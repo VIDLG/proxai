@@ -62,27 +62,6 @@ jobs:
           cd dist/package
           7z a ../zed-openai-shim-windows-x86_64.zip zed-openai-shim.exe .env.example
 
-      - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          previous_tag="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
-
-          if [ -n "${previous_tag}" ]; then
-            git log --pretty=format:'- %s (%h)' "${previous_tag}..${tag}" > dist/commits.md
-          else
-            git log --pretty=format:'- %s (%h)' "${tag}" > dist/commits.md
-          fi
-
-          pixi run python scripts/generate_release_notes.py \
-            --tag "${tag}" \
-            --previous-tag "${previous_tag}" \
-            --commits dist/commits.md \
-            --output dist/release-notes.md
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -93,5 +72,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3.0.0
         with:
-          body_path: dist/release-notes.md
+          generate_release_notes: true
           files: dist/zed-openai-shim-windows-x86_64.zip
