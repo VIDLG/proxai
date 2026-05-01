@@ -1,5 +1,7 @@
 # Zed OpenAI Shim
 
+[中文文档](README_CN.md)
+
 Local proxy for using Zed's OpenAI-compatible Responses API client with an
 upstream that rejects `role:"system"` messages in `input`.
 
