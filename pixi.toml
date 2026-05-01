@@ -1,0 +1,11 @@
+[workspace]
+name = "zed-openai-shim"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = ">=3.12,<3.15"
+gcc_win-64 = "*"
+gxx_win-64 = "*"
+binutils_win-64 = "*"
+m2w64-sysroot_win-64 = "*"

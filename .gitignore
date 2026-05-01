@@ -1,0 +1,14 @@
+.pixi/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+logs/
+build/
+dist/
+*.spec
+*.log
+llm/
+.claude
+target/

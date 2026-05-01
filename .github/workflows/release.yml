@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Pixi
+        uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          pixi-version: latest
+          cache: true
+
+      - name: Install Just
+        shell: pwsh
+        run: |
+          $bin = "$env:USERPROFILE\.cargo\bin"
+          echo $bin | Out-File -FilePath $env:GITHUB_PATH -Append
+          if (-not (Test-Path "$bin\just.exe")) {
+            cargo install just --locked
+          }
+
+      - name: Check
+        run: just check
+
+      - name: Build release exe
+        run: just build
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist | Out-Null
+          Copy-Item target\release\zed-openai-shim.exe dist\zed-openai-shim.exe
+          Copy-Item .env.example dist\.env.example
+          Compress-Archive -Path dist\zed-openai-shim.exe,dist\.env.example -DestinationPath dist\zed-openai-shim-windows-x86_64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zed-openai-shim-windows-x86_64
+          path: dist/zed-openai-shim-windows-x86_64.zip
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/zed-openai-shim-windows-x86_64.zip
