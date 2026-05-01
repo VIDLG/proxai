@@ -17,6 +17,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/gendef-v12.0.0.r1.ggdc42231f0-he1bec0e_1.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/gxx_impl_win-64-15.2.0-h22fd5bf_18.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/gxx_win-64-15.2.0-h447db50_24.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/just-1.50.0-h77a83cd_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ld_impl_win-64-2.45.1-default_hfd38196_102.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/libexpat-2.7.5-hac47afa_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/libffi-3.5.2-h3d046cb_0.conda
@@ -161,6 +162,16 @@ packages:
   license_family: BSD
   size: 27989
   timestamp: 1777144727131
+- conda: https://conda.anaconda.org/conda-forge/win-64/just-1.50.0-h77a83cd_0.conda
+  sha256: b1d99c4a6090a95318b36773b27d2c342042c490c84f4e55cdf35d8df2bacfd0
+  md5: 591a856d8c129fea9c73963ee67d5f61
+  depends:
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  license: CC0-1.0
+  size: 1548618
+  timestamp: 1776655309876
 - conda: https://conda.anaconda.org/conda-forge/win-64/ld_impl_win-64-2.45.1-default_hfd38196_102.conda
   sha256: 5256fe3ac465452a9702ca2b48adf47d1de905ed47d98fd5976ddb9c7a85619c
   md5: b0019a6e9267dd74b7efeefa970df76a
