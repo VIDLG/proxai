@@ -67,6 +67,7 @@ jobs:
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RELEASE_NOTES_REQUIRE_AI: "true"
         run: |
           pixi run git-cliff --latest --output dist/release-notes.raw.md
           pixi run python scripts/polish_release_notes.py \

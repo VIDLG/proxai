@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -73,16 +74,25 @@ Raw release notes:
         headers={
             "content-type": "application/json",
             "x-api-key": api_key,
+            "authorization": f"Bearer {api_key}",
             "anthropic-version": "2023-06-01",
+            "user-agent": "zed-openai-shim-release-notes",
         },
         method="POST",
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as error:
-        print(f"warning: release notes AI polish failed: {error}", file=sys.stderr)
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except Exception as error:
+            last_error = error
+            print(f"warning: release notes AI polish attempt {attempt} failed: {error}", file=sys.stderr)
+            time.sleep(attempt * 2)
+    else:
+        print(f"warning: release notes AI polish failed: {last_error}", file=sys.stderr)
         return None
 
     parts = [
@@ -105,6 +115,9 @@ def main() -> int:
 
     polished = polish(raw_notes)
     if polished is None:
+        if env_value("RELEASE_NOTES_REQUIRE_AI").lower() == "true":
+            print("error: release notes AI polish is required but failed", file=sys.stderr)
+            return 1
         shutil.copyfile(args.input, args.output)
         return 0
 
