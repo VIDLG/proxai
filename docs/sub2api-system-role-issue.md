@@ -4,6 +4,8 @@
 
 版本：`v0.1.121`
 
+已提交上游 issue：[Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147)
+
 使用 OpenAI OAuth 账号时，sub2api 会把请求转发到 ChatGPT internal Codex endpoint：
 
 ```text

@@ -45,9 +45,10 @@ built for, reject system messages in `input` and return an error like:
 ```
 
 The compatible shape is to move the system text to top-level `instructions` and
-remove the system item from `input`. See
+remove the system item from `input`. See the upstream sub2api issue
+[Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147) and
 [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md) for the
-sub2api root-cause notes and the proposed upstream fix.
+root-cause notes.
 
 ## What The Shim Changes
 
@@ -151,7 +152,7 @@ OPENAI_SHIM_OVERRIDE_AUTHORIZATION=true
 
 Do not commit real API keys.
 
-## Developer Setup
+## Developer Workflow
 
 Install the Pixi-managed GNU toolchain and run from source:
 
@@ -167,6 +168,52 @@ just build
 ```
 
 The local build output is `target\release\zed-openai-shim.exe`.
+
+Common commands:
+
+| Command | Description |
+| --- | --- |
+| `pixi install` | Install the Pixi-managed GNU toolchain used by the Rust build. |
+| `just run` | Run the shim from source for development. |
+| `just check` | Run formatting, clippy, and Rust tests. |
+| `just test-e2e` | Run the Rust proxy E2E test against a fake upstream. |
+| `just repro-system-role` | Optional real-upstream diagnostic for the system-role behavior. |
+| `just build` | Build `target/release/zed-openai-shim.exe`. |
+
+`just repro-system-role` is intentionally not part of `just check`: it calls the
+configured real upstream and requires `OPENAI_SHIM_API_KEY`.
+
+## Release Build
+
+GitHub Actions uses the same Pixi + Just path as local development:
+`just check` and `just build`. The Rust toolchain is
+`stable-x86_64-pc-windows-gnu`, and Pixi provides the GNU linker/toolchain.
+
+The release workflow runs on manual dispatch and on version tags such as
+`v0.1.1`. Tagged runs publish:
+
+```text
+zed-openai-shim-windows-x86_64.zip
+```
+
+The zip contains `zed-openai-shim.exe` and `.env.example`. Copy `.env.example`
+to `.env`, edit it, and keep `.env` beside the exe.
+
+Release notes are generated in two steps:
+
+1. `git-cliff` builds deterministic notes from commits since the previous tag.
+2. `scripts/polish_release_notes.py` optionally uses Anthropic-compatible
+   credentials to rewrite those notes into a short GitHub Release body.
+
+If `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` are not configured, release
+notes fall back to the raw `git-cliff` output. The release still succeeds.
+
+Local release-notes preview:
+
+```powershell
+pixi run git-cliff --latest --output dist\release-notes.raw.md
+pixi run python scripts\polish_release_notes.py --input dist\release-notes.raw.md --output dist\release-notes.md
+```
 
 ## Zed Configuration
 
@@ -271,64 +318,15 @@ agent request. The shim should log a forwarded `/v1/responses` request.
 When adding more screenshots, store them under `docs/images/`. Do not include
 captures that expose API keys, private prompts, or repository secrets.
 
-## Commands
+## Verified Behavior
 
-| Command | Description |
-| --- | --- |
-| `pixi install` | Install the Pixi-managed GNU toolchain used by the Rust build. |
-| `just run` | Run the shim from source for development. |
-| `just check` | Run formatting, clippy, and Rust tests. |
-| `just test-e2e` | Run the Rust proxy E2E test against a fake upstream. |
-| `just repro-system-role` | Optional real-upstream diagnostic for the system-role behavior. |
-| `just build` | Build `target/release/zed-openai-shim.exe`. |
-
-## Release Build
-
-GitHub Actions uses the same Pixi + Just path as local development:
-`just check` and `just build`. The Rust toolchain is
-`stable-x86_64-pc-windows-gnu`, and Pixi provides the GNU linker/toolchain.
-
-The workflow builds the Windows exe on every push and pull request. Tagged
-pushes like `v0.1.0` also publish a GitHub Release asset:
-
-```text
-zed-openai-shim-windows-x86_64.zip
-```
-
-The zip contains `zed-openai-shim.exe` and `.env.example`. Copy `.env.example`
-to `.env`, edit it, and keep `.env` beside the exe.
-
-Release zip layout:
-
-```text
-zed-openai-shim/
-  zed-openai-shim.exe
-  .env.example
-  .env
-```
-
-## Tests
-
-Offline tests:
-
-```powershell
-just check
-```
-
-Rust proxy E2E:
-
-```powershell
-just test-e2e
-```
-
-Observed real-upstream behavior:
+Offline tests and the Rust proxy E2E are covered by `just check`. Observed
+real-upstream behavior:
 
 - raw `role:"system"` in `input`: upstream fails
 - `system -> instructions`: upstream returns 200
-- detailed sub2api issue notes: [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)
-
-`just repro-system-role` is intentionally not part of `just check`: it calls the
-configured real upstream and requires `OPENAI_SHIM_API_KEY`.
+- detailed sub2api issue notes:
+  [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)
 
 ## Troubleshooting
 
@@ -360,9 +358,9 @@ logs/
 
 ## Upstream Notes
 
-The detailed sub2api analysis and issue draft live in
-[docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md). In
-short, the upstream OpenAI OAuth Codex transform should treat Responses
-`content` parts with `type:"input_text"` the same way it already intends to
-treat `type:"text"` system content: extract it into `instructions` and remove
-the original system message from `input`.
+The upstream sub2api issue is
+[Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147), with
+local analysis in
+[docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md). This
+shim remains useful while upstream support for Responses `input_text` system
+content is pending.

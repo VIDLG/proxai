@@ -1,0 +1,43 @@
+[changelog]
+header = """
+## Highlights
+
+- This release includes the changes listed below.
+
+## Changes
+"""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+{% for commit in commits %}
+- {{ commit.message | upper_first }}{% if commit.id %} ({{ commit.id | truncate(length=7, end="") }}){% endif %}
+{% endfor %}
+{% endfor %}
+
+## Download
+
+- Windows x86_64: `zed-openai-shim-windows-x86_64.zip`
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^ci: generate release notes", skip = true },
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Fixes" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^ci", group = "CI" },
+  { message = "^test", group = "Tests" },
+  { message = "^refactor", group = "Refactoring" },
+  { message = "^chore", group = "Maintenance" },
+  { message = "^style", group = "Styling" },
+  { message = "^perf", group = "Performance" },
+  { message = ".*", group = "Other" },
+]
