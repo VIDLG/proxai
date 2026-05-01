@@ -37,6 +37,7 @@ def polish(raw_notes: str) -> str | None:
     base_url = env_value("ANTHROPIC_BASE_URL")
     api_key = env_value("ANTHROPIC_API_KEY")
     model = env_value("ANTHROPIC_MODEL") or DEFAULT_MODEL
+    package_name = env_value("RELEASE_PACKAGE_NAME") or "zed-openai-shim-<tag>-windows-x86_64"
 
     if not base_url or not api_key:
         print("warning: Anthropic release notes env is not configured; using raw notes", file=sys.stderr)
@@ -53,7 +54,7 @@ Use these sections:
 - ## Download
 
 Requirements:
-- Mention `zed-openai-shim-<tag>-windows-x86_64.zip` in Download.
+- Mention `{package_name}.zip` in Download.
 - Make the wording useful to users and developers.
 - Do not include secrets, environment values, or private URLs.
 - Keep it short.
