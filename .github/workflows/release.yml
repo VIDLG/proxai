@@ -32,7 +32,7 @@ jobs:
         run: rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal --component clippy --component rustfmt
 
       - name: Install sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
