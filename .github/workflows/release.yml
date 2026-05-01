@@ -27,6 +27,17 @@ jobs:
       - name: Install Rust GNU
         run: rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal --component clippy --component rustfmt
 
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            target
+          key: ${{ runner.os }}-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml', 'pixi.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+
       - name: Install Pixi
         uses: prefix-dev/setup-pixi@v0.9.0
         with:
