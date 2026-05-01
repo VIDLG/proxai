@@ -47,15 +47,24 @@ jobs:
       - name: Build release exe
         run: pixi run just build
 
+      - name: Set package name
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="dev-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          fi
+          echo "PACKAGE_NAME=zed-openai-shim-${version}-windows-x86_64" >> "$GITHUB_ENV"
+
       - name: Stage artifact
         run: |
           rm -rf dist/package
-          rm -f dist/zed-openai-shim-windows-x86_64.zip
+          rm -f "dist/${PACKAGE_NAME}.zip"
           mkdir -p dist/package
           cp target/release/zed-openai-shim.exe dist/package/zed-openai-shim.exe
           cp .env.example dist/package/.env.example
           cd dist/package
-          7z a ../zed-openai-shim-windows-x86_64.zip zed-openai-shim.exe .env.example
+          7z a "../${PACKAGE_NAME}.zip" zed-openai-shim.exe .env.example
 
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/v')
@@ -72,12 +81,12 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: zed-openai-shim-windows-x86_64
-          path: dist/zed-openai-shim-windows-x86_64.zip
+          name: ${{ env.PACKAGE_NAME }}
+          path: dist/${{ env.PACKAGE_NAME }}.zip
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3.0.0
         with:
           body_path: dist/release-notes.md
-          files: dist/zed-openai-shim-windows-x86_64.zip
+          files: dist/${{ env.PACKAGE_NAME }}.zip

@@ -86,9 +86,9 @@ Zed Responses API role issue.
 
 ## User Setup
 
-Download `zed-openai-shim-windows-x86_64.zip` from GitHub Releases, unzip it,
-then copy `.env.example` to `.env`. For a portable release folder, keep `.env`
-next to `zed-openai-shim.exe`:
+Download `zed-openai-shim-vX.Y.Z-windows-x86_64.zip` from GitHub Releases,
+unzip it, then copy `.env.example` to `.env`. For a portable release folder,
+keep `.env` next to `zed-openai-shim.exe`:
 
 ```text
 zed-openai-shim/
@@ -193,7 +193,7 @@ The release workflow runs on manual dispatch and on version tags such as
 `v0.1.1`. Tagged runs publish:
 
 ```text
-zed-openai-shim-windows-x86_64.zip
+zed-openai-shim-vX.Y.Z-windows-x86_64.zip
 ```
 
 The zip contains `zed-openai-shim.exe` and `.env.example`. Copy `.env.example`

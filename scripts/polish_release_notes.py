@@ -53,7 +53,7 @@ Use these sections:
 - ## Download
 
 Requirements:
-- Mention `zed-openai-shim-windows-x86_64.zip` in Download.
+- Mention `zed-openai-shim-<tag>-windows-x86_64.zip` in Download.
 - Make the wording useful to users and developers.
 - Do not include secrets, environment values, or private URLs.
 - Keep it short.
