@@ -2,6 +2,7 @@
 .atomcode/
 .cargo-target*/
 .pi-lens/
+.pi/
 .ralph/
 __pycache__/
 *.pyc
