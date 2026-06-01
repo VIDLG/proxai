@@ -1,8 +1,9 @@
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use derive_more::Display;
+use serde::Serialize;
 use std::time::Duration;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub(crate) struct UpstreamStreamMetrics {
     pub(crate) duration: Duration,
     pub(crate) chunks: u64,
@@ -90,7 +91,7 @@ impl UpstreamResponseHead {
     }
 }
 
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone, Display, Serialize)]
 pub(crate) enum ContentType {
     #[display("text/event-stream")]
     EventStream,

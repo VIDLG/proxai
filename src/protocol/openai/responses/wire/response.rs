@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use structural_convert::StructuralConvert;
@@ -18,7 +19,7 @@ pub enum Instructions {
     Array(Vec<InputItem>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert)]
 #[convert(from(openai::Billing))]
 pub struct Billing {
     pub payer: String,
@@ -67,7 +68,7 @@ pub struct ResponseUsage {
 
 // ── Conversation ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert)]
 #[convert(from(openai::Conversation))]
 pub struct Conversation {
     pub id: String,

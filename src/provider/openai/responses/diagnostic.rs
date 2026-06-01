@@ -1,17 +1,15 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::fs as stdfs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::paths;
-use crate::provider::UpstreamResponseError;
-use crate::upstream::ContentType;
+use crate::upstream::UpstreamStreamMetrics;
 
 use super::sse::{is_terminal_event, is_tool_argument_done};
-use super::summary::{ResponseOutputItemKind, ResponseSummary};
+use super::summary::ResponseSummary;
 use super::ResponsesUpstreamStreamSnapshot;
-use crate::protocol::openai_responses::ResponseProjection;
+use crate::protocol::openai_responses::{Billing, Conversation};
 use crate::protocol::ErrorObject;
 use crate::sse::SseEventScanner;
 
@@ -41,117 +39,74 @@ impl ResponsesStreamDiagnostics {
     pub(super) fn write_unfinished_tool_diagnostic(
         &self,
         snapshot: &ResponsesUpstreamStreamSnapshot,
-        error: &UpstreamResponseError,
     ) -> Option<String> {
-        write_unfinished_tool_diagnostic(self.request_id, snapshot, error, &self.recent_tail)
+        let logs_dir = paths::ensure_app_paths().ok()?.logs_dir;
+        stdfs::create_dir_all(&logs_dir).ok()?;
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_millis();
+        let path = logs_dir.join(format!(
+            "unfinished-tool-diagnostic-{timestamp}-{:06}.json",
+            self.request_id
+        ));
+
+        let body =
+            UnfinishedToolDiagnosticReport::new(self.request_id, snapshot, &self.recent_tail);
+
+        stdfs::write(&path, serde_json::to_vec_pretty(&body).ok()?).ok()?;
+        Some(path.display().to_string())
     }
 }
 
-fn write_unfinished_tool_diagnostic(
-    request_id: u64,
-    snapshot: &ResponsesUpstreamStreamSnapshot,
-    error: &UpstreamResponseError,
-    recent_tail: &[u8],
-) -> Option<String> {
-    let logs_dir = paths::ensure_app_paths().ok()?.logs_dir;
-    stdfs::create_dir_all(&logs_dir).ok()?;
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()?
-        .as_millis();
-    let path = logs_dir.join(format!(
-        "unfinished-tool-diagnostic-{timestamp}-{request_id:06}.json"
-    ));
-
-    let response_snapshot = snapshot
-        .state
-        .snapshot
-        .as_ref()
-        .map(|value| &value.projection);
-    let response_summary = snapshot.state.effective_summary();
-    let observed_summary = snapshot.state.observed_summary();
-    let observed_error = snapshot.state.observed_error();
-    let sequence_number = match error {
-        UpstreamResponseError::UnfinishedTool { sequence_number } => *sequence_number,
-        _ => snapshot.state.sequence_number,
-    };
-    let recent_tail_text = String::from_utf8_lossy(recent_tail).to_string();
-    let tool_arguments = analyze_unfinished_tool_tail(recent_tail);
-    let body = UnfinishedToolDiagnosticBody::new(
-        request_id,
-        sequence_number,
-        snapshot,
-        response_snapshot,
-        response_summary,
-        observed_summary,
-        observed_error,
-        recent_tail,
-        recent_tail_text,
-        tool_arguments,
-    );
-
-    stdfs::write(&path, serde_json::to_vec_pretty(&body).ok()?).ok()?;
-    Some(path.display().to_string())
-}
-
 #[derive(Serialize)]
-struct UnfinishedToolDiagnosticBody {
+struct UnfinishedToolDiagnosticReport {
     request_id: u64,
     kind: &'static str,
-    error: DiagnosticError,
-    upstream: DiagnosticUpstream,
-    stream: DiagnosticStream,
-    tool_arguments: ToolArgumentsDiagnostic,
-    response: DiagnosticResponse,
-    observed_summary: DiagnosticSummary,
-    observed_error: Option<DiagnosticErrorObject>,
+    error: DiagnosticErrorSection,
+    upstream: DiagnosticUpstreamSection,
+    stream: DiagnosticStreamSection,
+    tool_arguments: ToolArgumentsSection,
+    response: DiagnosticResponseSection,
+    observed_summary: ResponseSummary,
+    observed_error: Option<ErrorObject>,
 }
 
-impl UnfinishedToolDiagnosticBody {
-    #[allow(clippy::too_many_arguments)]
+impl UnfinishedToolDiagnosticReport {
     fn new(
         request_id: u64,
-        sequence_number: Option<u64>,
         snapshot: &ResponsesUpstreamStreamSnapshot,
-        response_snapshot: Option<&ResponseProjection>,
-        response_summary: ResponseSummary,
-        observed_summary: ResponseSummary,
-        observed_error: Option<&ErrorObject>,
         recent_tail: &[u8],
-        recent_tail_text: String,
-        tool_arguments: ToolArgumentsDiagnostic,
     ) -> Self {
+        let tool_arguments = analyze_unfinished_tool_tail(recent_tail);
+        let recent_tail_text = String::from_utf8_lossy(recent_tail).to_string();
+
         Self {
             request_id,
             kind: "unfinished-tool",
-            error: DiagnosticError {
+            error: DiagnosticErrorSection {
                 message: "upstream stream ended with unfinished tool arguments",
-                sequence_number,
+                sequence_number: snapshot.state.sequence_number,
             },
-            upstream: DiagnosticUpstream::from(snapshot),
-            stream: DiagnosticStream::new(snapshot, recent_tail, recent_tail_text),
+            upstream: DiagnosticUpstreamSection::from(snapshot),
+            stream: DiagnosticStreamSection::new(snapshot.metrics, recent_tail, recent_tail_text),
             tool_arguments,
-            response: DiagnosticResponse::new(
-                snapshot,
-                response_snapshot,
-                response_summary,
-                snapshot.state.effective_error(),
-            ),
-            observed_summary: DiagnosticSummary::from(observed_summary),
-            observed_error: observed_error.map(DiagnosticErrorObject::from),
+            response: DiagnosticResponseSection::new(snapshot),
+            observed_summary: snapshot.state.observed_summary(),
+            observed_error: snapshot.state.observed_error().cloned(),
         }
     }
 }
 
 #[derive(Serialize)]
-struct DiagnosticError {
+struct DiagnosticErrorSection {
     message: &'static str,
     sequence_number: Option<u64>,
 }
 
 #[derive(Serialize)]
-struct DiagnosticUpstream {
+struct DiagnosticUpstreamSection {
     status: u16,
     content_type: String,
     transfer_encoding: String,
@@ -159,7 +114,7 @@ struct DiagnosticUpstream {
     ttfb_ms: u64,
 }
 
-impl From<&ResponsesUpstreamStreamSnapshot> for DiagnosticUpstream {
+impl From<&ResponsesUpstreamStreamSnapshot> for DiagnosticUpstreamSection {
     fn from(snapshot: &ResponsesUpstreamStreamSnapshot) -> Self {
         Self {
             status: snapshot.head.status.as_u16(),
@@ -175,18 +130,14 @@ impl From<&ResponsesUpstreamStreamSnapshot> for DiagnosticUpstream {
                 .as_ref()
                 .map(ToString::to_string)
                 .unwrap_or_default(),
-            sse: snapshot
-                .head
-                .content_type
-                .as_ref()
-                .is_some_and(ContentType::is_sse),
+            sse: snapshot.head.is_sse(),
             ttfb_ms: snapshot.head.ttfb.as_millis() as u64,
         }
     }
 }
 
 #[derive(Serialize)]
-struct DiagnosticStream {
+struct DiagnosticStreamSection {
     duration_ms: u64,
     chunks: u64,
     bytes: u64,
@@ -195,17 +146,17 @@ struct DiagnosticStream {
     recent_tail_utf8_lossy: String,
 }
 
-impl DiagnosticStream {
+impl DiagnosticStreamSection {
     fn new(
-        snapshot: &ResponsesUpstreamStreamSnapshot,
+        metrics: UpstreamStreamMetrics,
         recent_tail: &[u8],
         recent_tail_utf8_lossy: String,
     ) -> Self {
         Self {
-            duration_ms: snapshot.metrics.duration_ms(),
-            chunks: snapshot.metrics.chunks,
-            bytes: snapshot.metrics.bytes,
-            avg_chunk_bytes: snapshot.metrics.avg_chunk_bytes(),
+            duration_ms: metrics.duration_ms(),
+            chunks: metrics.chunks,
+            bytes: metrics.bytes,
+            avg_chunk_bytes: metrics.avg_chunk_bytes(),
             recent_tail_bytes: recent_tail.len(),
             recent_tail_utf8_lossy,
         }
@@ -213,10 +164,10 @@ impl DiagnosticStream {
 }
 
 #[derive(Serialize)]
-struct DiagnosticResponse {
+struct DiagnosticResponseSection {
     background: Option<bool>,
-    billing: Option<DiagnosticBilling>,
-    conversation: Option<DiagnosticConversation>,
+    billing: Option<Billing>,
+    conversation: Option<Conversation>,
     id: String,
     model: String,
     status: String,
@@ -234,27 +185,24 @@ struct DiagnosticResponse {
     truncation: Option<String>,
     sequence_number: Option<u64>,
     snapshot_kind: Option<String>,
-    output_items: BTreeMap<ResponseOutputItemKind, u64>,
-    function_calls: BTreeMap<String, u64>,
-    mcp_calls: BTreeMap<String, u64>,
-    error: Option<DiagnosticErrorObject>,
+    #[serde(flatten)]
+    summary: ResponseSummary,
+    error: Option<ErrorObject>,
 }
 
-impl DiagnosticResponse {
-    fn new(
-        snapshot: &ResponsesUpstreamStreamSnapshot,
-        response_snapshot: Option<&ResponseProjection>,
-        response_summary: ResponseSummary,
-        error: Option<&ErrorObject>,
-    ) -> Self {
+impl DiagnosticResponseSection {
+    fn new(snapshot: &ResponsesUpstreamStreamSnapshot) -> Self {
+        let response_snapshot = snapshot
+            .state
+            .snapshot
+            .as_ref()
+            .map(|value| &value.projection);
+        let response_summary = snapshot.state.effective_summary();
+
         Self {
             background: response_snapshot.and_then(|value| value.background),
-            billing: response_snapshot
-                .and_then(|value| value.billing.as_ref())
-                .map(DiagnosticBilling::from),
-            conversation: response_snapshot
-                .and_then(|value| value.conversation.as_ref())
-                .map(DiagnosticConversation::from),
+            billing: response_snapshot.and_then(|value| value.billing.clone()),
+            conversation: response_snapshot.and_then(|value| value.conversation.clone()),
             id: response_snapshot
                 .map(|value| value.id.clone())
                 .unwrap_or_default(),
@@ -296,86 +244,25 @@ impl DiagnosticResponse {
                 .snapshot
                 .as_ref()
                 .map(|value| format!("{:?}", value.kind)),
-            output_items: response_summary.output_items,
-            function_calls: response_summary.function_calls,
-            mcp_calls: response_summary.mcp_calls,
-            error: error.map(DiagnosticErrorObject::from),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct DiagnosticBilling {
-    payer: String,
-}
-
-impl From<&crate::protocol::openai_responses::Billing> for DiagnosticBilling {
-    fn from(value: &crate::protocol::openai_responses::Billing) -> Self {
-        Self {
-            payer: value.payer.clone(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct DiagnosticConversation {
-    id: String,
-}
-
-impl From<&crate::protocol::openai_responses::Conversation> for DiagnosticConversation {
-    fn from(value: &crate::protocol::openai_responses::Conversation) -> Self {
-        Self {
-            id: value.id.clone(),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct DiagnosticSummary {
-    output_items: BTreeMap<ResponseOutputItemKind, u64>,
-    function_calls: BTreeMap<String, u64>,
-    mcp_calls: BTreeMap<String, u64>,
-}
-
-impl From<ResponseSummary> for DiagnosticSummary {
-    fn from(value: ResponseSummary) -> Self {
-        Self {
-            output_items: value.output_items,
-            function_calls: value.function_calls,
-            mcp_calls: value.mcp_calls,
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct DiagnosticErrorObject {
-    code: String,
-    message: String,
-}
-
-impl From<&ErrorObject> for DiagnosticErrorObject {
-    fn from(value: &ErrorObject) -> Self {
-        Self {
-            code: value.code.clone(),
-            message: value.message.clone(),
+            summary: response_summary,
+            error: snapshot.state.effective_error().cloned(),
         }
     }
 }
 
 #[derive(Debug, Default, Serialize)]
-pub(super) struct ToolArgumentsDiagnostic {
-    pub(super) item_id: Option<String>,
-    pub(super) assembled: String,
-    pub(super) valid_json: bool,
-    pub(super) parsed: Value,
-    pub(super) saw_arguments_done: bool,
-    pub(super) saw_terminal_event: bool,
-    pub(super) last_sequence_number: Option<u64>,
+struct ToolArgumentsSection {
+    item_id: Option<String>,
+    assembled: String,
+    parsed: ToolArgumentsParseResult,
+    saw_arguments_done: bool,
+    saw_terminal_event: bool,
+    last_sequence_number: Option<u64>,
 }
 
-pub(super) fn analyze_unfinished_tool_tail(recent_tail: &[u8]) -> ToolArgumentsDiagnostic {
+fn analyze_unfinished_tool_tail(recent_tail: &[u8]) -> ToolArgumentsSection {
     let mut scanner = SseEventScanner::default();
-    let mut result = ToolArgumentsDiagnostic::default();
+    let mut result = ToolArgumentsSection::default();
 
     for event in scanner.scan(recent_tail) {
         if is_terminal_event(&event) {
@@ -386,47 +273,60 @@ pub(super) fn analyze_unfinished_tool_tail(recent_tail: &[u8]) -> ToolArgumentsD
             result.saw_terminal_event = true;
         }
 
-        let Some(payload) = event.payload_json() else {
+        let Ok(delta_event) =
+            serde_json::from_str::<FunctionCallArgumentsDeltaEventData>(&event.data)
+        else {
             continue;
         };
-        if payload.get("type").and_then(Value::as_str)
-            != Some("response.function_call_arguments.delta")
-        {
+        if delta_event.kind.as_deref() != Some("response.function_call_arguments.delta") {
             continue;
         }
 
-        let delta = payload
-            .get("delta")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let sequence_number = payload.get("sequence_number").and_then(Value::as_u64);
-
         if result.item_id.is_none() {
-            result.item_id = payload
-                .get("item_id")
-                .and_then(Value::as_str)
-                .map(ToString::to_string);
+            result.item_id = delta_event.item_id;
         }
-        result.assembled.push_str(delta);
-        result.last_sequence_number = sequence_number;
+        result
+            .assembled
+            .push_str(delta_event.delta.as_deref().unwrap_or_default());
+        result.last_sequence_number = delta_event.sequence_number;
     }
 
     if result.assembled.is_empty() {
-        result.parsed = Value::Null;
+        result.parsed = ToolArgumentsParseResult::Empty;
         return result;
     }
 
-    match serde_json::from_str::<Value>(&result.assembled) {
-        Ok(value) => {
-            result.valid_json = true;
-            result.parsed = value;
-        }
-        Err(_) => {
-            result.parsed = Value::String(result.assembled.clone());
-        }
-    }
+    result.parsed = match serde_json::from_str::<Value>(&result.assembled) {
+        Ok(value) => ToolArgumentsParseResult::Json { value },
+        Err(_) => ToolArgumentsParseResult::Incomplete {
+            raw: result.assembled.clone(),
+        },
+    };
 
     result
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum ToolArgumentsParseResult {
+    Empty,
+    Json { value: Value },
+    Incomplete { raw: String },
+}
+
+impl Default for ToolArgumentsParseResult {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
+
+#[derive(Deserialize)]
+struct FunctionCallArgumentsDeltaEventData {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    sequence_number: Option<u64>,
+    item_id: Option<String>,
+    delta: Option<String>,
 }
 
 #[cfg(test)]

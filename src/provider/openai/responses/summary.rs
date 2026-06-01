@@ -34,7 +34,7 @@ pub(crate) enum ResponseOutputItemKind {
     Compaction,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub(crate) struct ResponseSummary {
     pub(crate) output_items: BTreeMap<ResponseOutputItemKind, u64>,
     pub(crate) function_calls: BTreeMap<String, u64>,

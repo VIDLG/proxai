@@ -1,4 +1,4 @@
-use super::analyze_unfinished_tool_tail;
+use super::{analyze_unfinished_tool_tail, ToolArgumentsParseResult};
 use serde_json::json;
 
 #[test]
@@ -15,10 +15,11 @@ fn unfinished_tool_diagnostic_detects_complete_json_without_done_event() {
         diagnostic.assembled,
         "{\"path\":\"proxai/src/logging/mod.rs\"}"
     );
-    assert!(diagnostic.valid_json);
     assert_eq!(
         diagnostic.parsed,
-        json!({"path": "proxai/src/logging/mod.rs"})
+        ToolArgumentsParseResult::Json {
+            value: json!({"path": "proxai/src/logging/mod.rs"})
+        }
     );
     assert!(!diagnostic.saw_arguments_done);
     assert!(!diagnostic.saw_terminal_event);

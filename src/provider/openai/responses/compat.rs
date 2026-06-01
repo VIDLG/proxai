@@ -33,11 +33,11 @@ pub(super) fn normalize_nested_error_sse_stream(
 
 fn normalize_nested_error_sse_frame(frame: &SseFrame) -> Option<Bytes> {
     let event = Option::<SseEvent>::try_from(frame).ok().flatten()?;
-    let payload = serde_json::from_str::<NestedGenericErrorPayload>(&event.data).ok()?;
-    if event.event_type != "error" && payload.kind.as_deref() != Some("error") {
+    let event_data = serde_json::from_str::<NestedGenericErrorEventData>(&event.data).ok()?;
+    if event.event_type != "error" && event_data.kind.as_deref() != Some("error") {
         return None;
     }
-    if payload.message.is_some() {
+    if event_data.message.is_some() {
         return None;
     }
 
@@ -48,10 +48,10 @@ fn normalize_nested_error_sse_frame(frame: &SseFrame) -> Option<Bytes> {
     // Keep our protocol model strict and adapt this provider-local upstream gap on
     // the outbound wire so clients can deserialize the stream and see the real
     // upstream failure, such as `context_length_exceeded`.
-    let error = payload.error?;
-    let normalized = NormalizedGenericErrorPayload {
+    let error = event_data.error?;
+    let normalized = NormalizedGenericErrorEventData {
         kind: "error",
-        sequence_number: payload.sequence_number,
+        sequence_number: event_data.sequence_number,
         code: error.code,
         message: error.message,
         param: error.param,
@@ -60,7 +60,7 @@ fn normalize_nested_error_sse_frame(frame: &SseFrame) -> Option<Bytes> {
 }
 
 #[derive(Debug, Deserialize)]
-struct NestedGenericErrorPayload {
+struct NestedGenericErrorEventData {
     #[serde(rename = "type")]
     kind: Option<String>,
     sequence_number: Option<u64>,
@@ -76,7 +76,7 @@ struct NestedGenericError {
 }
 
 #[derive(Debug, Serialize)]
-struct NormalizedGenericErrorPayload {
+struct NormalizedGenericErrorEventData {
     #[serde(rename = "type")]
     kind: &'static str,
     sequence_number: Option<u64>,

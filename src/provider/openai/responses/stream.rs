@@ -1,7 +1,7 @@
 use axum::body::{Body, Bytes};
 use axum::http::{HeaderMap, Response};
 
-use futures_util::{Future, Stream};
+use futures_util::Future;
 
 use std::task::Context;
 use std::time::Duration;
@@ -180,9 +180,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             let error = UpstreamResponseError::UnfinishedTool {
                 sequence_number: snapshot.state.sequence_number,
             };
-            let diagnostic_path = self
-                .diagnostics
-                .write_unfinished_tool_diagnostic(&snapshot, &error);
+            let diagnostic_path = self.diagnostics.write_unfinished_tool_diagnostic(&snapshot);
             self.span.in_scope(|| {
                 logging::emit_responses_stream_error_with_diagnostic(
                     &snapshot,
