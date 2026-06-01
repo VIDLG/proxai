@@ -19,7 +19,7 @@ pub struct AppPaths {
     pub captures_dir: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub created_config: bool,
-    pub updated_config_example: bool,
+    pub created_config_example: bool,
 }
 
 fn app_dir() -> Option<PathBuf> {
@@ -42,7 +42,7 @@ pub fn ensure_app_paths() -> io::Result<AppPaths> {
     let diagnostics_dir = app_dir.join(DIAGNOSTICS_DIR_NAME);
 
     let created_config = write_file_if_missing(&config_path, DEFAULT_CONFIG_TOML)?;
-    let updated_config_example = write_file_if_changed(&config_example_path, DEFAULT_CONFIG_TOML)?;
+    let created_config_example = write_file_if_missing(&config_example_path, DEFAULT_CONFIG_TOML)?;
     fs::create_dir_all(&logs_dir)?;
     fs::create_dir_all(&captures_dir)?;
     fs::create_dir_all(&diagnostics_dir)?;
@@ -55,20 +55,12 @@ pub fn ensure_app_paths() -> io::Result<AppPaths> {
         captures_dir,
         diagnostics_dir,
         created_config,
-        updated_config_example,
+        created_config_example,
     })
 }
 
 fn write_file_if_missing(path: &PathBuf, content: &str) -> io::Result<bool> {
     if path.exists() {
-        return Ok(false);
-    }
-    fs::write(path, content)?;
-    Ok(true)
-}
-
-fn write_file_if_changed(path: &PathBuf, content: &str) -> io::Result<bool> {
-    if path.exists() && fs::read_to_string(path)? == content {
         return Ok(false);
     }
     fs::write(path, content)?;

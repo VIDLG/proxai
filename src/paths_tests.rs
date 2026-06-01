@@ -20,19 +20,19 @@ fn creates_default_files_inside_app_dir() {
     assert!(created.config_path.exists());
     assert!(created.config_example_path.exists());
     assert!(created.created_config);
-    assert!(created.updated_config_example);
+    assert!(created.created_config_example);
 
     let created_again = ensure_app_paths().unwrap();
     assert!(!created_again.created_config);
-    assert!(!created_again.updated_config_example);
+    assert!(!created_again.created_config_example);
 
-    fs::write(&created_again.config_example_path, "old example").unwrap();
+    fs::write(&created_again.config_example_path, "user-local example").unwrap();
     let refreshed = ensure_app_paths().unwrap();
     assert!(!refreshed.created_config);
-    assert!(refreshed.updated_config_example);
+    assert!(!refreshed.created_config_example);
     assert_eq!(
         fs::read_to_string(&refreshed.config_example_path).unwrap(),
-        DEFAULT_CONFIG_TOML
+        "user-local example"
     );
 
     match original_unix_home {
