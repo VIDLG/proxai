@@ -76,7 +76,7 @@ Do not force phase naming into unrelated protocol or error domain types when it 
 
 Within tightly scoped provider submodules, concise local filenames like `request.rs` and `response.rs` are fine as long as exported names or surrounding code keep phase semantics clear.
 
-For protocol-specific request/response data, prefer a top-level enum keyed by protocol that wraps concrete per-protocol structs. Avoid structs containing parallel `protocol` / `payload` / `projection` / `summary` fields that can drift into impossible states. See `docs/provider-infrastructure-plan.md` for the current phased multi-protocol design.
+For protocol-specific request/response data, prefer a top-level enum keyed by protocol that wraps concrete per-protocol structs. Avoid structs containing parallel `protocol` / `payload` / `projection` / `summary` fields that can drift into impossible states.
 
 ## Logging Details
 

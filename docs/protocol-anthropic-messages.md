@@ -5,9 +5,7 @@ proxai 中的协议名是 `anthropic_messages`，主要类型位于：
 - `src/protocol/anthropic/messages/wire`
 - `src/provider/anthropic_messages`
 
-当前运行时已支持 `anthropic_messages -> anthropic_messages` 透传。完整 wire model 已在协议层建模，但请求/响应的深度 projection、summary 和跨协议转换仍是后续工作。
-
-更偏科普和可视化的说明见 `docs/anthropic-messages-protocol.html`，其中包含 JSON 示例到 proxai Rust struct/enum 的映射表。
+当前运行时已支持 `anthropic_messages -> anthropic_messages` 透传。完整 wire model 已在协议层建模，协议转换和 provider 兼容处理仍应保持显式、可测试。
 
 ## 请求模型
 

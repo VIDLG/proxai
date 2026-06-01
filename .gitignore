@@ -15,4 +15,5 @@ dist/
 *.log
 llm/
 .claude
+.zed/
 target/
