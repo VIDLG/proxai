@@ -3,8 +3,8 @@ use axum::http::Response;
 
 use crate::logging;
 use crate::provider::{
-    build_outbound_stream, BodyAction, BodyObserver, OutboundStream, UpstreamBodyStreamStats,
-    UpstreamResponseContext,
+    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundStream,
+    UpstreamBodyStreamStats, UpstreamResponseContext,
 };
 use crate::upstream::UpstreamResponseHead;
 
@@ -34,14 +34,7 @@ pub(crate) async fn handle_success_response(
             .emit()
     });
 
-    let mut response = Response::new(Body::from_stream(stream));
-    *response.status_mut() = status;
-    for (key, value) in outbound_headers {
-        if let Some(key) = key {
-            response.headers_mut().append(key, value);
-        }
-    }
-    Ok(response)
+    Ok(streaming_response(status, outbound_headers, stream))
 }
 
 struct ChatUpstreamBodyObserver {

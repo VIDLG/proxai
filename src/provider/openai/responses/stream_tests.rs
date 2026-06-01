@@ -23,8 +23,8 @@ fn sse_eof_without_terminal_event_is_incomplete_even_without_pending_tools() {
 "#,
     );
 
-    assert!(!observer.outcome.saw_terminal_event);
-    assert!(observer.outcome.stream_error.is_none());
+    assert!(!observer.saw_terminal_event);
+    assert!(observer.stream_error.is_none());
 }
 
 #[test]
@@ -42,8 +42,8 @@ fn sse_eof_after_terminal_event_is_complete() {
 "#,
     );
 
-    assert!(observer.outcome.saw_terminal_event);
-    assert!(observer.outcome.stream_error.is_none());
+    assert!(observer.saw_terminal_event);
+    assert!(observer.stream_error.is_none());
 }
 
 #[test]
@@ -61,8 +61,8 @@ fn tool_argument_delta_without_item_id_marks_stream_error() {
 "#,
     );
 
-    assert!(observer.outcome.saw_terminal_event);
-    assert!(observer.outcome.stream_error.is_some());
+    assert!(observer.saw_terminal_event);
+    assert!(observer.stream_error.is_some());
 }
 
 #[test]

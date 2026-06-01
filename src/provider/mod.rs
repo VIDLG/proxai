@@ -16,4 +16,6 @@ pub(crate) use upstream_response::UpstreamResponseContext;
 
 mod outbound_stream;
 
-pub(crate) use outbound_stream::{build_outbound_stream, OutboundStream};
+pub(crate) use outbound_stream::{
+    build_outbound_stream, outbound_response, streaming_response, OutboundStream,
+};

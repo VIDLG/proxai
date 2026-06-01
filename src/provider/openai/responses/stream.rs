@@ -1,5 +1,5 @@
 use axum::body::{Body, Bytes};
-use axum::http::{HeaderMap, Response, StatusCode};
+use axum::http::{HeaderMap, Response};
 
 use futures_util::{Future, Stream};
 
@@ -8,12 +8,11 @@ use std::time::Duration;
 
 use super::compat::normalize_nested_error_sse_stream;
 use super::diagnostic::ResponsesStreamDiagnostics;
-use super::result::{emit_responses_stream_result, ResponsesStreamResult};
 use super::{ResponsesUpstreamEvent, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
 use crate::logging;
 use crate::provider::{
-    build_outbound_stream, BodyAction, BodyObserver, OutboundStream, UpstreamBodyStreamStats,
-    UpstreamResponseContext, UpstreamResponseError,
+    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundStream,
+    UpstreamBodyStreamStats, UpstreamResponseContext, UpstreamResponseError,
 };
 use crate::sse::{encode_sse_json_or_error, SseEventScanner};
 use crate::upstream::UpstreamResponseHead;
@@ -60,7 +59,8 @@ pub(crate) async fn handle_success_response(
 
 struct OpenaiResponsesUpstreamBodyObserver {
     upstream_response_tracker: ResponsesUpstreamTracker,
-    outcome: ResponsesStreamOutcome,
+    saw_terminal_event: bool,
+    stream_error: Option<UpstreamResponseError>,
     tool_arguments: ToolArgumentStreamState,
     diagnostics: ResponsesStreamDiagnostics,
     timeout: Option<Duration>,
@@ -77,13 +77,23 @@ impl OpenaiResponsesUpstreamBodyObserver {
     ) -> Self {
         Self {
             upstream_response_tracker: ResponsesUpstreamTracker::from_headers(headers),
-            outcome: ResponsesStreamOutcome::default(),
+            saw_terminal_event: false,
+            stream_error: None,
             tool_arguments: ToolArgumentStreamState::default(),
             diagnostics: ResponsesStreamDiagnostics::new(request_id),
             timeout,
             sse_scanner: SseEventScanner::default(),
             span,
         }
+    }
+    fn mark_terminal_event(&mut self) {
+        self.saw_terminal_event = true;
+        self.tool_arguments.clear();
+    }
+
+    fn record_stream_error(&mut self, error: UpstreamResponseError) {
+        self.stream_error = Some(error);
+        self.mark_terminal_event();
     }
 
     fn stream_snapshot(
@@ -97,60 +107,6 @@ impl OpenaiResponsesUpstreamBodyObserver {
             state: self.upstream_response_tracker.state.clone(),
         }
     }
-    fn stream_result(&self, snapshot: &ResponsesUpstreamStreamSnapshot) -> ResponsesStreamResult {
-        if let Some(error) = self.outcome.stream_error.clone() {
-            ResponsesStreamResult::StreamError { error }
-        } else if self
-            .upstream_response_tracker
-            .state
-            .eof_is_complete(self.outcome.saw_terminal_event)
-        {
-            ResponsesStreamResult::Completed
-        } else if self.tool_arguments.has_pending_items() {
-            ResponsesStreamResult::UnfinishedTool {
-                error: UpstreamResponseError::UnfinishedTool {
-                    sequence_number: snapshot.state.sequence_number,
-                },
-            }
-        } else {
-            ResponsesStreamResult::Closed
-        }
-    }
-}
-
-#[derive(Default)]
-struct ResponsesStreamOutcome {
-    saw_terminal_event: bool,
-    stream_error: Option<UpstreamResponseError>,
-}
-
-impl ResponsesStreamOutcome {
-    fn mark_finished(&mut self, tool_arguments: &mut ToolArgumentStreamState) {
-        self.saw_terminal_event = true;
-        tool_arguments.clear();
-    }
-
-    fn mark_error(
-        &mut self,
-        error: UpstreamResponseError,
-        tool_arguments: &mut ToolArgumentStreamState,
-    ) {
-        self.stream_error = Some(error);
-        self.mark_finished(tool_arguments);
-    }
-
-    fn mark_error_message(
-        &mut self,
-        message: impl Into<String>,
-        tool_arguments: &mut ToolArgumentStreamState,
-    ) {
-        self.mark_error(
-            UpstreamResponseError::Stream {
-                message: message.into(),
-            },
-            tool_arguments,
-        );
-    }
 }
 
 impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
@@ -159,12 +115,13 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
         self.upstream_response_tracker.scan_bytes(chunk);
         for event in self.sse_scanner.scan(chunk) {
             if is_terminal_event(&event) {
-                self.outcome.mark_finished(&mut self.tool_arguments);
+                self.mark_terminal_event();
                 return BodyAction::Continue;
             }
             if let Err(message) = self.tool_arguments.observe_event(&event, self.timeout) {
-                self.outcome
-                    .mark_error_message(message.clone(), &mut self.tool_arguments);
+                self.record_stream_error(UpstreamResponseError::Stream {
+                    message: message.clone(),
+                });
                 return BodyAction::InjectAndClose(error_sse_chunk(
                     self.upstream_response_tracker.state.sequence_number,
                     &message,
@@ -175,8 +132,9 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
     }
 
     fn observe_error(&mut self, error: &reqwest::Error) {
-        self.outcome
-            .mark_error_message(error.to_string(), &mut self.tool_arguments);
+        self.record_stream_error(UpstreamResponseError::Stream {
+            message: error.to_string(),
+        });
     }
 
     fn poll_pending(&mut self, cx: &mut Context<'_>) -> BodyAction {
@@ -188,13 +146,12 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             return BodyAction::Continue;
         }
 
-        self.outcome.mark_error_message(
-            format!(
+        self.record_stream_error(UpstreamResponseError::Stream {
+            message: format!(
                 "{TOOL_ARGUMENT_STALL_MESSAGE} after {}s",
                 self.timeout.unwrap_or_default().as_secs()
             ),
-            &mut self.tool_arguments,
-        );
+        });
         BodyAction::InjectAndClose(error_sse_chunk(
             self.upstream_response_tracker.state.sequence_number,
             TOOL_ARGUMENT_STALL_MESSAGE,
@@ -203,24 +160,45 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
 
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let snapshot = Box::new(self.stream_snapshot(head, stats));
-        let result = self.stream_result(&snapshot);
-        emit_responses_stream_result(&self.span, &self.diagnostics, snapshot, result);
-    }
-}
 
-fn streaming_response(
-    status: StatusCode,
-    headers: HeaderMap,
-    stream: impl Stream<Item = std::io::Result<Bytes>> + Send + 'static,
-) -> Response<Body> {
-    let mut response = Response::new(Body::from_stream(stream));
-    *response.status_mut() = status;
-    for (key, value) in headers {
-        if let Some(key) = key {
-            response.headers_mut().append(key, value);
+        if let Some(error) = self.stream_error.clone() {
+            self.span.in_scope(|| {
+                logging::ResponsesLogRecord::from_event(&ResponsesUpstreamEvent::Error {
+                    error,
+                    snapshot,
+                })
+                .emit()
+            });
+        } else if snapshot.state.eof_is_complete(self.saw_terminal_event) {
+            self.span.in_scope(|| {
+                logging::ResponsesLogRecord::from_event(&ResponsesUpstreamEvent::Completed {
+                    snapshot,
+                })
+                .emit()
+            });
+        } else if self.tool_arguments.has_pending_items() {
+            let error = UpstreamResponseError::UnfinishedTool {
+                sequence_number: snapshot.state.sequence_number,
+            };
+            let diagnostic_path = self
+                .diagnostics
+                .write_unfinished_tool_diagnostic(&snapshot, &error);
+            self.span.in_scope(|| {
+                logging::emit_responses_stream_error_with_diagnostic(
+                    &snapshot,
+                    &error,
+                    diagnostic_path.as_deref(),
+                )
+            });
+        } else {
+            self.span.in_scope(|| {
+                logging::ResponsesLogRecord::from_event(&ResponsesUpstreamEvent::Closed {
+                    snapshot,
+                })
+                .emit()
+            });
         }
     }
-    response
 }
 
 fn error_sse_chunk(sequence_number: Option<u64>, message: &str) -> Bytes {

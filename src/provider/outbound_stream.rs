@@ -1,8 +1,8 @@
 use std::io;
 use std::pin::Pin;
 
-use axum::body::Bytes;
-use axum::http::{HeaderMap, StatusCode};
+use axum::body::{Body, Bytes};
+use axum::http::{HeaderMap, Response, StatusCode};
 use futures_util::Stream;
 
 use crate::error::Result;
@@ -24,6 +24,25 @@ pub(crate) struct OutboundStream {
     pub head: UpstreamResponseHead,
     pub outbound_headers: HeaderMap,
     pub stream: Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send>>,
+}
+
+pub(crate) fn outbound_response(
+    status: StatusCode,
+    headers: HeaderMap,
+    body: Body,
+) -> Response<Body> {
+    let mut response = Response::new(body);
+    *response.status_mut() = status;
+    *response.headers_mut() = headers;
+    response
+}
+
+pub(crate) fn streaming_response(
+    status: StatusCode,
+    headers: HeaderMap,
+    stream: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
+) -> Response<Body> {
+    outbound_response(status, headers, Body::from_stream(stream))
 }
 
 /// Build the outbound side of a 2xx upstream response for streaming providers.

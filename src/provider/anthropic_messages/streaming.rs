@@ -5,7 +5,8 @@ use crate::config::ProviderCompatibility;
 use crate::error::Result;
 use crate::logging;
 use crate::provider::{
-    BodyAction, BodyObserver, MonitoredBodyStream, UpstreamBodyStreamStats, UpstreamResponseContext,
+    outbound_response, BodyAction, BodyObserver, MonitoredBodyStream, UpstreamBodyStreamStats,
+    UpstreamResponseContext,
 };
 use crate::upstream::UpstreamResponseHead;
 
@@ -39,10 +40,11 @@ pub(super) async fn handle_streaming(
         Body::from_stream(stream)
     };
 
-    let mut response = Response::new(stream);
-    *response.status_mut() = upstream_head.status;
-    *response.headers_mut() = outbound_headers;
-    Ok(response)
+    Ok(outbound_response(
+        upstream_head.status,
+        outbound_headers,
+        stream,
+    ))
 }
 
 fn should_normalize_provider_response(compatibility: ProviderCompatibility) -> bool {

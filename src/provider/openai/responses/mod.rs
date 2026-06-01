@@ -3,7 +3,6 @@ mod diagnostic;
 mod limits;
 mod observed;
 pub(crate) mod request;
-mod result;
 mod sse;
 mod state;
 mod stream;
