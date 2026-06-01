@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use structural_convert::StructuralConvert;
 use strum::Display;
@@ -11,14 +12,14 @@ use super::super::Filter;
 // Tool Definition Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::HybridSearch))]
 pub struct HybridSearch {
     pub embedding_weight: f32,
     pub text_weight: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::RankVersionType))]
 pub enum RankVersionType {
     Auto,
@@ -26,7 +27,7 @@ pub enum RankVersionType {
     Default20241115,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::RankingOptions))]
 pub struct RankingOptions {
     pub hybrid_search: Option<HybridSearch>,
@@ -38,7 +39,7 @@ pub struct RankingOptions {
 // Tool Definition
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FileSearchTool))]
 pub struct FileSearchTool {
     pub vector_store_ids: Vec<String>,
@@ -51,7 +52,7 @@ pub struct FileSearchTool {
 // Output / Resource Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FileSearchToolCallStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum FileSearchToolCallStatus {
@@ -62,7 +63,7 @@ pub enum FileSearchToolCallStatus {
     Completed,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FileSearchToolCallResult))]
 pub struct FileSearchToolCallResult {
     pub attributes: HashMap<String, Value>,
@@ -76,7 +77,7 @@ pub struct FileSearchToolCallResult {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FileSearchToolCall))]
 pub struct FileSearchToolCall {
     pub id: String,

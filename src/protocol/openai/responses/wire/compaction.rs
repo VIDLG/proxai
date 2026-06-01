@@ -6,7 +6,7 @@ use structural_convert::StructuralConvert;
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CompactionSummaryItemParam))]
 pub struct CompactionSummaryItemParam {
     pub id: Option<String>,
@@ -17,7 +17,7 @@ pub struct CompactionSummaryItemParam {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CompactionBody))]
 pub struct CompactionBody {
     pub id: String,

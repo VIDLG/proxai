@@ -1,11 +1,12 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::InputContent;
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponsePromptVariables))]
 pub enum ResponsePromptVariables {
     String(String),
@@ -13,7 +14,7 @@ pub enum ResponsePromptVariables {
     Custom(Value),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Prompt))]
 pub struct Prompt {
     pub id: String,
@@ -21,7 +22,7 @@ pub struct Prompt {
     pub variables: Option<ResponsePromptVariables>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::PromptCacheRetention))]
 #[strum(serialize_all = "snake_case")]
 pub enum PromptCacheRetention {

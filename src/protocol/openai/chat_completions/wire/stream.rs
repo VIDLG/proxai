@@ -1,22 +1,23 @@
 use async_openai::types::chat as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 
 use super::{ChatChoiceLogprobs, CompletionUsage, FinishReason, Role, ServiceTier};
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FunctionCallStream))]
 pub struct FunctionCallStream {
     pub name: Option<String>,
     pub arguments: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FunctionType))]
 pub enum FunctionType {
     Function,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageToolCallChunk))]
 pub struct ChatCompletionMessageToolCallChunk {
     pub index: u32,
@@ -25,7 +26,7 @@ pub struct ChatCompletionMessageToolCallChunk {
     pub function: Option<FunctionCallStream>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionStreamResponseDelta))]
 pub struct ChatCompletionStreamResponseDelta {
     pub content: Option<String>,
@@ -35,7 +36,7 @@ pub struct ChatCompletionStreamResponseDelta {
     pub refusal: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatChoiceStream))]
 pub struct ChatChoiceStream {
     pub index: u32,
@@ -44,7 +45,7 @@ pub struct ChatChoiceStream {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CreateChatCompletionStreamResponse))]
 pub struct CreateChatCompletionStreamResponse {
     pub id: String,

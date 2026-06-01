@@ -1,12 +1,12 @@
 use async_openai::types::responses as openai;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use structural_convert::StructuralConvert;
 
 // Keep these local citation/path bodies typed even though the upstream SDK keeps
 // their fields private. We cannot use `StructuralConvert` directly for them, so
 // we deserialize from their serialized JSON shape instead.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FileCitationBody {
     pub file_id: String,
     pub filename: String,
@@ -20,7 +20,7 @@ impl From<openai::FileCitationBody> for FileCitationBody {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UrlCitationBody {
     pub end_index: u32,
     pub start_index: u32,
@@ -35,7 +35,7 @@ impl From<openai::UrlCitationBody> for UrlCitationBody {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ContainerFileCitationBody {
     pub container_id: String,
     pub end_index: u32,
@@ -51,7 +51,7 @@ impl From<openai::ContainerFileCitationBody> for ContainerFileCitationBody {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FilePath {
     pub file_id: String,
     pub index: u32,
@@ -64,7 +64,7 @@ impl From<openai::FilePath> for FilePath {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Annotation))]
 pub enum Annotation {
     FileCitation(FileCitationBody),

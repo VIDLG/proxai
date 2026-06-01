@@ -1,5 +1,5 @@
 use async_openai::types::responses as openai;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use structural_convert::StructuralConvert;
@@ -12,26 +12,28 @@ use super::{
     ToolChoiceParam, Truncation, Verbosity,
 };
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Instructions))]
 pub enum Instructions {
     Text(String),
     Array(Vec<InputItem>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert, Deserialize)]
 #[convert(from(openai::Billing))]
 pub struct Billing {
     pub payer: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::IncompleteDetails))]
 pub struct IncompleteDetails {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::Status))]
 #[strum(serialize_all = "snake_case")]
 pub enum Status {
@@ -44,19 +46,19 @@ pub enum Status {
     Incomplete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputTokenDetails))]
 pub struct InputTokenDetails {
     pub cached_tokens: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::OutputTokenDetails))]
 pub struct OutputTokenDetails {
     pub reasoning_tokens: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseUsage))]
 pub struct ResponseUsage {
     pub input_tokens: u32,
@@ -68,7 +70,7 @@ pub struct ResponseUsage {
 
 // ── Conversation ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert, Deserialize)]
 #[convert(from(openai::Conversation))]
 pub struct Conversation {
     pub id: String,
@@ -76,7 +78,7 @@ pub struct Conversation {
 
 // ── Response formatting ─────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFormatJsonSchema))]
 pub struct ResponseFormatJsonSchema {
     pub description: Option<String>,
@@ -85,7 +87,9 @@ pub struct ResponseFormatJsonSchema {
     pub strict: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::TextResponseFormatConfiguration))]
 #[strum(serialize_all = "snake_case")]
 pub enum TextResponseFormatConfiguration {
@@ -96,14 +100,14 @@ pub enum TextResponseFormatConfiguration {
     JsonSchema(ResponseFormatJsonSchema),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseTextParam))]
 pub struct ResponseTextParam {
     pub format: TextResponseFormatConfiguration,
     pub verbosity: Option<Verbosity>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Response))]
 pub struct Response {
     pub background: Option<bool>,

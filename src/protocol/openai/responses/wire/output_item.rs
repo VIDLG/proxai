@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 
 use super::{
@@ -10,7 +11,7 @@ use super::{
 use super::{CodeInterpreterToolCall, ComputerToolCall, ComputerToolCallOutputResource};
 use super::{FunctionShellCall, FunctionShellCallOutput, ImageGenToolCall, LocalShellToolCall};
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::OutputItem))]
 pub enum OutputItem {
     Message(OutputMessage),

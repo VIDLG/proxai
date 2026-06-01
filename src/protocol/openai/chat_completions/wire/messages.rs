@@ -1,4 +1,5 @@
 use async_openai::types::chat as openai;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use structural_convert::StructuralConvert;
 use strum::Display;
@@ -17,7 +18,9 @@ use super::{
 // ImageUrl
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageDetail))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageDetail {
@@ -28,7 +31,7 @@ pub enum ImageDetail {
     Original,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ImageUrl))]
 pub struct ImageUrl {
     pub url: String,
@@ -39,7 +42,9 @@ pub struct ImageUrl {
 // Input Audio
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::InputAudioFormat))]
 #[strum(serialize_all = "lowercase")]
 pub enum InputAudioFormat {
@@ -48,7 +53,7 @@ pub enum InputAudioFormat {
     Mp3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputAudio))]
 pub struct InputAudio {
     pub data: String,
@@ -59,7 +64,7 @@ pub struct InputAudio {
 // File (manual From — SDK fields are private)
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileObject {
     pub file_data: Option<String>,
     pub file_id: Option<String>,
@@ -73,7 +78,7 @@ impl From<openai::FileObject> for FileObject {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessageContentPartFile))]
 pub struct ChatCompletionRequestMessageContentPartFile {
     pub file: FileObject,
@@ -83,19 +88,19 @@ pub struct ChatCompletionRequestMessageContentPartFile {
 // Content Parts
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessageContentPartRefusal))]
 pub struct ChatCompletionRequestMessageContentPartRefusal {
     pub refusal: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessageContentPartImage))]
 pub struct ChatCompletionRequestMessageContentPartImage {
     pub image_url: ImageUrl,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessageContentPartAudio))]
 pub struct ChatCompletionRequestMessageContentPartAudio {
     pub input_audio: InputAudio,
@@ -105,13 +110,13 @@ pub struct ChatCompletionRequestMessageContentPartAudio {
 // Message Content Enums
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestSystemMessageContentPart))]
 pub enum ChatCompletionRequestSystemMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestUserMessageContentPart))]
 pub enum ChatCompletionRequestUserMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
@@ -120,54 +125,54 @@ pub enum ChatCompletionRequestUserMessageContentPart {
     File(ChatCompletionRequestMessageContentPartFile),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessageContentPart))]
 pub enum ChatCompletionRequestAssistantMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
     Refusal(ChatCompletionRequestMessageContentPartRefusal),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestToolMessageContentPart))]
 pub enum ChatCompletionRequestToolMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestDeveloperMessageContentPart))]
 pub enum ChatCompletionRequestDeveloperMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestSystemMessageContent))]
 pub enum ChatCompletionRequestSystemMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestSystemMessageContentPart>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestUserMessageContent))]
 pub enum ChatCompletionRequestUserMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestUserMessageContentPart>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessageContent))]
 pub enum ChatCompletionRequestAssistantMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestAssistantMessageContentPart>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestToolMessageContent))]
 pub enum ChatCompletionRequestToolMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestToolMessageContentPart>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestDeveloperMessageContent))]
 pub enum ChatCompletionRequestDeveloperMessageContent {
     Text(String),
@@ -178,34 +183,34 @@ pub enum ChatCompletionRequestDeveloperMessageContent {
 // Message Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestDeveloperMessage))]
 pub struct ChatCompletionRequestDeveloperMessage {
     pub content: ChatCompletionRequestDeveloperMessageContent,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestSystemMessage))]
 pub struct ChatCompletionRequestSystemMessage {
     pub content: ChatCompletionRequestSystemMessageContent,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestUserMessage))]
 pub struct ChatCompletionRequestUserMessage {
     pub content: ChatCompletionRequestUserMessageContent,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessageAudio))]
 pub struct ChatCompletionRequestAssistantMessageAudio {
     pub id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessage))]
 pub struct ChatCompletionRequestAssistantMessage {
     pub content: Option<ChatCompletionRequestAssistantMessageContent>,
@@ -215,21 +220,21 @@ pub struct ChatCompletionRequestAssistantMessage {
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestToolMessage))]
 pub struct ChatCompletionRequestToolMessage {
     pub content: ChatCompletionRequestToolMessageContent,
     pub tool_call_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestFunctionMessage))]
 pub struct ChatCompletionRequestFunctionMessage {
     pub content: Option<String>,
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessage))]
 pub enum ChatCompletionRequestMessage {
     Developer(ChatCompletionRequestDeveloperMessage),
@@ -244,7 +249,7 @@ pub enum ChatCompletionRequestMessage {
 // Response-level types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::CompletionFinishReason))]
 #[strum(serialize_all = "snake_case")]
 pub enum CompletionFinishReason {
@@ -253,7 +258,7 @@ pub enum CompletionFinishReason {
     ContentFilter,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Logprobs))]
 pub struct Logprobs {
     pub tokens: Vec<String>,
@@ -262,7 +267,7 @@ pub struct Logprobs {
     pub text_offset: Vec<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Choice))]
 pub struct Choice {
     pub text: String,
@@ -271,7 +276,7 @@ pub struct Choice {
     pub finish_reason: Option<CompletionFinishReason>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ContentPart))]
 pub enum ContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
@@ -282,7 +287,7 @@ pub enum ContentPart {
 // Request/Response wrapper types
 // ============================================================
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CreateChatCompletionRequest))]
 pub struct CreateChatCompletionRequest {
     pub messages: Vec<ChatCompletionRequestMessage>,
@@ -315,7 +320,7 @@ pub struct CreateChatCompletionRequest {
     pub prompt_cache_key: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionDeleted))]
 pub struct ChatCompletionDeleted {
     pub object: String,
@@ -323,7 +328,7 @@ pub struct ChatCompletionDeleted {
     pub deleted: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionList))]
 pub struct ChatCompletionList {
     pub object: String,
@@ -333,7 +338,7 @@ pub struct ChatCompletionList {
     pub has_more: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageListItem))]
 pub struct ChatCompletionMessageListItem {
     pub id: String,
@@ -341,7 +346,7 @@ pub struct ChatCompletionMessageListItem {
     pub message: ChatCompletionResponseMessage,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageList))]
 pub struct ChatCompletionMessageList {
     pub object: String,
@@ -351,7 +356,7 @@ pub struct ChatCompletionMessageList {
     pub has_more: bool,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UpdateChatCompletionRequest {
     pub metadata: serde_json::Value,
 }
@@ -367,7 +372,7 @@ impl From<openai::UpdateChatCompletionRequest> for UpdateChatCompletionRequest {
 // Prompt
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Prompt))]
 pub enum Prompt {
     String(String),

@@ -1,5 +1,6 @@
 //! OpenAI Responses protocol-native response projection.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::protocol::ErrorObject;
@@ -16,7 +17,7 @@ use super::super::wire::{
 ///
 /// Field order follows `async_openai::types::responses::Response` for the
 /// fields we intentionally retain.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ResponseProjection {
     pub background: Option<bool>,
     pub billing: Option<Billing>,

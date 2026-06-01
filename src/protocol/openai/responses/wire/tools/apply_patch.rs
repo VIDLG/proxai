@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 use strum::Display;
 
@@ -6,7 +7,7 @@ use strum::Display;
 // Input / Context Item Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallStatusParam))]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallStatusParam {
@@ -14,7 +15,7 @@ pub enum ApplyPatchCallStatusParam {
     Completed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallOutputStatusParam))]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallOutputStatusParam {
@@ -22,20 +23,20 @@ pub enum ApplyPatchCallOutputStatusParam {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCreateFileOperationParam))]
 pub struct ApplyPatchCreateFileOperationParam {
     pub path: String,
     pub diff: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchDeleteFileOperationParam))]
 pub struct ApplyPatchDeleteFileOperationParam {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchUpdateFileOperationParam))]
 pub struct ApplyPatchUpdateFileOperationParam {
     pub path: String,
@@ -46,7 +47,7 @@ pub struct ApplyPatchUpdateFileOperationParam {
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses apply-patch operation variant names."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchOperationParam))]
 pub enum ApplyPatchOperationParam {
     CreateFile(ApplyPatchCreateFileOperationParam),
@@ -58,7 +59,7 @@ pub enum ApplyPatchOperationParam {
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchToolCallItemParam))]
 pub struct ApplyPatchToolCallItemParam {
     pub id: Option<String>,
@@ -67,7 +68,7 @@ pub struct ApplyPatchToolCallItemParam {
     pub operation: ApplyPatchOperationParam,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchToolCallOutputItemParam))]
 pub struct ApplyPatchToolCallOutputItemParam {
     pub id: Option<String>,
@@ -80,7 +81,7 @@ pub struct ApplyPatchToolCallOutputItemParam {
 // Output / Resource Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallStatus {
@@ -88,7 +89,7 @@ pub enum ApplyPatchCallStatus {
     Completed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallOutputStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallOutputStatus {
@@ -96,20 +97,20 @@ pub enum ApplyPatchCallOutputStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCreateFileOperation))]
 pub struct ApplyPatchCreateFileOperation {
     pub path: String,
     pub diff: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchDeleteFileOperation))]
 pub struct ApplyPatchDeleteFileOperation {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchUpdateFileOperation))]
 pub struct ApplyPatchUpdateFileOperation {
     pub path: String,
@@ -120,7 +121,7 @@ pub struct ApplyPatchUpdateFileOperation {
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses apply-patch operation variant names."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchOperation))]
 pub enum ApplyPatchOperation {
     CreateFile(ApplyPatchCreateFileOperation),
@@ -132,7 +133,7 @@ pub enum ApplyPatchOperation {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchToolCall))]
 pub struct ApplyPatchToolCall {
     pub id: String,
@@ -142,7 +143,7 @@ pub struct ApplyPatchToolCall {
     pub created_by: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchToolCallOutput))]
 pub struct ApplyPatchToolCallOutput {
     pub id: String,

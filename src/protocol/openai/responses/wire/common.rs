@@ -1,8 +1,9 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 use strum::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ServiceTier))]
 #[strum(serialize_all = "snake_case")]
 pub enum ServiceTier {
@@ -13,7 +14,9 @@ pub enum ServiceTier {
     Priority,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::Verbosity))]
 #[strum(serialize_all = "lowercase")]
 pub enum Verbosity {
@@ -23,7 +26,7 @@ pub enum Verbosity {
     High,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::OutputStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum OutputStatus {
@@ -32,7 +35,7 @@ pub enum OutputStatus {
     Incomplete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::Truncation))]
 #[strum(serialize_all = "lowercase")]
 pub enum Truncation {

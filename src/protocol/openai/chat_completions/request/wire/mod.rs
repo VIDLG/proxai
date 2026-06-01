@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 mod audio;
 mod tools;
 mod web_search;
@@ -11,21 +12,23 @@ pub use self::audio::*;
 pub use self::tools::*;
 pub use self::web_search::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseModalities))]
 pub enum ResponseModalities {
     Text,
     Audio,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::StopConfiguration))]
 pub enum StopConfiguration {
     String(String),
     StringArray(Vec<String>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::ReasoningEffort))]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningEffort {
@@ -38,7 +41,9 @@ pub enum ReasoningEffort {
     Xhigh,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::Verbosity))]
 #[strum(serialize_all = "lowercase")]
 pub enum Verbosity {
@@ -48,7 +53,7 @@ pub enum Verbosity {
     High,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFormatJsonSchema))]
 pub struct ResponseFormatJsonSchema {
     pub description: Option<String>,
@@ -57,7 +62,7 @@ pub struct ResponseFormatJsonSchema {
     pub strict: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFormat))]
 pub enum ResponseFormat {
     Text,
@@ -67,20 +72,20 @@ pub enum ResponseFormat {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessageContentPartText))]
 pub struct ChatCompletionRequestMessageContentPartText {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::PredictionContentContent))]
 pub enum PredictionContentContent {
     Text(String),
     Array(Vec<ChatCompletionRequestMessageContentPartText>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::PredictionContent))]
 pub enum PredictionContent {
     Content(PredictionContentContent),
@@ -90,7 +95,7 @@ pub enum PredictionContent {
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionStreamOptions))]
 pub struct ChatCompletionStreamOptions {
     pub include_usage: Option<bool>,

@@ -1,10 +1,11 @@
 use async_openai::types::chat as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::{CompletionUsage, ServiceTier};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FinishReason))]
 #[strum(serialize_all = "snake_case")]
 pub enum FinishReason {
@@ -15,7 +16,9 @@ pub enum FinishReason {
     FunctionCall,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize,
+)]
 #[convert(from(openai::Role))]
 #[strum(serialize_all = "lowercase")]
 pub enum Role {
@@ -27,42 +30,42 @@ pub enum Role {
     Function,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FunctionCall))]
 pub struct FunctionCall {
     pub name: String,
     pub arguments: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageToolCall))]
 pub struct ChatCompletionMessageToolCall {
     pub id: String,
     pub function: FunctionCall,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CustomTool))]
 pub struct CustomTool {
     pub name: String,
     pub input: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageCustomToolCall))]
 pub struct ChatCompletionMessageCustomToolCall {
     pub id: String,
     pub custom_tool: CustomTool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageToolCalls))]
 pub enum ChatCompletionMessageToolCalls {
     Function(ChatCompletionMessageToolCall),
     Custom(ChatCompletionMessageCustomToolCall),
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionResponseMessageAudio))]
 pub struct ChatCompletionResponseMessageAudio {
     pub id: String,
@@ -71,7 +74,7 @@ pub struct ChatCompletionResponseMessageAudio {
     pub transcript: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::UrlCitation))]
 pub struct UrlCitation {
     pub end_index: u32,
@@ -80,13 +83,13 @@ pub struct UrlCitation {
     pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionResponseMessageAnnotation))]
 pub enum ChatCompletionResponseMessageAnnotation {
     UrlCitation { url_citation: UrlCitation },
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::TopLogprobs))]
 pub struct TopLogprobs {
     pub token: String,
@@ -94,7 +97,7 @@ pub struct TopLogprobs {
     pub bytes: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionTokenLogprob))]
 pub struct ChatCompletionTokenLogprob {
     pub token: String,
@@ -103,14 +106,14 @@ pub struct ChatCompletionTokenLogprob {
     pub top_logprobs: Vec<TopLogprobs>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatChoiceLogprobs))]
 pub struct ChatChoiceLogprobs {
     pub content: Option<Vec<ChatCompletionTokenLogprob>>,
     pub refusal: Option<Vec<ChatCompletionTokenLogprob>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionResponseMessage))]
 pub struct ChatCompletionResponseMessage {
     pub content: Option<String>,
@@ -122,7 +125,7 @@ pub struct ChatCompletionResponseMessage {
     pub audio: Option<ChatCompletionResponseMessageAudio>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatChoice))]
 pub struct ChatChoice {
     pub index: u32,
@@ -131,7 +134,7 @@ pub struct ChatChoice {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CreateChatCompletionResponse))]
 pub struct CreateChatCompletionResponse {
     pub id: String,

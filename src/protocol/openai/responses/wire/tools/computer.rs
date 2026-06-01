@@ -1,5 +1,5 @@
 use async_openai::types::responses as openai;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use structural_convert::StructuralConvert;
 use strum::Display;
@@ -10,7 +10,9 @@ use super::super::OutputStatus;
 // Tool Definition Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Deserialize, Serialize,
+)]
 #[convert(from(openai::ComputerEnvironment))]
 #[strum(serialize_all = "lowercase")]
 pub enum ComputerEnvironment {
@@ -30,7 +32,7 @@ pub enum ComputerEnvironment {
 // We cannot use `StructuralConvert` here because `openai::ComputerUsePreviewTool`
 // does not expose its fields publicly, so we deserialize from its serialized JSON
 // shape instead.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ComputerUsePreviewTool {
     pub environment: ComputerEnvironment,
     pub display_width: u32,
@@ -44,7 +46,7 @@ impl From<openai::ComputerUsePreviewTool> for ComputerUsePreviewTool {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerTool))]
 pub struct ComputerTool {}
 
@@ -52,14 +54,14 @@ pub struct ComputerTool {}
 // Output / Resource Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CoordParam))]
 pub struct CoordParam {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ClickButtonType))]
 #[strum(serialize_all = "lowercase")]
 pub enum ClickButtonType {
@@ -70,7 +72,7 @@ pub enum ClickButtonType {
     Forward,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ClickParam))]
 pub struct ClickParam {
     pub button: ClickButtonType,
@@ -79,7 +81,7 @@ pub struct ClickParam {
     pub keys: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::DoubleClickAction))]
 pub struct DoubleClickAction {
     pub x: i32,
@@ -87,20 +89,20 @@ pub struct DoubleClickAction {
     pub keys: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::DragParam))]
 pub struct DragParam {
     pub path: Vec<CoordParam>,
     pub keys: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::KeyPressAction))]
 pub struct KeyPressAction {
     pub keys: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MoveParam))]
 pub struct MoveParam {
     pub x: i32,
@@ -108,7 +110,7 @@ pub struct MoveParam {
     pub keys: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ScrollParam))]
 pub struct ScrollParam {
     pub scroll_x: i32,
@@ -118,13 +120,13 @@ pub struct ScrollParam {
     pub keys: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::TypeParam))]
 pub struct TypeParam {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerAction))]
 pub enum ComputerAction {
     Click(ClickParam),
@@ -138,7 +140,7 @@ pub enum ComputerAction {
     Wait,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerCallSafetyCheckParam))]
 pub struct ComputerCallSafetyCheckParam {
     pub id: String,
@@ -146,7 +148,7 @@ pub struct ComputerCallSafetyCheckParam {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ComputerCallOutputStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerCallOutputStatus {
@@ -156,14 +158,14 @@ pub enum ComputerCallOutputStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ComputerScreenshotImageType))]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerScreenshotImageType {
     ComputerScreenshot,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerScreenshotImage))]
 pub struct ComputerScreenshotImage {
     pub r#type: ComputerScreenshotImageType,
@@ -175,7 +177,7 @@ pub struct ComputerScreenshotImage {
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerCallOutputItemParam))]
 pub struct ComputerCallOutputItemParam {
     pub call_id: String,
@@ -189,7 +191,7 @@ pub struct ComputerCallOutputItemParam {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerToolCall))]
 pub struct ComputerToolCall {
     pub action: Option<ComputerAction>,
@@ -200,7 +202,7 @@ pub struct ComputerToolCall {
     pub status: OutputStatus,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ComputerToolCallOutputResource))]
 pub struct ComputerToolCallOutputResource {
     pub call_id: String,

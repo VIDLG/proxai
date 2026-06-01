@@ -1,4 +1,5 @@
 use async_openai::types::chat as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 use strum::Display;
 
@@ -6,7 +7,7 @@ use strum::Display;
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionAudioVoice))]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioVoice {
@@ -28,7 +29,7 @@ pub enum ChatCompletionAudioVoice {
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionAudioFormat))]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioFormat {
@@ -44,7 +45,7 @@ pub enum ChatCompletionAudioFormat {
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionAudio))]
 pub struct ChatCompletionAudio {
     pub voice: ChatCompletionAudioVoice,

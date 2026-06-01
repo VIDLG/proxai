@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 
 use super::super::{
@@ -5,7 +6,7 @@ use super::super::{
     CreateChatCompletionStreamResponse, ServiceTier,
 };
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(CreateChatCompletionResponse))]
 pub struct ChatResponseProjection {
     pub id: String,
@@ -17,7 +18,7 @@ pub struct ChatResponseProjection {
     pub usage: Option<CompletionUsage>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(CreateChatCompletionStreamResponse))]
 pub struct ChatStreamResponseProjection {
     pub id: String,

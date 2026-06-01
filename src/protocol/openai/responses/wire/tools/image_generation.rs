@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 use strum::Display;
 
@@ -6,7 +7,9 @@ use strum::Display;
 // Tool Definition Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenToolBackground))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolBackground {
@@ -16,7 +19,9 @@ pub enum ImageGenToolBackground {
     Auto,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::InputFidelity))]
 #[strum(serialize_all = "lowercase")]
 pub enum InputFidelity {
@@ -25,14 +30,16 @@ pub enum InputFidelity {
     Low,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Default, Serialize, Deserialize)]
 #[convert(from(openai::ImageGenToolInputImageMask))]
 pub struct ImageGenToolInputImageMask {
     pub image_url: Option<String>,
     pub file_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenToolModeration))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolModeration {
@@ -41,7 +48,9 @@ pub enum ImageGenToolModeration {
     Low,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenToolOutputFormat))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolOutputFormat {
@@ -51,7 +60,9 @@ pub enum ImageGenToolOutputFormat {
     Jpeg,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenToolQuality))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolQuality {
@@ -62,7 +73,9 @@ pub enum ImageGenToolQuality {
     Auto,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenToolSize))]
 pub enum ImageGenToolSize {
     #[default]
@@ -75,7 +88,9 @@ pub enum ImageGenToolSize {
     Size1536x1024,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
+)]
 #[convert(from(openai::ImageGenActionEnum))]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenActionEnum {
@@ -89,7 +104,7 @@ pub enum ImageGenActionEnum {
 // Tool Definition
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ImageGenTool))]
 pub struct ImageGenTool {
     pub background: Option<ImageGenToolBackground>,
@@ -109,7 +124,7 @@ pub struct ImageGenTool {
 // Output / Resource Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ImageGenToolCallStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum ImageGenToolCallStatus {
@@ -123,7 +138,7 @@ pub enum ImageGenToolCallStatus {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ImageGenToolCall))]
 pub struct ImageGenToolCall {
     pub id: String,

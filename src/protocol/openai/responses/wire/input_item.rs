@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 
 use super::{
@@ -11,27 +12,27 @@ use super::{
     ReasoningItem, ToolSearchCallItemParam, ToolSearchOutputItemParam, WebSearchToolCall,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ItemReferenceType))]
 pub enum ItemReferenceType {
     ItemReference,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ItemReference))]
 pub struct ItemReference {
     pub r#type: Option<ItemReferenceType>,
     pub id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MessageItem))]
 pub enum MessageItem {
     Output(OutputMessage),
     Input(InputMessage),
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Item))]
 pub enum Item {
     Message(MessageItem),
@@ -61,14 +62,14 @@ pub enum Item {
     CustomToolCall(CustomToolCall),
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputParam))]
 pub enum InputParam {
     Text(String),
     Items(Vec<InputItem>),
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputItem))]
 pub enum InputItem {
     ItemReference(ItemReference),

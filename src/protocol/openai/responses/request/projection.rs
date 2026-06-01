@@ -1,5 +1,6 @@
 use async_openai::types::responses as openai;
 use async_openai::types::responses::CreateResponse;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use structural_convert::StructuralConvert;
 
@@ -8,7 +9,7 @@ use super::super::wire::{
     ResponseTextParam, ServiceTier, Tool, ToolChoiceParam, Truncation,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ConversationParam))]
 pub enum ConversationParam {
     ConversationID(String),
@@ -19,7 +20,7 @@ pub enum ConversationParam {
 ///
 /// Field order follows `async_openai::types::responses::CreateResponse` for the
 /// fields we intentionally retain.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RequestProjection {
     pub background: Option<bool>,
     pub conversation: Option<ConversationParam>,

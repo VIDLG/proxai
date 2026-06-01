@@ -1,5 +1,6 @@
 use async_openai::types::mcp as openai_mcp;
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use structural_convert::StructuralConvert;
 use strum::Display;
@@ -8,7 +9,7 @@ use strum::Display;
 // Tool Choice
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ToolChoiceMCP))]
 pub struct ToolChoiceMCP {
     pub name: String,
@@ -19,14 +20,14 @@ pub struct ToolChoiceMCP {
 // Tool Definition Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolFilter))]
 pub struct MCPToolFilter {
     pub read_only: Option<bool>,
     pub tool_names: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolAllowedTools))]
 pub enum MCPToolAllowedTools {
     List(Vec<String>),
@@ -37,7 +38,7 @@ pub enum MCPToolAllowedTools {
     clippy::enum_variant_names,
     reason = "Mirrors upstream MCP connector identifiers."
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai_mcp::McpToolConnectorId))]
 #[strum(serialize_all = "snake_case")]
 pub enum McpToolConnectorId {
@@ -51,7 +52,7 @@ pub enum McpToolConnectorId {
     ConnectorSharepoint,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolApprovalSetting))]
 #[strum(serialize_all = "lowercase")]
 pub enum MCPToolApprovalSetting {
@@ -59,14 +60,14 @@ pub enum MCPToolApprovalSetting {
     Never,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolApprovalFilter))]
 pub struct MCPToolApprovalFilter {
     pub always: Option<MCPToolFilter>,
     pub never: Option<MCPToolFilter>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolRequireApproval))]
 pub enum MCPToolRequireApproval {
     Filter(MCPToolApprovalFilter),
@@ -77,7 +78,7 @@ pub enum MCPToolRequireApproval {
 // Tool Definition
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPTool))]
 pub struct MCPTool {
     pub server_label: String,
@@ -95,7 +96,7 @@ pub struct MCPTool {
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MCPApprovalResponse))]
 pub struct MCPApprovalResponse {
     pub approval_request_id: String,
@@ -108,7 +109,7 @@ pub struct MCPApprovalResponse {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MCPApprovalRequest))]
 pub struct MCPApprovalRequest {
     pub arguments: String,
@@ -121,7 +122,7 @@ pub struct MCPApprovalRequest {
 // MCP List Tools Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPListToolsTool))]
 pub struct MCPListToolsTool {
     pub input_schema: Value,
@@ -134,7 +135,7 @@ pub struct MCPListToolsTool {
 // MCP List Tools Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MCPListTools))]
 pub struct MCPListTools {
     pub id: String,
@@ -147,7 +148,7 @@ pub struct MCPListTools {
 // MCP Call Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::MCPToolCallStatus))]
 #[strum(serialize_all = "snake_case")]
 pub enum MCPToolCallStatus {
@@ -162,7 +163,7 @@ pub enum MCPToolCallStatus {
 // MCP Call Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MCPToolCall))]
 pub struct MCPToolCall {
     pub arguments: String,

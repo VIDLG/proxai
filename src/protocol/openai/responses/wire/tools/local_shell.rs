@@ -1,4 +1,5 @@
 use async_openai::types::responses as openai;
+use serde::{Deserialize, Serialize};
 use structural_convert::StructuralConvert;
 
 use std::collections::HashMap;
@@ -9,7 +10,7 @@ use super::super::OutputStatus;
 // Local Shell Supporting Types
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::LocalShellExecAction))]
 pub struct LocalShellExecAction {
     pub command: Vec<String>,
@@ -23,7 +24,7 @@ pub struct LocalShellExecAction {
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::LocalShellToolCallOutput))]
 pub struct LocalShellToolCallOutput {
     pub id: String,
@@ -35,7 +36,7 @@ pub struct LocalShellToolCallOutput {
 // Local Shell Output Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::LocalShellToolCall))]
 pub struct LocalShellToolCall {
     pub action: LocalShellExecAction,

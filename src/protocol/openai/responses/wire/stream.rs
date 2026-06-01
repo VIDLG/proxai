@@ -5,42 +5,42 @@ use structural_convert::StructuralConvert;
 
 use super::{OutputContent, OutputItem, Response, ResponseLogProb, SummaryPart};
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCreatedEvent))]
 pub struct ResponseCreatedEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseInProgressEvent))]
 pub struct ResponseInProgressEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCompletedEvent))]
 pub struct ResponseCompletedEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFailedEvent))]
 pub struct ResponseFailedEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseIncompleteEvent))]
 pub struct ResponseIncompleteEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseOutputItemAddedEvent))]
 pub struct ResponseOutputItemAddedEvent {
     pub sequence_number: u64,
@@ -48,7 +48,7 @@ pub struct ResponseOutputItemAddedEvent {
     pub item: OutputItem,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseOutputItemDoneEvent))]
 pub struct ResponseOutputItemDoneEvent {
     pub sequence_number: u64,
@@ -56,7 +56,7 @@ pub struct ResponseOutputItemDoneEvent {
     pub item: OutputItem,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseContentPartAddedEvent))]
 pub struct ResponseContentPartAddedEvent {
     pub sequence_number: u64,
@@ -66,7 +66,7 @@ pub struct ResponseContentPartAddedEvent {
     pub part: OutputContent,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseContentPartDoneEvent))]
 pub struct ResponseContentPartDoneEvent {
     pub sequence_number: u64,
@@ -76,7 +76,7 @@ pub struct ResponseContentPartDoneEvent {
     pub part: OutputContent,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseTextDeltaEvent))]
 pub struct ResponseTextDeltaEvent {
     pub sequence_number: u64,
@@ -87,7 +87,7 @@ pub struct ResponseTextDeltaEvent {
     pub logprobs: Option<Vec<ResponseLogProb>>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseTextDoneEvent))]
 pub struct ResponseTextDoneEvent {
     pub sequence_number: u64,
@@ -98,7 +98,7 @@ pub struct ResponseTextDoneEvent {
     pub logprobs: Option<Vec<ResponseLogProb>>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseRefusalDeltaEvent))]
 pub struct ResponseRefusalDeltaEvent {
     pub sequence_number: u64,
@@ -108,7 +108,7 @@ pub struct ResponseRefusalDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseRefusalDoneEvent))]
 pub struct ResponseRefusalDoneEvent {
     pub sequence_number: u64,
@@ -118,7 +118,7 @@ pub struct ResponseRefusalDoneEvent {
     pub refusal: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFunctionCallArgumentsDeltaEvent))]
 pub struct ResponseFunctionCallArgumentsDeltaEvent {
     pub sequence_number: u64,
@@ -127,7 +127,7 @@ pub struct ResponseFunctionCallArgumentsDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFunctionCallArgumentsDoneEvent))]
 pub struct ResponseFunctionCallArgumentsDoneEvent {
     pub name: Option<String>,
@@ -137,7 +137,7 @@ pub struct ResponseFunctionCallArgumentsDoneEvent {
     pub arguments: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFileSearchCallInProgressEvent))]
 pub struct ResponseFileSearchCallInProgressEvent {
     pub sequence_number: u64,
@@ -145,7 +145,7 @@ pub struct ResponseFileSearchCallInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFileSearchCallSearchingEvent))]
 pub struct ResponseFileSearchCallSearchingEvent {
     pub sequence_number: u64,
@@ -153,7 +153,7 @@ pub struct ResponseFileSearchCallSearchingEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseFileSearchCallCompletedEvent))]
 pub struct ResponseFileSearchCallCompletedEvent {
     pub sequence_number: u64,
@@ -161,7 +161,7 @@ pub struct ResponseFileSearchCallCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseWebSearchCallInProgressEvent))]
 pub struct ResponseWebSearchCallInProgressEvent {
     pub sequence_number: u64,
@@ -169,7 +169,7 @@ pub struct ResponseWebSearchCallInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseWebSearchCallSearchingEvent))]
 pub struct ResponseWebSearchCallSearchingEvent {
     pub sequence_number: u64,
@@ -177,7 +177,7 @@ pub struct ResponseWebSearchCallSearchingEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseWebSearchCallCompletedEvent))]
 pub struct ResponseWebSearchCallCompletedEvent {
     pub sequence_number: u64,
@@ -185,7 +185,7 @@ pub struct ResponseWebSearchCallCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningSummaryPartAddedEvent))]
 pub struct ResponseReasoningSummaryPartAddedEvent {
     pub sequence_number: u64,
@@ -195,7 +195,7 @@ pub struct ResponseReasoningSummaryPartAddedEvent {
     pub part: SummaryPart,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningSummaryPartDoneEvent))]
 pub struct ResponseReasoningSummaryPartDoneEvent {
     pub sequence_number: u64,
@@ -205,7 +205,7 @@ pub struct ResponseReasoningSummaryPartDoneEvent {
     pub part: SummaryPart,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningSummaryTextDeltaEvent))]
 pub struct ResponseReasoningSummaryTextDeltaEvent {
     pub sequence_number: u64,
@@ -215,7 +215,7 @@ pub struct ResponseReasoningSummaryTextDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningSummaryTextDoneEvent))]
 pub struct ResponseReasoningSummaryTextDoneEvent {
     pub sequence_number: u64,
@@ -225,7 +225,7 @@ pub struct ResponseReasoningSummaryTextDoneEvent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningTextDeltaEvent))]
 pub struct ResponseReasoningTextDeltaEvent {
     pub sequence_number: u64,
@@ -235,7 +235,7 @@ pub struct ResponseReasoningTextDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseReasoningTextDoneEvent))]
 pub struct ResponseReasoningTextDoneEvent {
     pub sequence_number: u64,
@@ -245,7 +245,7 @@ pub struct ResponseReasoningTextDoneEvent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseImageGenCallCompletedEvent))]
 pub struct ResponseImageGenCallCompletedEvent {
     pub sequence_number: u64,
@@ -253,7 +253,7 @@ pub struct ResponseImageGenCallCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseImageGenCallGeneratingEvent))]
 pub struct ResponseImageGenCallGeneratingEvent {
     pub sequence_number: u64,
@@ -261,7 +261,7 @@ pub struct ResponseImageGenCallGeneratingEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseImageGenCallInProgressEvent))]
 pub struct ResponseImageGenCallInProgressEvent {
     pub sequence_number: u64,
@@ -269,7 +269,7 @@ pub struct ResponseImageGenCallInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseImageGenCallPartialImageEvent))]
 pub struct ResponseImageGenCallPartialImageEvent {
     pub sequence_number: u64,
@@ -279,7 +279,7 @@ pub struct ResponseImageGenCallPartialImageEvent {
     pub partial_image_b64: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPCallArgumentsDeltaEvent))]
 pub struct ResponseMCPCallArgumentsDeltaEvent {
     pub sequence_number: u64,
@@ -288,7 +288,7 @@ pub struct ResponseMCPCallArgumentsDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPCallArgumentsDoneEvent))]
 pub struct ResponseMCPCallArgumentsDoneEvent {
     pub sequence_number: u64,
@@ -297,7 +297,7 @@ pub struct ResponseMCPCallArgumentsDoneEvent {
     pub arguments: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPCallCompletedEvent))]
 pub struct ResponseMCPCallCompletedEvent {
     pub sequence_number: u64,
@@ -305,7 +305,7 @@ pub struct ResponseMCPCallCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPCallFailedEvent))]
 pub struct ResponseMCPCallFailedEvent {
     pub sequence_number: u64,
@@ -313,7 +313,7 @@ pub struct ResponseMCPCallFailedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPCallInProgressEvent))]
 pub struct ResponseMCPCallInProgressEvent {
     pub sequence_number: u64,
@@ -321,7 +321,7 @@ pub struct ResponseMCPCallInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPListToolsCompletedEvent))]
 pub struct ResponseMCPListToolsCompletedEvent {
     pub sequence_number: u64,
@@ -329,7 +329,7 @@ pub struct ResponseMCPListToolsCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPListToolsFailedEvent))]
 pub struct ResponseMCPListToolsFailedEvent {
     pub sequence_number: u64,
@@ -337,7 +337,7 @@ pub struct ResponseMCPListToolsFailedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseMCPListToolsInProgressEvent))]
 pub struct ResponseMCPListToolsInProgressEvent {
     pub sequence_number: u64,
@@ -345,7 +345,7 @@ pub struct ResponseMCPListToolsInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCodeInterpreterCallInProgressEvent))]
 pub struct ResponseCodeInterpreterCallInProgressEvent {
     pub sequence_number: u64,
@@ -353,7 +353,7 @@ pub struct ResponseCodeInterpreterCallInProgressEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCodeInterpreterCallInterpretingEvent))]
 pub struct ResponseCodeInterpreterCallInterpretingEvent {
     pub sequence_number: u64,
@@ -361,7 +361,7 @@ pub struct ResponseCodeInterpreterCallInterpretingEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCodeInterpreterCallCompletedEvent))]
 pub struct ResponseCodeInterpreterCallCompletedEvent {
     pub sequence_number: u64,
@@ -369,7 +369,7 @@ pub struct ResponseCodeInterpreterCallCompletedEvent {
     pub item_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCodeInterpreterCallCodeDeltaEvent))]
 pub struct ResponseCodeInterpreterCallCodeDeltaEvent {
     pub sequence_number: u64,
@@ -378,7 +378,7 @@ pub struct ResponseCodeInterpreterCallCodeDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCodeInterpreterCallCodeDoneEvent))]
 pub struct ResponseCodeInterpreterCallCodeDoneEvent {
     pub sequence_number: u64,
@@ -387,7 +387,7 @@ pub struct ResponseCodeInterpreterCallCodeDoneEvent {
     pub code: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseOutputTextAnnotationAddedEvent))]
 pub struct ResponseOutputTextAnnotationAddedEvent {
     pub sequence_number: u64,
@@ -398,14 +398,14 @@ pub struct ResponseOutputTextAnnotationAddedEvent {
     pub annotation: Value,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseQueuedEvent))]
 pub struct ResponseQueuedEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCustomToolCallInputDeltaEvent))]
 pub struct ResponseCustomToolCallInputDeltaEvent {
     pub sequence_number: u64,
@@ -414,7 +414,7 @@ pub struct ResponseCustomToolCallInputDeltaEvent {
     pub delta: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseCustomToolCallInputDoneEvent))]
 pub struct ResponseCustomToolCallInputDoneEvent {
     pub sequence_number: u64,
@@ -423,7 +423,7 @@ pub struct ResponseCustomToolCallInputDoneEvent {
     pub input: String,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseErrorEvent))]
 pub struct ResponseErrorEvent {
     pub sequence_number: u64,
@@ -436,7 +436,7 @@ pub struct ResponseErrorEvent {
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses stream event variant names."
 )]
-#[derive(Debug, Clone, PartialEq, StructuralConvert)]
+#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ResponseStreamEvent))]
 pub enum ResponseStreamEvent {
     ResponseCreated(ResponseCreatedEvent),

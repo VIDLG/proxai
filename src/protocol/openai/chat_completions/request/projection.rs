@@ -1,4 +1,5 @@
 use async_openai::types::{chat::CreateChatCompletionRequest, Metadata};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -14,7 +15,7 @@ use super::{
 ///
 /// Field order follows `async_openai::types::chat::CreateChatCompletionRequest`
 /// for the fields we intentionally retain.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RequestProjection {
     // Intentionally omitted for now: `messages`.
     // Messages can be very large and private; request hints should not depend on
