@@ -1,9 +1,9 @@
 use axum::body::Bytes;
 use futures_util::{Stream, StreamExt};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
-use crate::sse::{sse_frame_stream, SseEvent, SseSegment};
+use crate::sse::{sse_frame_stream, SseEvent, SseFrame, SseSegment};
 
 /// Rewrites a narrow upstream compatibility gap in OpenAI Responses SSE streams.
 ///
@@ -23,33 +23,21 @@ pub(super) fn normalize_nested_error_sse_stream(
 ) -> Pin<Box<dyn Stream<Item = std::io::Result<Bytes>> + Send>> {
     Box::pin(sse_frame_stream(input).map(|segment| {
         segment.map(|segment| match segment {
-            SseSegment::Frame(frame) => normalize_nested_error_sse_frame(frame.bytes())
-                .unwrap_or_else(|| frame.into_bytes()),
+            SseSegment::Frame(frame) => {
+                normalize_nested_error_sse_frame(&frame).unwrap_or_else(|| frame.into_bytes())
+            }
             SseSegment::Tail(bytes) => bytes,
         })
     }))
 }
 
-pub(super) fn normalize_nested_error_sse_frame(frame: &[u8]) -> Option<Bytes> {
-    let frame = std::str::from_utf8(frame).ok()?;
-    let mut event_type = SseEvent::DEFAULT_EVENT_TYPE;
-    let mut data_lines = Vec::new();
-
-    for line in frame.lines() {
-        let line = line.strip_suffix('\r').unwrap_or(line);
-        if let Some(value) = line.strip_prefix("event:") {
-            event_type = value.trim_start();
-        } else if let Some(value) = line.strip_prefix("data:") {
-            data_lines.push(value.trim_start());
-        }
-    }
-
-    let data = data_lines.join("\n");
-    let payload = serde_json::from_str::<Value>(&data).ok()?;
-    if event_type != "error" && payload.get("type").and_then(Value::as_str) != Some("error") {
+fn normalize_nested_error_sse_frame(frame: &SseFrame) -> Option<Bytes> {
+    let event = Option::<SseEvent>::try_from(frame).ok().flatten()?;
+    let payload = serde_json::from_str::<NestedGenericErrorPayload>(&event.data).ok()?;
+    if event.event_type != "error" && payload.kind.as_deref() != Some("error") {
         return None;
     }
-    if payload.get("message").and_then(Value::as_str).is_some() {
+    if payload.message.is_some() {
         return None;
     }
 
@@ -60,14 +48,43 @@ pub(super) fn normalize_nested_error_sse_frame(frame: &[u8]) -> Option<Bytes> {
     // Keep our protocol model strict and adapt this provider-local upstream gap on
     // the outbound wire so clients can deserialize the stream and see the real
     // upstream failure, such as `context_length_exceeded`.
-    let error = payload.get("error")?.as_object()?;
-    let message = error.get("message")?.as_str()?;
-    let normalized = serde_json::json!({
-        "type": "error",
-        "sequence_number": payload.get("sequence_number").and_then(Value::as_u64),
-        "code": error.get("code").and_then(Value::as_str),
-        "message": message,
-        "param": error.get("param").and_then(Value::as_str),
-    });
+    let error = payload.error?;
+    let normalized = NormalizedGenericErrorPayload {
+        kind: "error",
+        sequence_number: payload.sequence_number,
+        code: error.code,
+        message: error.message,
+        param: error.param,
+    };
     crate::sse::encode_sse_json("error", &normalized).ok()
 }
+
+#[derive(Debug, Deserialize)]
+struct NestedGenericErrorPayload {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    sequence_number: Option<u64>,
+    message: Option<String>,
+    error: Option<NestedGenericError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct NestedGenericError {
+    code: Option<String>,
+    message: String,
+    param: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct NormalizedGenericErrorPayload {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    sequence_number: Option<u64>,
+    code: Option<String>,
+    message: String,
+    param: Option<String>,
+}
+
+#[cfg(test)]
+#[path = "compat_tests.rs"]
+mod tests;
