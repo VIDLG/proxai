@@ -1,11 +1,10 @@
 use axum::http::HeaderMap;
-use std::time::Duration;
 
 use crate::protocol::openai_responses::ResponseProjection;
 use crate::protocol::ErrorObject;
 
 use crate::provider::UpstreamResponseError;
-use crate::upstream::{UpstreamResponseHead, UpstreamStreamMetrics};
+use crate::upstream::{ContentType, UpstreamResponseHead, UpstreamStreamMetrics};
 
 use super::limits::{CodexLimits, RateLimit};
 use super::observed::{ObservedState, ObservedUpdate};
@@ -51,13 +50,11 @@ pub(crate) struct ResponsesUpstreamState {
 
 impl ResponsesUpstreamState {
     pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
-        let head = UpstreamResponseHead::from_headers(
-            axum::http::StatusCode::OK,
-            headers,
-            Duration::default(),
-        );
         Self {
-            is_sse: head.is_sse(),
+            is_sse: headers
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|value| ContentType::try_from(value).ok())
+                .is_some_and(|content_type| content_type.is_sse()),
             rate_limit: RateLimit::from_headers(headers),
             codex_limits: CodexLimits::from_headers(headers),
             ..Self::default()
