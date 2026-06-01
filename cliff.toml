@@ -16,7 +16,7 @@ body = """
 
 ## Download
 
-- Windows x86_64: `zed-openai-shim-<tag>-windows-x86_64.zip`
+- Windows x86_64: `proxai-<tag>-windows-x86_64.exe`
 """
 trim = true
 

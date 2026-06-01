@@ -1,366 +1,220 @@
-# Zed OpenAI Shim
+# ProxAI
 
 [中文文档](README_CN.md)
 
-Local proxy for using Zed's OpenAI-compatible Responses API client with an
-upstream that rejects `role:"system"` messages in `input`.
+ProxAI is a small local compatibility proxy for OpenAI-compatible requests.
+It accepts local client traffic, normalizes the specific OpenAI Responses API
+system-message shape that breaks some upstreams, and forwards requests to the
+configured provider with minimal surprises.
 
-The shim listens on `127.0.0.1:18080` by default, forwards requests to the
-configured upstream, and only normalizes the system-message shape that breaks
-the upstream.
+Today, the stable runtime paths support no-conversion forwarding for OpenAI
+Responses, OpenAI Chat Completions, and Anthropic Messages. The config model is
+protocol-aware so routing and future conversion paths can expand explicitly over
+time without turning ProxAI into a generic AI gateway.
 
-## Overview
+## Current Status
 
-- Users: download the release zip, place `.env` next to
-  `zed-openai-shim.exe`, then run the exe.
-- Developers: use `pixi install` and `just run` for local iteration.
-- Zed: configure an `openai_compatible` provider whose `api_url` is
-  `http://127.0.0.1:18080/v1`.
+The current stable forwarding paths are:
 
-## Problem
+- inbound: `openai_responses` -> outbound: `openai_responses`
+- inbound: `openai_chat_completions` -> outbound: `openai_chat_completions`
+- inbound: `anthropic_messages` -> outbound: `anthropic_messages`
 
-Zed sends agent requests to `/v1/responses` with a Responses-style `input`
-array. Agent instructions are sent as a system message:
+Cross-protocol translation remains scaffolded and should stay explicit when it
+is wired into runtime.
 
-```json
-{
-  "type": "message",
-  "role": "system",
-  "content": [
-    {
-      "type": "input_text",
-      "text": "You are a coding agent."
-    }
-  ]
-}
-```
+## What ProxAI Does Today
 
-Some upstreams, including the sub2api OpenAI OAuth Codex path this shim was
-built for, reject system messages in `input` and return an error like:
+For JSON `/v1/responses` requests, ProxAI currently normalizes the specific
+system-message shape that breaks some upstreams:
 
-```json
-{
-  "detail": "System messages are not allowed"
-}
-```
-
-The compatible shape is to move the system text to top-level `instructions` and
-remove the system item from `input`. See the upstream sub2api issue
-[Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147) and
-[docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md) for the
-root-cause notes.
-
-## What The Shim Changes
-
-For JSON requests, the shim:
-
-- finds top-level `input` array items with `role:"system"`
-- extracts text from `content` parts with `type:"input_text"` or `type:"text"`
+- finds top-level `input` items with `role:"system"`
+- extracts `input_text` / `text` parts
 - prepends that text to top-level `instructions`
-- removes the original system message from `input`
-- leaves other fields, headers, tools, `prompt_cache_key`, and request paths as
-  unchanged as possible
+- removes the original system item from `input`
+- leaves other fields as unchanged as practical
 
-Example normalized request:
+This keeps clients working with upstreams that reject Responses-style system
+messages inside `input`.
 
-```json
-{
-  "instructions": "You are a coding agent.",
-  "input": [
-    {
-      "type": "message",
-      "role": "user",
-      "content": [
-        {
-          "type": "input_text",
-          "text": "Hello"
-        }
-      ]
-    }
-  ]
-}
-```
+For `/v1/chat/completions` requests, ProxAI currently performs no protocol
+conversion; it validates the Chat Completions request shape, applies provider
+routing/model rewrite, and forwards the request upstream.
 
-The shim does not convert Chat Completions payloads. The current scope is the
-Zed Responses API role issue.
+For `/v1/messages` requests, ProxAI performs the same no-conversion forwarding
+for Anthropic Messages, including provider auth and stream observation.
 
-## User Setup
+## Installation and App Directory
 
-Download `zed-openai-shim-vX.Y.Z-windows-x86_64.zip` from GitHub Releases,
-unzip it, then copy `.env.example` to `.env`. For a portable release folder,
-keep `.env` next to `zed-openai-shim.exe`:
+Download the Windows release executable, run it once, and then edit the
+generated config files in the user app directory.
 
-```text
-zed-openai-shim/
-  zed-openai-shim.exe
-  .env.example
-  .env
-```
+Generated runtime files live under:
 
-The exe loads configuration from these `.env` locations, in order:
+- Windows: `%USERPROFILE%\\.proxai\\config.toml`
+- Windows: `%USERPROFILE%\\.proxai\\config.example.toml`
+- Linux/macOS: `~/.proxai/config.toml`
+- Linux/macOS: `~/.proxai/config.example.toml`
 
-1. `.env` next to `zed-openai-shim.exe`
-2. `%USERPROFILE%\.zed-openai-shim\.env`
-3. `.env` in the current working directory
+Additional runtime folders under the same app dir include:
 
-Values loaded earlier win because `dotenvy` does not override existing
-environment variables. Use the exe-local `.env` for portable folders, or the
-home-directory `.env` if you want to download/update the exe without moving a
-config file beside it each time.
+- `logs/`
+- `captures/`
 
-Create `.env` from the example:
+Before first real use, set the referenced provider `base_url` and `api_key` in
+`config.toml`.
 
-```powershell
-Copy-Item .env.example .env
-```
+## Running
 
-Or create the home-directory config once:
+After editing your config:
 
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.zed-openai-shim"
-Copy-Item .env.example "$env:USERPROFILE\.zed-openai-shim\.env"
-```
+- executable name: `proxai.exe`
+- default proxy listen address: `http://127.0.0.1:18080`
+- default MCP endpoint: `http://127.0.0.1:18081/mcp`
 
-Then edit `.env` and set your upstream:
+CLI overrides remain intentionally small:
 
-```powershell
-OPENAI_SHIM_UPSTREAM=http://your-upstream.example:8080
-```
+- `--config`
+- `--upstream`
+- `--api-key`
+- `--port`
+- `--log-level`
+- `--log-format`
 
-Run the exe:
+`--upstream` and `--api-key` temporarily override the provider selected by
+`routing.default_provider_names.openai_responses` for that run.
 
-```powershell
-.\zed-openai-shim.exe
-```
+## Config Overview
 
-By default, the shim listens on `http://127.0.0.1:18080` and forwards to
-`OPENAI_SHIM_UPSTREAM` from `.env`.
+Runtime configuration lives in `config.toml`. The tracked reference file is
+`config.example.toml`.
 
-If Zed does not send an `Authorization` header, the shim can add one from
-`.env`:
+For the full field-by-field explanation, see:
 
-```powershell
-OPENAI_SHIM_API_KEY=replace-with-your-api-key
-```
+- [docs/configuration.md](docs/configuration.md)
 
-If Zed requires a key and sends a dummy `Authorization` header, enable explicit
-override in `.env`:
+In short, the config is organized around:
 
-```powershell
-OPENAI_SHIM_OVERRIDE_AUTHORIZATION=true
-```
+- `[server]`
+- `[mcp]`
+- `[routing.default_provider_names]`
+- `[[routing.routes]]`
+- `[providers.<name>]`
+- `[tool_calls]`
+- `[capture]` (`inbound_request_enabled` / `forwarded_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`)
+- `[logging]`
+- `[error_responses]`
 
-Do not commit real API keys.
+Today, the stable runtime paths are OpenAI Responses no-conversion and OpenAI
+Chat Completions no-conversion, plus Anthropic Messages no-conversion. The
+provider/routing model is already structured for explicit protocol expansion.
 
-## Developer Workflow
+For Anthropic Messages providers, use `compatibility = "strict"` with the
+official Anthropic API and `compatibility = "anthropic_compatible"` for
+compatible upstreams that omit some official response fields.
 
-Install the Pixi-managed GNU toolchain and run from source:
+For upstream non-2xx responses, ProxAI normalizes the response body and preserves
+useful diagnostic headers such as `Retry-After`, upstream request ids, and
+rate-limit headers.
 
-```powershell
-pixi install
-just run
-```
+The `[mcp]` section configures a local MCP listener. By default ProxAI starts a streamable HTTP MCP endpoint at `http://127.0.0.1:18081/mcp`.
 
-Build a local release exe:
+## Client Setup Today
 
-```powershell
-just build
-```
+For OpenAI-compatible clients, point a provider at:
 
-The local build output is `target\release\zed-openai-shim.exe`.
+- `http://127.0.0.1:18080/v1`
+
+Keep model names stable in the client and let ProxAI route them internally.
+A practical approach is to expose logical names such as:
+
+- `gpt-5.4`
+- `gpt-5.5`
+- later, possibly `claude-sonnet`
+
+Do not put real upstream URLs or keys in client settings. Keep upstream details
+in `~/.proxai/config.toml`.
+
+## Development
 
 Common commands:
 
-| Command | Description |
-| --- | --- |
-| `pixi install` | Install the Pixi-managed GNU toolchain used by the Rust build. |
-| `just run` | Run the shim from source for development. |
-| `just check` | Run formatting, clippy, and Rust tests. |
-| `just test-e2e` | Run the Rust proxy E2E test against a fake upstream. |
-| `just repro-system-role` | Optional real-upstream diagnostic for the system-role behavior. |
-| `just build` | Build `target/release/zed-openai-shim.exe`. |
+- `pixi install`
+- `just run`
+- `just check`
+- `just test-e2e`
+- `just build`
+- `cargo run -- check-update`
 
-`just repro-system-role` is intentionally not part of `just check`: it calls the
-configured real upstream and requires `OPENAI_SHIM_API_KEY`.
+Protocol coverage comparison against official SDKs:
 
-## Release Build
+- `just compare-anthropic-protocol` — compare Anthropic Messages protocol types against the official TS SDK
+- `just compare-openai-protocol` — compare OpenAI protocol types against `async-openai` v0.40.2
 
-GitHub Actions uses the same Pixi + Just path as local development:
-`just check` and `just build`. The Rust toolchain is
-`stable-x86_64-pc-windows-gnu`, and Pixi provides the GNU linker/toolchain.
+The referenced SDK checkouts are tracked as git submodules under `contrib/`:
 
-The release workflow runs on manual dispatch and on version tags such as
-`v0.1.1`. Tagged runs publish:
+- `contrib/anthropic-sdk-typescript`
+- `contrib/async-openai`
 
-```text
-zed-openai-shim-vX.Y.Z-windows-x86_64.zip
-```
+Use `-d` (detail, default), `-q` (brief), or `-v` (verbose with classification) for output detail.
 
-The zip contains `zed-openai-shim.exe` and `.env.example`. Copy `.env.example`
-to `.env`, edit it, and keep `.env` beside the exe.
+Useful capture control commands:
 
-Release notes are generated in two steps:
+- `cargo run -- capture status`
+- `cargo run -- capture enable`
+- `cargo run -- capture disable`
+- `cargo run -- capture enable inbound-request`
+- `cargo run -- capture enable forwarded-request`
+- `cargo run -- capture enable upstream-response`
+- `cargo run -- capture enable outbound-response`
 
-1. `git-cliff` builds deterministic notes from commits since the previous tag.
-2. `scripts/polish_release_notes.py` optionally uses Anthropic-compatible
-   credentials to rewrite those notes into a short GitHub Release body.
+Useful temporary debug overrides for a single run:
 
-If `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` are not configured, release
-notes fall back to the raw `git-cliff` output. The release still succeeds.
+- `cargo run -- --capture-inbound-request`
+- `cargo run -- --capture-forwarded-request`
+- `cargo run -- --capture-upstream-response`
+- `cargo run -- --capture-outbound-response`
 
-Local release-notes preview:
+The local release executable is:
 
-```powershell
-pixi run git-cliff --latest --output dist\release-notes.raw.md
-pixi run python scripts\polish_release_notes.py --input dist\release-notes.raw.md --output dist\release-notes.md
-```
+- `target\\release\\proxai.exe`
 
-## Zed Configuration
+## Protocol Alignment Strategy
 
-In Zed settings, configure an OpenAI-compatible provider that points at the
-local shim. Do not put API keys in `settings.json`; Zed stores provider keys in
-the OS keychain when entered through the Agent settings UI, and also supports
-provider-specific environment variables.
+ProxAI's protocol types follow a strict **name consistency** rule:
 
-```json
-{
-  "language_models": {
-    "openai_compatible": {
-      "openai_shim": {
-        "api_url": "http://127.0.0.1:18080/v1",
-        "available_models": [
-          {
-            "name": "gpt-5.5",
-            "display_name": "GPT-5.5 via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          },
-          {
-            "name": "gpt-5.4",
-            "display_name": "GPT-5.4 via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          },
-          {
-            "name": "gpt-5.3-codex",
-            "display_name": "GPT-5.3 Codex via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          }
-        ]
-      }
-    }
-  },
-  "agent": {
-    "default_model": {
-      "provider": "openai_shim",
-      "model": "gpt-5.5",
-      "enable_thinking": false
-    }
-  }
-}
-```
+1. **No type aliases** — every SDK type name has exactly one corresponding
+   `pub struct` or `pub enum` in proxai, never `pub type X = Y`.
+2. **No folded types** — when the SDK distinguishes between `*Block` and
+   `*BlockParam` (or similar request/response pairs), proxai maintains
+   separate structs for each rather than sharing one with an alias.
+3. **No renamed types** — proxai uses the SDK's native name, even when the
+   SDK's casing is inconsistent (`Base64PdfSource`, not `Base64PDFSource`).
+4. **String unions as enums** — fixed-string unions in the SDK
+   (`Array<'direct' | 'code_execution_20250825'>`) are modeled as
+   `Vec<EnumType>` rather than `Vec<String>`.
 
-The important parts are:
+These rules are enforced by `tools/compare_anthropic_protocol.py` and
+`tools/compare_openai_protocol.py`, which use tree-sitter AST parsing to
+compare proxai types field-by-field against the official SDK. The scripts
+report missing types, missing fields, field-order mismatches, serde wire
+semantics, and deprecated-field auto-exclusions at three verbosity levels.
+When an SDK required-nullable field (`field: T | null`) is represented as a
+Rust `Option<T>`, the field must carry
+`/// @sdk(required_nullable_accepts_missing)` to document that proxai
+intentionally accepts a missing field as compatibility tolerance. See
+`docs/protocol-conversion.md` for the full conversion and alignment rules.
 
-- `api_url` ends with `/v1`
-- `capabilities.chat_completions` is `false`, so Zed uses `/v1/responses`
-- `capabilities.prompt_cache_key` can stay `true`; the shim preserves it
-- `agent.default_model.provider` matches the provider name `openai_shim`
+## Release Artifacts
 
-Do not put the real upstream URL or API key in Zed settings. Point Zed at the
-local shim and keep upstream details in `.env`.
+GitHub release artifacts are versioned like:
 
-## Zed Agent Usage
+- `proxai-vX.Y.Z-windows-x86_64.exe`
 
-With the release executable running and `agent.default_model` pointing to
-`openai_shim`, Zed Agent can use the configured OpenAI-compatible models
-through the local proxy.
+## Notes on Future Protocols
 
-![Zed Agent using GPT-5.5 via local shim](<docs/images/zed agent.png>)
-
-The screenshot above shows Zed Agent selecting `GPT-5.5 via local shim` and
-receiving a response through the configured provider.
-
-![Shim forwarding a Zed Agent request](docs/images/log.png)
-
-The shim log shows a forwarded `/v1/responses` request and an upstream `200`
-response, which confirms the local proxy path is being used.
-
-To verify manually, start `zed-openai-shim.exe`, open Zed Agent, select
-`GPT-5.5 via local shim` or another configured `openai_shim` model, and send an
-agent request. The shim should log a forwarded `/v1/responses` request.
-
-When adding more screenshots, store them under `docs/images/`. Do not include
-captures that expose API keys, private prompts, or repository secrets.
-
-## Verified Behavior
-
-Offline tests and the Rust proxy E2E are covered by `just check`. Observed
-real-upstream behavior:
-
-- raw `role:"system"` in `input`: upstream fails
-- `system -> instructions`: upstream returns 200
-- detailed sub2api issue notes:
-  [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)
-
-## Troubleshooting
-
-If Zed Agent shows a connection error for
-`http://127.0.0.1:18080/v1/responses`, the shim is usually not running or is
-listening on a different port.
-
-![Zed Agent error when the shim is not running](docs/images/error.png)
-
-Fix it by starting the release executable from its release directory, then
-retrying the Agent request:
-
-```powershell
-.\zed-openai-shim.exe
-```
-
-If you changed `OPENAI_SHIM_PORT`, make sure the Zed `api_url` uses the same
-port and still ends with `/v1`.
-
-## Logs
-
-The shim logs to stdout/stderr. If file logs are needed, write them under:
-
-```text
-logs/
-```
-
-`logs/` is ignored by git.
-
-## Upstream Notes
-
-The upstream sub2api issue is
-[Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147), with
-local analysis in
-[docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md). This
-shim remains useful while upstream support for Responses `input_text` system
-content is pending.
+The current repo already contains early cross-protocol translation scaffolding
+and route-level protocol filtering. That scaffolding is intentionally ahead of
+full conversion support so that the config and internal architecture do not
+need another redesign later. Future protocol support should stay explicit and
+predictable rather than growing ProxAI into a generic AI platform by accident.

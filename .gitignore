@@ -1,10 +1,14 @@
 .pixi/
-.env
-.env.*
-!.env.example
+.atomcode/
+.cargo-target*/
+.pi-lens/
+.ralph/
 __pycache__/
 *.pyc
 logs/
+captures/
+diagnostics/
+nul
 build/
 dist/
 *.spec

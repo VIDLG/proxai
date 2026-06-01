@@ -1,4 +1,0 @@
-[target.x86_64-pc-windows-gnu]
-linker = "x86_64-w64-mingw32-gcc.exe"
-ar = "x86_64-w64-mingw32-gcc-ar.exe"
-rustflags = ["-Cdlltool=x86_64-w64-mingw32-dlltool.exe"]

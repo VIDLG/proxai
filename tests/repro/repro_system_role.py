@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 import urllib.request
@@ -10,20 +9,51 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+import tomllib
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL = "gpt-5.5"
 
 
-def load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+def default_config_path() -> Path:
+    return Path.home() / ".proxai" / "config.toml"
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("rb") as file:
+            return tomllib.load(file)
+    except FileNotFoundError:
+        return {}
+
+
+def default_openai_provider_name(config: dict[str, Any]) -> str:
+    routing = config.get("routing")
+    if isinstance(routing, dict):
+        default_provider_names = routing.get("default_provider_names")
+        if isinstance(default_provider_names, dict):
+            value = default_provider_names.get("openai_responses")
+            if isinstance(value, str):
+                return value.strip()
+    return ""
+
+
+def provider_value(config: dict[str, Any], provider_name: str, key: str) -> str:
+    providers = config.get("providers")
+    if isinstance(providers, dict):
+        provider = providers.get(provider_name)
+        if isinstance(provider, dict):
+            value = provider.get(key)
+            if isinstance(value, str):
+                return value.strip()
+    return ""
+
+
+def default_openai_provider_value(config: dict[str, Any], key: str) -> str:
+    provider_name = default_openai_provider_name(config)
+    if not provider_name:
+        return ""
+    return provider_value(config, provider_name, key)
 
 
 def normalize_payload(value: Any) -> Any:
@@ -32,7 +62,9 @@ def normalize_payload(value: Any) -> Any:
     if not isinstance(value, dict):
         return value
 
-    normalized = {key: normalize_payload(item) for key, item in value.items() if key != "input"}
+    normalized = {
+        key: normalize_payload(item) for key, item in value.items() if key != "input"
+    }
     input_value = value.get("input")
     if not isinstance(input_value, list):
         if "input" in value:
@@ -44,7 +76,10 @@ def normalize_payload(value: Any) -> Any:
     changed = False
     for item in input_value:
         normalized_item = normalize_payload(item)
-        if isinstance(normalized_item, dict) and normalized_item.get("role") == "system":
+        if (
+            isinstance(normalized_item, dict)
+            and normalized_item.get("role") == "system"
+        ):
             text = extract_text(normalized_item.get("content"))
             if text:
                 system_texts.append(text)
@@ -57,7 +92,9 @@ def normalize_payload(value: Any) -> Any:
         extracted = "\n\n".join(system_texts)
         existing = normalized.get("instructions")
         normalized["instructions"] = (
-            f"{extracted}\n\n{existing}" if isinstance(existing, str) and existing.strip() else extracted
+            f"{extracted}\n\n{existing}"
+            if isinstance(existing, str) and existing.strip()
+            else extracted
         )
     return normalized
 
@@ -101,7 +138,9 @@ def post_json(url: str, api_key: str, payload: dict[str, Any]) -> tuple[int, str
 
 def print_case(url: str, api_key: str, name: str, payload: dict[str, Any]) -> None:
     status, body = post_json(url, api_key, payload)
-    roles = [item.get("role") for item in payload.get("input", []) if isinstance(item, dict)]
+    roles = [
+        item.get("role") for item in payload.get("input", []) if isinstance(item, dict)
+    ]
     print(f"\nCASE {name}")
     print("roles", roles)
     print("instructions", repr(payload.get("instructions")))
@@ -110,22 +149,39 @@ def print_case(url: str, api_key: str, name: str, payload: dict[str, Any]) -> No
 
 
 def main() -> int:
-    load_dotenv(PROJECT_ROOT / ".env")
-
-    parser = argparse.ArgumentParser(description="Reproduce upstream handling of system input messages.")
-    parser.add_argument("--url", help="Responses endpoint URL. Defaults to OPENAI_SHIM_UPSTREAM + /v1/responses.")
+    parser = argparse.ArgumentParser(
+        description="Reproduce upstream handling of system input messages."
+    )
+    parser.add_argument("--config", help="Path to config.toml")
+    parser.add_argument(
+        "--url",
+        help="Responses endpoint URL. Defaults to the default openai_responses provider base_url + /v1/responses.",
+    )
+    parser.add_argument(
+        "--api-key",
+        help="Bearer API key. Defaults to the default openai_responses provider api_key.",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     args = parser.parse_args()
 
-    url = args.url
-    if not url and os.environ.get("OPENAI_SHIM_UPSTREAM"):
-        url = os.environ["OPENAI_SHIM_UPSTREAM"].rstrip("/") + "/v1/responses"
-    if not url:
-        raise SystemExit("pass --url or set OPENAI_SHIM_UPSTREAM")
+    config_path = Path(args.config) if args.config else default_config_path()
+    config = load_config(config_path)
 
-    api_key = os.environ.get("OPENAI_SHIM_API_KEY")
+    url = args.url
+    if not url:
+        base_url = default_openai_provider_value(config, "base_url")
+        if base_url:
+            url = base_url.rstrip("/") + "/v1/responses"
+    if not url:
+        raise SystemExit(
+            "pass --url or configure the default openai_responses provider base_url in config.toml"
+        )
+
+    api_key = (args.api_key or default_openai_provider_value(config, "api_key")).strip()
     if not api_key:
-        raise SystemExit("OPENAI_SHIM_API_KEY is not set")
+        raise SystemExit(
+            "set --api-key or configure the default openai_responses provider api_key in config.toml"
+        )
 
     payload = {
         "model": args.model,
@@ -133,7 +189,9 @@ def main() -> int:
             {
                 "type": "message",
                 "role": "system",
-                "content": [{"type": "input_text", "text": "You are a terse test assistant."}],
+                "content": [
+                    {"type": "input_text", "text": "You are a terse test assistant."}
+                ],
             },
             {
                 "type": "message",
@@ -146,7 +204,12 @@ def main() -> int:
     }
 
     print_case(url, api_key, "minimal_system", payload)
-    print_case(url, api_key, "minimal_system_to_instructions", normalize_payload(deepcopy(payload)))
+    print_case(
+        url,
+        api_key,
+        "minimal_system_to_instructions",
+        normalize_payload(deepcopy(payload)),
+    )
     return 0
 
 

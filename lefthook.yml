@@ -1,0 +1,18 @@
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      root: "."
+      run: pixi run -- just fmt_check
+
+pre-push:
+  commands:
+    release-tag-version:
+      root: "."
+      run: pixi run -- just check_release_tag_version
+    clippy:
+      root: "."
+      run: pixi run -- just clippy
+    test-lib:
+      root: "."
+      run: pixi run -- just test_lib

@@ -7,7 +7,6 @@ import time
 import urllib.error
 import urllib.request
 
-
 DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 
 
@@ -37,14 +36,17 @@ def polish(raw_notes: str) -> str | None:
     base_url = env_value("ANTHROPIC_BASE_URL")
     api_key = env_value("ANTHROPIC_API_KEY")
     model = env_value("ANTHROPIC_MODEL") or DEFAULT_MODEL
-    package_name = env_value("RELEASE_PACKAGE_NAME") or "zed-openai-shim-<tag>-windows-x86_64"
+    package_name = env_value("RELEASE_PACKAGE_NAME") or "proxai-<tag>-windows-x86_64"
 
     if not base_url or not api_key:
-        print("warning: Anthropic release notes env is not configured; using raw notes", file=sys.stderr)
+        print(
+            "warning: Anthropic release notes env is not configured; using raw notes",
+            file=sys.stderr,
+        )
         return None
 
     prompt = f"""
-Rewrite these structured release notes into concise GitHub Release notes for zed-openai-shim.
+Rewrite these structured release notes into concise GitHub Release notes for proxai.
 
 Keep the facts exactly the same. Do not invent changes.
 Keep Markdown.
@@ -54,7 +56,7 @@ Use these sections:
 - ## Download
 
 Requirements:
-- Mention `{package_name}.zip` in Download.
+- Mention `{package_name}.exe` in Download.
 - Make the wording useful to users and developers.
 - Do not include secrets, environment values, or private URLs.
 - Keep it short.
@@ -77,7 +79,7 @@ Raw release notes:
             "x-api-key": api_key,
             "authorization": f"Bearer {api_key}",
             "anthropic-version": "2023-06-01",
-            "user-agent": "zed-openai-shim-release-notes",
+            "user-agent": "proxai-release-notes",
         },
         method="POST",
     )
@@ -90,7 +92,10 @@ Raw release notes:
             break
         except Exception as error:
             last_error = error
-            print(f"warning: release notes AI polish attempt {attempt} failed: {error}", file=sys.stderr)
+            print(
+                f"warning: release notes AI polish attempt {attempt} failed: {error}",
+                file=sys.stderr,
+            )
             time.sleep(attempt * 2)
     else:
         print(f"warning: release notes AI polish failed: {last_error}", file=sys.stderr)
@@ -117,7 +122,9 @@ def main() -> int:
     polished = polish(raw_notes)
     if polished is None:
         if env_value("RELEASE_NOTES_REQUIRE_AI").lower() == "true":
-            print("error: release notes AI polish is required but failed", file=sys.stderr)
+            print(
+                "error: release notes AI polish is required but failed", file=sys.stderr
+            )
             return 1
         shutil.copyfile(args.input, args.output)
         return 0

@@ -1,0 +1,8 @@
+[submodule "contrib/async-openai"]
+	path = contrib/async-openai
+	url = https://github.com/64bit/async-openai.git
+	tag = async-openai-v0.40.2
+[submodule "contrib/anthropic-sdk-typescript"]
+	path = contrib/anthropic-sdk-typescript
+	url = https://github.com/anthropics/anthropic-sdk-typescript
+	tag = sdk-v0.98.0

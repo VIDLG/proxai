@@ -1,13 +1,14 @@
 [workspace]
-name = "zed-openai-shim"
+name = "proxai"
 channels = ["conda-forge"]
 platforms = ["win-64"]
 
 [dependencies]
 python = ">=3.12,<3.15"
-gcc_win-64 = "*"
-gxx_win-64 = "*"
-binutils_win-64 = "*"
-m2w64-sysroot_win-64 = "*"
 just = "*"
 git-cliff = "*"
+lefthook = "*"
+rtk-cli = ">=0.38.0,<0.39"
+pip = ">=26.1.1,<27"
+tree_sitter = ">=0.25.2,<0.26"
+pyyaml = ">=6.0.3,<7"

@@ -1,20 +1,44 @@
 [package]
-name = "zed-openai-shim"
+name = "proxai"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1"
+async-stream = "0.3"
 axum = "0.8"
+bytes = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive", "env"] }
-dotenvy = "0.15"
+derive_more = { version = "2", features = ["display", "from"] }
+dirs = "6"
 futures-util = "0.3"
-home = "0.5"
+humantime = "2"
 http = "1"
+indexmap = "2"
+owo-colors = "4"
 reqwest = { version = "0.13", features = ["json", "stream"] }
+rmcp = { version = "1.6.0", features = ["server", "macros", "schemars", "transport-streamable-http-server", "transport-streamable-http-server-session"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_plain = "1"
+serde_with = "3"
+structural-convert = "0.13"
+sse-core = { version = "0.2", default-features = false, features = ["std"] }
+strum = { version = "0.28", features = ["derive"] }
+toml_edit = { version = "0.22", features = ["serde"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2"
+tracing-core = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+unit-prefix = "0.5"
+url = { version = "2", features = ["serde"] }
+valuable = { version = "0.1", features = ["derive"] }
+valuable-serde = "0.1"
+globset = "0.4"
+getset = "0.1"
+regex = "1"
+async-openai = { version = "0.38.0", default-features = false, features = ["response-types", "chat-completion-types"] }
+update-informer = { version = "1.3", default-features = false, features = ["github", "reqwest", "rustls-tls"] }

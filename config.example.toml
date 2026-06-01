@@ -1,0 +1,129 @@
+[server]
+host = "127.0.0.1"
+port = 18080
+
+[mcp]
+# Local MCP control/API listener. The MCP endpoint is served at /mcp.
+# Example default URL: http://127.0.0.1:18081/mcp
+host = "127.0.0.1"
+port = 18081
+
+[routing.default_provider_names]
+openai_responses = "openai_default"
+# No-conversion default provider for /v1/chat/completions.
+openai_chat_completions = "openai_chat_default"
+# No-conversion default provider for /v1/messages.
+anthropic_messages = "anthropic_default"
+
+# Route matching modes:
+# - exact: case-insensitive exact match
+# - glob: * and ? wildcard match
+# - regex: case-insensitive regex match; upstream_model acts as replacement template
+# - auto: infer glob when * or ? is present, infer regex for obvious regex syntax,
+#   otherwise exact
+#
+# request_protocol is a route filter on the inbound request shape.
+# If omitted, it defaults to the selected provider.protocol, which means
+# no protocol conversion by default.
+#
+# upstream_model is optional:
+# - omitted: forward the original request model unchanged
+# - exact/glob: fixed upstream model mapping
+# - regex: replacement template using $1 or $name
+
+[[routing.routes]]
+# auto => glob
+model_pattern = "gpt-*"
+provider_name = "openai_default"
+
+[[routing.routes]]
+# Example OpenAI Responses request routed to an Anthropic-compatible provider.
+request_protocol = "openai_responses"
+model_pattern = "mimo-v2.5"
+provider_name = "anthropic_default"
+
+[[routing.routes]]
+# Example OpenAI Responses request routed to an Anthropic-compatible provider.
+request_protocol = "openai_responses"
+model_pattern = "mimo-v2.5-pro"
+provider_name = "anthropic_default"
+
+[[routing.routes]]
+# Example MiniMax M3 route for OpenAI-compatible clients such as Zed.
+request_protocol = "openai_responses"
+model_pattern = "MiniMax-M3"
+provider_name = "minimax_anthropic"
+
+# Example exact alias route:
+# [[routing.routes]]
+# model_pattern = "gpt-5.4-stable"
+# provider_name = "openai_default"
+# upstream_model = "gpt-5.4"
+
+# Example regex mapping route:
+# [[routing.routes]]
+# match_kind = "regex"
+# model_pattern = "^gpt-(?<major>\d+)\.(?<minor>\d+)-mini$"
+# provider_name = "openai_default"
+# upstream_model = "gpt-$major.$minor-mini"
+
+[providers.openai_default]
+protocol = "openai_responses"
+base_url = "http://your-openai-upstream.example:8080"
+# Required. Proxai always sends this key upstream and ignores any
+# Authorization header Zed provided. This makes dummy Zed keys safe.
+api_key = "replace-with-your-api-key"
+read_idle_timeout_secs = 120
+
+[providers.openai_chat_default]
+protocol = "openai_chat_completions"
+base_url = "http://your-openai-compatible-chat-upstream.example:8080"
+api_key = "replace-with-your-api-key"
+read_idle_timeout_secs = 120
+
+[providers.anthropic_default]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "replace-with-your-api-key"
+# strict: do not rewrite successful upstream Anthropic Messages response bodies.
+# anthropic_compatible: fill conservative compatibility gaps, currently
+# missing SDK required-nullable response fields, bare message_start events,
+# measured MiniMax thinking block missing-signature events, and measured
+# GLM 5.1 partial server_tool_use counters.
+compatibility = "strict"
+read_idle_timeout_secs = 120
+
+[providers.minimax_anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.minimaxi.com/anthropic"
+api_key = "replace-with-your-minimax-api-key"
+compatibility = "anthropic_compatible"
+read_idle_timeout_secs = 120
+
+[tool_calls]
+# Semantic timeout for incomplete streamed tool arguments. Must be > 0.
+timeout_secs = 120
+
+[logging]
+level = "info"
+output_format = "human"
+use_color = true
+
+[logging.duration_thresholds]
+warn_ms = 5000
+error_ms = 15000
+
+[error_responses]
+# text: concise text body, best for raw-string clients
+# json: OpenAI-style JSON error body
+format = "text"
+
+[capture]
+# Capture the client request as proxai received it.
+inbound_request_enabled = false
+# Capture the request proxai actually forwards upstream after adaptation.
+forwarded_request_enabled = false
+# Capture the upstream response headers and raw response body bytes.
+upstream_response_enabled = false
+# Capture the final response proxai sends back to the client.
+outbound_response_enabled = false

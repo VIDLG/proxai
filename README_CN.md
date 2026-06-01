@@ -1,328 +1,209 @@
-# Zed OpenAI Shim
+# ProxAI
 
-这是一个本地代理，用来解决 Zed 通过 OpenAI Compatible Responses API 访问某些上游时，`input` 中的 `role:"system"` 被拒绝的问题。
+[English README](README.md)
 
-默认监听：
+ProxAI 是一个运行在 AI 客户端和模型上游之间的本地轻量兼容代理。
+它接收本地 OpenAI Compatible 请求，修复会导致某些上游失败的特定
+OpenAI Responses API system-message 形状问题，然后尽量透明地转发到
+配置好的 provider。
 
-```text
-http://127.0.0.1:18080
-```
+当前稳定运行路径支持 OpenAI Responses、OpenAI Chat Completions 和
+Anthropic Messages 的 no-conversion 转发。配置模型已经按协议感知整理好，
+后续可以显式扩展到更多转换路径与路由，但不会因此演变成泛化的 AI 网关。
 
-默认转发到：
+## 当前状态
 
-```text
-.env 中的 OPENAI_SHIM_UPSTREAM
-```
+当前稳定可用的转发路径是：
 
-shim 只做当前问题需要的最小兼容处理：把 Responses 请求里的 system message 转成顶层 `instructions`，其他内容尽量原样透传。
+- 入站：`openai_responses` -> 出站：`openai_responses`
+- 入站：`openai_chat_completions` -> 出站：`openai_chat_completions`
+- 入站：`anthropic_messages` -> 出站：`anthropic_messages`
 
-## 概览
+跨协议转换仍处于骨架阶段，后续接入 runtime 时应保持显式。
 
-- 使用者：下载 release zip，把 `.env` 放到 `zed-openai-shim.exe` 同目录，然后直接运行 exe。
-- 开发者：用 `pixi install` 和 `just run` 本地迭代。
-- Zed：配置一个 `openai_compatible` provider，`api_url` 指向 `http://127.0.0.1:18080/v1`。
+## ProxAI 现在会做什么
 
-## 问题背景
+对 JSON `/v1/responses` 请求，ProxAI 目前会处理一个很具体的兼容问题：
 
-Zed 的 Agent 请求会走 `/v1/responses`，并把 Agent 指令放在 `input` 数组里的 system message 中：
+- 查找顶层 `input` 里 `role:"system"` 的 item
+- 提取其中 `input_text` / `text` 内容
+- prepend 到顶层 `instructions`
+- 从 `input` 里删除原 system item
+- 其他字段尽量保持不变
 
-```json
-{
-  "type": "message",
-  "role": "system",
-  "content": [
-    {
-      "type": "input_text",
-      "text": "You are a coding agent."
-    }
-  ]
-}
-```
+这样可以让客户端继续使用那些不接受 Responses 风格 `input` 内 system
+message 的上游。
 
-某些上游会拒绝 `input` 中的 system message。这个 shim 最初就是为 sub2api OpenAI OAuth Codex 路径遇到的这个兼容问题做的。上游会返回类似错误：
+对 `/v1/chat/completions` 请求，ProxAI 目前不做协议转换；它会校验 Chat
+Completions 请求形状，应用 provider 路由 / 模型改写，然后转发到上游。
 
-```json
-{
-  "detail": "System messages are not allowed"
-}
-```
+对 `/v1/messages` 请求，ProxAI 同样按 Anthropic Messages 做 no-conversion
+转发，包括 provider 鉴权和流式响应观察。
 
-更合适的兼容方式不是把 `system` 改成 `user`，而是把 system 文本移动到顶层 `instructions`，并从 `input` 中删除原 system message。上游 issue 是 [Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147)，根因分析见 [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)。
+## 安装与应用目录
 
-## Shim 做了什么
+下载 Windows release 可执行文件，先运行一次，然后去用户应用目录编辑
+自动生成的配置文件。
 
-对于 JSON 请求，shim 会：
+运行时文件位于：
 
-- 查找顶层 `input` 数组里 `role:"system"` 的 item
-- 从 `content` 中提取 `type:"input_text"` 或 `type:"text"` 的文本
-- 把这些文本 prepend 到顶层 `instructions`
-- 从 `input` 中移除原来的 system message
-- 尽量保留其他字段、headers、tools、`prompt_cache_key` 和请求路径
+- Windows：`%USERPROFILE%\\.proxai\\config.toml`
+- Windows：`%USERPROFILE%\\.proxai\\config.example.toml`
+- Linux/macOS：`~/.proxai/config.toml`
+- Linux/macOS：`~/.proxai/config.example.toml`
 
-转换后的请求形状示例：
+同目录下还会有：
 
-```json
-{
-  "instructions": "You are a coding agent.",
-  "input": [
-    {
-      "type": "message",
-      "role": "user",
-      "content": [
-        {
-          "type": "input_text",
-          "text": "Hello"
-        }
-      ]
-    }
-  ]
-}
-```
+- `logs/`
+- `captures/`
 
-当前 shim 不处理 Chat Completions 转换。现在的范围就是 Zed Responses API 的 role 兼容问题。
+首次真正使用前，需要先在 `config.toml` 里把相关 provider 的 `base_url`
+和 `api_key` 配好。
 
-## 使用者安装
+## 运行
 
-从 GitHub Releases 下载 `zed-openai-shim-vX.Y.Z-windows-x86_64.zip`，解压后把 `.env.example` 复制成 `.env`。如果希望 release 目录自包含，就把 `.env` 放在 `zed-openai-shim.exe` 同一个目录：
+配置好之后：
 
-```text
-zed-openai-shim/
-  zed-openai-shim.exe
-  .env.example
-  .env
-```
+- 可执行文件名：`proxai.exe`
+- 默认代理监听地址：`http://127.0.0.1:18080`
+- 默认 MCP endpoint：`http://127.0.0.1:18081/mcp`
 
-exe 会按下面顺序读取 `.env`：
+CLI 覆盖项保持精简：
 
-1. `zed-openai-shim.exe` 同目录的 `.env`
-2. `%USERPROFILE%\.zed-openai-shim\.env`
-3. 当前工作目录的 `.env`
+- `--config`
+- `--upstream`
+- `--api-key`
+- `--port`
+- `--log-level`
+- `--log-format`
 
-先读取到的值优先，因为 `dotenvy` 不会覆盖已经存在的环境变量。想做便携目录时，把 `.env` 放 exe 同目录；想以后只替换/更新 exe 时，可以把配置放在用户目录的 `%USERPROFILE%\.zed-openai-shim\.env`。
+其中 `--upstream` 和 `--api-key` 会临时覆盖本次运行中
+`routing.default_provider_names.openai_responses` 所选 provider 的上游地址和 key。
 
-从示例创建 `.env`：
+## 配置概览
 
-```powershell
-Copy-Item .env.example .env
-```
+运行时配置在 `config.toml`，跟踪示例在 `config.example.toml`。
 
-或者一次性创建用户目录配置：
+完整字段说明请看：
 
-```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.zed-openai-shim"
-Copy-Item .env.example "$env:USERPROFILE\.zed-openai-shim\.env"
-```
+- [docs/configuration_cn.md](docs/configuration_cn.md)
 
-然后编辑 `.env`，设置你的上游：
+简要来说，配置主要围绕这些部分组织：
 
-```powershell
-OPENAI_SHIM_UPSTREAM=http://your-upstream.example:8080
-```
+- `[server]`
+- `[mcp]`
+- `[routing.default_provider_names]`
+- `[[routing.routes]]`
+- `[providers.<name>]`
+- `[tool_calls]`
+- `[capture]`（`inbound_request_enabled` / `forwarded_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`）
+- `[logging]`
+- `[error_responses]`
 
-启动 exe：
+当前稳定运行路径包括 OpenAI Responses no-conversion 和 OpenAI Chat
+Completions no-conversion，以及 Anthropic Messages no-conversion。
+provider/routing 模型已经提前按显式多协议扩展整理好了。
 
-```powershell
-.\zed-openai-shim.exe
-```
+Anthropic Messages provider 如果连接官方 Anthropic API，建议使用
+`compatibility = "strict"`；如果连接会省略部分官方响应字段的兼容上游，
+使用 `compatibility = "anthropic_compatible"`。
 
-默认监听 `http://127.0.0.1:18080`，并转发到 `.env` 中的 `OPENAI_SHIM_UPSTREAM`。
+对于上游非 2xx 响应，ProxAI 会归一化响应体，并保留 `Retry-After`、
+上游 request id、rate-limit headers 等有助于排障的响应头。
 
-如果 Zed 没有传 `Authorization` header，shim 可以从 `.env` 补：
+`[mcp]` 现在会配置一个本地 MCP 监听器。默认情况下，ProxAI 会启动一个 streamable HTTP MCP endpoint：`http://127.0.0.1:18081/mcp`。
 
-```powershell
-OPENAI_SHIM_API_KEY=replace-with-your-api-key
-```
+## 当前客户端配置建议
 
-如果 Zed 必须填写 key 并发送 dummy `Authorization` header，可以在 `.env` 开启显式覆盖：
+对于 OpenAI Compatible 客户端，可以配置一个 provider 指向：
 
-```powershell
-OPENAI_SHIM_OVERRIDE_AUTHORIZATION=true
-```
+- `http://127.0.0.1:18080/v1`
 
-不要把真实 key 写进仓库。
+客户端里建议只暴露逻辑模型名，比如：
 
-## 开发者流程
+- `gpt-5.4`
+- `gpt-5.5`
+- 未来可扩展到 `claude-sonnet`
 
-安装 Pixi 管理的 GNU 工具链，并从源码运行：
+实际走哪个 provider、上游真实模型名是什么，都交给 ProxAI 在
+`~/.proxai/config.toml` 里路由。
 
-```powershell
-pixi install
-just run
-```
-
-构建本地 release exe：
-
-```powershell
-just build
-```
-
-本地构建产物是 `target\release\zed-openai-shim.exe`。
+## 开发
 
 常用命令：
 
-| 命令 | 说明 |
-| --- | --- |
-| `pixi install` | 安装 Rust 构建需要的 Pixi GNU 工具链。 |
-| `just run` | 开发时从源码运行 shim。 |
-| `just check` | 运行格式检查、clippy 和 Rust 测试。 |
-| `just test-e2e` | 用本地假 upstream 运行 Rust 代理 E2E。 |
-| `just repro-system-role` | 可选的真实上游 system-role 诊断脚本。 |
-| `just build` | 构建 `target/release/zed-openai-shim.exe`。 |
+- `pixi install`
+- `just run`
+- `just check`
+- `just test-e2e`
+- `just build`
+- `cargo run -- check-update`
 
-`just repro-system-role` 不属于 `just check`，它会请求配置的真实上游，并且需要 `OPENAI_SHIM_API_KEY`。
+与官方 SDK 的协议类型覆盖率对比：
 
-## Release 构建
+- `just compare-anthropic-protocol` — Anthropic Messages 协议类型 vs 官方 TS SDK
+- `just compare-openai-protocol` — OpenAI 协议类型 vs `async-openai` v0.38
 
-GitHub Actions 使用和本地一致的 Pixi + Just 路径：`just check` 和 `just build`。Rust toolchain 是 `stable-x86_64-pc-windows-gnu`，Pixi 提供 GNU linker/toolchain。
+这些用于对比的 SDK checkout 作为 git submodule 放在 `contrib/`：
 
-release workflow 支持手动触发，也会在推送 `v0.1.1` 这种版本 tag 时发布：
+- `contrib/anthropic-sdk-typescript`
+- `contrib/async-openai`
 
-```text
-zed-openai-shim-vX.Y.Z-windows-x86_64.zip
-```
+支持 `-d`（详细，默认）、`-q`（简洁）、`-v`（冗长+分类）三个输出级别。
 
-zip 中包含 `zed-openai-shim.exe` 和 `.env.example`。运行前复制 `.env.example` 为 `.env`，编辑后把 `.env` 保持在 exe 同目录。
+常用 capture 控制命令：
 
-Release notes 分两步生成：
+- `cargo run -- capture status`
+- `cargo run -- capture enable`
+- `cargo run -- capture disable`
+- `cargo run -- capture enable inbound-request`
+- `cargo run -- capture enable forwarded-request`
+- `cargo run -- capture enable upstream-response`
+- `cargo run -- capture enable outbound-response`
 
-1. `git-cliff` 根据上一个 tag 之后的 commits 生成确定性的 changelog。
-2. `scripts/polish_release_notes.py` 可选调用 Anthropic-compatible 接口，把 changelog 润色成更适合 GitHub Release 的正文。
+常用临时调试覆盖项：
 
-如果没有配置 `ANTHROPIC_BASE_URL` 或 `ANTHROPIC_API_KEY`，发布会退回到原始 `git-cliff` 输出，不会因为 AI 不可用而失败。
+- `cargo run -- --capture-inbound-request`
+- `cargo run -- --capture-forwarded-request`
+- `cargo run -- --capture-upstream-response`
+- `cargo run -- --capture-outbound-response`
 
-本地预览 release notes：
+本地 release 可执行文件：
 
-```powershell
-pixi run git-cliff --latest --output dist\release-notes.raw.md
-pixi run python scripts\polish_release_notes.py --input dist\release-notes.raw.md --output dist\release-notes.md
-```
+- `target\\release\\proxai.exe`
 
-## Zed 配置参考
+## 协议类型对齐策略
 
-在 Zed settings 中配置一个 OpenAI Compatible provider，指向本地 shim。不要把 API key 写进 `settings.json`；Zed 官方推荐通过 Agent 设置 UI 写入系统 keychain，或者使用 provider 对应的环境变量。
+ProxAI 的协议类型遵循严格的**名称一致性**规则：
 
-```json
-{
-  "language_models": {
-    "openai_compatible": {
-      "openai_shim": {
-        "api_url": "http://127.0.0.1:18080/v1",
-        "available_models": [
-          {
-            "name": "gpt-5.5",
-            "display_name": "GPT-5.5 via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          },
-          {
-            "name": "gpt-5.4",
-            "display_name": "GPT-5.4 via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          },
-          {
-            "name": "gpt-5.3-codex",
-            "display_name": "GPT-5.3 Codex via local shim",
-            "max_tokens": 400000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 32000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": true,
-              "prompt_cache_key": true,
-              "chat_completions": false
-            }
-          }
-        ]
-      }
-    }
-  },
-  "agent": {
-    "default_model": {
-      "provider": "openai_shim",
-      "model": "gpt-5.5",
-      "enable_thinking": false
-    }
-  }
-}
-```
+1. **不使用类型别名** — 每个 SDK 类型名在 proxai 中有且只有一个
+   `pub struct` 或 `pub enum`，绝不使用 `pub type X = Y`。
+2. **不折叠类型** — 当 SDK 区分 `*Block` 和 `*BlockParam`（或类似的
+   请求/响应类型对）时，proxai 为每个类型保留独立的结构体。
+3. **不改名** — proxai 使用 SDK 原生的类型名，即使 SDK 的大小写
+   不一致（使用 `Base64PdfSource` 而非 `Base64PDFSource`）。
+4. **字符串联合作为枚举** — SDK 中的固定字符串联合类型
+   （`Array<'direct' | 'code_execution_20250825'>`）建模为
+   `Vec<EnumType>` 而非 `Vec<String>`。
 
-关键点：
+这些规则由 `tools/compare_anthropic_protocol.py` 和
+`tools/compare_openai_protocol.py` 强制执行。它们使用 tree-sitter
+AST 解析，逐字段对比 proxai 类型与官方 SDK，报告缺失类型、缺失字段、
+字段顺序不匹配、serde wire 语义以及废弃字段自动排除，支持三个详细级别。
+当 SDK 的 required-nullable 字段（`field: T | null`）在 Rust 中表示为
+`Option<T>` 时，该字段必须标注
+`/// @sdk(required_nullable_accepts_missing)`，表示 proxai 有意接受字段缺失
+作为兼容宽松。完整的转换和对齐规则见 `docs/protocol-conversion.md`。
 
-- `api_url` 需要以 `/v1` 结尾
-- `capabilities.chat_completions` 设为 `false`，让 Zed 使用 `/v1/responses`
-- `capabilities.prompt_cache_key` 可以保持 `true`，shim 会保留这个字段
-- `agent.default_model.provider` 要和 provider 名称 `openai_shim` 一致
+## Release 产物
 
-不要把真实上游 URL 或 API key 写进 Zed settings。Zed 只需要指向本地 shim，真实上游信息放在 `.env`。
+GitHub Release 产物命名类似：
 
-## Zed Agent 使用效果
+- `proxai-vX.Y.Z-windows-x86_64.exe`
 
-启动 release exe，并让 `agent.default_model` 指向 `openai_shim` 后，Zed Agent 就可以通过本地代理使用这些 OpenAI Compatible 模型。
+## 关于未来协议
 
-![Zed Agent 使用 GPT-5.5 via local shim](<docs/images/zed agent.png>)
-
-上图展示了 Zed Agent 选择 `GPT-5.5 via local shim`，并通过配置的 provider 收到回复。
-
-![shim 转发 Zed Agent 请求](docs/images/log.png)
-
-日志截图里可以看到 shim 转发 `/v1/responses` 请求，并收到 upstream `200`，说明 Zed Agent 请求确实走了本地代理。
-
-手动验证时，先启动 `zed-openai-shim.exe`，再打开 Zed Agent，选择 `GPT-5.5 via local shim` 或其他 `openai_shim` 下配置的模型并发送请求。shim 应该会打印一条转发 `/v1/responses` 的日志。
-
-后续截图统一放在 `docs/images/`。截图里不要暴露 API key、私有 prompt 或仓库里的敏感信息。
-
-## 已验证行为
-
-`just check` 会覆盖离线测试和 Rust 代理 E2E。真实上游已验证的行为：
-
-- 原始 `input` 中保留 `role:"system"`：上游失败
-- 转成 `instructions`：上游返回 200
-- 详细 sub2api issue 说明见 [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)
-
-## 排错
-
-如果 Zed Agent 显示无法请求 `http://127.0.0.1:18080/v1/responses`，通常是 shim 没有启动，或者监听端口和 Zed 配置不一致。
-
-![shim 未启动时的 Zed Agent 错误](docs/images/error.png)
-
-先在 release 目录启动 exe，然后重试 Agent 请求：
-
-```powershell
-.\zed-openai-shim.exe
-```
-
-如果改过 `OPENAI_SHIM_PORT`，需要确认 Zed 的 `api_url` 使用同一个端口，并且仍然以 `/v1` 结尾。
-
-## 日志
-
-shim 默认输出日志到 stdout/stderr。
-
-如果需要写文件日志，统一放到：
-
-```text
-logs/
-```
-
-`logs/` 已经被 git 忽略。
-
-## 上游说明
-
-上游 issue 是 [Wei-Shaw/sub2api#2147](https://github.com/Wei-Shaw/sub2api/issues/2147)，本地分析放在 [docs/sub2api-system-role-issue.md](docs/sub2api-system-role-issue.md)。在上游补齐 Responses `input_text` system content 支持前，这个 shim 仍然提供本地兼容路径。
+当前仓库已经有跨协议 translation 和 route-level protocol filter 的早期骨架。
+这样做是为了让配置结构和内部架构先稳定下来，后续接通协议转换时不需要再
+推翻现有设计。未来协议支持应该保持显式、可预测，避免 ProxAI 在无意中
+变成通用 AI 平台。
