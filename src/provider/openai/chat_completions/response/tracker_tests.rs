@@ -2,10 +2,8 @@ use axum::http::HeaderMap;
 use bytes::Bytes;
 use serde_json::json;
 
-use super::{ChatUpstreamResponseTracker, ObservedChatResponse};
-use crate::protocol::openai::chat_completions::{
-    ChatResponseProjection, CreateChatCompletionResponse, FinishReason,
-};
+use super::{ChatResponseObservation, ChatUpstreamResponseTracker};
+use crate::protocol::openai::chat_completions::FinishReason;
 use crate::upstream::ContentType;
 
 #[test]
@@ -42,15 +40,12 @@ fn tracker_extracts_non_stream_chat_completion_usage() {
     let bytes = serde_json::to_vec(&body).unwrap();
     tracker.scan_bytes(&bytes[..8]);
     tracker.scan_bytes(&bytes[8..]);
-    finish_non_stream(&mut tracker);
 
-    let ObservedChatResponse::Response(projection) = tracker
+    let snapshot = tracker
         .state
-        .observed
-        .latest
-        .as_ref()
-        .expect("chat completion projection")
-    else {
+        .terminal_response()
+        .expect("chat completion snapshot");
+    let ChatResponseObservation::NonStream(projection) = snapshot else {
         panic!("expected non-stream chat completion projection");
     };
     assert_eq!(projection.id, "chatcmpl_123");
@@ -75,10 +70,10 @@ fn tracker_extracts_non_stream_chat_completion_usage() {
         Some(2)
     );
 
-    let summary = tracker.state.observed.effective_summary();
+    let summary = tracker.state.effective_summary();
     assert_eq!(summary.output_items.values().sum::<u64>(), 4);
     assert_eq!(summary.finish_reasons.get("stop"), Some(&1));
-    assert_eq!(summary.tool_calls.get("lookup"), Some(&1));
+    assert_eq!(summary.tool_call_names.get("lookup"), Some(&1));
 }
 
 #[test]
@@ -122,13 +117,11 @@ fn tracker_extracts_stream_chat_completion_chunks_and_ignores_done() {
 
     tracker.scan_bytes(&chunk);
 
-    let ObservedChatResponse::Stream(projection) = tracker
+    let snapshot = tracker
         .state
-        .observed
-        .latest
-        .as_ref()
-        .expect("chat completion chunk projection")
-    else {
+        .terminal_response()
+        .expect("chat completion stream snapshot");
+    let ChatResponseObservation::StreamChunk(projection) = snapshot else {
         panic!("expected stream chat completion projection");
     };
     assert_eq!(projection.id, "chatcmpl_stream");
@@ -139,27 +132,67 @@ fn tracker_extracts_stream_chat_completion_chunks_and_ignores_done() {
     );
     assert_eq!(projection.usage.as_ref().expect("usage").total_tokens, 10);
 
-    let summary = tracker.state.observed.effective_summary();
+    let summary = tracker.state.effective_summary();
     assert_eq!(summary.finish_reasons.get("stop"), Some(&1));
-    assert_eq!(summary.tool_calls.get("lookup"), Some(&1));
-    assert!(tracker.state.observed.done);
+    assert_eq!(summary.tool_call_names.get("lookup"), Some(&1));
+    assert!(tracker.state.stream_done);
 }
 
-fn finish_non_stream(tracker: &mut ChatUpstreamResponseTracker) {
-    if tracker.is_sse || tracker.json_body.is_empty() {
-        return;
-    }
-    let response =
-        serde_json::from_slice::<async_openai::types::chat::CreateChatCompletionResponse>(
-            &tracker.json_body,
-        )
-        .expect("parse non-stream chat completion response");
-    let projection = ChatResponseProjection::from(CreateChatCompletionResponse::from(response));
-    tracker
-        .state
-        .observed
-        .record(ObservedChatResponse::Response(projection));
-    tracker.json_body.clear();
+#[test]
+fn stream_observed_summary_deduplicates_tool_call_deltas_without_snapshot() {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        http::header::CONTENT_TYPE,
+        http::HeaderValue::from_static("text/event-stream"),
+    );
+    let mut tracker = ChatUpstreamResponseTracker::from_headers(&headers);
+
+    let chunk = Bytes::from(format!(
+        "data: {}\n\ndata: {}\n\n",
+        json!({
+            "id": "chatcmpl_stream",
+            "object": "chat.completion.chunk",
+            "created": 1,
+            "model": "gpt-4.1",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "content": "o",
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "call_456",
+                        "type": "function",
+                        "function": {"name": "lookup", "arguments": "{\"id"}
+                    }]
+                },
+                "finish_reason": null
+            }]
+        }),
+        json!({
+            "id": "chatcmpl_stream",
+            "object": "chat.completion.chunk",
+            "created": 1,
+            "model": "gpt-4.1",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "content": "k",
+                    "tool_calls": [{
+                        "index": 0,
+                        "function": {"arguments": "\":\"42\"}"}
+                    }]
+                },
+                "finish_reason": null
+            }]
+        })
+    ));
+
+    tracker.scan_bytes(&chunk);
+
+    assert!(tracker.state.terminal_response().is_none());
+    let summary = tracker.state.effective_summary();
+    assert_eq!(summary.output_items.values().sum::<u64>(), 3);
+    assert_eq!(summary.tool_call_names.get("lookup"), Some(&1));
 }
 
 #[test]

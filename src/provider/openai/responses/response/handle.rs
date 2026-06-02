@@ -12,11 +12,11 @@ use super::{ResponsesUpstreamEvent, ResponsesUpstreamStreamSnapshot, ResponsesUp
 use crate::formatting::compact_tail;
 use crate::logging;
 use crate::provider::{
-    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundStream,
-    ProgressFields, UpstreamBodyStreamStats, UpstreamResponseContext, UpstreamResponseError,
+    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundResponseContext,
+    OutboundStream, ProgressFields, UpstreamResponseError,
 };
 use crate::sse::{encode_sse_json_or_error, SseEventScanner};
-use crate::upstream::UpstreamResponseHead;
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 use super::sse::is_terminal_event;
 use super::tool_arguments::ToolArgumentStreamState;
@@ -24,7 +24,7 @@ use super::tool_arguments::ToolArgumentStreamState;
 const TOOL_ARGUMENT_STALL_MESSAGE: &str = "upstream SSE stalled while streaming tool arguments";
 
 pub(crate) async fn handle_success_response(
-    ctx: UpstreamResponseContext<'_>,
+    ctx: OutboundResponseContext<'_>,
     upstream_response: reqwest::Response,
 ) -> crate::error::Result<Response<Body>> {
     let upstream_headers = upstream_response.headers().clone();
@@ -161,7 +161,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
 
     fn progress_fields(&self) -> ProgressFields {
         let state = &self.upstream_response_tracker.state;
-        let snapshot = state.snapshot.as_ref();
+        let snapshot = state.latest_snapshot.as_ref();
         ProgressFields {
             phase: if self.tool_arguments.has_pending_items() {
                 "tool_args"
@@ -235,5 +235,5 @@ fn error_sse_chunk(sequence_number: Option<u64>, message: &str) -> Bytes {
 }
 
 #[cfg(test)]
-#[path = "stream_tests.rs"]
+#[path = "handle_tests.rs"]
 mod tests;

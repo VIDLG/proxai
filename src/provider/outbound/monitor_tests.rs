@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::task::Context;
 use std::time::Instant;
 
-use super::{BodyAction, BodyObserver, MonitoredBodyStream, UpstreamBodyStreamStats};
-use crate::upstream::UpstreamResponseHead;
+use super::{BodyAction, BodyObserver, MonitoredBodyStream};
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 #[derive(Default)]
 struct ObserverState {
@@ -78,6 +78,7 @@ async fn generic_stream_records_chunks_and_outcome() {
         observer,
         None,
         tracing::Span::none(),
+        None,
     );
 
     let body = stream
@@ -109,6 +110,7 @@ async fn generic_stream_allows_observer_inject_and_close_on_pending() {
         observer,
         None,
         tracing::Span::none(),
+        None,
     );
 
     let body = stream

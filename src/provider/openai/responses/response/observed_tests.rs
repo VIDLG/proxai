@@ -1,5 +1,6 @@
+use super::super::summary::ResponseSummary;
 use super::{ObservedState, ObservedUpdate};
-use crate::provider::openai::responses::{ResponseOutputItemKind, ResponseSummary};
+use crate::provider::openai::responses::ResponseOutputItemKind;
 
 #[test]
 fn observed_updates_merge_later_function_call_name() {

@@ -29,8 +29,8 @@ pub(crate) enum ChatResponseOutputKind {
 pub(crate) struct ChatResponseSummary {
     pub(crate) output_items: BTreeMap<ChatResponseOutputKind, u64>,
     pub(crate) finish_reasons: BTreeMap<String, u64>,
-    pub(crate) tool_calls: BTreeMap<String, u64>,
-    pub(crate) custom_tool_calls: BTreeMap<String, u64>,
+    pub(crate) tool_call_names: BTreeMap<String, u64>,
+    pub(crate) custom_tool_call_names: BTreeMap<String, u64>,
 }
 
 impl From<&ChatResponseProjection> for ChatResponseSummary {
@@ -106,6 +106,13 @@ impl From<&ChatStreamResponseProjection> for ChatResponseSummary {
 }
 
 impl ChatResponseSummary {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.output_items.is_empty()
+            && self.finish_reasons.is_empty()
+            && self.tool_call_names.is_empty()
+            && self.custom_tool_call_names.is_empty()
+    }
+
     pub(crate) fn add_item_kind_count(&mut self, kind: ChatResponseOutputKind, count: u64) {
         *self.output_items.entry(kind).or_default() += count;
     }
@@ -128,11 +135,14 @@ impl ChatResponseSummary {
     }
 
     fn add_tool_call_name(&mut self, name: &str) {
-        *self.tool_calls.entry(name.to_string()).or_default() += 1;
+        *self.tool_call_names.entry(name.to_string()).or_default() += 1;
     }
 
     fn add_custom_tool_call(&mut self, name: &str) {
         self.add_item_kind(ChatResponseOutputKind::CustomToolCall);
-        *self.custom_tool_calls.entry(name.to_string()).or_default() += 1;
+        *self
+            .custom_tool_call_names
+            .entry(name.to_string())
+            .or_default() += 1;
     }
 }

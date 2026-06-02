@@ -207,6 +207,42 @@ struct FunctionCallStream {
 
 客户端需要按 `choice.index` 和 `tool_call_chunk.index` 聚合工具参数，直到该 choice 出现 `finish_reason = tool_calls` 或其他终止原因。
 
+### choices、并行与串行
+
+Chat Completions 的顶层输出单元是 `choices[]`。每个 choice 是同一请求的一条候选回答；当请求参数 `n > 1` 时，上游可以并行返回多个候选回答。绝大多数 agent 场景中 `n` 默认为 `1`，所以通常只有 `choices[0]`。
+
+流式响应里，同一个 `choice.index` 的 delta 按到达顺序串行拼接：
+
+```text
+choice[0]: delta "Hel" -> delta "lo" -> finish_reason "stop"
+choice[1]: delta "Hi"  -> delta " there" -> finish_reason "stop"
+```
+
+不同 choice 的 chunk 可以交错到达，但 `choice.index` 是稳定聚合 key：
+
+```json
+{"choices":[{"index":0,"delta":{"content":"Hel"}}]}
+{"choices":[{"index":1,"delta":{"content":"Hi"}}]}
+{"choices":[{"index":0,"delta":{"content":"lo"}}]}
+```
+
+工具调用是 choice 内部的下一层并列单元。一个 choice 可以同时返回多个 tool calls：
+
+```text
+choice[0]
+└─ tool_calls[0] read_file(src/main.rs)
+└─ tool_calls[1] read_file(Cargo.toml)
+```
+
+因此 stream 聚合需要两级 key：
+
+```text
+choice.index
+choice.index + tool_call.index
+```
+
+`tool_call.id` 通常会在工具调用开始时出现，但后续 arguments delta 不保证每次携带 id，所以 proxai observer 不只依赖 id 去重。
+
 proxai 的 Chat Completions provider 使用通用 stream mechanics 保留 SSE bytes，并由 Chat observer 解析 `chat.completion.chunk`，用于 usage、finish reason 和日志摘要。它不像 Responses observer 那样注入工具参数超时诊断。
 
 ## 完整交互示例

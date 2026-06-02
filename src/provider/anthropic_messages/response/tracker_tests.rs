@@ -3,8 +3,7 @@ use bytes::Bytes;
 use serde_json::json;
 
 use super::AnthropicResponseTracker;
-
-use crate::provider::anthropic_messages::summary::AnthropicResponseOutputKind;
+use crate::provider::anthropic_messages::response::summary::AnthropicResponseOutputKind;
 
 #[test]
 fn tracker_extracts_non_stream_message_usage_and_summary() {

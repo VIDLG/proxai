@@ -3,16 +3,16 @@ use axum::http::Response;
 
 use crate::logging;
 use crate::provider::{
-    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundStream,
-    UpstreamBodyStreamStats, UpstreamResponseContext,
+    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundResponseContext,
+    OutboundStream,
 };
-use crate::upstream::UpstreamResponseHead;
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 use super::state::ChatUpstreamStreamSnapshot;
 use super::tracker::ChatUpstreamResponseTracker;
 
 pub(crate) async fn handle_success_response(
-    ctx: UpstreamResponseContext<'_>,
+    ctx: OutboundResponseContext<'_>,
     upstream_response: reqwest::Response,
 ) -> crate::error::Result<Response<Body>> {
     let upstream_headers = upstream_response.headers().clone();
@@ -26,7 +26,7 @@ pub(crate) async fn handle_success_response(
         head,
         outbound_headers,
         stream,
-        status,
+        ..
     } = build_outbound_stream(&ctx, upstream_response, observer).await?;
 
     ctx.span.in_scope(|| {
@@ -34,7 +34,7 @@ pub(crate) async fn handle_success_response(
             .emit()
     });
 
-    Ok(streaming_response(status, outbound_headers, stream))
+    Ok(streaming_response(head.status, outbound_headers, stream))
 }
 
 struct ChatUpstreamBodyObserver {
@@ -104,5 +104,5 @@ impl BodyObserver for ChatUpstreamBodyObserver {
 }
 
 #[cfg(test)]
-#[path = "stream_wrapper_tests.rs"]
+#[path = "handle_tests.rs"]
 mod tests;

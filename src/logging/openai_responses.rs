@@ -51,7 +51,10 @@ struct ResponseFields {
 impl ResponseFields {
     fn from_state(state: &ResponsesUpstreamState, sequence_number: Option<u64>) -> Self {
         let summary = state.effective_summary();
-        let snapshot = state.snapshot.as_ref().map(|value| &value.projection);
+        let snapshot = state
+            .latest_snapshot
+            .as_ref()
+            .map(|value| &value.projection);
         let error = state
             .effective_error()
             .map(|value| {

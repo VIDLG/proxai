@@ -41,6 +41,89 @@ openai_responses / openai_chat_completions / anthropic_messages
 
 跨协议转换目前保留为显式未实现路径。文档里描述的协议结构来自 `src/protocol/**/wire` 和各协议 projection；其中 Anthropic Messages 的完整 wire model 已在 `src/protocol/anthropic/messages` 建模，但部分结构仍是为后续翻译和更深观察预留的脚手架。
 
+## Chat Completions choices 与 Responses output items
+
+Chat Completions 和 Responses 都需要表达“一个响应里可能有多个并列输出单元，并且每个输出单元内部按时间串行地产生 delta”。两者的核心差异是输出单元的粒度不同。
+
+Chat Completions 是 `choice/message` 中心：
+
+```text
+response
+└─ choices: Vec<Choice>              // 并列候选回答
+   ├─ choice[0]
+   │  ├─ delta.content 串行到达
+   │  └─ delta.tool_calls[index] 参数串行到达
+   └─ choice[1]
+      └─ delta.content 串行到达
+```
+
+Responses 是 `output item` 中心，更扁平：
+
+```text
+response
+└─ output: Vec<OutputItem>           // 并列输出实体
+   ├─ output[0] reasoning rs_1
+   │  └─ summary[0] delta 串行到达
+   ├─ output[1] message msg_1
+   │  └─ content[0] text delta 串行到达
+   └─ output[2] function_call fc_1
+      └─ arguments delta 串行到达
+```
+
+可以把两者统一理解为：
+
+```text
+并行维度 = 外层 key 有几个
+串行维度 = 同一个 key 下的 delta 按到达顺序拼接
+```
+
+Chat Completions 的并行 key：
+
+- `choice.index` 区分不同候选回答。
+- `choice.index + tool_call.index` 区分同一 choice 内的不同工具调用。
+- `tool_call.id` 是有用的辅助信息，但 stream 后续 delta 不一定每次携带，所以不能只靠 id 聚合。
+
+Responses 的并行 key：
+
+- 优先使用 output item 的 `id` / 事件里的 `item_id`。
+- 没有稳定 id 时，用 `kind + output_index` 作为 fallback。
+- item 内部再用 `content_index` / `summary_index` 区分多个内容 part。
+
+同一个“并行读取两个文件”的例子：
+
+Chat Completions 表达为一个 choice message 里的多个 tool calls：
+
+```text
+choices[0].message.tool_calls = [
+  read_file(src/main.rs),
+  read_file(Cargo.toml)
+]
+```
+
+Responses 表达为顶层 output 里的多个 function_call item：
+
+```text
+output = [
+  function_call read_file(src/main.rs),
+  function_call read_file(Cargo.toml)
+]
+```
+
+所以可以概括为：
+
+```text
+Chat Completions: choice -> message -> tool_calls
+Responses:        output -> item
+```
+
+Responses 不是完全没有嵌套，`message.content[]`、`reasoning.summary[]` 仍然存在；但主要输出实体被提升为顶层 `output[]` item，因此比 Chat Completions 更 flat。
+
+这也是 proxai observer state 的建模依据：
+
+- Chat Completions observer 按 `choice.index` 和 `tool_call.index` 去重 stream delta。
+- Responses observer 按 `item_id` / `output_index` 去重 output item 生命周期事件。
+- 当前 observer 主要记录实体数量、名称、finish reason 和错误摘要；如果未来需要重建完整文本或参数，需要为同一 key 下的串行 delta 维护 buffer。
+
 ## 数据结构分层
 
 协议相关数据优先使用“顶层 enum 按协议分支”的结构，而不是一个通用 struct 里放多个可漂移字段。

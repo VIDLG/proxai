@@ -57,7 +57,7 @@ data: {"type":"error","error":{"type":"invalid_request_error","code":"context_le
 }
 
 #[test]
-fn completed_snapshot_without_output_keeps_observed_summary() {
+fn completed_snapshot_without_output_uses_fallback_summary() {
     let mut headers = http::HeaderMap::new();
     headers.insert(
         http::header::CONTENT_TYPE,

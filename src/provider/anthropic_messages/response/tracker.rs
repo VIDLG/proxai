@@ -6,7 +6,7 @@ use crate::upstream::UpstreamResponseHead;
 use std::time::Duration;
 
 use super::normalize::{normalize_message_payload, normalize_stream_event_payload};
-use super::response_state::AnthropicResponseState;
+use super::state::AnthropicResponseState;
 
 #[derive(Debug, Default)]
 pub(crate) struct AnthropicResponseTracker {

@@ -200,6 +200,37 @@ struct ResponseFunctionCallArgumentsDoneEvent {
 
 这类事件是 proxai 重点保护的行为：如果上游开始流工具参数但长时间没有 terminal/done 事件，Responses observer 可以按 `[tool_calls].timeout_secs` 产出诊断，避免客户端无限等待。实现集中在 `src/provider/openai/responses/stream_wrapper.rs` 和 `tool_arguments.rs` 附近。
 
+### output items、并行与串行
+
+Responses 的顶层输出单元是 `output[]`。与 Chat Completions 的 `choices[]` 不同，Responses 更扁平：message、reasoning、function_call、web_search_call、MCP call 等主要输出实体都是顶层 `OutputItem`。
+
+同一个“并行读取两个文件”的工具调用，在 Responses 中会表现为两个并列 output item：
+
+```text
+output[0] function_call fc_main  read_file(src/main.rs)
+output[1] function_call fc_cargo read_file(Cargo.toml)
+```
+
+流式事件里，这些 item 可以交错产出 delta：
+
+```text
+fc_main.arguments:  "{\"path" -> "\":\"src/main.rs\"}"
+fc_cargo.arguments: "{\"path" -> "\":\"Cargo.toml\"}"
+msg_1.content[0]:   "Done" -> "."
+```
+
+串行顺序由同一个 item/content key 下事件的到达顺序表示。常见 key 是：
+
+```text
+item_id / output_index
+item_id + content_index
+item_id + summary_index
+```
+
+proxai 的 Responses observer 优先用 item `id` 或事件中的 `item_id` 识别实体；没有稳定 id 时，用 `kind + output_index` 作为 fallback，避免 `output_item.added` 和 `output_item.done` 重复计数同一个匿名 item。
+
+Responses 不是完全没有嵌套，`message.content[]`、`reasoning.summary[]` 仍然是 item 内部的数组；但主要输出实体被提升到顶层 `output[]`，因此比 Chat Completions 的 `choice -> message -> tool_calls` 更 flat。
+
 ## 完整交互示例
 
 下面用同一个跑步建议场景展示 Responses 的 item 化交互。

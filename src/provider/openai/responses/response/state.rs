@@ -31,7 +31,7 @@ pub(crate) struct ResponsesUpstreamState {
     is_sse: bool,
 
     /// The latest response snapshot received from upstream `response.*` events.
-    pub(crate) snapshot: Option<ResponseSnapshot>,
+    pub(crate) latest_snapshot: Option<ResponseSnapshot>,
 
     /// Best-effort observed stream state reconstructed from incremental
     /// stream events when a full response snapshot is absent or incomplete for
@@ -73,7 +73,7 @@ impl ResponsesUpstreamState {
         kind: ResponseSnapshotKind,
         projection: ResponseProjection,
     ) {
-        self.snapshot = Some(ResponseSnapshot { kind, projection });
+        self.latest_snapshot = Some(ResponseSnapshot { kind, projection });
     }
 
     pub(super) fn record_sequence_number(&mut self, sequence_number: u64) {
@@ -88,7 +88,7 @@ impl ResponsesUpstreamState {
         self.observed.apply(update);
     }
 
-    pub(crate) fn observed_summary(&self) -> ResponseSummary {
+    pub(crate) fn fallback_summary(&self) -> ResponseSummary {
         ResponseSummary::from(&self.observed)
     }
 
@@ -96,21 +96,19 @@ impl ResponsesUpstreamState {
         self.observed.error()
     }
 
-    pub(crate) fn effective_summary(&self) -> ResponseSummary {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return self.observed_summary();
-        };
+    pub(crate) fn primary_summary(&self) -> Option<ResponseSummary> {
+        let snapshot = self.latest_snapshot.as_ref()?;
+        let summary = ResponseSummary::from(&snapshot.projection);
+        (!summary.is_empty()).then_some(summary)
+    }
 
-        let snapshot_summary = ResponseSummary::from(&snapshot.projection);
-        if snapshot_summary.is_empty() {
-            self.observed_summary()
-        } else {
-            snapshot_summary
-        }
+    pub(crate) fn effective_summary(&self) -> ResponseSummary {
+        self.primary_summary()
+            .unwrap_or_else(|| self.fallback_summary())
     }
 
     pub(crate) fn effective_error(&self) -> Option<&ErrorObject> {
-        if let Some(snapshot) = self.snapshot.as_ref() {
+        if let Some(snapshot) = self.latest_snapshot.as_ref() {
             if let Some(error) = snapshot.projection.error.as_ref() {
                 return Some(error);
             }

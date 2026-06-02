@@ -8,39 +8,41 @@ use crate::config::{ErrorResponseFormat, ProviderCompatibility};
 use crate::error::Result;
 use crate::logging;
 use crate::protocol::ProviderProtocol;
-use crate::provider::{normalize_upstream_error_body, UpstreamResponseError};
+use crate::provider::{
+    anthropic_messages, normalize_upstream_error_body, openai, UpstreamResponseError,
+};
 use crate::upstream::UpstreamResponseHead;
 
-pub(crate) struct UpstreamResponseContext<'a> {
+pub(crate) struct OutboundResponseContext<'a> {
     pub(crate) request_id: u64,
     pub(crate) started: Instant,
     pub(crate) capture: &'a CaptureSession,
     pub(crate) span: &'a tracing::Span,
     pub(crate) sse_tool_call_timeout: Option<Duration>,
+    pub(crate) read_idle_timeout: Duration,
     pub(crate) error_response_format: ErrorResponseFormat,
+    pub(crate) provider_protocol: ProviderProtocol,
     pub(crate) provider_compatibility: ProviderCompatibility,
 }
 
-impl UpstreamResponseContext<'_> {
+impl OutboundResponseContext<'_> {
     pub(crate) async fn handle_response(
         self,
-        provider_protocol: ProviderProtocol,
         upstream_response: reqwest::Response,
     ) -> Result<Response<Body>> {
         if !upstream_response.status().is_success() {
             return self.handle_error_response(upstream_response).await;
         }
 
-        match provider_protocol {
+        match self.provider_protocol {
             ProviderProtocol::OpenaiResponses => {
-                super::openai::responses::handle_success_response(self, upstream_response).await
+                openai::responses::handle_success_response(self, upstream_response).await
             }
             ProviderProtocol::OpenaiChatCompletions => {
-                super::openai::chat_completions::handle_success_response(self, upstream_response)
-                    .await
+                openai::chat_completions::handle_success_response(self, upstream_response).await
             }
             ProviderProtocol::AnthropicMessages => {
-                super::anthropic_messages::handle_success_response(self, upstream_response).await
+                anthropic_messages::handle_success_response(self, upstream_response).await
             }
         }
     }
@@ -125,5 +127,5 @@ fn should_forward_error_response_header(name: &HeaderName) -> bool {
 }
 
 #[cfg(test)]
-#[path = "upstream_response_tests.rs"]
+#[path = "context_tests.rs"]
 mod tests;

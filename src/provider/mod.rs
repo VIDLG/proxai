@@ -3,21 +3,16 @@ pub(crate) mod anthropic_messages;
 mod error;
 mod forwarded;
 pub(crate) mod openai;
-mod upstream_response;
+mod outbound;
 
-mod runtime;
-mod stream;
+mod transport;
 
 pub(crate) use error::{normalize_upstream_error_body, UpstreamResponseError};
 pub(crate) use forwarded::{ForwardedRequest, ForwardedRequestView};
-pub(crate) use runtime::{filter_forwardable_headers, ProviderRuntime};
-pub(crate) use stream::{
-    BodyAction, BodyObserver, MonitoredBodyStream, ProgressFields, UpstreamBodyStreamStats,
+pub(crate) use outbound::{
+    build_outbound_stream, outbound_response, streaming_response, BodyAction, BodyObserver,
+    MonitoredBodyStream, OutboundResponseContext, OutboundStream, ProgressFields,
 };
-pub(crate) use upstream_response::UpstreamResponseContext;
-
-mod outbound_stream;
-
-pub(crate) use outbound_stream::{
-    build_outbound_stream, outbound_response, streaming_response, OutboundStream,
+pub(crate) use transport::{
+    filter_forwardable_headers, ProviderSendContext, ProviderSendRequest, ProviderTransport,
 };

@@ -39,12 +39,12 @@ struct ChatResponseFields {
 
 impl From<&ChatUpstreamStreamSnapshot> for ChatResponseFields {
     fn from(snapshot: &ChatUpstreamStreamSnapshot) -> Self {
-        let projection = snapshot.state.observed.latest.as_ref();
+        let projection = snapshot.state.effective_response();
         let usage = projection.and_then(|projection| projection.usage());
-        let summary = snapshot.state.observed.effective_summary();
+        let summary = snapshot.state.effective_summary();
 
-        let tool_calls = string_count_map(&summary.tool_calls);
-        let custom_tool_calls = string_count_map(&summary.custom_tool_calls);
+        let tool_calls = string_count_map(&summary.tool_call_names);
+        let custom_tool_calls = string_count_map(&summary.custom_tool_call_names);
 
         Self {
             id: compact_tail(
@@ -98,8 +98,8 @@ impl From<&ChatUpstreamStreamSnapshot> for ChatResponseFields {
                 ("custom_tool", custom_tool_calls),
             ]),
             calls_human: join_call_maps([
-                compact_tool_calls(&summary.tool_calls),
-                compact_tool_calls(&summary.custom_tool_calls),
+                compact_tool_calls(&summary.tool_call_names),
+                compact_tool_calls(&summary.custom_tool_call_names),
             ]),
         }
     }

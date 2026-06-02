@@ -9,36 +9,10 @@ use tokio::time::{Instant as TokioInstant, Sleep};
 
 use crate::capture::UpstreamResponseCaptureWriter;
 
-use crate::upstream::{UpstreamResponseHead, UpstreamStreamMetrics};
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 const WAIT_LOG_AFTER: Duration = Duration::from_secs(5);
 const WAIT_LOG_INTERVAL: Duration = Duration::from_secs(5);
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct UpstreamBodyStreamStats {
-    started: Instant,
-    chunks: u64,
-    bytes: u64,
-}
-
-impl UpstreamBodyStreamStats {
-    fn new(started: Instant) -> Self {
-        Self {
-            started,
-            chunks: 0,
-            bytes: 0,
-        }
-    }
-
-    fn record_chunk(&mut self, chunk: &[u8]) {
-        self.chunks += 1;
-        self.bytes += chunk.len() as u64;
-    }
-
-    pub(crate) fn metrics(&self) -> UpstreamStreamMetrics {
-        UpstreamStreamMetrics::new(self.started.elapsed(), self.chunks, self.bytes)
-    }
-}
 
 pub(crate) enum BodyAction {
     Continue,
@@ -85,6 +59,7 @@ where
     span: tracing::Span,
     last_activity: TokioInstant,
     wait_sleep: Pin<Box<Sleep>>,
+    idle_timeout: Option<Duration>,
 }
 
 impl<O> MonitoredBodyStream<O>
@@ -98,6 +73,7 @@ where
         observer: O,
         capture_writer: Option<UpstreamResponseCaptureWriter>,
         span: tracing::Span,
+        idle_timeout: Option<Duration>,
     ) -> Self {
         let now = TokioInstant::now();
         Self {
@@ -110,6 +86,7 @@ where
             span,
             last_activity: now,
             wait_sleep: Box::pin(tokio::time::sleep_until(now + WAIT_LOG_AFTER)),
+            idle_timeout,
         }
     }
 
@@ -132,15 +109,15 @@ where
         self.wait_sleep.as_mut().reset(now + WAIT_LOG_AFTER);
     }
 
-    fn poll_wait_progress(&mut self, cx: &mut Context<'_>) {
+    fn poll_wait_progress(&mut self, cx: &mut Context<'_>) -> bool {
         if self.wait_sleep.as_mut().poll(cx).is_pending() {
-            return;
+            return false;
         }
 
         let idle_ms = self.last_activity.elapsed().as_millis() as u64;
         let duration_ms = self.stats.metrics().duration_ms();
-        let chunks = self.stats.chunks;
-        let down = self.stats.bytes;
+        let chunks = self.stats.chunks();
+        let down = self.stats.bytes();
         let progress = self.observer.progress_fields();
         self.span.in_scope(|| {
             tracing::info!(
@@ -157,9 +134,29 @@ where
                 pending_tool_items = progress.pending_tool_items,
             );
         });
-        self.wait_sleep
-            .as_mut()
-            .reset(TokioInstant::now() + WAIT_LOG_INTERVAL);
+
+        let timed_out = self
+            .idle_timeout
+            .is_some_and(|timeout| idle_ms >= timeout.as_millis() as u64);
+
+        if timed_out {
+            self.span.in_scope(|| {
+                tracing::warn!(
+                    event = "timeout",
+                    idle_ms,
+                    duration_ms,
+                    chunks,
+                    down,
+                    "stream idle timeout exceeded"
+                );
+            });
+        } else {
+            self.wait_sleep
+                .as_mut()
+                .reset(TokioInstant::now() + WAIT_LOG_INTERVAL);
+        }
+
+        timed_out
     }
 }
 
@@ -196,7 +193,12 @@ where
                 Poll::Ready(None)
             }
             Poll::Pending => {
-                this.poll_wait_progress(cx);
+                let timed_out = this.poll_wait_progress(cx);
+                if timed_out {
+                    this.finished = true;
+                    this.emit_outcome();
+                    return Poll::Ready(None);
+                }
                 match this.observer.poll_pending(cx) {
                     BodyAction::Continue => Poll::Pending,
                     BodyAction::InjectAndClose(chunk) => {
@@ -224,5 +226,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "stream_tests.rs"]
+#[path = "monitor_tests.rs"]
 mod tests;

@@ -25,9 +25,9 @@ fn observed_chat_state_deduplicates_stream_tool_call_deltas() {
         reason: "stop".to_string(),
     });
 
-    let summary = state.summary();
+    let summary = state.fallback_summary();
 
     assert_eq!(summary.output_items.values().sum::<u64>(), 4);
-    assert_eq!(summary.tool_calls.get("lookup"), Some(&1));
+    assert_eq!(summary.tool_call_names.get("lookup"), Some(&1));
     assert_eq!(summary.finish_reasons.get("stop"), Some(&1));
 }

@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use crate::provider::UpstreamBodyStreamStats;
-use crate::upstream::{UpstreamResponseHead, UpstreamStreamMetrics};
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead, UpstreamStreamMetrics};
 
-use super::response_state::AnthropicResponseState;
+use super::state::AnthropicResponseState;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AnthropicUpstreamResponseSnapshot {

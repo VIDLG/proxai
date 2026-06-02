@@ -35,14 +35,14 @@ use ingress::prepare_inbound_request;
 pub use logging::TOOL_NAME_ALIASES;
 use logging::{ForwardedRequestEvent, RequestBodySizes};
 use protocol::RequestProtocol;
-use provider::{ProviderRuntime, UpstreamResponseContext};
+use provider::{ProviderSendContext, ProviderSendRequest, ProviderTransport};
 use routing::{resolve_route, EffectiveDefaultProviderNames, EffectiveRoute};
 use translation::{translate_request, translate_response};
 
 #[derive(Clone)]
 pub struct AppState {
     default_provider_names: EffectiveDefaultProviderNames,
-    providers: std::collections::BTreeMap<String, ProviderRuntime>,
+    providers: std::collections::BTreeMap<String, ProviderTransport>,
     routes: Vec<EffectiveRoute>,
     error_response_format: ErrorResponseFormat,
     capture: CaptureController,
@@ -55,25 +55,25 @@ impl AppState {
         providers: std::collections::BTreeMap<String, ProviderConfig>,
         routes: Vec<RouteConfig>,
     ) -> Result<Self> {
-        let provider_runtimes = providers
+        let provider_transports = providers
             .into_iter()
             .map(|(name, config)| {
-                let runtime = ProviderRuntime::build(name, config)?;
-                Ok((runtime.name.clone(), runtime))
+                let transport = ProviderTransport::build(name, config)?;
+                Ok((transport.name().to_string(), transport))
             })
             .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
-        let provider_protocols = provider_runtimes
+        let provider_protocols = provider_transports
             .values()
-            .map(|runtime| (runtime.name.clone(), runtime.protocol))
+            .map(|transport| (transport.name().to_string(), transport.protocol()))
             .collect();
-        let provider_names = provider_runtimes.keys().cloned().collect::<BTreeSet<_>>();
+        let provider_names = provider_transports.keys().cloned().collect::<BTreeSet<_>>();
         let effective_default_provider_names =
             EffectiveDefaultProviderNames::build(default_provider_names, &provider_names)?;
         let effective_routes = EffectiveRoute::build(&provider_protocols, routes)?;
 
         Ok(Self {
             default_provider_names: effective_default_provider_names,
-            providers: provider_runtimes,
+            providers: provider_transports,
             routes: effective_routes,
             error_response_format: ErrorResponseFormat::Text,
             capture: CaptureController::new(None, CaptureConfig::default()),
@@ -274,11 +274,11 @@ async fn proxy_inner(
         .ok_or_else(|| InternalError::InvalidProviderResolution(resolved_route.provider.clone()))?;
     let forwarded_request = translate_request(
         &inbound_request,
-        provider.protocol,
+        provider.protocol(),
         &resolved_route.upstream_model,
     )?;
     let forwarded_request_view = forwarded_request.view();
-    let forwarded_request_capture_payload = forwarded_request.capture_payload().clone();
+
     let forwarded_request_body_len = forwarded_request.body().len();
 
     request_span.in_scope(|| {
@@ -293,40 +293,30 @@ async fn proxy_inner(
             request_protocol: inbound_request.protocol(),
             provider: resolved_route.provider.clone(),
             route_name: resolved_route.route_name.clone(),
-            provider_protocol: provider.protocol,
+            provider_protocol: provider.protocol(),
             forwarded_request: forwarded_request_view,
             capture: capture.forwarded_request_enabled(),
         }
         .emit()
     });
 
-    let provider_request =
-        provider.prepare_request(&uri, &inbound_request_headers, forwarded_request)?;
-
-    capture
-        .capture_forwarded_request(
-            &method,
-            provider_request.url.as_str(),
-            &provider_request.headers,
-            &provider_request.body,
-            Some(&forwarded_request_capture_payload),
+    let response = provider
+        .send(
+            ProviderSendRequest::new(
+                method.clone(),
+                &uri,
+                &inbound_request_headers,
+                forwarded_request,
+            ),
+            ProviderSendContext::new(
+                request_id,
+                request_started,
+                &capture,
+                &request_span,
+                state.sse_tool_call_timeout,
+                state.error_response_format,
+            ),
         )
         .await?;
-
-    let upstream_response = provider_request
-        .build(&provider.client, method.clone())
-        .send()
-        .await?;
-    let response = UpstreamResponseContext {
-        request_id,
-        started: request_started,
-        capture: &capture,
-        span: &request_span,
-        sse_tool_call_timeout: state.sse_tool_call_timeout,
-        error_response_format: state.error_response_format,
-        provider_compatibility: provider.compatibility,
-    }
-    .handle_response(provider.protocol, upstream_response)
-    .await?;
-    Ok(translate_response(inbound_request.protocol(), provider.protocol, response).await?)
+    Ok(translate_response(inbound_request.protocol(), provider.protocol(), response).await?)
 }

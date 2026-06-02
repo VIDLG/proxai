@@ -1,7 +1,36 @@
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use derive_more::Display;
+use getset::CopyGetters;
 use serde::Serialize;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Copy, CopyGetters)]
+pub(crate) struct UpstreamBodyStreamStats {
+    started: Instant,
+    #[getset(get_copy = "pub(crate)")]
+    chunks: u64,
+    #[getset(get_copy = "pub(crate)")]
+    bytes: u64,
+}
+
+impl UpstreamBodyStreamStats {
+    pub(crate) fn new(started: Instant) -> Self {
+        Self {
+            started,
+            chunks: 0,
+            bytes: 0,
+        }
+    }
+
+    pub(crate) fn record_chunk(&mut self, chunk: &[u8]) {
+        self.chunks += 1;
+        self.bytes += chunk.len() as u64;
+    }
+
+    pub(crate) fn metrics(&self) -> UpstreamStreamMetrics {
+        UpstreamStreamMetrics::new(self.started.elapsed(), self.chunks, self.bytes)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub(crate) struct UpstreamStreamMetrics {

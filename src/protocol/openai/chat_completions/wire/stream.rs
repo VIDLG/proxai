@@ -13,6 +13,7 @@ pub struct FunctionCallStream {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FunctionType))]
+#[serde(rename_all = "snake_case")]
 pub enum FunctionType {
     Function,
 }

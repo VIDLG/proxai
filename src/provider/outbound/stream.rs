@@ -6,21 +6,19 @@ use axum::http::{HeaderMap, Response, StatusCode};
 use futures_util::Stream;
 
 use crate::error::Result;
+use crate::provider::filter_forwardable_headers;
 use crate::upstream::UpstreamResponseHead;
 
-use super::{
-    filter_forwardable_headers, BodyObserver, MonitoredBodyStream, UpstreamResponseContext,
-};
+use super::{BodyObserver, MonitoredBodyStream, OutboundResponseContext};
 
 /// Outcome of building the outbound side of a 2xx upstream response.
 ///
-/// `head`, `outbound_headers`, and `status` are exposed so callers can perform
+/// `head` and `outbound_headers` are exposed so callers can perform
 /// provider-specific wiring (e.g. SSE error-shape normalization, `event: error`
 /// encoding) before wrapping the stream in an axum `Response`. The stream has
 /// already been wrapped in a [`MonitoredBodyStream`], which drives the
 /// [`BodyObserver`] hooks for the lifetime of the response.
 pub(crate) struct OutboundStream {
-    pub status: StatusCode,
     pub head: UpstreamResponseHead,
     pub outbound_headers: HeaderMap,
     pub stream: Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send>>,
@@ -61,7 +59,7 @@ pub(crate) fn streaming_response(
 /// record (each provider uses a different log type), SSE error-shape
 /// normalization, and constructing the final axum [`axum::http::Response`].
 pub(crate) async fn build_outbound_stream<O>(
-    ctx: &UpstreamResponseContext<'_>,
+    ctx: &OutboundResponseContext<'_>,
     upstream_response: reqwest::Response,
     observer: O,
 ) -> Result<OutboundStream>
@@ -98,10 +96,10 @@ where
         observer,
         capture_writer,
         ctx.span.clone(),
+        Some(ctx.read_idle_timeout),
     );
 
     Ok(OutboundStream {
-        status,
         head,
         outbound_headers,
         stream: Box::pin(stream),

@@ -5,17 +5,16 @@ use crate::config::ProviderCompatibility;
 use crate::error::Result;
 use crate::logging;
 use crate::provider::{
-    outbound_response, BodyAction, BodyObserver, MonitoredBodyStream, UpstreamBodyStreamStats,
-    UpstreamResponseContext,
+    outbound_response, BodyAction, BodyObserver, MonitoredBodyStream, OutboundResponseContext,
 };
-use crate::upstream::UpstreamResponseHead;
+use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 use super::normalize;
 use super::snapshot::AnthropicUpstreamResponseSnapshot;
 use super::tracker::AnthropicResponseTracker;
 
 pub(super) async fn handle_streaming(
-    ctx: UpstreamResponseContext<'_>,
+    ctx: OutboundResponseContext<'_>,
     upstream_response: reqwest::Response,
     upstream_headers: &HeaderMap,
     upstream_head: &UpstreamResponseHead,
@@ -26,14 +25,17 @@ pub(super) async fn handle_streaming(
         ctx.span.clone(),
     );
 
+    let capture_writer = ctx
+        .capture
+        .create_upstream_response_writer(upstream_head.content_type.as_ref());
     let stream = MonitoredBodyStream::new(
         upstream_response.bytes_stream(),
         upstream_head.clone(),
         ctx.started,
         observer,
-        ctx.capture
-            .create_upstream_response_writer(upstream_head.content_type.as_ref()),
+        capture_writer,
         ctx.span.clone(),
+        Some(ctx.read_idle_timeout),
     );
     let stream = if should_normalize_provider_response(ctx.provider_compatibility) {
         Body::from_stream(normalize::normalize_sse_stream(stream))
@@ -126,5 +128,5 @@ impl BodyObserver for AnthropicSseObserver {
 }
 
 #[cfg(test)]
-#[path = "streaming_tests.rs"]
+#[path = "stream_tests.rs"]
 mod tests;

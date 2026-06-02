@@ -18,3 +18,4 @@ llm/
 .claude
 .zed/
 target/
+Cargo.lock

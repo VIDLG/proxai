@@ -93,7 +93,7 @@ impl UnfinishedToolDiagnosticReport {
             stream: DiagnosticStreamSection::new(snapshot.metrics, recent_tail, recent_tail_text),
             tool_arguments,
             response: DiagnosticResponseSection::new(snapshot),
-            observed_summary: snapshot.state.observed_summary(),
+            observed_summary: snapshot.state.fallback_summary(),
             observed_error: snapshot.state.observed_error().cloned(),
         }
     }
@@ -194,9 +194,9 @@ impl DiagnosticResponseSection {
     fn new(snapshot: &ResponsesUpstreamStreamSnapshot) -> Self {
         let response_snapshot = snapshot
             .state
-            .snapshot
+            .latest_snapshot
             .as_ref()
-            .map(|value| &value.projection);
+            .map(|snapshot| &snapshot.projection);
         let response_summary = snapshot.state.effective_summary();
 
         Self {
@@ -241,7 +241,7 @@ impl DiagnosticResponseSection {
             sequence_number: snapshot.state.sequence_number,
             snapshot_kind: snapshot
                 .state
-                .snapshot
+                .latest_snapshot
                 .as_ref()
                 .map(|value| format!("{:?}", value.kind)),
             summary: response_summary,
