@@ -33,10 +33,22 @@ pub(crate) fn translate_request(
             )?,
             inbound.normalized_payload.clone(),
         )),
-        (PreparedInboundRequest::OpenaiResponses(_), ProviderProtocol::OpenaiChatCompletions) => {
-            Err(InternalError::InvalidRoute(
-                "openai_responses -> openai_chat_completions translation is not implemented yet"
-                    .to_string(),
+        (
+            PreparedInboundRequest::OpenaiResponses(inbound),
+            ProviderProtocol::OpenaiChatCompletions,
+        ) => {
+            let translated = crate::translation::openai_responses::to_openai_chat_completions::translate_request_payload(
+                &inbound.normalized_payload,
+                &inbound.model,
+                upstream_model,
+            )?;
+            Ok(ForwardedRequest::openai_chat_completions(
+                chat_completions::request::prepare_forwarded_request(
+                    &translated,
+                    upstream_model,
+                    upstream_model,
+                )?,
+                translated,
             ))
         }
         (PreparedInboundRequest::OpenaiResponses(inbound), ProviderProtocol::AnthropicMessages) => {
@@ -60,10 +72,22 @@ pub(crate) fn translate_request(
                     .to_string(),
             ))
         }
-        (PreparedInboundRequest::OpenaiChatCompletions(_), ProviderProtocol::AnthropicMessages) => {
-            Err(InternalError::InvalidRoute(
-                "openai_chat_completions -> anthropic_messages translation is not implemented yet"
-                    .to_string(),
+        (
+            PreparedInboundRequest::OpenaiChatCompletions(inbound),
+            ProviderProtocol::AnthropicMessages,
+        ) => {
+            let translated = crate::translation::openai_chat_completions::to_anthropic_messages::translate_request_payload(
+                &inbound.normalized_payload,
+                &inbound.model,
+                upstream_model,
+            )?;
+            Ok(ForwardedRequest::anthropic_messages(
+                anthropic_messages::request::prepare_forwarded_request(
+                    &translated,
+                    upstream_model,
+                    upstream_model,
+                )?,
+                translated,
             ))
         }
         (PreparedInboundRequest::AnthropicMessages(inbound), ProviderProtocol::OpenaiResponses) => {

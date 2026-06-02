@@ -7,5 +7,4 @@ pub(crate) use self::prepare::{prepare_forwarded_request, PreparedForwardedReque
 pub(crate) use self::summary::{RequestSummary, ToolCategory};
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

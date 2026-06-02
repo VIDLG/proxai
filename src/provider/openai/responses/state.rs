@@ -101,7 +101,12 @@ impl ResponsesUpstreamState {
             return self.observed_summary();
         };
 
-        ResponseSummary::from(&snapshot.projection)
+        let snapshot_summary = ResponseSummary::from(&snapshot.projection);
+        if snapshot_summary.is_empty() {
+            self.observed_summary()
+        } else {
+            snapshot_summary
+        }
     }
 
     pub(crate) fn effective_error(&self) -> Option<&ErrorObject> {

@@ -22,8 +22,8 @@ fn sse_eof_without_message_stop_is_incomplete() {
 "#,
     );
 
-    assert!(!observer.is_terminal());
-    assert!(!observer.is_error());
+    assert!(!observer.saw_terminal);
+    assert!(observer.error_message.is_none());
 }
 
 #[test]
@@ -36,6 +36,6 @@ fn sse_eof_after_message_stop_is_complete() {
 "#,
     );
 
-    assert!(observer.is_terminal());
-    assert!(!observer.is_error());
+    assert!(observer.saw_terminal);
+    assert!(observer.error_message.is_none());
 }

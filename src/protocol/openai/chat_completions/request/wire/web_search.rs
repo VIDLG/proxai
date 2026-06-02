@@ -7,6 +7,7 @@ use strum::Display;
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::WebSearchContextSize))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchContextSize {
     Low,
@@ -17,6 +18,7 @@ pub enum WebSearchContextSize {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::WebSearchUserLocationType))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchUserLocationType {
     Approximate,

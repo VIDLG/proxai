@@ -25,8 +25,8 @@ fn sse_eof_without_done_sentinel_is_incomplete() {
 "#,
     );
 
-    assert!(!observer.is_terminal());
-    assert!(!observer.is_error());
+    assert!(!observer.tracker.state.stream_done);
+    assert!(observer.error_message.is_none());
 }
 
 #[test]
@@ -38,6 +38,6 @@ fn sse_eof_after_done_sentinel_is_complete() {
 
     observer.observe_chunk(b"data: [DONE]\n\n");
 
-    assert!(observer.is_terminal());
-    assert!(!observer.is_error());
+    assert!(observer.tracker.state.stream_done);
+    assert!(observer.error_message.is_none());
 }

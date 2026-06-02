@@ -42,7 +42,7 @@ Use protocol-based names where wire behavior differs:
 - provider names: user labels, not semantic protocol identifiers
 
 Current protocol values: `openai_responses`, `openai_chat_completions`, `anthropic_messages`.
-If a route omits `request_protocol`, default it to the selected provider's protocol; cross-protocol routing should be explicit.
+If a route omits `request_protocol`, match the actual inbound protocol detected from the request path; provider `protocol` still controls outbound wire behavior. Set `request_protocol` only when the same model pattern needs endpoint-specific routing; model matches with mismatched explicit `request_protocol` should raise a configuration error instead of falling through.
 
 Keep protocol names separate from chain phases:
 

@@ -40,6 +40,7 @@ pub enum MCPToolAllowedTools {
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai_mcp::McpToolConnectorId))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum McpToolConnectorId {
     ConnectorDropbox,
@@ -54,6 +55,7 @@ pub enum McpToolConnectorId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai_mcp::MCPToolApprovalSetting))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum MCPToolApprovalSetting {
     Always,
@@ -150,6 +152,7 @@ pub struct MCPListTools {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::MCPToolCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MCPToolCallStatus {
     InProgress,

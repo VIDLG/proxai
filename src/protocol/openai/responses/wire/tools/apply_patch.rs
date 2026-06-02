@@ -9,6 +9,7 @@ use strum::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallStatusParam))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallStatusParam {
     InProgress,
@@ -17,6 +18,7 @@ pub enum ApplyPatchCallStatusParam {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallOutputStatusParam))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallOutputStatusParam {
     Completed,
@@ -83,6 +85,7 @@ pub struct ApplyPatchToolCallOutputItemParam {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallStatus {
     InProgress,
@@ -91,6 +94,7 @@ pub enum ApplyPatchCallStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ApplyPatchCallOutputStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ApplyPatchCallOutputStatus {
     Completed,

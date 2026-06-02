@@ -1,6 +1,5 @@
-use async_openai::types::responses::CreateResponse;
 use serde_json::Value;
-use tracing::error;
+use tracing::debug;
 
 use crate::diagnostics;
 
@@ -11,15 +10,15 @@ pub(crate) fn project_payload(
     request_id: Option<u64>,
 ) -> Result<RequestProjection, serde_json::Error> {
     let adapted = adapt_payload_for_projection(payload);
-    match serde_json::from_value::<CreateResponse>(adapted.clone()) {
-        Ok(request) => Ok(request.into()),
+    match RequestProjection::from_payload(&adapted) {
+        Ok(request) => Ok(request),
         Err(error) => {
             if let Some(request_id) = request_id {
                 let _diagnostic_path = diagnostics::write_request_info_parse_failure(
                     request_id, payload, &adapted, &error,
                 );
             }
-            error!(
+            debug!(
                 error = %error,
                 request_id = request_id,
                 "failed to parse normalized /v1/responses payload for RequestProjection extraction"

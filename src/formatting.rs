@@ -43,9 +43,34 @@ pub(crate) fn format_count_map<K>(values: &BTreeMap<K, u64>) -> String
 where
     K: Display,
 {
+    format_count_map_with(values, |key| key.to_string())
+}
+
+pub(crate) fn format_count_map_with<K>(
+    values: &BTreeMap<K, u64>,
+    render_key: impl Fn(&K) -> String,
+) -> String {
     values
         .iter()
-        .map(|(key, value)| format!("{key}:{value}"))
+        .map(|(key, value)| format!("{}:{value}", render_key(key)))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn map_count_keys<K>(
+    values: &BTreeMap<K, u64>,
+    render_key: impl Fn(&K) -> String,
+) -> BTreeMap<String, u64> {
+    values
+        .iter()
+        .map(|(key, value)| (render_key(key), *value))
+        .collect()
+}
+
+pub(crate) fn join_non_empty<const N: usize>(values: [String; N]) -> String {
+    values
+        .into_iter()
+        .filter(|value| !value.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
 }

@@ -79,6 +79,7 @@ pub enum OutputContent {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::AssistantRole))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum AssistantRole {
     #[default]

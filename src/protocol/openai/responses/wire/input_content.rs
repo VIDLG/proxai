@@ -8,6 +8,7 @@ use strum::Display;
 )]
 #[convert(from(openai::ImageDetail))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum ImageDetail {
     #[default]
     Auto,
@@ -19,6 +20,7 @@ pub enum ImageDetail {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FileInputDetail))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum FileInputDetail {
     Low,
     High,
@@ -30,12 +32,21 @@ pub struct InputTextContent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::InputImageContent))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputImageContent {
-    pub detail: ImageDetail,
+    pub detail: Option<ImageDetail>,
     pub file_id: Option<String>,
     pub image_url: Option<String>,
+}
+
+impl From<openai::InputImageContent> for InputImageContent {
+    fn from(value: openai::InputImageContent) -> Self {
+        Self {
+            detail: Some(value.detail.into()),
+            file_id: value.file_id,
+            image_url: value.image_url,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
@@ -54,6 +65,7 @@ pub struct InputFileContent {
 )]
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputContent))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum InputContent {
     InputText(InputTextContent),
     InputImage(InputImageContent),

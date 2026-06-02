@@ -9,6 +9,7 @@ use strum::Display;
 )]
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionAudioVoice))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioVoice {
     Alloy,
@@ -31,6 +32,7 @@ pub enum ChatCompletionAudioVoice {
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionAudioFormat))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioFormat {
     Wav,

@@ -208,7 +208,8 @@ async fn proxy_normalizes_anthropic_messages_sse_response() {
     let body = response.text().await.unwrap();
     assert!(body.contains("event: message_start"));
     assert!(body.contains("event: message_stop"));
-    assert!(body.contains("\"message\":{\"content\":[]"));
+    assert!(body.contains("\"id\":\"msg_stream\""));
+    assert!(body.contains("\"content\":[]"));
     assert!(body.contains("\"caller\":{\"type\":\"direct\"}"));
     assert!(body.contains("\"web_fetch_requests\":0"));
 }

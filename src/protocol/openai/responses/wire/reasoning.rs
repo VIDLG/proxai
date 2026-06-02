@@ -9,6 +9,7 @@ use super::OutputStatus;
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::ReasoningEffort))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningEffort {
     None,
@@ -22,6 +23,7 @@ pub enum ReasoningEffort {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ReasoningSummary))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningSummary {
     Auto,

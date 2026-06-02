@@ -1,9 +1,9 @@
 use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use structural_convert::StructuralConvert;
 use strum::Display;
 
-use super::super::InputContent;
 use super::function::{FunctionCallOutputStatusEnum, FunctionCallStatus};
 
 // ============================================================
@@ -25,6 +25,7 @@ pub struct ToolChoiceCustom {
 )]
 #[convert(from(openai::GrammarSyntax))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum GrammarSyntax {
     #[default]
     Lark,
@@ -40,6 +41,7 @@ pub struct CustomGrammarFormatParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Default, Serialize, Deserialize)]
 #[convert(from(openai::CustomToolParamFormat))]
+#[serde(untagged)]
 pub enum CustomToolParamFormat {
     #[default]
     Text,
@@ -63,11 +65,18 @@ pub struct CustomToolParam {
 // Shared / Supporting Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CustomToolCallOutputOutput))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum CustomToolCallOutputOutput {
     Text(String),
-    List(Vec<InputContent>),
+    List(Vec<Value>),
+}
+
+impl From<openai::CustomToolCallOutputOutput> for CustomToolCallOutputOutput {
+    fn from(value: openai::CustomToolCallOutputOutput) -> Self {
+        serde_json::from_value(serde_json::to_value(value).unwrap_or_default())
+            .expect("CustomToolCallOutputOutput should match local protocol shape")
+    }
 }
 
 // ============================================================
@@ -86,14 +95,25 @@ pub struct CustomToolCallOutput {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CustomToolCall))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CustomToolCall {
     pub call_id: String,
     pub namespace: Option<String>,
     pub input: String,
     pub name: String,
-    pub id: String,
+    pub id: Option<String>,
+}
+
+impl From<openai::CustomToolCall> for CustomToolCall {
+    fn from(value: openai::CustomToolCall) -> Self {
+        Self {
+            call_id: value.call_id,
+            namespace: value.namespace,
+            input: value.input,
+            name: value.name,
+            id: Some(value.id),
+        }
+    }
 }
 
 #[allow(dead_code, reason = "Retained for future item-resource modeling.")]

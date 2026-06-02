@@ -44,27 +44,6 @@ impl ChatUpstreamResponseTracker {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn finish(&mut self) {
-        use crate::protocol::openai::chat_completions::{
-            ChatResponseProjection, CreateChatCompletionResponse,
-        };
-
-        if self.is_sse || self.json_body.is_empty() {
-            return;
-        }
-        let Ok(response) =
-            serde_json::from_slice::<openai::CreateChatCompletionResponse>(&self.json_body)
-        else {
-            return;
-        };
-        let projection = ChatResponseProjection::from(CreateChatCompletionResponse::from(response));
-        self.state
-            .observed
-            .record(ObservedChatResponse::Response(projection));
-        self.json_body.clear();
-    }
-
     fn scan_sse_bytes(&mut self, chunk: &[u8]) {
         for event in self.sse_scanner.scan(chunk) {
             if event.is_done_sentinel() {
@@ -85,3 +64,7 @@ impl ChatUpstreamResponseTracker {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tracker_tests.rs"]
+mod tests;

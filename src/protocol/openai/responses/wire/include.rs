@@ -44,3 +44,19 @@ pub enum IncludeParam {
     #[serde(rename = "reasoning.encrypted_content")]
     ReasoningEncryptedContent,
 }
+
+impl From<IncludeParam> for IncludeEnum {
+    fn from(value: IncludeParam) -> Self {
+        match value {
+            IncludeParam::WebSearchCallActionSources => Self::WebSearchCallActionSources,
+            IncludeParam::CodeInterpreterCallOutputs => Self::CodeInterpreterCallOutputs,
+            IncludeParam::ComputerCallOutputOutputImageUrl => {
+                Self::ComputerCallOutputOutputImageUrl
+            }
+            IncludeParam::FileSearchCallResults => Self::FileSearchCallResults,
+            IncludeParam::MessageInputImageImageUrl => Self::MessageInputImageImageUrl,
+            IncludeParam::MessageOutputTextLogprobs => Self::MessageOutputTextLogprobs,
+            IncludeParam::ReasoningEncryptedContent => Self::ReasoningEncryptedContent,
+        }
+    }
+}

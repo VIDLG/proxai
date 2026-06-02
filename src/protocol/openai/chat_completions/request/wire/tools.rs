@@ -61,6 +61,7 @@ pub struct CustomToolChatCompletions {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionTools))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionTools {
     Function(ChatCompletionTool),
     Custom(CustomToolChatCompletions),
@@ -126,6 +127,7 @@ pub enum ToolChoiceOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionToolChoiceOption))]
+#[serde(untagged)]
 pub enum ChatCompletionToolChoiceOption {
     AllowedTools(ChatCompletionAllowedToolsChoice),
     Function(ChatCompletionNamedToolChoice),

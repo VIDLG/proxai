@@ -9,6 +9,7 @@ use super::{ToolChoiceCustom, ToolChoiceFunction, ToolChoiceMCP};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ToolChoiceAllowedMode))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ToolChoiceAllowedMode {
     Auto,
     Required,
@@ -24,12 +25,14 @@ pub struct ToolChoiceAllowed {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ToolChoiceTypes))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ToolChoiceTypes {
     FileSearch,
     WebSearchPreview,
     Computer,
     ComputerUsePreview,
     ComputerUse,
+    #[serde(rename = "web_search_preview_2025_03_11")]
     #[strum(to_string = "web_search_preview_2025_03_11")]
     WebSearchPreview20250311,
     CodeInterpreter,
@@ -39,6 +42,7 @@ pub enum ToolChoiceTypes {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ToolChoiceOptions))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ToolChoiceOptions {
     None,
     Auto,
@@ -47,6 +51,7 @@ pub enum ToolChoiceOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ToolChoiceParam))]
+#[serde(untagged)]
 pub enum ToolChoiceParam {
     AllowedTools(ToolChoiceAllowed),
     Function(ToolChoiceFunction),

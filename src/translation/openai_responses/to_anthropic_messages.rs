@@ -13,9 +13,10 @@ use std::io;
 
 use crate::error::{InternalError, Result};
 use crate::protocol::anthropic::messages::{
-    ContentBlock, DirectCaller, Message as AnthropicMessage, MessageType, Role, StopReason,
-    TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock, Usage,
+    ContentBlock, DirectCaller, Message as AnthropicMessage, MessageCreateParamsBase, MessageType,
+    Role, StopReason, TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock, Usage,
 };
+
 use crate::sse::SseEvent;
 use crate::translation::sse::{
     encode_sse_json, event_payload_with_type, translate_sse_response, SseEventTranslator,
@@ -23,19 +24,41 @@ use crate::translation::sse::{
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
+#[derive(Debug, Default, Deserialize)]
+struct ResponseRequestView {
+    input: Option<Value>,
+    instructions: Option<String>,
+    max_output_tokens: Option<u32>,
+    metadata: Option<Value>,
+    parallel_tool_calls: Option<bool>,
+    reasoning: Option<Value>,
+    stream: Option<bool>,
+    temperature: Option<f32>,
+    tool_choice: Option<Value>,
+    tools: Option<Value>,
+    top_p: Option<f32>,
+}
+
 pub(crate) fn translate_request_payload(
     payload: &Value,
     request_model: &str,
     upstream_model: &str,
 ) -> Result<Value, InternalError> {
+    let source = serde_json::from_value::<ResponseRequestView>(payload.clone())?;
+    let input = source.input.as_ref();
+    let tools = source.tools.as_ref();
+    let tool_choice = source.tool_choice.as_ref();
+    let reasoning = source.reasoning.as_ref();
+    let metadata = source.metadata.as_ref();
+
     let mut system_parts = Vec::new();
-    if let Some(instructions) = payload.get("instructions").and_then(Value::as_str) {
+    if let Some(instructions) = source.instructions.as_deref() {
         if !instructions.trim().is_empty() {
             system_parts.push(instructions.to_string());
         }
     }
 
-    let mut messages = translate_input(payload.get("input"), &mut system_parts)?;
+    let mut messages = translate_input(input, &mut system_parts)?;
     if messages.is_empty() {
         messages.push(json!({
             "role": "user",
@@ -54,38 +77,38 @@ pub(crate) fn translate_request_payload(
     );
     request.insert(
         "max_tokens".to_string(),
-        json!(payload
-            .get("max_output_tokens")
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(DEFAULT_MAX_TOKENS)),
+        json!(source.max_output_tokens.unwrap_or(DEFAULT_MAX_TOKENS)),
     );
     request.insert("messages".to_string(), Value::Array(messages));
 
     if let Some(system) = join_text_parts(system_parts) {
         request.insert("system".to_string(), Value::String(system));
     }
-    copy_optional(payload, &mut request, "stream");
-    copy_optional(payload, &mut request, "temperature");
-    copy_optional(payload, &mut request, "top_p");
+    if let Some(stream) = source.stream {
+        request.insert("stream".to_string(), Value::Bool(stream));
+    }
+    if let Some(temperature) = source.temperature {
+        request.insert("temperature".to_string(), json!(temperature));
+    }
+    if let Some(top_p) = source.top_p {
+        request.insert("top_p".to_string(), json!(top_p));
+    }
 
-    if let Some(metadata) = translate_metadata(payload.get("metadata")) {
+    if let Some(metadata) = translate_metadata(metadata) {
         request.insert("metadata".to_string(), metadata);
     }
-    if let Some(thinking) = translate_reasoning(payload.get("reasoning")) {
+    if let Some(thinking) = translate_reasoning(reasoning) {
         request.insert("thinking".to_string(), thinking);
     }
-    if let Some(tools) = translate_tools(payload.get("tools")) {
+    if let Some(tools) = translate_tools(tools) {
         request.insert("tools".to_string(), tools);
     }
-    if let Some(tool_choice) = translate_tool_choice(
-        payload.get("tool_choice"),
-        payload.get("parallel_tool_calls").and_then(Value::as_bool),
-    ) {
+    if let Some(tool_choice) = translate_tool_choice(tool_choice, source.parallel_tool_calls) {
         request.insert("tool_choice".to_string(), tool_choice);
     }
 
-    Ok(Value::Object(request))
+    let typed = serde_json::from_value::<MessageCreateParamsBase>(Value::Object(request))?;
+    Ok(serde_json::to_value(typed)?)
 }
 
 pub(crate) async fn translate_response(
@@ -1122,12 +1145,6 @@ fn call_id(object: &Map<String, Value>) -> String {
         .and_then(Value::as_str)
         .unwrap_or("tool_call")
         .to_string()
-}
-
-fn copy_optional(source: &Value, target: &mut Map<String, Value>, key: &str) {
-    if let Some(value) = source.get(key) {
-        target.insert(key.to_string(), value.clone());
-    }
 }
 
 #[cfg(test)]

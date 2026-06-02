@@ -10,16 +10,17 @@ use crate::error::InternalError;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 #[test]
-fn route_without_request_protocol_inherits_provider_protocol() {
+fn route_without_request_protocol_accepts_inbound_protocol() {
     let defaults =
         EffectiveDefaultProviderNames::build(default_provider_names(), &provider_names()).unwrap();
     let routes = EffectiveRoute::build(
         &provider_protocols(),
         vec![RouteConfig {
+            name: None,
             request_protocol: None,
             match_kind: MatchKind::Glob,
             model_pattern: "claude-*".to_string(),
-            provider_name: "anthropic".to_string(),
+            provider: "anthropic".to_string(),
             upstream_model: Some("claude-sonnet-4-5-20250929".to_string()),
         }],
     )
@@ -33,8 +34,9 @@ fn route_without_request_protocol_inherits_provider_protocol() {
     )
     .unwrap();
 
-    assert_eq!(resolved.provider_name, "openai");
-    assert_eq!(resolved.upstream_model, "claude-sonnet");
+    assert_eq!(resolved.route_name, None);
+    assert_eq!(resolved.provider, "anthropic");
+    assert_eq!(resolved.upstream_model, "claude-sonnet-4-5-20250929");
 }
 
 #[test]
@@ -44,10 +46,11 @@ fn explicit_request_protocol_can_route_openai_ingress_to_anthropic_provider() {
     let routes = EffectiveRoute::build(
         &provider_protocols(),
         vec![RouteConfig {
+            name: Some("claude_responses_ant".to_string()),
             request_protocol: Some(RequestProtocol::OpenaiResponses),
             match_kind: MatchKind::Exact,
             model_pattern: "claude-sonnet".to_string(),
-            provider_name: "anthropic".to_string(),
+            provider: "anthropic".to_string(),
             upstream_model: Some("claude-sonnet-4-5-20250929".to_string()),
         }],
     )
@@ -61,10 +64,84 @@ fn explicit_request_protocol_can_route_openai_ingress_to_anthropic_provider() {
     )
     .unwrap();
 
-    assert_eq!(resolved.provider_name, "anthropic");
+    assert_eq!(resolved.route_name.as_deref(), Some("claude_responses_ant"));
+    assert_eq!(resolved.provider, "anthropic");
     assert_eq!(resolved.upstream_model, "claude-sonnet-4-5-20250929");
 }
 
+#[test]
+fn explicit_request_protocol_mismatch_is_reported_for_matching_model() {
+    let defaults =
+        EffectiveDefaultProviderNames::build(default_provider_names(), &provider_names()).unwrap();
+    let routes = EffectiveRoute::build(
+        &provider_protocols(),
+        vec![RouteConfig {
+            name: Some("glm_responses_ant".to_string()),
+            request_protocol: Some(RequestProtocol::OpenaiResponses),
+            match_kind: MatchKind::Glob,
+            model_pattern: "glm-*".to_string(),
+            provider: "anthropic".to_string(),
+            upstream_model: None,
+        }],
+    )
+    .unwrap();
+
+    let error = resolve_route(
+        &defaults,
+        &routes,
+        RequestProtocol::OpenaiChatCompletions,
+        "glm-5.1",
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        InternalError::InvalidRoute(message)
+            if message.contains("routing route `glm_responses_ant` matches model `glm-5.1`")
+                && message.contains("request_protocol is `openai_responses`")
+                && message.contains("inbound request uses `openai_chat_completions`")
+    ));
+}
+
+#[test]
+fn later_protocol_match_wins_over_earlier_mismatch() {
+    let defaults =
+        EffectiveDefaultProviderNames::build(default_provider_names(), &provider_names()).unwrap();
+    let routes = EffectiveRoute::build(
+        &provider_protocols(),
+        vec![
+            RouteConfig {
+                name: Some("glm_responses_ant".to_string()),
+                request_protocol: Some(RequestProtocol::OpenaiResponses),
+                match_kind: MatchKind::Glob,
+                model_pattern: "glm-*".to_string(),
+                provider: "openai".to_string(),
+                upstream_model: None,
+            },
+            RouteConfig {
+                name: Some("glm_chat_ant".to_string()),
+                request_protocol: Some(RequestProtocol::OpenaiChatCompletions),
+                match_kind: MatchKind::Glob,
+                model_pattern: "glm-*".to_string(),
+                provider: "anthropic".to_string(),
+                upstream_model: None,
+            },
+        ],
+    )
+    .unwrap();
+
+    let resolved = resolve_route(
+        &defaults,
+        &routes,
+        RequestProtocol::OpenaiChatCompletions,
+        "glm-5.1",
+    )
+    .unwrap();
+
+    assert_eq!(resolved.route_name.as_deref(), Some("glm_chat_ant"));
+    assert_eq!(resolved.provider, "anthropic");
+    assert_eq!(resolved.upstream_model, "glm-5.1");
+}
 #[test]
 fn effective_default_provider_names_reject_empty_defaults() {
     let defaults = DefaultProviderNamesConfig {

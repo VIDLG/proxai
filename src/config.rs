@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DurationSeconds};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -48,6 +48,26 @@ impl AppConfig {
                     path: path.clone(),
                     message: format!("providers.{name}.api_key must be a non-empty string"),
                 });
+            }
+        }
+        let mut route_names = BTreeSet::new();
+        for (index, route) in config.routing.routes.iter().enumerate() {
+            if let Some(name) = &route.name {
+                let name = name.trim();
+                if name.is_empty() {
+                    return Err(ConfigError::Invalid {
+                        path: path.clone(),
+                        message: format!("routing.routes[{index}].name must be a non-empty string"),
+                    });
+                }
+                if !route_names.insert(name.to_string()) {
+                    return Err(ConfigError::Invalid {
+                        path: path.clone(),
+                        message: format!(
+                            "routing.routes[{index}].name duplicates route name `{name}`"
+                        ),
+                    });
+                }
             }
         }
         Ok(config)
@@ -121,10 +141,11 @@ pub enum MatchKind {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RouteConfig {
+    pub name: Option<String>,
     pub request_protocol: Option<RequestProtocol>,
     pub match_kind: MatchKind,
     pub model_pattern: String,
-    pub provider_name: String,
+    pub provider: String,
     pub upstream_model: Option<String>,
 }
 

@@ -14,8 +14,15 @@ pub(crate) async fn translate_response(
     }
 
     match (request_protocol, provider_protocol) {
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => {
+            super::openai_chat_completions::to_openai_responses::translate_response(response).await
+        }
         (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => {
             super::anthropic_messages::to_openai_responses::translate_response(response).await
+        }
+        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => {
+            super::anthropic_messages::to_openai_chat_completions::translate_response(response)
+                .await
         }
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             super::openai_responses::to_anthropic_messages::translate_response(response).await

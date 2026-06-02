@@ -1,8 +1,8 @@
 use crate::protocol::anthropic::messages::ThinkingConfigParam;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::ForwardedRequestView;
-use serde_json::Value as JsonValue;
+use serde_json::{json, Value as JsonValue};
 use valuable::Valuable;
-use valuable_serde::Serializable;
 
 use super::request_hints;
 use super::ForwardedRequestEvent;
@@ -15,11 +15,20 @@ pub(crate) struct ForwardFields {
     pub(crate) forwarded_request_bytes: u64,
     pub(crate) inbound_request_bytes: u64,
     pub(crate) request_delta_bytes: i128,
+    pub(crate) request_protocol: String,
+    pub(crate) provider: String,
+    pub(crate) route_name: Option<String>,
+    pub(crate) provider_protocol: String,
+    pub(crate) translation: String,
+    pub(crate) request_protocol_alias: String,
+    pub(crate) translation_alias: String,
+    pub(crate) provider_protocol_alias: String,
     pub(crate) model: String,
     pub(crate) reasoning_effort: String,
     pub(crate) stream: Option<bool>,
     pub(crate) max_output_tokens: Option<u32>,
     pub(crate) request_hints: String,
+    pub(crate) request_hint_parts: Vec<String>,
     pub(crate) capture: bool,
 }
 
@@ -35,6 +44,8 @@ impl From<&ForwardedRequestEvent<'_>> for ForwardFields {
         ));
         let common = ForwardRequestCommonFields::from(&event.forwarded_request);
 
+        let request_hints = hint_parts.join(" ");
+
         Self {
             request_id: event.request_id,
             method: event.method.to_string(),
@@ -42,13 +53,67 @@ impl From<&ForwardedRequestEvent<'_>> for ForwardFields {
             forwarded_request_bytes: event.request_sizes.forwarded,
             inbound_request_bytes: event.request_sizes.inbound,
             request_delta_bytes: event.request_sizes.delta(),
+            request_protocol: event.request_protocol.to_string(),
+            provider: event.provider.clone(),
+            route_name: event.route_name.clone(),
+            provider_protocol: event.provider_protocol.to_string(),
+            translation: render_translation(event.request_protocol, event.provider_protocol),
+            request_protocol_alias: compact_request_protocol(event.request_protocol).to_string(),
+            translation_alias: render_translation_alias(
+                event.request_protocol,
+                event.provider_protocol,
+            ),
+            provider_protocol_alias: compact_provider_protocol(event.provider_protocol).to_string(),
             model: common.model,
             reasoning_effort: common.reasoning_effort,
             stream: common.stream,
             max_output_tokens: common.max_output_tokens,
-            request_hints: hint_parts.join(" "),
+            request_hints,
+            request_hint_parts: hint_parts,
             capture: event.capture,
         }
+    }
+}
+
+fn render_translation(
+    request_protocol: RequestProtocol,
+    provider_protocol: ProviderProtocol,
+) -> String {
+    if request_protocol == provider_protocol.default_request_protocol() {
+        String::new()
+    } else {
+        format!("{request_protocol}->{provider_protocol}")
+    }
+}
+
+fn render_translation_alias(
+    request_protocol: RequestProtocol,
+    provider_protocol: ProviderProtocol,
+) -> String {
+    if request_protocol == provider_protocol.default_request_protocol() {
+        String::new()
+    } else {
+        format!(
+            "{}->{}",
+            compact_request_protocol(request_protocol),
+            compact_provider_protocol(provider_protocol)
+        )
+    }
+}
+
+fn compact_request_protocol(protocol: RequestProtocol) -> &'static str {
+    match protocol {
+        RequestProtocol::OpenaiResponses => "resp",
+        RequestProtocol::OpenaiChatCompletions => "chat",
+        RequestProtocol::AnthropicMessages => "ant",
+    }
+}
+
+fn compact_provider_protocol(protocol: ProviderProtocol) -> &'static str {
+    match protocol {
+        ProviderProtocol::OpenaiResponses => "resp",
+        ProviderProtocol::OpenaiChatCompletions => "chat",
+        ProviderProtocol::AnthropicMessages => "ant",
     }
 }
 
@@ -119,6 +184,28 @@ pub(crate) trait ValuableJson {
 
 impl ValuableJson for ForwardFields {
     fn to_json_value(&self) -> JsonValue {
-        serde_json::to_value(Serializable::new(self)).unwrap_or(JsonValue::Null)
+        json!({
+            "request_id": self.request_id,
+            "method": self.method,
+            "path": self.path,
+            "forwarded_request_bytes": self.forwarded_request_bytes,
+            "inbound_request_bytes": self.inbound_request_bytes,
+            "request_delta_bytes": self.request_delta_bytes,
+            "request_protocol": self.request_protocol,
+            "provider": self.provider,
+            "route_name": self.route_name,
+            "provider_protocol": self.provider_protocol,
+            "translation": self.translation,
+            "request_protocol_alias": self.request_protocol_alias,
+            "translation_alias": self.translation_alias,
+            "provider_protocol_alias": self.provider_protocol_alias,
+            "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
+            "stream": self.stream,
+            "max_output_tokens": self.max_output_tokens,
+            "request_hints": self.request_hints,
+            "request_hint_parts": self.request_hint_parts,
+            "capture": self.capture,
+        })
     }
 }

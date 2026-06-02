@@ -63,16 +63,6 @@ impl ChatUpstreamBodyObserver {
             state: self.tracker.state.clone(),
         }
     }
-
-    #[cfg(test)]
-    fn is_terminal(&self) -> bool {
-        self.tracker.state.stream_done
-    }
-
-    #[cfg(test)]
-    fn is_error(&self) -> bool {
-        self.error_message.is_some()
-    }
 }
 
 impl BodyObserver for ChatUpstreamBodyObserver {

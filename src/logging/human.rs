@@ -1,7 +1,8 @@
 use indexmap::IndexMap;
 use owo_colors::{OwoColorize, Style};
 use std::fmt;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
+use std::sync::Mutex;
 use tracing::Level;
 use tracing_core::span::{Attributes, Id, Record};
 use tracing_core::{Event, Subscriber};
@@ -34,10 +35,16 @@ impl Default for DurationThresholds {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct HumanLayer {
     duration_thresholds: DurationThresholds,
     color: bool,
+    progress_state: Mutex<ProgressState>,
+}
+
+#[derive(Debug, Default)]
+struct ProgressState {
+    inline_active: bool,
 }
 
 impl HumanLayer {
@@ -45,6 +52,7 @@ impl HumanLayer {
         Self {
             duration_thresholds,
             color,
+            progress_state: Mutex::default(),
         }
     }
 }
@@ -58,6 +66,7 @@ enum ColorToken {
     LevelTrace,
     EventForward,
     EventHeaders,
+    EventWait,
     EventEnd,
     EventClosed,
     EventError,
@@ -75,6 +84,7 @@ enum ColorToken {
     Tool,
     RateLimit,
     Meta,
+    Route,
 }
 
 #[derive(Debug, Default)]
@@ -202,8 +212,25 @@ where
             self.color,
             &self.duration_thresholds,
         );
-        let mut stdout = std::io::stdout().lock();
-        let _ = writeln!(stdout, "{line}");
+        let stdout = std::io::stdout();
+        let inline_progress =
+            fields.text("event").as_deref() == Some("wait") && stdout.is_terminal();
+        let mut stdout = stdout.lock();
+        let mut progress = self
+            .progress_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if inline_progress {
+            progress.inline_active = true;
+            let _ = write!(stdout, "\r\x1b[2K{line}");
+            let _ = stdout.flush();
+        } else {
+            if progress.inline_active {
+                let _ = write!(stdout, "\r\x1b[2K");
+                progress.inline_active = false;
+            }
+            let _ = writeln!(stdout, "{line}");
+        }
     }
 }
 
@@ -224,17 +251,6 @@ fn format_event_line(
         ),
         paint(color, level, level_style(level))
     )?;
-    if let Some(id) = fields.text("id") {
-        write!(
-            writer,
-            "{} ",
-            paint(
-                color,
-                format!("#{}", short_request_id(&id)),
-                style(ColorToken::Meta)
-            )
-        )?;
-    }
     if let Some(event) = fields.text("event") {
         write!(writer, "{} ", paint(color, &event, event_style(&event)))?;
     }
@@ -242,6 +258,7 @@ fn format_event_line(
     match fields.text("event").as_deref() {
         Some("fwd") => format_forward(writer, fields, color)?,
         Some("hdr") => format_headers(writer, fields, color, duration_thresholds)?,
+        Some("wait") => format_wait(writer, fields, color, duration_thresholds)?,
         Some("end" | "closed") => format_stream_end(writer, fields, color, duration_thresholds)?,
         Some("hdr-error" | "stream-error" | "timeout" | "unfinished-tool") => {
             format_error(writer, fields, color, duration_thresholds)?
@@ -304,6 +321,13 @@ fn format_forward(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) 
         } else {
             write!(writer, " {model}")?;
         }
+        if let Some(route) = render_forward_route(fields) {
+            write!(
+                writer,
+                " {}",
+                paint(color, &route, style(ColorToken::Route))
+            )?;
+        }
     }
     if fields.text("stream").as_deref() == Some("true") {
         write!(
@@ -335,6 +359,68 @@ fn format_forward(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) 
     }
     if fields.text("capture").as_deref() == Some("true") {
         write!(writer, " capture")?;
+    }
+    if let Some(request_id) = fields.text("request_id") {
+        write!(writer, " req={}", short_request_id(&request_id))?;
+    }
+    Ok(())
+}
+
+fn render_forward_route(fields: &LogFields) -> Option<String> {
+    let inbound = fields.text("request_protocol_alias")?;
+    let provider = fields.text("provider").map(compact_provider_name)?;
+    let outbound = fields.text("provider_protocol_alias")?;
+    Some(format!("{inbound}->{provider}/{outbound}"))
+}
+
+fn compact_provider_name(name: String) -> String {
+    name.strip_suffix("_default").unwrap_or(&name).to_string()
+}
+
+fn format_wait(
+    writer: &mut dyn fmt::Write,
+    fields: &LogFields,
+    color: bool,
+    duration_thresholds: &DurationThresholds,
+) -> fmt::Result {
+    match fields.u64("idle_ms") {
+        Some(idle_ms) => write!(
+            writer,
+            " {}",
+            paint(
+                color,
+                format!("idle={}", format_millis(idle_ms)),
+                duration_style(idle_ms, duration_thresholds)
+            )
+        )?,
+        None => write!(writer, " idle=?")?,
+    }
+    if let Some(phase) = fields.text("phase").filter(|phase| phase != "upstream") {
+        write!(writer, " {phase}")?;
+    }
+    if let Some(duration_ms) = fields.u64("duration_ms") {
+        write!(writer, " dur={}", format_millis(duration_ms))?;
+    }
+    if let Some(value) = fields.u64("down") {
+        write_traffic(writer, color, TrafficDirection::Down, value)?;
+    }
+    if let Some(chunks) = fields.u64("chunks") {
+        write!(writer, " chunks={}", format_count(chunks))?;
+    }
+    if let Some(response_id) = fields.text("response_id") {
+        write!(writer, " resp={response_id}")?;
+    }
+    if let Some(seq) = fields.u64("seq") {
+        write!(writer, " seq={seq}")?;
+    }
+    if let Some(status) = fields.text("response_status") {
+        write!(writer, " state={status}")?;
+    }
+    if let Some(pending) = fields.u64("pending_tool_items") {
+        write!(writer, " pending={pending}")?;
+    }
+    if let Some(request_id) = fields.text("request_id") {
+        write!(writer, " req={}", short_request_id(&request_id))?;
     }
     Ok(())
 }
@@ -415,7 +501,10 @@ fn format_stream_end(
             write!(writer, " {model}")?;
         }
     }
-    if let Some(value) = fields.text("ct") {
+    if let Some(value) = fields
+        .text("ct")
+        .filter(|value| !is_default_sse_content_type(value, fields))
+    {
         write!(writer, " {value}")?;
     }
     if let Some(chunks) = fields.u64("chunks") {
@@ -490,7 +579,10 @@ fn format_response_summary(
             )
         )?;
     }
-    if let Some(value) = fields.text("service_tier") {
+    if let Some(value) = fields
+        .text("service_tier")
+        .filter(|value| !value.eq_ignore_ascii_case("default"))
+    {
         write!(writer, " tier={value}")?;
     }
     if let Some(value) = fields.text("incomplete_reason") {
@@ -525,13 +617,17 @@ fn format_response_summary(
     Ok(())
 }
 
+fn is_default_sse_content_type(value: &str, fields: &LogFields) -> bool {
+    value.eq_ignore_ascii_case("text/event-stream") && fields.text("sse").as_deref() == Some("true")
+}
+
 fn format_response_tail(
     writer: &mut dyn fmt::Write,
     fields: &LogFields,
     color: bool,
 ) -> fmt::Result {
     if let Some(value) = fields.text("response_id") {
-        write!(writer, " rid={value}")?;
+        write!(writer, " resp={value}")?;
     }
     if let Some(value) = fields.u64("seq") {
         write!(writer, " seq={value}")?;
@@ -550,28 +646,24 @@ fn format_response_tail(
     if let Some(value) = fields.text("diagnostic_path") {
         write!(writer, " diag={value}")?;
     }
-    if let Some(value) = fields.text("output_items") {
+    if let Some(value) = fields
+        .text("output_items_human")
+        .or_else(|| fields.text("output_items"))
+    {
         write!(writer, " out[{value}]")?;
     }
-    if let Some(value) = fields.text("function_calls") {
+    if let Some(calls) = fields.text("calls_human").or_else(|| fields.text("calls")) {
         write!(
             writer,
             " {}",
-            paint(color, format!("funcs[{value}]"), style(ColorToken::Tool))
-        )?;
-    }
-    if let Some(value) = fields.text("mcp_calls") {
-        write!(
-            writer,
-            " {}",
-            paint(color, format!("mcp[{value}]"), style(ColorToken::Tool))
+            paint(color, format!("calls[{calls}]"), style(ColorToken::Tool))
         )?;
     }
     Ok(())
 }
 
 fn format_tokens(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) -> fmt::Result {
-    let token_values = [
+    let mut token_values = [
         ("input", "↑"),
         ("output", "↓"),
         ("tok", "Σ"),
@@ -586,6 +678,12 @@ fn format_tokens(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) -
             .map(|value| format!("{label}{}", format_count(value)))
     })
     .collect::<Vec<_>>();
+
+    for (field, label) in [("cache_read", "$r"), ("cache_creation", "$w")] {
+        if let Some(value) = fields.u64(field).filter(|value| *value != 0) {
+            token_values.push(format!("{label}{}", format_count(value)));
+        }
+    }
 
     if token_values.is_empty() {
         Ok(())
@@ -755,6 +853,7 @@ fn event_style(event: &str) -> Style {
     style(match event {
         "fwd" => ColorToken::EventForward,
         "hdr" => ColorToken::EventHeaders,
+        "wait" => ColorToken::EventWait,
         "end" => ColorToken::EventEnd,
         "closed" => ColorToken::EventClosed,
         _ => ColorToken::EventError,
@@ -808,6 +907,7 @@ fn style(token: ColorToken) -> Style {
         ColorToken::LevelTrace => Style::new().dimmed(),
         ColorToken::EventForward => Style::new().cyan().bold(),
         ColorToken::EventHeaders => Style::new().blue().bold(),
+        ColorToken::EventWait => Style::new().yellow().bold(),
         ColorToken::EventEnd => Style::new().green().bold(),
         ColorToken::EventClosed => Style::new().yellow().bold(),
         ColorToken::EventError => Style::new().red().bold(),
@@ -825,6 +925,7 @@ fn style(token: ColorToken) -> Style {
         ColorToken::Tool => Style::new().bright_blue().bold(),
         ColorToken::RateLimit => Style::new().yellow(),
         ColorToken::Meta => Style::new().dimmed(),
+        ColorToken::Route => Style::new().magenta(),
     }
 }
 

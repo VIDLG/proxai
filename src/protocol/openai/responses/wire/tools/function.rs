@@ -47,6 +47,7 @@ pub struct FunctionToolParam {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FunctionCallStatus))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum FunctionCallStatus {
     InProgress,
     Completed,
@@ -56,6 +57,7 @@ pub enum FunctionCallStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FunctionCallOutputStatusEnum))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum FunctionCallOutputStatusEnum {
     InProgress,
     Completed,
@@ -79,6 +81,7 @@ pub struct FunctionToolCall {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::FunctionCallOutput))]
+#[serde(untagged)]
 pub enum FunctionCallOutput {
     Text(String),
     Content(Vec<InputContent>),

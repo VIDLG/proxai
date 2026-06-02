@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "Chat Completions wire compatibility includes deprecated max_tokens."
+)]
+
 use async_openai::types::chat as openai;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -22,6 +27,7 @@ use super::{
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageDetail))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageDetail {
     #[default]
@@ -46,6 +52,7 @@ pub struct ImageUrl {
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::InputAudioFormat))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum InputAudioFormat {
     Wav,
@@ -112,12 +119,14 @@ pub struct ChatCompletionRequestMessageContentPartAudio {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestSystemMessageContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionRequestSystemMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestUserMessageContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionRequestUserMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
     ImageUrl(ChatCompletionRequestMessageContentPartImage),
@@ -127,6 +136,7 @@ pub enum ChatCompletionRequestUserMessageContentPart {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessageContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionRequestAssistantMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
     Refusal(ChatCompletionRequestMessageContentPartRefusal),
@@ -134,18 +144,21 @@ pub enum ChatCompletionRequestAssistantMessageContentPart {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestToolMessageContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionRequestToolMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestDeveloperMessageContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionRequestDeveloperMessageContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestSystemMessageContent))]
+#[serde(untagged)]
 pub enum ChatCompletionRequestSystemMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestSystemMessageContentPart>),
@@ -153,6 +166,7 @@ pub enum ChatCompletionRequestSystemMessageContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestUserMessageContent))]
+#[serde(untagged)]
 pub enum ChatCompletionRequestUserMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestUserMessageContentPart>),
@@ -160,6 +174,7 @@ pub enum ChatCompletionRequestUserMessageContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestAssistantMessageContent))]
+#[serde(untagged)]
 pub enum ChatCompletionRequestAssistantMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestAssistantMessageContentPart>),
@@ -167,6 +182,7 @@ pub enum ChatCompletionRequestAssistantMessageContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestToolMessageContent))]
+#[serde(untagged)]
 pub enum ChatCompletionRequestToolMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestToolMessageContentPart>),
@@ -174,6 +190,7 @@ pub enum ChatCompletionRequestToolMessageContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestDeveloperMessageContent))]
+#[serde(untagged)]
 pub enum ChatCompletionRequestDeveloperMessageContent {
     Text(String),
     Array(Vec<ChatCompletionRequestDeveloperMessageContentPart>),
@@ -236,6 +253,7 @@ pub struct ChatCompletionRequestFunctionMessage {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionRequestMessage))]
+#[serde(tag = "role", rename_all = "snake_case")]
 pub enum ChatCompletionRequestMessage {
     Developer(ChatCompletionRequestDeveloperMessage),
     System(ChatCompletionRequestSystemMessage),
@@ -251,6 +269,7 @@ pub enum ChatCompletionRequestMessage {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::CompletionFinishReason))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum CompletionFinishReason {
     Stop,
@@ -278,6 +297,7 @@ pub struct Choice {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ContentPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     Text(ChatCompletionRequestMessageContentPartText),
     ImageUrl(ChatCompletionRequestMessageContentPartImage),
@@ -287,6 +307,7 @@ pub enum ContentPart {
 // Request/Response wrapper types
 // ============================================================
 
+#[allow(deprecated)]
 #[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::CreateChatCompletionRequest))]
 pub struct CreateChatCompletionRequest {
@@ -307,6 +328,7 @@ pub struct CreateChatCompletionRequest {
     pub stop: Option<StopConfiguration>,
     pub logit_bias: Option<HashMap<String, i8>>,
     pub logprobs: Option<bool>,
+    pub max_tokens: Option<u32>,
     pub n: Option<u8>,
     pub prediction: Option<PredictionContent>,
     pub stream_options: Option<ChatCompletionStreamOptions>,

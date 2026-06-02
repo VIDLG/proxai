@@ -19,9 +19,9 @@ impl EffectiveDefaultProviderNames {
         provider_names: &BTreeSet<String>,
     ) -> Result<Self, InternalError> {
         let normalize_and_validate = |field_name: &str,
-                                      provider_name: String|
+                                      provider: String|
          -> Result<String, InternalError> {
-            let normalized = normalize_provider_name(&provider_name);
+            let normalized = normalize_provider_name(&provider);
             if normalized.is_empty() {
                 return Err(InternalError::InvalidProviderResolution(format!(
                     "routing.default_provider_names.{field_name} must be a non-empty string"
@@ -62,8 +62,9 @@ impl EffectiveDefaultProviderNames {
 
 #[derive(Debug, Clone)]
 pub(crate) struct EffectiveRoute {
-    pub(crate) request_protocol: RequestProtocol,
-    pub(crate) provider_name: String,
+    pub(crate) name: Option<String>,
+    pub(crate) request_protocol: Option<RequestProtocol>,
+    pub(crate) provider: String,
     pub(crate) upstream_model: Option<String>,
     matcher: matcher::CompiledModelMatcher,
 }
@@ -76,23 +77,19 @@ impl EffectiveRoute {
         routes
             .into_iter()
             .map(|route| {
-                let provider_name = normalize_provider_name(&route.provider_name);
-                let provider_protocol = provider_protocols.get(&provider_name).ok_or_else(|| {
+                let provider = normalize_provider_name(&route.provider);
+                let _provider_protocol = provider_protocols.get(&provider).ok_or_else(|| {
                     InternalError::InvalidProviderResolution(format!(
-                        "routing.routes[].provider_name references unknown provider `{provider_name}`"
+                        "routing.routes[].provider references unknown provider `{provider}`"
                     ))
                 })?;
-                let request_protocol = route
-                    .request_protocol
-                    .unwrap_or_else(|| provider_protocol.default_request_protocol());
-                let matcher = matcher::CompiledModelMatcher::build(
-                    route.match_kind,
-                    &route.model_pattern,
-                )?;
+                let matcher =
+                    matcher::CompiledModelMatcher::build(route.match_kind, &route.model_pattern)?;
 
                 Ok(Self {
-                    request_protocol,
-                    provider_name,
+                    name: route.name,
+                    request_protocol: route.request_protocol,
+                    provider,
                     upstream_model: route.upstream_model,
                     matcher,
                 })
@@ -101,9 +98,10 @@ impl EffectiveRoute {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct RouteTarget {
-    pub(crate) provider_name: String,
+    pub(crate) route_name: Option<String>,
+    pub(crate) provider: String,
     pub(crate) upstream_model: String,
 }
 
@@ -114,31 +112,53 @@ pub(crate) fn resolve_route(
     model: &str,
 ) -> Result<RouteTarget, InternalError> {
     let mut matched = None;
+    let mut protocol_mismatch = None;
     for route in routes {
-        if route.request_protocol != request_protocol {
+        let Some(upstream_model) = route.match_model(model)? else {
             continue;
+        };
+        if let Some(route_protocol) = route.request_protocol {
+            if route_protocol != request_protocol {
+                protocol_mismatch = Some(route);
+                continue;
+            }
         }
-        if let Some(upstream_model) = route.match_model(model)? {
-            matched = Some((route, upstream_model));
-            break;
+        matched = Some((route, upstream_model));
+        break;
+    }
+
+    if matched.is_none() {
+        if let Some(route) = protocol_mismatch {
+            let route_label = route
+                .name
+                .as_deref()
+                .map(|name| format!(" `{name}`"))
+                .unwrap_or_default();
+            let configured = route
+                .request_protocol
+                .expect("protocol_mismatch is only set for explicit request_protocol");
+            return Err(InternalError::InvalidRoute(format!(
+                "routing route{route_label} matches model `{model}` but request_protocol is `{configured}` while the inbound request uses `{request_protocol}`; remove request_protocol to accept any inbound protocol, or update it to `{request_protocol}`"
+            )));
         }
     }
 
-    let default_provider_name = default_provider_names.for_request_protocol(request_protocol);
-    let provider_name = matched
+    let default_provider = default_provider_names.for_request_protocol(request_protocol);
+    let route_name = matched.as_ref().and_then(|(route, _)| route.name.clone());
+    let provider = matched
         .as_ref()
-        .map(|(route, _)| route.provider_name.clone())
-        .unwrap_or_else(|| normalize_provider_name(default_provider_name));
+        .map(|(route, _)| route.provider.clone())
+        .unwrap_or_else(|| normalize_provider_name(default_provider));
     let upstream_model = matched
         .map(|(_, upstream_model)| upstream_model)
         .unwrap_or_else(|| model.to_string());
 
     Ok(RouteTarget {
-        provider_name,
+        route_name,
+        provider,
         upstream_model,
     })
 }
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

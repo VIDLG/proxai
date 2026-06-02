@@ -1,16 +1,22 @@
+use std::collections::BTreeMap;
+
 use serde_json::Value as JsonValue;
 use tracing::{info, warn};
 use valuable::Valuable;
-use valuable_serde::Serializable;
 
 use crate::config::LogOutputFormat;
-use crate::formatting::{compact_tail, format_count_map, truncate_chars};
+use crate::formatting::{compact_tail, truncate_chars};
 use crate::provider::openai::responses::{
-    ResponsesUpstreamEvent, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
+    ResponseOutputItemKind, ResponsesUpstreamEvent, ResponsesUpstreamState,
+    ResponsesUpstreamStreamSnapshot,
 };
 use crate::provider::UpstreamResponseError;
 use crate::upstream::ContentType;
 
+use super::counts::{
+    compact_output_items_for_human, compact_tool_calls, full_count_map, join_call_maps,
+    merge_count_maps, source_count_maps, string_count_map,
+};
 use super::record::ValuableJson;
 use super::upstream::{error_text, error_token};
 use super::{
@@ -35,9 +41,11 @@ struct ResponseFields {
     cache: Option<u32>,
     output: u32,
     reasoning: u32,
-    output_items: String,
-    function_calls: String,
-    mcp_calls: String,
+    output_items: BTreeMap<String, u64>,
+    output_items_human: String,
+    calls: BTreeMap<String, u64>,
+    calls_by_source: BTreeMap<String, BTreeMap<String, u64>>,
+    calls_human: String,
 }
 
 impl ResponseFields {
@@ -54,6 +62,9 @@ impl ResponseFields {
                 )
             })
             .unwrap_or_default();
+
+        let function_calls = string_count_map(&summary.function_calls);
+        let mcp_calls = string_count_map(&summary.mcp_calls);
 
         Self {
             id: compact_tail(
@@ -110,21 +121,69 @@ impl ResponseFields {
                         .map(|usage| usage.output_tokens_details.reasoning_tokens)
                 })
                 .unwrap_or_default(),
-            output_items: format_count_map(&summary.output_items),
-            function_calls: summary
-                .function_calls
-                .iter()
-                .map(|(key, value)| format!("{}:{value}", super::compact_tool_call_name(key)))
-                .collect::<Vec<_>>()
-                .join(" "),
-            mcp_calls: format_count_map(&summary.mcp_calls),
+            output_items: string_count_map(&summary.output_items),
+            output_items_human: compact_output_items_for_human(
+                &summary.output_items,
+                ResponseOutputItemKind::Message,
+            ),
+            calls: merge_count_maps([function_calls.clone(), mcp_calls.clone()]),
+            calls_by_source: source_count_maps([("function", function_calls), ("mcp", mcp_calls)]),
+            calls_human: join_call_maps([
+                compact_tool_calls(&summary.function_calls),
+                full_count_map(&summary.mcp_calls),
+            ]),
         }
     }
 }
 
 impl ValuableJson for ResponseFields {
     fn to_json_value(&self) -> JsonValue {
-        serde_json::to_value(Serializable::new(self)).unwrap_or(JsonValue::Null)
+        super::json_object([
+            ("id", JsonValue::String(self.id.clone())),
+            ("model", JsonValue::String(self.model.clone())),
+            (
+                "reasoning_effort",
+                JsonValue::String(self.reasoning_effort.clone()),
+            ),
+            ("status", JsonValue::String(self.status.clone())),
+            ("service_tier", JsonValue::String(self.service_tier.clone())),
+            (
+                "incomplete_reason",
+                JsonValue::String(self.incomplete_reason.clone()),
+            ),
+            ("error_code", JsonValue::String(self.error_code.clone())),
+            (
+                "error_message",
+                JsonValue::String(self.error_message.clone()),
+            ),
+            ("error_param", JsonValue::String(self.error_param.clone())),
+            (
+                "sequence_number",
+                self.sequence_number
+                    .map(JsonValue::from)
+                    .unwrap_or(JsonValue::Null),
+            ),
+            ("tok", JsonValue::from(self.tok)),
+            ("input", JsonValue::from(self.input)),
+            (
+                "cache",
+                self.cache.map(JsonValue::from).unwrap_or(JsonValue::Null),
+            ),
+            ("output", JsonValue::from(self.output)),
+            ("reasoning", JsonValue::from(self.reasoning)),
+            (
+                "output_items",
+                serde_json::to_value(&self.output_items).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls",
+                serde_json::to_value(&self.calls).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls_by_source",
+                serde_json::to_value(&self.calls_by_source).unwrap_or(JsonValue::Null),
+            ),
+        ])
     }
 }
 
@@ -211,9 +270,8 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
             cache = response.cache,
             output = response.output,
             reasoning = response.reasoning,
-            output_items = response.output_items,
-            function_calls = response.function_calls,
-            mcp_calls = response.mcp_calls,
+            output_items_human = response.output_items_human,
+            calls_human = response.calls_human,
             rate_limit_limit_requests = rate_limit.limit_requests,
             rate_limit_limit_tokens = rate_limit.limit_tokens,
             rate_limit_remaining_requests = rate_limit.remaining_requests,
@@ -413,9 +471,8 @@ pub(crate) fn emit_stream_error_with_diagnostic(
             cache = response.cache,
             output = response.output,
             reasoning = response.reasoning,
-            output_items = response.output_items,
-            function_calls = response.function_calls,
-            mcp_calls = response.mcp_calls,
+            output_items_human = response.output_items_human,
+            calls_human = response.calls_human,
             rate_limit_limit_requests = rate_limit.limit_requests,
             rate_limit_limit_tokens = rate_limit.limit_tokens,
             rate_limit_remaining_requests = rate_limit.remaining_requests,
@@ -546,3 +603,7 @@ pub(crate) fn emit_stream_error_with_diagnostic(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "openai_responses_tests.rs"]
+mod tests;

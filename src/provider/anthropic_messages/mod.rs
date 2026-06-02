@@ -23,6 +23,7 @@ use crate::upstream::UpstreamResponseHead;
 
 pub(crate) use self::snapshot::AnthropicUpstreamResponseSnapshot;
 use self::streaming::handle_streaming;
+pub(crate) use self::summary::AnthropicResponseOutputKind;
 use self::tracker::AnthropicResponseTracker;
 
 /// Handle a successful upstream response where the provider protocol is `AnthropicMessages`.

@@ -98,7 +98,7 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
         .filter(|value| !value.is_empty())
     {
         parts.push(format!(
-            "inc[{}]",
+            "include[{}]",
             include
                 .iter()
                 .map(render_include_hint)
@@ -160,7 +160,7 @@ fn render_include_hint(value: &IncludeEnum) -> &'static str {
         IncludeEnum::MessageInputImageImageUrl => "message.input_image.image_url",
         IncludeEnum::ComputerCallOutputOutputImageUrl => "computer_call_output.output.image_url",
         IncludeEnum::CodeInterpreterCallOutputs => "code_interpreter_call.outputs",
-        IncludeEnum::ReasoningEncryptedContent => "reasoning.enc",
+        IncludeEnum::ReasoningEncryptedContent => "rsn.enc",
         IncludeEnum::MessageOutputTextLogprobs => "message.output_text.logprobs",
     }
 }

@@ -33,6 +33,7 @@ pub(super) async fn handle_streaming(
         observer,
         ctx.capture
             .create_upstream_response_writer(upstream_head.content_type.as_ref()),
+        ctx.span.clone(),
     );
     let stream = if should_normalize_provider_response(ctx.provider_compatibility) {
         Body::from_stream(normalize::normalize_sse_stream(stream))
@@ -77,16 +78,6 @@ impl AnthropicSseObserver {
         stats: UpstreamBodyStreamStats,
     ) -> AnthropicUpstreamResponseSnapshot {
         AnthropicUpstreamResponseSnapshot::streaming(head, stats, self.tracker.state.clone())
-    }
-
-    #[cfg(test)]
-    fn is_terminal(&self) -> bool {
-        self.saw_terminal
-    }
-
-    #[cfg(test)]
-    fn is_error(&self) -> bool {
-        self.error_message.is_some()
     }
 }
 
@@ -136,4 +127,4 @@ impl BodyObserver for AnthropicSseObserver {
 
 #[cfg(test)]
 #[path = "streaming_tests.rs"]
-mod streaming_tests;
+mod tests;

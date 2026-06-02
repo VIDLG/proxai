@@ -8,20 +8,23 @@ system-message shape that breaks some upstreams, and forwards requests to the
 configured provider with minimal surprises.
 
 Today, the stable runtime paths support no-conversion forwarding for OpenAI
-Responses, OpenAI Chat Completions, and Anthropic Messages. The config model is
-protocol-aware so routing and future conversion paths can expand explicitly over
-time without turning ProxAI into a generic AI gateway.
+Responses, OpenAI Chat Completions, and Anthropic Messages, plus explicit
+OpenAI Chat Completions to Anthropic Messages translation for routed
+Anthropic-compatible providers. The config model is protocol-aware so routing
+and conversion paths can expand explicitly over time without turning ProxAI
+into a generic AI gateway.
 
 ## Current Status
 
-The current stable forwarding paths are:
+The current stable forwarding and translation paths are:
 
 - inbound: `openai_responses` -> outbound: `openai_responses`
 - inbound: `openai_chat_completions` -> outbound: `openai_chat_completions`
 - inbound: `anthropic_messages` -> outbound: `anthropic_messages`
+- inbound: `openai_chat_completions` -> outbound: `anthropic_messages`
 
-Cross-protocol translation remains scaffolded and should stay explicit when it
-is wired into runtime.
+Other cross-protocol translation paths remain intentionally unsupported until
+they are implemented explicitly.
 
 ## What ProxAI Does Today
 
@@ -37,9 +40,11 @@ system-message shape that breaks some upstreams:
 This keeps clients working with upstreams that reject Responses-style system
 messages inside `input`.
 
-For `/v1/chat/completions` requests, ProxAI currently performs no protocol
-conversion; it validates the Chat Completions request shape, applies provider
-routing/model rewrite, and forwards the request upstream.
+For `/v1/chat/completions` requests, ProxAI validates the Chat Completions
+request shape, applies provider routing/model rewrite, and either forwards the
+request to an OpenAI Chat Completions provider unchanged or translates it to
+Anthropic Messages when an explicit route selects an `anthropic_messages`
+provider.
 
 For `/v1/messages` requests, ProxAI performs the same no-conversion forwarding
 for Anthropic Messages, including provider auth and stream observation.
@@ -80,9 +85,16 @@ CLI overrides remain intentionally small:
 - `--port`
 - `--log-level`
 - `--log-format`
+- `--route-override ROUTE.FIELD=VALUE`
 
 `--upstream` and `--api-key` temporarily override the provider selected by
 `routing.default_provider_names.openai_responses` for that run.
+`--route-override` temporarily overrides a named `[[routing.routes]]` field for
+that run, for example:
+
+```sh
+proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview
+```
 
 ## Config Overview
 
@@ -105,9 +117,15 @@ In short, the config is organized around:
 - `[logging]`
 - `[error_responses]`
 
-Today, the stable runtime paths are OpenAI Responses no-conversion and OpenAI
-Chat Completions no-conversion, plus Anthropic Messages no-conversion. The
-provider/routing model is already structured for explicit protocol expansion.
+Today, the stable runtime paths are OpenAI Responses no-conversion, OpenAI
+Chat Completions no-conversion, Anthropic Messages no-conversion, and explicit
+OpenAI Chat Completions to Anthropic Messages translation. Named routes can be
+temporarily adjusted with `--route-override ROUTE.FIELD=VALUE` without editing
+`config.toml`.
+
+A route's `request_protocol` is optional. When omitted, the route can match any
+inbound endpoint protocol detected from the request path; when set, a matching
+model with a different inbound protocol is a configuration error.
 
 For Anthropic Messages providers, use `compatibility = "strict"` with the
 official Anthropic API and `compatibility = "anthropic_compatible"` for
@@ -213,8 +231,7 @@ GitHub release artifacts are versioned like:
 
 ## Notes on Future Protocols
 
-The current repo already contains early cross-protocol translation scaffolding
-and route-level protocol filtering. That scaffolding is intentionally ahead of
-full conversion support so that the config and internal architecture do not
-need another redesign later. Future protocol support should stay explicit and
-predictable rather than growing ProxAI into a generic AI platform by accident.
+The current repo keeps cross-protocol translation and route-level protocol
+filtering explicit. Add new protocol pairs deliberately, with runtime routing,
+request/response conversion, and tests for the exact pair, rather than growing
+ProxAI into a generic AI platform by accident.

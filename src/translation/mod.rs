@@ -13,9 +13,8 @@
 //! Self-to-self protocol paths are intentionally omitted.
 
 pub(crate) mod anthropic_messages;
+pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
-#[cfg(test)]
-pub(crate) mod path;
 mod request;
 mod response;
 mod sse;

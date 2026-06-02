@@ -28,9 +28,15 @@ Provider names are user labels and should not be treated as semantic protocol id
 
 ## Routing and conversion
 
-A route may specify `request_protocol`. If omitted, it defaults to the selected provider's `protocol`, which means no cross-protocol conversion by default.
+A route may specify `request_protocol`. If omitted, the route can match any
+inbound request protocol detected from the actual request path. Provider
+`protocol` controls the outbound wire format, so route protocol filtering and
+protocol conversion are separate decisions.
 
-Cross-protocol routing should be explicit. This keeps local proxy behavior predictable and avoids accidentally converting requests because a provider default changed.
+Set `request_protocol` only when the same model pattern needs different routing
+for different request endpoints. If a model pattern matches but the explicit
+`request_protocol` differs from the inbound request protocol, ProxAI reports a
+configuration error instead of silently falling through to a default provider.
 
 ## SDK alignment
 

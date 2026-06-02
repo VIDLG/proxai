@@ -14,6 +14,7 @@ use super::super::OutputStatus;
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Deserialize, Serialize,
 )]
 #[convert(from(openai::ComputerEnvironment))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ComputerEnvironment {
     Windows,
@@ -63,6 +64,7 @@ pub struct CoordParam {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ClickButtonType))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ClickButtonType {
     Left,
@@ -150,6 +152,7 @@ pub struct ComputerCallSafetyCheckParam {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ComputerCallOutputStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerCallOutputStatus {
     InProgress,
@@ -160,6 +163,7 @@ pub enum ComputerCallOutputStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ComputerScreenshotImageType))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerScreenshotImageType {
     ComputerScreenshot,

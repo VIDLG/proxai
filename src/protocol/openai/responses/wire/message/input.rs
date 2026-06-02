@@ -11,6 +11,7 @@ use super::MessagePhase;
 )]
 #[convert(from(openai::InputRole))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum InputRole {
     #[default]
     User,
@@ -23,6 +24,7 @@ pub enum InputRole {
 )]
 #[convert(from(openai::MessageType))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum MessageType {
     #[default]
     Message,
@@ -33,6 +35,7 @@ pub enum MessageType {
 )]
 #[convert(from(openai::Role))]
 #[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum Role {
     #[default]
     User,
@@ -43,6 +46,7 @@ pub enum Role {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::EasyInputContent))]
+#[serde(untagged)]
 pub enum EasyInputContent {
     Text(String),
     ContentList(Vec<InputContent>),

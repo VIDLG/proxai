@@ -65,4 +65,5 @@ pub(super) fn insert_nulls(object: &mut Map<String, Value>, keys: &[&str]) {
 }
 
 #[cfg(test)]
-mod normalize_tests;
+#[path = "normalize_tests.rs"]
+mod tests;

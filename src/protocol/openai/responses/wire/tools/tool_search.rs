@@ -14,6 +14,7 @@ use super::Tool;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ToolSearchExecutionType))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ToolSearchExecutionType {
     Server,

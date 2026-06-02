@@ -17,6 +17,7 @@ pub struct WebSearchToolFilters {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::WebSearchApproximateLocationType))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchApproximateLocationType {
     #[default]
@@ -35,6 +36,7 @@ pub struct WebSearchApproximateLocation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::WebSearchToolSearchContextSize))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchToolSearchContextSize {
     Low,
@@ -44,6 +46,7 @@ pub enum WebSearchToolSearchContextSize {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::SearchContentType))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum SearchContentType {
     Text,
@@ -105,6 +108,7 @@ pub enum WebSearchToolCallAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::WebSearchToolCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum WebSearchToolCallStatus {
     InProgress,

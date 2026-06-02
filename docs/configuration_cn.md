@@ -62,21 +62,46 @@ route 是对入站请求的过滤规则。
 
 字段：
 
+- `name` 可选，但建议填写，便于 CLI 临时覆盖
 - `request_protocol` 可选
 - `match_kind` 可选
 - `model_pattern`
-- `provider_name`
+- `provider`
 - `upstream_model` 可选
+
+### `name`
+
+稳定的 route 标识，用于运行时 CLI override。它不参与匹配，但可以让你按
+名称定位某条 route，而不是依赖 route 顺序。
+
+单次运行覆盖示例：
+
+```sh
+proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview \
+  --route-override minimax_m3_chat.upstream_model=MiniMax-M3
+```
+
+支持覆盖的字段包括 `request_protocol`、`match_kind`、`model_pattern`、
+`provider` 和 `upstream_model`。对可选字段 `request_protocol` 或
+`upstream_model` 传空值可以清空配置。
 
 ### `request_protocol`
 
 这是 route 的过滤条件，不是客户端手工传入的字段。
 
-运行时会先根据 path 和请求体形状自动识别入站协议，然后 route 再用 `request_protocol` 判断自己是否适用。
+运行时会先根据实际请求 path（`/v1/responses`、`/v1/chat/completions` 或
+`/v1/messages`）自动识别入站协议。route 中的 `request_protocol` 只是对这个
+已识别协议的可选保护条件。
 
-如果省略 `request_protocol`，默认等于所选 provider 的 `protocol`，也就是“默认不做协议转换”。
+如果省略 `request_protocol`，这条 route 可以匹配任意入站协议。所选 provider
+的 `protocol` 仍然决定转发给上游时使用的 wire format，所以省略
+`request_protocol` 也可以有意把 OpenAI Chat Completions 或 OpenAI Responses
+请求路由到 Anthropic Messages provider。
 
-因此，跨协议路由建议显式写出来。
+如果显式设置了 `request_protocol`，并且模型模式命中但实际入站协议不同，
+ProxAI 会返回配置错误，而不是静默落到默认 provider。只有当同一个
+`model_pattern` 需要按不同请求端点走不同 route 时，才建议显式设置
+`request_protocol`。
 
 ### `match_kind`
 
@@ -99,7 +124,7 @@ route 是对入站请求的过滤规则。
 - `gpt-*`
 - `^claude-(?<tier>.+)$`
 
-### `provider_name`
+### `provider`
 
 命中该 route 时要选择的 provider 名称。
 

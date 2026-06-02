@@ -30,6 +30,7 @@ pub enum StopConfiguration {
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::ReasoningEffort))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningEffort {
     None,
@@ -45,6 +46,7 @@ pub enum ReasoningEffort {
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::Verbosity))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Verbosity {
     Low,

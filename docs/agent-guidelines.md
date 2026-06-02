@@ -35,7 +35,7 @@ Current protocol values include:
 - `openai_chat_completions`
 - `anthropic_messages`
 
-If a route omits `request_protocol`, default it to the selected provider's protocol, i.e. the no-conversion path. Cross-protocol routing should be explicit.
+If a route omits `request_protocol`, it can match any inbound protocol detected from the actual request path. Provider `protocol` still controls outbound wire behavior. Set `request_protocol` only when the same model pattern needs different routes per request endpoint; a model match with a mismatched explicit `request_protocol` should be treated as a configuration error.
 
 ## Chain Phase Naming Details
 

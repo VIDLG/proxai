@@ -30,5 +30,4 @@ pub(crate) fn prepare_openai_responses_request(
 }
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

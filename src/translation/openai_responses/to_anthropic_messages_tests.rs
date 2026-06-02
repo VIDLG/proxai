@@ -43,6 +43,39 @@ fn translates_text_request_with_instructions_and_function_tool() {
 }
 
 #[test]
+fn translates_glm_responses_request_with_unknown_input_item() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "instructions": "Be concise.",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "hello"}]
+            },
+            {
+                "type": "future_zed_item",
+                "opaque": {"value": 1}
+            }
+        ],
+        "max_output_tokens": 128,
+        "stream": true
+    });
+
+    let translated = translate_request_payload(&payload, "glm-5.1", "glm-5.1").unwrap();
+
+    assert_eq!(translated["model"], "glm-5.1");
+    assert_eq!(translated["max_tokens"], 128);
+    assert_eq!(translated["system"], "Be concise.");
+    assert_eq!(translated["messages"][0]["role"], "user");
+    assert_eq!(translated["messages"][0]["content"][0]["text"], "hello");
+    assert_eq!(translated["messages"][1]["role"], "user");
+    assert_eq!(
+        translated["messages"][1]["content"],
+        "[OpenAI Responses item `future_zed_item` omitted during Anthropic translation]"
+    );
+}
+#[test]
 fn translates_message_items_and_tool_roundtrip_items() {
     let payload = json!({
         "model": "gpt-5.5",

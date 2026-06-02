@@ -24,16 +24,18 @@ openai_chat_completions = "openai_default"
 anthropic_messages = "anthropic_default"
 
 [[routing.routes]]
+name = "gpt_responses"
 match_kind = "glob"
 model_pattern = "gpt-*"
-provider_name = "openai_default"
+provider = "openai_default"
 upstream_model = "gpt-5.4"
 
 [[routing.routes]]
+name = "claude_responses"
 match_kind = "exact"
 request_protocol = "openai_responses"
 model_pattern = "claude-sonnet"
-provider_name = "anthropic_default"
+provider = "anthropic_default"
 upstream_model = "claude-sonnet-4-5-20250929"
 
 [providers.openai_default]
@@ -82,6 +84,10 @@ outbound_response_enabled = false
         "openai_default"
     );
     assert_eq!(config.routing.routes.len(), 2);
+    assert_eq!(
+        config.routing.routes[0].name.as_deref(),
+        Some("gpt_responses")
+    );
     assert_eq!(config.routing.routes[0].request_protocol, None);
     assert_eq!(
         config.routing.routes[1].request_protocol,
@@ -115,6 +121,44 @@ outbound_response_enabled = false
     assert!(!config.capture.forwarded_request_enabled);
     assert!(!config.capture.upstream_response_enabled);
     assert!(!config.capture.outbound_response_enabled);
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn rejects_duplicate_route_names() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[[routing.routes]]
+name = "dupe"
+model_pattern = "gpt-*"
+provider = "openai_default"
+
+[[routing.routes]]
+name = "dupe"
+model_pattern = "claude-*"
+provider = "anthropic_default"
+
+[providers.openai_default]
+protocol = "openai_responses"
+base_url = "http://upstream.example:8080"
+api_key = "replace-with-your-api-key"
+read_idle_timeout_secs = 42
+
+[providers.anthropic_default]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "anthropic-secret"
+read_idle_timeout_secs = 55
+"#,
+    )
+    .unwrap();
+
+    let error = AppConfig::load(path.clone()).unwrap_err().to_string();
+
+    assert!(error.contains("routing.routes[1].name duplicates route name `dupe`"));
 
     fs::remove_file(path).unwrap();
 }

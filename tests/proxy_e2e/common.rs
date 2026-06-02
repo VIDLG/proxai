@@ -650,10 +650,11 @@ pub(super) async fn spawn_anthropic_shim_with_model_route(
         upstream_address,
         proxai::protocol::ProviderProtocol::AnthropicMessages,
         vec![proxai::config::RouteConfig {
+            name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
             match_kind: proxai::config::MatchKind::Exact,
             model_pattern: "claude-request".to_string(),
-            provider_name: "openai_default".to_string(),
+            provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
         }],
     )
@@ -665,10 +666,27 @@ pub(super) async fn spawn_responses_to_anthropic_shim(upstream_address: SocketAd
         upstream_address,
         proxai::protocol::ProviderProtocol::AnthropicMessages,
         vec![proxai::config::RouteConfig {
+            name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiResponses),
             match_kind: proxai::config::MatchKind::Glob,
             model_pattern: "*".to_string(),
-            provider_name: "openai_default".to_string(),
+            provider: "openai_default".to_string(),
+            upstream_model: Some("claude-upstream".to_string()),
+        }],
+    )
+    .await
+}
+
+pub(super) async fn spawn_chat_to_anthropic_shim(upstream_address: SocketAddr) -> SocketAddr {
+    spawn_shim_with_routes(
+        upstream_address,
+        proxai::protocol::ProviderProtocol::AnthropicMessages,
+        vec![proxai::config::RouteConfig {
+            name: None,
+            request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiChatCompletions),
+            match_kind: proxai::config::MatchKind::Glob,
+            model_pattern: "*".to_string(),
+            provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
         }],
     )
@@ -680,10 +698,11 @@ pub(super) async fn spawn_anthropic_to_responses_shim(upstream_address: SocketAd
         upstream_address,
         proxai::protocol::ProviderProtocol::OpenaiResponses,
         vec![proxai::config::RouteConfig {
+            name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
             match_kind: proxai::config::MatchKind::Glob,
             model_pattern: "*".to_string(),
-            provider_name: "openai_default".to_string(),
+            provider: "openai_default".to_string(),
             upstream_model: Some("gpt-upstream".to_string()),
         }],
     )

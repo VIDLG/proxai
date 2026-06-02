@@ -62,21 +62,48 @@ Routes are filters over inbound requests.
 
 Fields:
 
+- `name` optional but recommended for CLI overrides
 - `request_protocol` optional
 - `match_kind` optional
 - `model_pattern`
-- `provider_name`
+- `provider`
 - `upstream_model` optional
+
+### `name`
+
+Stable route identifier used by runtime CLI overrides. Names are not used for
+matching, but they let you target a specific route without depending on route
+order.
+
+Example one-run override:
+
+```sh
+proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview \
+  --route-override minimax_m3_chat.upstream_model=MiniMax-M3
+```
+
+Supported override fields are `request_protocol`, `match_kind`,
+`model_pattern`, `provider`, and `upstream_model`. Use an empty value to
+clear optional `request_protocol` or `upstream_model`.
 
 ### `request_protocol`
 
 This is a route filter, not an input from the client.
 
-At runtime, ProxAI detects the inbound request protocol from request shape and path. A route then uses `request_protocol` to say whether it applies to that detected protocol.
+At runtime, ProxAI detects the inbound request protocol from the actual request
+path (`/v1/responses`, `/v1/chat/completions`, or `/v1/messages`). A route then
+uses `request_protocol` only as an optional guard against that detected protocol.
 
-If `request_protocol` is omitted, it defaults to the selected provider's `protocol`, i.e. the no-conversion path.
+If `request_protocol` is omitted, the route can match any inbound protocol. The
+selected provider's `protocol` still controls the outbound wire format, so
+omitting `request_protocol` can intentionally route OpenAI Chat Completions or
+OpenAI Responses requests to an Anthropic Messages provider.
 
-Cross-protocol routing should therefore be explicit.
+If `request_protocol` is set and the model pattern matches but the inbound
+request uses a different protocol, ProxAI returns a configuration error instead
+of silently falling through to a default provider. Use explicit
+`request_protocol` only when the same `model_pattern` needs different routes for
+different request endpoints.
 
 ### `match_kind`
 
@@ -99,7 +126,7 @@ Examples:
 - `gpt-*`
 - `^claude-(?<tier>.+)$`
 
-### `provider_name`
+### `provider`
 
 The provider name selected when this route matches.
 

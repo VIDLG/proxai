@@ -118,6 +118,7 @@ pub struct FunctionShellActionParam {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FunctionShellCallItemStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum FunctionShellCallItemStatus {
     InProgress,
@@ -190,6 +191,7 @@ pub struct FunctionShellAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::LocalShellCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum LocalShellCallStatus {
     InProgress,

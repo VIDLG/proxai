@@ -38,5 +38,4 @@ pub(crate) fn prepare_anthropic_messages_request(
 }
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

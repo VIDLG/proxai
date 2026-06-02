@@ -22,20 +22,28 @@ pub struct ComparisonFilter {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ComparisonType))]
 pub enum ComparisonType {
+    #[serde(rename = "eq")]
     #[strum(to_string = "eq")]
     Equals,
+    #[serde(rename = "ne")]
     #[strum(to_string = "ne")]
     NotEquals,
+    #[serde(rename = "gt")]
     #[strum(to_string = "gt")]
     GreaterThan,
+    #[serde(rename = "gte")]
     #[strum(to_string = "gte")]
     GreaterThanOrEqual,
+    #[serde(rename = "lt")]
     #[strum(to_string = "lt")]
     LessThan,
+    #[serde(rename = "lte")]
     #[strum(to_string = "lte")]
     LessThanOrEqual,
+    #[serde(rename = "in")]
     #[strum(to_string = "in")]
     In,
+    #[serde(rename = "nin")]
     #[strum(to_string = "nin")]
     NotIn,
 }
@@ -49,6 +57,7 @@ pub struct CompoundFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::CompoundType))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum CompoundType {
     And,

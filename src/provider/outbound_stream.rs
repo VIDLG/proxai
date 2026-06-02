@@ -97,6 +97,7 @@ where
         ctx.started,
         observer,
         capture_writer,
+        ctx.span.clone(),
     );
 
     Ok(OutboundStream {

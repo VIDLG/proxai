@@ -11,6 +11,7 @@ use strum::Display;
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageGenToolBackground))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolBackground {
     Transparent,
@@ -23,6 +24,7 @@ pub enum ImageGenToolBackground {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::InputFidelity))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum InputFidelity {
     High,
@@ -41,6 +43,7 @@ pub struct ImageGenToolInputImageMask {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageGenToolModeration))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolModeration {
     #[default]
@@ -52,6 +55,7 @@ pub enum ImageGenToolModeration {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageGenToolOutputFormat))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolOutputFormat {
     #[default]
@@ -64,6 +68,7 @@ pub enum ImageGenToolOutputFormat {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageGenToolQuality))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenToolQuality {
     Low,
@@ -80,10 +85,13 @@ pub enum ImageGenToolQuality {
 pub enum ImageGenToolSize {
     #[default]
     Auto,
+    #[serde(rename = "1024x1024")]
     #[strum(to_string = "1024x1024")]
     Size1024x1024,
+    #[serde(rename = "1024x1536")]
     #[strum(to_string = "1024x1536")]
     Size1024x1536,
+    #[serde(rename = "1536x1024")]
     #[strum(to_string = "1536x1024")]
     Size1536x1024,
 }
@@ -92,6 +100,7 @@ pub enum ImageGenToolSize {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::ImageGenActionEnum))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum ImageGenActionEnum {
     Generate,
@@ -126,6 +135,7 @@ pub struct ImageGenTool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ImageGenToolCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ImageGenToolCallStatus {
     InProgress,

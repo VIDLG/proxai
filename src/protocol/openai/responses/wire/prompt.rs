@@ -24,9 +24,11 @@ pub struct Prompt {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::PromptCacheRetention))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum PromptCacheRetention {
     InMemory,
+    #[serde(rename = "24h")]
     #[strum(to_string = "24h")]
     Hours24,
 }

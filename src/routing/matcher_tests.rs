@@ -12,10 +12,11 @@ use crate::protocol::{ProviderProtocol, RequestProtocol};
 #[test]
 fn auto_match_kind_uses_glob_patterns_case_insensitively() {
     let route = build_route(RouteConfig {
+        name: None,
         request_protocol: None,
         match_kind: MatchKind::Auto,
         model_pattern: "gpt-*".to_string(),
-        provider_name: "openai".to_string(),
+        provider: "openai".to_string(),
         upstream_model: Some("gpt-5.4".to_string()),
     });
 
@@ -27,10 +28,11 @@ fn auto_match_kind_uses_glob_patterns_case_insensitively() {
 #[test]
 fn auto_match_kind_uses_regex_patterns_and_supports_rewrite_templates() {
     let route = build_route(RouteConfig {
+        name: None,
         request_protocol: None,
         match_kind: MatchKind::Auto,
         model_pattern: "^gpt-(.+)$".to_string(),
-        provider_name: "openai".to_string(),
+        provider: "openai".to_string(),
         upstream_model: Some("openai/$1".to_string()),
     });
 
@@ -44,10 +46,11 @@ fn invalid_regex_patterns_return_invalid_route_errors() {
     let error = EffectiveRoute::build(
         &provider_protocols(),
         vec![RouteConfig {
+            name: None,
             request_protocol: Some(RequestProtocol::OpenaiResponses),
             match_kind: MatchKind::Regex,
             model_pattern: "(".to_string(),
-            provider_name: "openai".to_string(),
+            provider: "openai".to_string(),
             upstream_model: None,
         }],
     )

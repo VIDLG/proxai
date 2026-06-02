@@ -15,9 +15,11 @@ pub const TOOL_NAME_ALIASES: &[(&str, &str)] = &[
     ("o", "open"),
     ("r", "read_file"),
     ("restore", "restore_file_from_disk"),
-    ("w", "save_file"),
+    ("save", "save_file"),
+    ("sk", "skill"),
     ("spawn", "spawn_agent"),
     ("sh", "terminal"),
+    ("w", "write_file"),
 ];
 
 pub(crate) fn compact_tool_call_name(name: &str) -> String {

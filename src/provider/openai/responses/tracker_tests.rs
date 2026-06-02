@@ -55,3 +55,30 @@ data: {"type":"error","error":{"type":"invalid_request_error","code":"context_le
     );
     assert_eq!(tracker.state.sequence_number, Some(2));
 }
+
+#[test]
+fn completed_snapshot_without_output_keeps_observed_summary() {
+    let mut headers = http::HeaderMap::new();
+    headers.insert(
+        http::header::CONTENT_TYPE,
+        http::HeaderValue::from_static("text/event-stream"),
+    );
+    let mut tracker = ResponsesUpstreamTracker::from_headers(&headers);
+
+    tracker.scan_bytes(
+        br#"event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":3,"output_index":0,"item":{"id":"fc_1","type":"function_call","name":"edit_file","call_id":"call_1","arguments":"{}"}}
+
+"#,
+    );
+    tracker.scan_bytes(
+        br#"event: response.completed
+data: {"type":"response.completed","sequence_number":4,"response":{"id":"resp_1","object":"response","created_at":0,"model":"gpt-5.5","status":"completed","output":[]}}
+
+"#,
+    );
+
+    let summary = tracker.state.effective_summary();
+
+    assert_eq!(summary.function_calls.get("edit_file"), Some(&1));
+}

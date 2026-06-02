@@ -77,6 +77,7 @@ async fn generic_stream_records_chunks_and_outcome() {
         Instant::now(),
         observer,
         None,
+        tracing::Span::none(),
     );
 
     let body = stream
@@ -107,6 +108,7 @@ async fn generic_stream_allows_observer_inject_and_close_on_pending() {
         Instant::now(),
         observer,
         None,
+        tracing::Span::none(),
     );
 
     let body = stream

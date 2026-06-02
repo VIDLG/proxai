@@ -38,5 +38,4 @@ pub(crate) fn prepare_openai_chat_completions_request(
 }
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

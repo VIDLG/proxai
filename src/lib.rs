@@ -8,7 +8,7 @@ use capture::CaptureController;
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tracing::{info_span, Instrument};
+use tracing::{field::Empty, info_span, Instrument};
 
 pub mod capture;
 pub mod config;
@@ -134,7 +134,7 @@ async fn proxy(
     request: Request<Body>,
 ) -> impl IntoResponse {
     let request_id = request_id();
-    let span = info_span!("request", request_id);
+    let span = info_span!("request", request_id, request_reasoning_effort = Empty);
     let inbound_request_context = ProxyRequestContext {
         request_id,
         started: Instant::now(),
@@ -146,12 +146,12 @@ async fn proxy(
         .and_then(|value| value.parse::<u64>().ok());
 
     span.in_scope(|| {
-        tracing::info!(
+        tracing::debug!(
+            event = "recv",
             request_id,
             method = %method,
             path = uri.path(),
             content_length,
-            "recv"
         );
     });
 
@@ -167,7 +167,6 @@ async fn proxy(
     .instrument(span)
     .await
     .unwrap_or_else(|error| error_response(error, format));
-    tracing::info!(request_id, status = response.status().as_u16(), "sent");
     response
 }
 
@@ -271,10 +270,8 @@ async fn proxy_inner(
     )?;
     let provider = state
         .providers
-        .get(&resolved_route.provider_name)
-        .ok_or_else(|| {
-            InternalError::InvalidProviderResolution(resolved_route.provider_name.clone())
-        })?;
+        .get(&resolved_route.provider)
+        .ok_or_else(|| InternalError::InvalidProviderResolution(resolved_route.provider.clone()))?;
     let forwarded_request = translate_request(
         &inbound_request,
         provider.protocol,
@@ -293,6 +290,10 @@ async fn proxy_inner(
                 inbound: inbound_request_body_bytes.len() as u64,
                 forwarded: forwarded_request_body_len as u64,
             },
+            request_protocol: inbound_request.protocol(),
+            provider: resolved_route.provider.clone(),
+            route_name: resolved_route.route_name.clone(),
+            provider_protocol: provider.protocol,
             forwarded_request: forwarded_request_view,
             capture: capture.forwarded_request_enabled(),
         }

@@ -29,6 +29,31 @@ fn request_adaptation_defaults_missing_input_image_detail() {
 }
 
 #[test]
+fn project_payload_ignores_unknown_input_items() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "hello"}]
+            },
+            {
+                "type": "future_zed_item",
+                "opaque": {"value": 1}
+            }
+        ],
+        "parallel_tool_calls": true,
+        "stream": true
+    });
+
+    let projection = project_payload(&payload, None).expect("project request payload");
+
+    assert_eq!(projection.model.as_deref(), Some("glm-5.1"));
+    assert_eq!(projection.parallel_tool_calls, Some(true));
+    assert_eq!(projection.stream, Some(true));
+}
+#[test]
 fn project_payload_supports_request_summary_extraction() {
     let payload = json!({
         "model": "gpt-5.5",

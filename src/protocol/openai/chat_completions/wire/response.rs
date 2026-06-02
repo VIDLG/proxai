@@ -7,6 +7,7 @@ use super::{CompletionUsage, ServiceTier};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FinishReason))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum FinishReason {
     Stop,
@@ -20,6 +21,7 @@ pub enum FinishReason {
     Debug, Clone, Copy, Default, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::Role))]
+#[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Role {
     System,
@@ -60,6 +62,7 @@ pub struct ChatCompletionMessageCustomToolCall {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::ChatCompletionMessageToolCalls))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionMessageToolCalls {
     Function(ChatCompletionMessageToolCall),
     Custom(ChatCompletionMessageCustomToolCall),

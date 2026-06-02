@@ -10,6 +10,7 @@ mod message;
 mod output_item;
 mod prompt;
 mod reasoning;
+mod request;
 pub mod response;
 mod shared;
 mod stream;
@@ -66,6 +67,11 @@ pub use self::prompt::*;
     reason = "Facade re-exports for request and response protocol modules."
 )]
 pub use self::reasoning::*;
+#[allow(
+    unused_imports,
+    reason = "Facade re-exports for request and response protocol modules."
+)]
+pub use self::request::*;
 #[allow(
     unused_imports,
     reason = "Facade re-exports for request and response protocol modules."

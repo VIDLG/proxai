@@ -9,10 +9,11 @@ use std::time::Duration;
 use super::compat::normalize_nested_error_sse_stream;
 use super::diagnostic::ResponsesStreamDiagnostics;
 use super::{ResponsesUpstreamEvent, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
+use crate::formatting::compact_tail;
 use crate::logging;
 use crate::provider::{
     build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundStream,
-    UpstreamBodyStreamStats, UpstreamResponseContext, UpstreamResponseError,
+    ProgressFields, UpstreamBodyStreamStats, UpstreamResponseContext, UpstreamResponseError,
 };
 use crate::sse::{encode_sse_json_or_error, SseEventScanner};
 use crate::upstream::UpstreamResponseHead;
@@ -156,6 +157,26 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             self.upstream_response_tracker.state.sequence_number,
             TOOL_ARGUMENT_STALL_MESSAGE,
         ))
+    }
+
+    fn progress_fields(&self) -> ProgressFields {
+        let state = &self.upstream_response_tracker.state;
+        let snapshot = state.snapshot.as_ref();
+        ProgressFields {
+            phase: if self.tool_arguments.has_pending_items() {
+                "tool_args"
+            } else {
+                "upstream"
+            },
+            response_id: snapshot.map(|snapshot| compact_tail(&snapshot.projection.id, 8)),
+            sequence_number: state.sequence_number,
+            response_status: snapshot.map(|snapshot| snapshot.projection.status.to_string()),
+            snapshot_kind: snapshot.map(|snapshot| format!("{:?}", snapshot.kind)),
+            pending_tool_items: self
+                .tool_arguments
+                .has_pending_items()
+                .then(|| self.tool_arguments.pending_item_count() as u64),
+        }
     }
 
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {

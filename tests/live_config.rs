@@ -375,19 +375,17 @@ fn resolve_live_anthropic_provider_for_model(
     model: &str,
 ) -> Option<(String, String)> {
     for route in &config.routing.routes {
-        let provider_name = route.provider_name.trim().to_ascii_lowercase();
+        let provider_name = route.provider.trim().to_ascii_lowercase();
         let Some(provider) = config.providers.get(&provider_name) else {
             continue;
         };
         if provider.protocol != ProviderProtocol::AnthropicMessages {
             continue;
         }
-        let request_protocol = route
-            .request_protocol
-            .unwrap_or_else(|| provider.protocol.default_request_protocol());
-        if request_protocol != RequestProtocol::OpenaiResponses
-            && request_protocol != RequestProtocol::AnthropicMessages
-        {
+        if matches!(
+            route.request_protocol,
+            Some(RequestProtocol::OpenaiChatCompletions)
+        ) {
             continue;
         }
         if route.model_pattern.eq_ignore_ascii_case(model) {
@@ -689,6 +687,22 @@ async fn live_openai_responses_to_anthropic_messages_stream_translation(
     );
 }
 
+/// Live test: verify the user's MiniMax chat provider can serve MiniMax-M3
+/// through the OpenAI Chat Completions-compatible proxy path.
+///
+/// Run with:
+///   cargo test live_minimax_chat_provider_roundtrip -- --ignored --nocapture
+#[tokio::test]
+#[ignore = "uses ~/.proxai/config.toml and calls the configured MiniMax upstream"]
+async fn live_minimax_chat_provider_roundtrip() {
+    live_openai_chat_completions_roundtrip_with_model(
+        "MiniMax-M3".to_string(),
+        Some("minimax_chat"),
+        "proxai-minimax-chat-live-ok",
+    )
+    .await;
+}
+
 /// Live test: roundtrip OpenAI Chat Completions through the proxy and validate
 /// the response can be projected into proxai's protocol schema.
 ///
@@ -697,12 +711,20 @@ async fn live_openai_responses_to_anthropic_messages_stream_translation(
 #[tokio::test]
 #[ignore = "uses ~/.proxai/config.toml and makes a real OpenAI-compatible API call"]
 async fn live_openai_chat_completions_protocol_roundtrip() {
+    let model = std::env::var("PROXAI_CHAT_TEST_MODEL")
+        .or_else(|_| std::env::var("PROXAI_LIVE_TEST_MODEL"))
+        .unwrap_or_else(|_| "MiniMax-M3".to_string());
+    live_openai_chat_completions_roundtrip_with_model(model, None, "proxai-chat-live-ok").await;
+}
+
+async fn live_openai_chat_completions_roundtrip_with_model(
+    model: String,
+    expected_provider: Option<&str>,
+    expected_text: &str,
+) {
     let app_paths = paths::ensure_app_paths().expect("prepare app paths");
     let config = proxai::config::AppConfig::load(app_paths.config_path.clone())
         .expect("load ~/.proxai/config.toml");
-    let model = std::env::var("PROXAI_CHAT_TEST_MODEL")
-        .or_else(|_| std::env::var("PROXAI_LIVE_TEST_MODEL"))
-        .unwrap_or_else(|_| "gpt-5.4".to_string());
 
     let provider_name = config
         .routing
@@ -710,6 +732,12 @@ async fn live_openai_chat_completions_protocol_roundtrip() {
         .openai_chat_completions
         .trim()
         .to_ascii_lowercase();
+    if let Some(expected_provider_name) = expected_provider {
+        assert_eq!(
+            provider_name, expected_provider_name,
+            "expected OpenAI Chat Completions default provider to be `{expected_provider_name}`"
+        );
+    }
     let Some(provider) = config.providers.get(&provider_name) else {
         println!(
             "SKIP Chat Completions live: default provider `{provider_name}` is not configured"
@@ -762,7 +790,7 @@ async fn live_openai_chat_completions_protocol_roundtrip() {
             "model": model,
             "messages": [{
                 "role": "user",
-                "content": "Reply with the exact text: proxai-chat-live-ok"
+                "content": format!("Reply with the exact text: {expected_text}")
             }],
             "stream": false,
             "max_completion_tokens": 32
@@ -806,9 +834,18 @@ async fn live_openai_chat_completions_protocol_roundtrip() {
         !projection.choices.is_empty(),
         "Chat Completions choices must not be empty"
     );
+    assert!(
+        projection
+            .choices
+            .iter()
+            .filter_map(|choice| choice.message.content.as_deref())
+            .any(|content| content.contains(expected_text)),
+        "Chat Completions response should contain `{expected_text}`; projection: {projection:?}"
+    );
     println!(
-        "PASS Chat Completions serde/projection: id={} choices={}",
+        "PASS Chat Completions serde/projection: id={} model={} choices={}",
         projection.id,
+        projection.model,
         projection.choices.len()
     );
 }
@@ -827,8 +864,8 @@ async fn live_anthropic_messages_protocol_roundtrip() {
         .expect("load ~/.proxai/config.toml");
 
     assert!(
-        config.providers.contains_key("anthropic_default"),
-        "~/.proxai/config.toml must have [providers.anthropic_default] configured"
+        config.providers.contains_key("anthropic"),
+        "~/.proxai/config.toml must have [providers.anthropic] configured"
     );
 
     let model = std::env::var("PROXAI_ANTHROPIC_TEST_MODEL")

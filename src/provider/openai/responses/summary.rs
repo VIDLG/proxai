@@ -52,6 +52,10 @@ impl From<&ResponseProjection> for ResponseSummary {
 }
 
 impl ResponseSummary {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.output_items.is_empty() && self.function_calls.is_empty() && self.mcp_calls.is_empty()
+    }
+
     /// Records a concrete output item variant and any associated name-level
     /// summaries derived from that item.
     pub(crate) fn record_output_item(&mut self, item: &OutputItem) {

@@ -27,6 +27,7 @@ pub struct ItemReference {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::MessageItem))]
+#[serde(untagged)]
 pub enum MessageItem {
     Output(OutputMessage),
     Input(InputMessage),
@@ -34,6 +35,7 @@ pub enum MessageItem {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Item))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Item {
     Message(MessageItem),
     FileSearchCall(FileSearchToolCall),
@@ -64,6 +66,7 @@ pub enum Item {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputParam))]
+#[serde(untagged)]
 pub enum InputParam {
     Text(String),
     Items(Vec<InputItem>),
@@ -71,6 +74,7 @@ pub enum InputParam {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::InputItem))]
+#[serde(untagged)]
 pub enum InputItem {
     ItemReference(ItemReference),
     Item(Item),

@@ -306,18 +306,17 @@ fn analyze_unfinished_tool_tail(recent_tail: &[u8]) -> ToolArgumentsSection {
     result
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum ToolArgumentsParseResult {
+    #[default]
     Empty,
-    Json { value: Value },
-    Incomplete { raw: String },
-}
-
-impl Default for ToolArgumentsParseResult {
-    fn default() -> Self {
-        Self::Empty
-    }
+    Json {
+        value: Value,
+    },
+    Incomplete {
+        raw: String,
+    },
 }
 
 #[derive(Deserialize)]

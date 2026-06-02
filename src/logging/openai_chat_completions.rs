@@ -1,12 +1,19 @@
+use std::collections::BTreeMap;
+
 use serde_json::Value as JsonValue;
 use tracing::{info, warn};
 use valuable::Valuable;
-use valuable_serde::Serializable;
 
 use crate::config::LogOutputFormat;
-use crate::formatting::{compact_tail, format_count_map};
-use crate::provider::openai::chat_completions::ChatUpstreamStreamSnapshot;
+use crate::formatting::{compact_tail, format_count_map_with};
+use crate::provider::openai::chat_completions::{
+    ChatResponseOutputKind, ChatUpstreamStreamSnapshot,
+};
 
+use super::counts::{
+    compact_output_items_for_human, compact_tool_calls, join_call_maps, merge_count_maps,
+    source_count_maps, string_count_map,
+};
 use super::record::ValuableJson;
 use super::{
     active_log_format, emit_json_log, extend_json_object, rename_json_field, UpstreamLogRecord,
@@ -22,10 +29,12 @@ struct ChatResponseFields {
     cache: Option<u32>,
     output: u32,
     reasoning: u32,
-    output_items: String,
-    finish_reasons: String,
-    tool_calls: String,
-    custom_tool_calls: String,
+    output_items: BTreeMap<String, u64>,
+    output_items_human: String,
+    finish_reasons: BTreeMap<String, u64>,
+    calls: BTreeMap<String, u64>,
+    calls_by_source: BTreeMap<String, BTreeMap<String, u64>>,
+    calls_human: String,
 }
 
 impl From<&ChatUpstreamStreamSnapshot> for ChatResponseFields {
@@ -33,6 +42,9 @@ impl From<&ChatUpstreamStreamSnapshot> for ChatResponseFields {
         let projection = snapshot.state.observed.latest.as_ref();
         let usage = projection.and_then(|projection| projection.usage());
         let summary = snapshot.state.observed.effective_summary();
+
+        let tool_calls = string_count_map(&summary.tool_calls);
+        let custom_tool_calls = string_count_map(&summary.custom_tool_calls);
 
         Self {
             id: compact_tail(
@@ -74,27 +86,56 @@ impl From<&ChatUpstreamStreamSnapshot> for ChatResponseFields {
                         .and_then(|details| details.reasoning_tokens)
                 })
                 .unwrap_or_default(),
-            output_items: format_count_map(&summary.output_items),
-            finish_reasons: format_count_map(&summary.finish_reasons),
-            tool_calls: summary
-                .tool_calls
-                .iter()
-                .map(|(key, value)| format!("{}:{value}", super::compact_tool_call_name(key)))
-                .collect::<Vec<_>>()
-                .join(" "),
-            custom_tool_calls: summary
-                .custom_tool_calls
-                .iter()
-                .map(|(key, value)| format!("{}:{value}", super::compact_tool_call_name(key)))
-                .collect::<Vec<_>>()
-                .join(" "),
+            output_items: string_count_map(&summary.output_items),
+            output_items_human: compact_output_items_for_human(
+                &summary.output_items,
+                ChatResponseOutputKind::Text,
+            ),
+            finish_reasons: string_count_map(&summary.finish_reasons),
+            calls: merge_count_maps([tool_calls.clone(), custom_tool_calls.clone()]),
+            calls_by_source: source_count_maps([
+                ("tool", tool_calls),
+                ("custom_tool", custom_tool_calls),
+            ]),
+            calls_human: join_call_maps([
+                compact_tool_calls(&summary.tool_calls),
+                compact_tool_calls(&summary.custom_tool_calls),
+            ]),
         }
     }
 }
 
 impl ValuableJson for ChatResponseFields {
     fn to_json_value(&self) -> JsonValue {
-        serde_json::to_value(Serializable::new(self)).unwrap_or(JsonValue::Null)
+        super::json_object([
+            ("id", JsonValue::String(self.id.clone())),
+            ("model", JsonValue::String(self.model.clone())),
+            ("service_tier", JsonValue::String(self.service_tier.clone())),
+            ("tok", JsonValue::from(self.tok)),
+            ("input", JsonValue::from(self.input)),
+            (
+                "cache",
+                self.cache.map(JsonValue::from).unwrap_or(JsonValue::Null),
+            ),
+            ("output", JsonValue::from(self.output)),
+            ("reasoning", JsonValue::from(self.reasoning)),
+            (
+                "output_items",
+                serde_json::to_value(&self.output_items).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "finish_reasons",
+                serde_json::to_value(&self.finish_reasons).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls",
+                serde_json::to_value(&self.calls).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls_by_source",
+                serde_json::to_value(&self.calls_by_source).unwrap_or(JsonValue::Null),
+            ),
+        ])
     }
 }
 
@@ -155,10 +196,9 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
             cache = response.cache,
             output = response.output,
             reasoning = response.reasoning,
-            output_items = response.output_items,
-            finish_reasons = response.finish_reasons,
-            tool_calls = response.tool_calls,
-            custom_tool_calls = response.custom_tool_calls,
+            output_items_human = response.output_items_human,
+            finish_reasons = format_count_map_with(&response.finish_reasons, |key| key.clone()),
+            calls_human = response.calls_human,
         ),
         LogOutputFormat::Json => {
             let mut payload = response.to_json_value();
@@ -222,10 +262,9 @@ fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, message: &str) 
             cache = response.cache,
             output = response.output,
             reasoning = response.reasoning,
-            output_items = response.output_items,
-            finish_reasons = response.finish_reasons,
-            tool_calls = response.tool_calls,
-            custom_tool_calls = response.custom_tool_calls,
+            output_items_human = response.output_items_human,
+            finish_reasons = format_count_map_with(&response.finish_reasons, |key| key.clone()),
+            calls_human = response.calls_human,
             err = message,
         ),
         LogOutputFormat::Json => {
@@ -263,3 +302,7 @@ fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, message: &str) 
         }
     }
 }
+
+#[cfg(test)]
+#[path = "openai_chat_completions_tests.rs"]
+mod tests;

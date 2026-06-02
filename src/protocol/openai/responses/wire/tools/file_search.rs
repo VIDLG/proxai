@@ -23,6 +23,7 @@ pub struct HybridSearch {
 #[convert(from(openai::RankVersionType))]
 pub enum RankVersionType {
     Auto,
+    #[serde(rename = "default-2024-11-15")]
     #[strum(to_string = "default-2024-11-15")]
     Default20241115,
 }
@@ -54,6 +55,7 @@ pub struct FileSearchTool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::FileSearchToolCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum FileSearchToolCallStatus {
     InProgress,

@@ -3,7 +3,9 @@ use bytes::Bytes;
 use serde_json::json;
 
 use super::{ChatUpstreamResponseTracker, ObservedChatResponse};
-use crate::protocol::openai::chat_completions::FinishReason;
+use crate::protocol::openai::chat_completions::{
+    ChatResponseProjection, CreateChatCompletionResponse, FinishReason,
+};
 use crate::upstream::ContentType;
 
 #[test]
@@ -40,7 +42,7 @@ fn tracker_extracts_non_stream_chat_completion_usage() {
     let bytes = serde_json::to_vec(&body).unwrap();
     tracker.scan_bytes(&bytes[..8]);
     tracker.scan_bytes(&bytes[8..]);
-    tracker.finish();
+    finish_non_stream(&mut tracker);
 
     let ObservedChatResponse::Response(projection) = tracker
         .state
@@ -119,7 +121,6 @@ fn tracker_extracts_stream_chat_completion_chunks_and_ignores_done() {
     ));
 
     tracker.scan_bytes(&chunk);
-    tracker.finish();
 
     let ObservedChatResponse::Stream(projection) = tracker
         .state
@@ -142,6 +143,23 @@ fn tracker_extracts_stream_chat_completion_chunks_and_ignores_done() {
     assert_eq!(summary.finish_reasons.get("stop"), Some(&1));
     assert_eq!(summary.tool_calls.get("lookup"), Some(&1));
     assert!(tracker.state.observed.done);
+}
+
+fn finish_non_stream(tracker: &mut ChatUpstreamResponseTracker) {
+    if tracker.is_sse || tracker.json_body.is_empty() {
+        return;
+    }
+    let response =
+        serde_json::from_slice::<async_openai::types::chat::CreateChatCompletionResponse>(
+            &tracker.json_body,
+        )
+        .expect("parse non-stream chat completion response");
+    let projection = ChatResponseProjection::from(CreateChatCompletionResponse::from(response));
+    tracker
+        .state
+        .observed
+        .record(ObservedChatResponse::Response(projection));
+    tracker.json_body.clear();
 }
 
 #[test]

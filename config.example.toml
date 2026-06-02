@@ -9,11 +9,11 @@ host = "127.0.0.1"
 port = 18081
 
 [routing.default_provider_names]
-openai_responses = "openai_default"
+openai_responses = "openai"
 # No-conversion default provider for /v1/chat/completions.
-openai_chat_completions = "openai_chat_default"
+openai_chat_completions = "minimax_chat"
 # No-conversion default provider for /v1/messages.
-anthropic_messages = "anthropic_default"
+anthropic_messages = "anthropic"
 
 # Route matching modes:
 # - exact: case-insensitive exact match
@@ -22,9 +22,13 @@ anthropic_messages = "anthropic_default"
 # - auto: infer glob when * or ? is present, infer regex for obvious regex syntax,
 #   otherwise exact
 #
-# request_protocol is a route filter on the inbound request shape.
-# If omitted, it defaults to the selected provider.protocol, which means
-# no protocol conversion by default.
+# request_protocol is optional. The inbound protocol is determined from the
+# actual request path (/v1/responses, /v1/chat/completions, or /v1/messages).
+# - omitted: match this model pattern for any inbound protocol
+# - set: require the inbound protocol to match; if the model pattern matches but
+#   the request path uses a different protocol, proxai returns a config error
+# If you need different providers for the same model pattern across endpoints,
+# create separate routes and set request_protocol explicitly on each one.
 #
 # upstream_model is optional:
 # - omitted: forward the original request model unchanged
@@ -32,42 +36,40 @@ anthropic_messages = "anthropic_default"
 # - regex: replacement template using $1 or $name
 
 [[routing.routes]]
+# Stable route names can be targeted by --route-override name.field=value.
+name = "openai"
 # auto => glob
 model_pattern = "gpt-*"
-provider_name = "openai_default"
+provider = "openai"
 
 [[routing.routes]]
-# Example OpenAI Responses request routed to an Anthropic-compatible provider.
-request_protocol = "openai_responses"
-model_pattern = "mimo-v2.5"
-provider_name = "anthropic_default"
+name = "mimo_chat_ant"
+# Example OpenAI Chat Completions requests routed to an Anthropic-compatible provider.
+model_pattern = "mimo-*"
+provider = "anthropic"
 
 [[routing.routes]]
-# Example OpenAI Responses request routed to an Anthropic-compatible provider.
-request_protocol = "openai_responses"
-model_pattern = "mimo-v2.5-pro"
-provider_name = "anthropic_default"
-
-[[routing.routes]]
-# Example MiniMax M3 route for OpenAI-compatible clients such as Zed.
-request_protocol = "openai_responses"
-model_pattern = "MiniMax-M3"
-provider_name = "minimax_anthropic"
+name = "minimax_chat"
+# Example MiniMax M3 route for OpenAI Chat Completions-compatible clients.
+model_pattern = "MiniMax-*"
+provider = "minimax_chat"
 
 # Example exact alias route:
 # [[routing.routes]]
+# name = "gpt_54_stable_alias"
 # model_pattern = "gpt-5.4-stable"
-# provider_name = "openai_default"
+# provider = "openai"
 # upstream_model = "gpt-5.4"
 
 # Example regex mapping route:
 # [[routing.routes]]
-# match_kind = "regex"
+# name = "gpt_minor_regex"
 # model_pattern = "^gpt-(?<major>\d+)\.(?<minor>\d+)-mini$"
-# provider_name = "openai_default"
+# provider = "openai"
+# match_kind = "regex"
 # upstream_model = "gpt-$major.$minor-mini"
 
-[providers.openai_default]
+[providers.openai]
 protocol = "openai_responses"
 base_url = "http://your-openai-upstream.example:8080"
 # Required. Proxai always sends this key upstream and ignores any
@@ -75,13 +77,13 @@ base_url = "http://your-openai-upstream.example:8080"
 api_key = "replace-with-your-api-key"
 read_idle_timeout_secs = 120
 
-[providers.openai_chat_default]
+[providers.minimax_chat]
 protocol = "openai_chat_completions"
-base_url = "http://your-openai-compatible-chat-upstream.example:8080"
-api_key = "replace-with-your-api-key"
+base_url = "https://api.minimaxi.com/v1"
+api_key = "replace-with-your-minimax-api-key"
 read_idle_timeout_secs = 120
 
-[providers.anthropic_default]
+[providers.anthropic]
 protocol = "anthropic_messages"
 base_url = "https://api.anthropic.com"
 api_key = "replace-with-your-api-key"
@@ -91,13 +93,6 @@ api_key = "replace-with-your-api-key"
 # measured MiniMax thinking block missing-signature events, and measured
 # GLM 5.1 partial server_tool_use counters.
 compatibility = "strict"
-read_idle_timeout_secs = 120
-
-[providers.minimax_anthropic]
-protocol = "anthropic_messages"
-base_url = "https://api.minimaxi.com/anthropic"
-api_key = "replace-with-your-minimax-api-key"
-compatibility = "anthropic_compatible"
 read_idle_timeout_secs = 120
 
 [tool_calls]

@@ -59,6 +59,7 @@ pub enum CodeInterpreterToolCallOutput {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::CodeInterpreterToolCallStatus))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum CodeInterpreterToolCallStatus {
     InProgress,

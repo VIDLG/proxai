@@ -12,6 +12,7 @@ use crate::error::{InternalError, Result};
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, Message, MessageStreamEvent, StopReason,
 };
+use crate::protocol::openai_responses::ResponseCreateParams;
 use crate::provider::anthropic_messages;
 use crate::sse::SseEvent;
 use crate::translation::sse::{
@@ -65,7 +66,8 @@ pub(crate) fn translate_request_payload(
         translated["instructions"] = serde_json::to_value(system)?;
     }
 
-    Ok(translated)
+    let typed = serde_json::from_value::<ResponseCreateParams>(translated)?;
+    Ok(serde_json::to_value(typed)?)
 }
 
 pub(crate) async fn translate_response(

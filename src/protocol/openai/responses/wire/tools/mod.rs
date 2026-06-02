@@ -49,6 +49,7 @@ pub use self::web_search::*;
 )]
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::Tool))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Tool {
     Function(FunctionTool),
     FileSearch(FileSearchTool),

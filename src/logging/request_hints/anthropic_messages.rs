@@ -27,7 +27,7 @@ pub(crate) fn render_summary_compact(
 }
 
 pub(crate) fn render_projection_compact(projection: &MessageCreateParamsBase) -> String {
-    let mut parts = vec!["Anthropic/passthrough".to_string()];
+    let mut parts = vec![];
     if projection.container.is_some() {
         parts.push("container".to_string());
     }

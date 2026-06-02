@@ -5,6 +5,7 @@ use strum::Display;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::ServiceTier))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ServiceTier {
     Auto,
@@ -18,7 +19,8 @@ pub enum ServiceTier {
     Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::Verbosity))]
-#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Verbosity {
     Low,
     #[default]
@@ -29,6 +31,7 @@ pub enum Verbosity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::OutputStatus))]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum OutputStatus {
     InProgress,
     Completed,
@@ -37,7 +40,8 @@ pub enum OutputStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
 #[convert(from(openai::Truncation))]
-#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Truncation {
     Auto,
     Disabled,

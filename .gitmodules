@@ -6,3 +6,7 @@
 	path = contrib/anthropic-sdk-typescript
 	url = https://github.com/anthropics/anthropic-sdk-typescript
 	tag = sdk-v0.98.0
+[submodule "contrib/zed"]
+	path = contrib/zed
+	url = https://github.com/zed-industries/zed.git
+	tag = v1.4.4

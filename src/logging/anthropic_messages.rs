@@ -1,13 +1,20 @@
+use std::collections::BTreeMap;
+
 use serde_json::Value as JsonValue;
 use tracing::{info, warn};
 use valuable::Valuable;
-use valuable_serde::Serializable;
 
 use crate::config::LogOutputFormat;
 use crate::formatting::{compact_tail, format_count_map};
 
-use crate::provider::anthropic_messages::AnthropicUpstreamResponseSnapshot;
+use crate::provider::anthropic_messages::{
+    AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot,
+};
 
+use super::counts::{
+    compact_output_items_for_human, compact_tool_calls, full_count_map, join_call_maps,
+    merge_count_maps, source_count_maps, string_count_map,
+};
 use super::record::ValuableJson;
 use super::{active_log_format, emit_json_log, extend_json_object, rename_json_field};
 
@@ -22,10 +29,12 @@ struct AnthropicResponseFields {
     cache_read: Option<u32>,
     cache_creation: Option<u32>,
     output: u32,
-    output_items: String,
-    stop_reasons: String,
-    tool_uses: String,
-    server_tool_uses: String,
+    output_items: BTreeMap<String, u64>,
+    output_items_human: String,
+    stop_reasons: BTreeMap<String, u64>,
+    calls: BTreeMap<String, u64>,
+    calls_by_source: BTreeMap<String, BTreeMap<String, u64>>,
+    calls_human: String,
 }
 
 impl From<&AnthropicUpstreamResponseSnapshot> for AnthropicResponseFields {
@@ -35,6 +44,8 @@ impl From<&AnthropicUpstreamResponseSnapshot> for AnthropicResponseFields {
         let cache_read = projection.cache_read_input_tokens();
         let cache_creation = projection.cache_creation_input_tokens();
         let output = projection.output_tokens().unwrap_or_default();
+        let tool_uses = string_count_map(&snapshot.state.summary.tool_uses);
+        let server_tool_uses = string_count_map(&snapshot.state.summary.server_tool_uses);
 
         Self {
             id: compact_tail(projection.id().as_deref().unwrap_or_default(), 8),
@@ -52,24 +63,64 @@ impl From<&AnthropicUpstreamResponseSnapshot> for AnthropicResponseFields {
             cache_read,
             cache_creation,
             output,
-            output_items: format_count_map(&snapshot.state.summary.output_items),
-            stop_reasons: format_count_map(&snapshot.state.summary.stop_reasons),
-            tool_uses: snapshot
-                .state
-                .summary
-                .tool_uses
-                .iter()
-                .map(|(key, value)| format!("{}:{value}", super::compact_tool_call_name(key)))
-                .collect::<Vec<_>>()
-                .join(" "),
-            server_tool_uses: format_count_map(&snapshot.state.summary.server_tool_uses),
+            output_items: string_count_map(&snapshot.state.summary.output_items),
+            output_items_human: compact_output_items_for_human(
+                &snapshot.state.summary.output_items,
+                AnthropicResponseOutputKind::Text,
+            ),
+            stop_reasons: string_count_map(&snapshot.state.summary.stop_reasons),
+            calls: merge_count_maps([tool_uses.clone(), server_tool_uses.clone()]),
+            calls_by_source: source_count_maps([
+                ("tool", tool_uses),
+                ("server_tool", server_tool_uses),
+            ]),
+            calls_human: join_call_maps([
+                compact_tool_calls(&snapshot.state.summary.tool_uses),
+                full_count_map(&snapshot.state.summary.server_tool_uses),
+            ]),
         }
     }
 }
 
 impl ValuableJson for AnthropicResponseFields {
     fn to_json_value(&self) -> JsonValue {
-        serde_json::to_value(Serializable::new(self)).unwrap_or(JsonValue::Null)
+        super::json_object([
+            ("id", JsonValue::String(self.id.clone())),
+            ("model", JsonValue::String(self.model.clone())),
+            ("service_tier", JsonValue::String(self.service_tier.clone())),
+            ("stop_reason", JsonValue::String(self.stop_reason.clone())),
+            ("tok", JsonValue::from(self.tok)),
+            ("input", JsonValue::from(self.input)),
+            (
+                "cache_read",
+                self.cache_read
+                    .map(JsonValue::from)
+                    .unwrap_or(JsonValue::Null),
+            ),
+            (
+                "cache_creation",
+                self.cache_creation
+                    .map(JsonValue::from)
+                    .unwrap_or(JsonValue::Null),
+            ),
+            ("output", JsonValue::from(self.output)),
+            (
+                "output_items",
+                serde_json::to_value(&self.output_items).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "stop_reasons",
+                serde_json::to_value(&self.stop_reasons).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls",
+                serde_json::to_value(&self.calls).unwrap_or(JsonValue::Null),
+            ),
+            (
+                "calls_by_source",
+                serde_json::to_value(&self.calls_by_source).unwrap_or(JsonValue::Null),
+            ),
+        ])
     }
 }
 
@@ -127,10 +178,9 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
             cache_read = response.cache_read,
             cache_creation = response.cache_creation,
             output = response.output,
-            output_items = response.output_items,
-            stop_reasons = response.stop_reasons,
-            tool_uses = response.tool_uses,
-            server_tool_uses = response.server_tool_uses,
+            output_items_human = response.output_items_human,
+            stop_reasons = format_count_map(&response.stop_reasons),
+            calls_human = response.calls_human,
         ),
         LogOutputFormat::Json => {
             let mut payload = response.to_json_value();
@@ -195,10 +245,9 @@ fn emit_anthropic_stream_error(snapshot: &AnthropicUpstreamResponseSnapshot, mes
             cache_read = response.cache_read,
             cache_creation = response.cache_creation,
             output = response.output,
-            output_items = response.output_items,
-            stop_reasons = response.stop_reasons,
-            tool_uses = response.tool_uses,
-            server_tool_uses = response.server_tool_uses,
+            output_items_human = response.output_items_human,
+            stop_reasons = format_count_map(&response.stop_reasons),
+            calls_human = response.calls_human,
             err = message,
         ),
         LogOutputFormat::Json => {
@@ -236,3 +285,7 @@ fn emit_anthropic_stream_error(snapshot: &AnthropicUpstreamResponseSnapshot, mes
         }
     }
 }
+
+#[cfg(test)]
+#[path = "anthropic_messages_tests.rs"]
+mod tests;

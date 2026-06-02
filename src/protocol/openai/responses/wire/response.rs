@@ -35,6 +35,7 @@ pub struct IncompleteDetails {
     Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
 )]
 #[convert(from(openai::Status))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Status {
     Completed,
@@ -91,6 +92,7 @@ pub struct ResponseFormatJsonSchema {
     Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
 )]
 #[convert(from(openai::TextResponseFormatConfiguration))]
+#[serde(tag = "type", rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TextResponseFormatConfiguration {
     #[default]

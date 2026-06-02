@@ -49,6 +49,10 @@ pub(crate) fn error_text(error: &UpstreamResponseError) -> &str {
 }
 
 fn emit_head_info(head: &UpstreamResponseHead) {
+    if matches!(active_log_format(), LogOutputFormat::Human) && is_default_success_sse_head(head) {
+        return;
+    }
+
     match active_log_format() {
         LogOutputFormat::Human => info!(
             event = "hdr",
@@ -102,6 +106,15 @@ fn emit_head_info(head: &UpstreamResponseHead) {
             ]),
         ),
     }
+}
+
+fn is_default_success_sse_head(head: &UpstreamResponseHead) -> bool {
+    head.status.is_success()
+        && head.content_type.as_ref().is_some_and(ContentType::is_sse)
+        && head
+            .transfer_encoding
+            .as_ref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("chunked"))
 }
 
 fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamResponseError) {
