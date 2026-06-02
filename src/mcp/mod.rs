@@ -228,7 +228,7 @@ impl ProxaiMcpServer {
 
 #[tool_handler(
     name = "proxai",
-    version = "0.1.0",
+    version = "0.2.0"
     instructions = "Use these tools to inspect and control proxai runtime capture behavior."
 )]
 impl ServerHandler for ProxaiMcpServer {}
