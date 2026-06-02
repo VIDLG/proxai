@@ -60,6 +60,7 @@ jobs:
 
       - name: Stage artifact
         run: |
+          mkdir -p dist
           rm -f "dist/${PACKAGE_NAME}.exe"
           cp target/release/proxai.exe "dist/${PACKAGE_NAME}.exe"
 
