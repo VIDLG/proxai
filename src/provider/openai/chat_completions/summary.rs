@@ -106,13 +106,6 @@ impl From<&ChatStreamResponseProjection> for ChatResponseSummary {
 }
 
 impl ChatResponseSummary {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.output_items.is_empty()
-            && self.finish_reasons.is_empty()
-            && self.tool_calls.is_empty()
-            && self.custom_tool_calls.is_empty()
-    }
-
     pub(crate) fn add_item_kind_count(&mut self, kind: ChatResponseOutputKind, count: u64) {
         *self.output_items.entry(kind).or_default() += count;
     }
@@ -141,21 +134,5 @@ impl ChatResponseSummary {
     fn add_custom_tool_call(&mut self, name: &str) {
         self.add_item_kind(ChatResponseOutputKind::CustomToolCall);
         *self.custom_tool_calls.entry(name.to_string()).or_default() += 1;
-    }
-
-    #[expect(dead_code)]
-    pub(crate) fn merge(&mut self, other: &Self) {
-        for (kind, count) in &other.output_items {
-            *self.output_items.entry(*kind).or_default() += count;
-        }
-        for (reason, count) in &other.finish_reasons {
-            *self.finish_reasons.entry(reason.clone()).or_default() += count;
-        }
-        for (name, count) in &other.tool_calls {
-            *self.tool_calls.entry(name.clone()).or_default() += count;
-        }
-        for (name, count) in &other.custom_tool_calls {
-            *self.custom_tool_calls.entry(name.clone()).or_default() += count;
-        }
     }
 }
