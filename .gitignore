@@ -8,7 +8,7 @@ __pycache__/
 *.pyc
 logs/
 captures/
-diagnostics/
+/diagnostics/
 nul
 build/
 dist/
