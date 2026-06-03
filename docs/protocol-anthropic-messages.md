@@ -260,6 +260,69 @@ block 通过 `index` 关联：
 
 消息级结束由 `MessageStopEvent` 表示；`MessageDeltaEvent` 携带 `stop_reason`、`stop_sequence` 和增量 usage。
 
+## content blocks、并行与串行
+
+Anthropic Messages 的输出单元是 assistant 消息中的 `content[]` 数组。与 Responses 的顶层 `output[]` 不同，Anthropic 把所有输出内容（文本、思考、工具调用、服务端工具调用）都嵌套在一个 `Message.content[]` 里。
+
+同一个“并行读取两个文件”的工具调用，在 Anthropic 中表现为一个 assistant 消息里的多个 `tool_use` block：
+
+```json
+{
+  "role": "assistant",
+  "content": [
+    {"type": "tool_use", "id": "tu_1", "name": "read_file", "input": {"path": "src/main.rs"}},
+    {"type": "tool_use", "id": "tu_2", "name": "read_file", "input": {"path": "Cargo.toml"}}
+  ]
+}
+```
+
+对应的工具结果在下一个 user 消息中以 `tool_result` block 回填，同样可以包含多个 result block：
+
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "tool_result", "tool_use_id": "tu_1", "content": "fn main() {...}"},
+    {"type": "tool_result", "tool_use_id": "tu_2", "content": "[package]\nname = ..."}
+  ]
+}
+```
+
+### 并行控制
+
+Anthropic 通过 `tool_choice` 中的 `disable_parallel_tool_use` 字段控制是否允许并行工具调用：
+
+```json
+{"type": "auto", "disable_parallel_tool_use": true}
+```
+
+当设为 `true` 时，模型每次只会产出一个 `tool_use` block。省略或设为 `false` 时，模型可以在单个 assistant 消息中产出多个 `tool_use` block。
+
+OpenAI 协议的对应字段是请求级 `parallel_tool_calls: false`。proxai 在 `openai_responses -> anthropic_messages` 转换时，将 `parallel_tool_calls: false` 映射为 `tool_choice.disable_parallel_tool_use: true`。
+
+### 严格邻接约束
+
+Anthropic 要求工具调用和工具结果严格相邻：
+
+1. assistant 消息包含一个或多个 `tool_use` block。
+2. 紧接着的 user 消息必须包含对应的 `tool_result` block（每个 `tool_use_id` 恰好匹配一个 result）。
+3. 中间不能插入其他 role 的消息。
+
+部分 provider（如 MiniMax M3）严格执行此约束，对拆分或交错的工具轮次会返回 `tool call result does not follow tool call (2013)` 错误。proxai 在翻译时保持相邻 `tool_use` / `tool_result` 的聚合，避免拆散并行工具调用。
+
+### 流式中的并行工具参数
+
+SSE 流式时，多个并行 `tool_use` 的 `input_json_delta` 事件可以交错到达，通过 `ContentBlockStartEvent.index` 和 `ContentBlockDeltaEvent.index` 区分属于哪个 block：
+
+```text
+index=0  input_json_delta  {"path":
+index=1  input_json_delta  {"path":
+index=0  input_json_delta  "src/main.rs"}
+index=1  input_json_delta  "Cargo.toml"}
+```
+
+这与 Responses 通过 `item_id` + `output_index` 区分并行 item 的方式类似，但 Anthropic 使用的是消息内 content block 的数组 index。
+
 ## 完整交互示例
 
 下面用一个简化场景串起客户端、本地工具、服务端工具和 SSE。
