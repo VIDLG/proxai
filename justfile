@@ -30,7 +30,7 @@ run *args:
     pixi run -- cargo run -- {{ args }}
 
 run-capture *args:
-    pixi run -- cargo run -- --capture-inbound-request --capture-forwarded-request --capture-upstream-response --capture-outbound-response {{ args }}
+    pixi run -- cargo run -- --capture-inbound-request --capture-provider-request --capture-upstream-response --capture-outbound-response {{ args }}
 
 zed-probe *args:
     pixi run -- python tools/zed_probe_server.py {{ args }}

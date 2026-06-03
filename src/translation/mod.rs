@@ -20,4 +20,4 @@ mod response;
 mod sse;
 
 pub(crate) use request::translate_request;
-pub(crate) use response::translate_response;
+pub(crate) use response::{translate_non_streaming_response, translate_streaming_response};

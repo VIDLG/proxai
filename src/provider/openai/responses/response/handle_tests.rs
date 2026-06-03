@@ -1,18 +1,14 @@
 use super::OpenaiResponsesUpstreamBodyObserver;
-use crate::provider::BodyObserver;
+use crate::request::RequestId;
+use crate::upstream::BodyObserver;
 
-fn test_observer(headers: &http::HeaderMap) -> OpenaiResponsesUpstreamBodyObserver {
-    OpenaiResponsesUpstreamBodyObserver::new(headers, None, 1, tracing::Span::none())
+fn test_observer() -> OpenaiResponsesUpstreamBodyObserver {
+    OpenaiResponsesUpstreamBodyObserver::new(None, RequestId::from(1), tracing::Span::none())
 }
 
 #[test]
 fn sse_eof_without_terminal_event_is_incomplete_even_without_pending_tools() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut observer = test_observer(&headers);
+    let mut observer = test_observer();
 
     observer.observe_chunk(
         br#"data: {"type":"response.output_text.delta","sequence_number":1,"delta":"ok"}
@@ -26,12 +22,7 @@ fn sse_eof_without_terminal_event_is_incomplete_even_without_pending_tools() {
 
 #[test]
 fn sse_eof_after_terminal_event_is_complete() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut observer = test_observer(&headers);
+    let mut observer = test_observer();
 
     observer.observe_chunk(
         br#"data: {"type":"response.completed","sequence_number":2}
@@ -45,12 +36,7 @@ fn sse_eof_after_terminal_event_is_complete() {
 
 #[test]
 fn tool_argument_delta_without_item_id_marks_stream_error() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut observer = test_observer(&headers);
+    let mut observer = test_observer();
 
     observer.observe_chunk(
         br#"data: {"type":"response.function_call_arguments.delta","sequence_number":1,"delta":"{}"}

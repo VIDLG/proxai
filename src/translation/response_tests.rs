@@ -3,14 +3,14 @@ use axum::http::{Response, StatusCode};
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-use super::translate_response;
+use super::translate_non_streaming_response;
 
 #[tokio::test]
 async fn skips_translation_for_upstream_error_responses() {
     let mut response = Response::new(Body::from("upstream failed"));
     *response.status_mut() = StatusCode::BAD_GATEWAY;
 
-    let response = translate_response(
+    let response = translate_non_streaming_response(
         RequestProtocol::OpenaiResponses,
         ProviderProtocol::AnthropicMessages,
         response,

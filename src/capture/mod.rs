@@ -5,8 +5,8 @@ mod write;
 pub(crate) use controller::CaptureSession;
 pub use controller::{CaptureController, CaptureDirective, CaptureOverrides, CaptureStatus};
 pub use model::{
-    CaptureQuery, CaptureRecord, CaptureShowTarget, ForwardedRequestArtifacts,
-    InboundRequestArtifacts, OutboundResponseArtifacts, UpstreamResponseArtifacts,
+    CaptureQuery, CaptureRecord, CaptureShowTarget, InboundRequestArtifacts,
+    OutboundResponseArtifacts, ProviderRequestArtifacts, UpstreamResponseArtifacts,
 };
 pub(crate) use write::UpstreamResponseCaptureWriter;
 

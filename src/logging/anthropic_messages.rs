@@ -10,12 +10,14 @@ use crate::formatting::{compact_tail, format_count_map};
 use crate::provider::anthropic_messages::{
     AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot,
 };
+use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
     compact_output_items_for_human, compact_tool_calls, full_count_map, join_call_maps,
     merge_count_maps, source_count_maps, string_count_map,
 };
 use super::record::ValuableJson;
+use super::upstream::{stream_error_text, stream_error_token};
 use super::{active_log_format, emit_json_log, extend_json_object, rename_json_field};
 
 #[derive(Debug, Clone, Default, Valuable)]
@@ -39,22 +41,22 @@ struct AnthropicResponseFields {
 
 impl From<&AnthropicUpstreamResponseSnapshot> for AnthropicResponseFields {
     fn from(snapshot: &AnthropicUpstreamResponseSnapshot) -> Self {
-        let projection = &snapshot.state.projection;
-        let input = projection.input_tokens().unwrap_or_default();
-        let cache_read = projection.cache_read_input_tokens();
-        let cache_creation = projection.cache_creation_input_tokens();
-        let output = projection.output_tokens().unwrap_or_default();
+        let state = &snapshot.state;
+        let input = state.input_tokens().unwrap_or_default();
+        let cache_read = state.cache_read_input_tokens();
+        let cache_creation = state.cache_creation_input_tokens();
+        let output = state.output_tokens().unwrap_or_default();
         let tool_uses = string_count_map(&snapshot.state.summary.tool_uses);
         let server_tool_uses = string_count_map(&snapshot.state.summary.server_tool_uses);
 
         Self {
-            id: compact_tail(projection.id().as_deref().unwrap_or_default(), 8),
-            model: projection.model().clone().unwrap_or_default(),
-            service_tier: projection
+            id: compact_tail(state.id().as_deref().unwrap_or_default(), 8),
+            model: state.model().clone().unwrap_or_default(),
+            service_tier: state
                 .service_tier()
                 .map(|service_tier| service_tier.to_string())
                 .unwrap_or_default(),
-            stop_reason: projection
+            stop_reason: state
                 .stop_reason()
                 .map(|reason| reason.to_string())
                 .unwrap_or_default(),
@@ -134,7 +136,7 @@ pub(crate) enum AnthropicLogRecord<'a> {
     },
     StreamError {
         snapshot: &'a AnthropicUpstreamResponseSnapshot,
-        message: &'a str,
+        error: &'a UpstreamStreamError,
     },
 }
 
@@ -143,9 +145,7 @@ impl AnthropicLogRecord<'_> {
         match self {
             Self::Completed { snapshot } => emit_anthropic_stream_info("end", snapshot),
             Self::Closed { snapshot } => emit_anthropic_stream_info("closed", snapshot),
-            Self::StreamError { snapshot, message } => {
-                emit_anthropic_stream_error(snapshot, message)
-            }
+            Self::StreamError { snapshot, error } => emit_anthropic_stream_error(snapshot, error),
         }
     }
 }
@@ -163,11 +163,7 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -200,15 +196,7 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
                 ],
             );
@@ -217,24 +205,23 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
     }
 }
 
-fn emit_anthropic_stream_error(snapshot: &AnthropicUpstreamResponseSnapshot, message: &str) {
+fn emit_anthropic_stream_error(
+    snapshot: &AnthropicUpstreamResponseSnapshot,
+    error: &UpstreamStreamError,
+) {
     let head = &snapshot.head;
     let response = AnthropicResponseFields::from(snapshot);
 
     match active_log_format() {
         LogOutputFormat::Human => warn!(
-            event = "stream-error",
+            event = stream_error_token(error),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -248,7 +235,7 @@ fn emit_anthropic_stream_error(snapshot: &AnthropicUpstreamResponseSnapshot, mes
             output_items_human = response.output_items_human,
             stop_reasons = format_count_map(&response.stop_reasons),
             calls_human = response.calls_human,
-            err = message,
+            err = stream_error_text(error),
         ),
         LogOutputFormat::Json => {
             let mut payload = response.to_json_value();
@@ -268,20 +255,12 @@ fn emit_anthropic_stream_error(snapshot: &AnthropicUpstreamResponseSnapshot, mes
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
-                    ("err", JsonValue::String(message.to_string())),
+                    ("err", JsonValue::String(stream_error_text(error))),
                 ],
             );
-            emit_json_log("WARN", "stream-error", payload);
+            emit_json_log("WARN", stream_error_token(error), payload);
         }
     }
 }

@@ -1,6 +1,10 @@
 [server]
 host = "127.0.0.1"
 port = 18080
+# Maximum inbound HTTP request body size accepted by the local proxy.
+max_request_body_bytes = 52428800
+# Maximum number of concurrently handled local proxy requests.
+max_concurrent_requests = 64
 
 [mcp]
 # Local MCP control/API listener. The MCP endpoint is served at /mcp.
@@ -117,7 +121,7 @@ format = "text"
 # Capture the client request as proxai received it.
 inbound_request_enabled = false
 # Capture the request proxai actually forwards upstream after adaptation.
-forwarded_request_enabled = false
+provider_request_enabled = false
 # Capture the upstream response headers and raw response body bytes.
 upstream_response_enabled = false
 # Capture the final response proxai sends back to the client.

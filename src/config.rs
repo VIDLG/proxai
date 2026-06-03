@@ -14,6 +14,8 @@ use url::Url;
 
 const DEFAULT_SERVER_HOST: &str = "127.0.0.1";
 const DEFAULT_SERVER_PORT: u16 = 18080;
+const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 50 * 1024 * 1024;
+const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 64;
 const DEFAULT_MCP_HOST: &str = "127.0.0.1";
 const DEFAULT_MCP_PORT: u16 = 18081;
 const DEFAULT_TOOL_CALLS_TIMEOUT_SECS: u64 = 120;
@@ -42,6 +44,18 @@ impl AppConfig {
                 path: path.clone(),
                 message: source.to_string(),
             })?;
+        if config.server.max_request_body_bytes == 0 {
+            return Err(ConfigError::Invalid {
+                path: path.clone(),
+                message: "server.max_request_body_bytes must be greater than 0".to_string(),
+            });
+        }
+        if config.server.max_concurrent_requests == 0 {
+            return Err(ConfigError::Invalid {
+                path: path.clone(),
+                message: "server.max_concurrent_requests must be greater than 0".to_string(),
+            });
+        }
         for (name, provider) in &config.providers {
             if provider.api_key.trim().is_empty() {
                 return Err(ConfigError::Invalid {
@@ -79,6 +93,8 @@ impl AppConfig {
 pub struct ServerConfig {
     pub host: IpAddr,
     pub port: u16,
+    pub max_request_body_bytes: usize,
+    pub max_concurrent_requests: usize,
 }
 
 impl Default for ServerConfig {
@@ -86,6 +102,8 @@ impl Default for ServerConfig {
         Self {
             host: DEFAULT_SERVER_HOST.parse().expect("valid default host"),
             port: DEFAULT_SERVER_PORT,
+            max_request_body_bytes: DEFAULT_MAX_REQUEST_BODY_BYTES,
+            max_concurrent_requests: DEFAULT_MAX_CONCURRENT_REQUESTS,
         }
     }
 }
@@ -257,7 +275,7 @@ impl Default for ToolCallsConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct CaptureConfig {
     pub inbound_request_enabled: bool,
-    pub forwarded_request_enabled: bool,
+    pub provider_request_enabled: bool,
     pub upstream_response_enabled: bool,
     pub outbound_response_enabled: bool,
 }
@@ -265,7 +283,7 @@ pub struct CaptureConfig {
 impl CaptureConfig {
     pub fn any_enabled(self) -> bool {
         self.inbound_request_enabled
-            || self.forwarded_request_enabled
+            || self.provider_request_enabled
             || self.upstream_response_enabled
             || self.outbound_response_enabled
     }

@@ -13,7 +13,7 @@ proxai 把请求链路拆成两条独立的轴。
 阶段轴描述数据在代理链路里的位置：
 
 ```text
-inbound_request -> forwarded_request -> upstream_response -> outbound_response
+inbound_request -> provider_request -> upstream_response -> outbound_response
 ```
 
 协议轴描述这一阶段使用的 wire 协议：
@@ -26,7 +26,7 @@ openai_responses / openai_chat_completions / anthropic_messages
 
 - `src/protocol/mod.rs` 定义 `RequestProtocol` 和 `ProviderProtocol`。
 - `src/ingress/request.rs` 用 `PreparedInboundRequest` 按协议承载已经解析过的入站请求。
-- `src/translation/request.rs` 根据入站协议和 provider 协议构造 `ForwardedRequest`。
+- `src/translation/request.rs` 根据入站协议和 provider 协议构造 `ProviderRequest`。
 - `src/provider/handler.rs` 根据 provider 协议选择上游响应处理器。
 
 这个拆分避免把“客户端发来的协议”和“上游 provider 使用的协议”混成一个概念。例如客户端可以发 `openai_responses`，但路由到 `anthropic_messages` provider 时必须经过显式翻译；如果对应 pair 尚未实现，`translation::translate_request` 会返回明确错误。
@@ -141,10 +141,10 @@ enum PreparedInboundRequest {
 转发请求：
 
 ```rust
-enum ForwardedRequest {
-    OpenaiResponses(Box<OpenaiResponsesForwardedRequest>),
-    OpenaiChatCompletions(Box<OpenaiChatCompletionsForwardedRequest>),
-    AnthropicMessages(Box<AnthropicMessagesForwardedRequest>),
+enum ProviderRequest {
+    OpenaiResponses(Box<OpenaiResponsesProviderRequest>),
+    OpenaiChatCompletions(Box<OpenaiChatCompletionsProviderRequest>),
+    AnthropicMessages(Box<AnthropicMessagesProviderRequest>),
 }
 ```
 

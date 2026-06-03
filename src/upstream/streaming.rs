@@ -1,18 +1,31 @@
 use axum::body::Bytes;
+use axum::http::HeaderMap;
 use futures_util::{Future, Stream, StreamExt};
 
+use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use tokio::time::{Instant as TokioInstant, Sleep};
 
-use crate::capture::UpstreamResponseCaptureWriter;
+use crate::capture::{CaptureSession, UpstreamResponseCaptureWriter};
 
-use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
+use crate::http_model::UpstreamResponseHead;
+use crate::http_utils::filter_forwardable_headers;
+
+use crate::upstream::UpstreamBodyStreamStats;
 
 const WAIT_LOG_AFTER: Duration = Duration::from_secs(5);
 const WAIT_LOG_INTERVAL: Duration = Duration::from_secs(5);
+
+pub(crate) struct StreamingResponseContext<'a> {
+    pub(crate) capture: &'a CaptureSession,
+    pub(crate) started: Instant,
+    pub(crate) span: &'a tracing::Span,
+    pub(crate) read_idle_timeout: Duration,
+    pub(crate) head: &'a UpstreamResponseHead,
+}
 
 pub(crate) enum BodyAction {
     Continue,
@@ -46,7 +59,7 @@ pub(crate) trait BodyObserver: Send + Unpin + 'static {
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats);
 }
 
-pub(crate) struct MonitoredBodyStream<O>
+pub(crate) struct MonitoredUpstreamBodyStream<O>
 where
     O: BodyObserver,
 {
@@ -62,7 +75,7 @@ where
     idle_timeout: Option<Duration>,
 }
 
-impl<O> MonitoredBodyStream<O>
+impl<O> MonitoredUpstreamBodyStream<O>
 where
     O: BodyObserver,
 {
@@ -160,7 +173,7 @@ where
     }
 }
 
-impl<O> Stream for MonitoredBodyStream<O>
+impl<O> Stream for MonitoredUpstreamBodyStream<O>
 where
     O: BodyObserver,
 {
@@ -213,7 +226,7 @@ where
     }
 }
 
-impl<O> Drop for MonitoredBodyStream<O>
+impl<O> Drop for MonitoredUpstreamBodyStream<O>
 where
     O: BodyObserver,
 {
@@ -225,6 +238,58 @@ where
     }
 }
 
+/// Prepare the streaming body side of a 2xx upstream response.
+///
+/// This consolidates the steps shared by streaming provider response handlers:
+///
+/// 1. Capture the raw upstream headers to the configured capture destination.
+/// 2. Filter the upstream headers down to the set safe to forward to the client.
+/// 3. Capture the outbound headers so the on-disk capture mirrors what the
+///    client actually saw.
+/// 4. Wrap the reqwest byte stream in a [`MonitoredUpstreamBodyStream`] driven by the
+///    caller-supplied [`BodyObserver`].
+pub(crate) async fn prepare_response_stream<O>(
+    context: StreamingResponseContext<'_>,
+    upstream_response: reqwest::Response,
+    observer: O,
+) -> (
+    HeaderMap,
+    Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send>>,
+)
+where
+    O: BodyObserver,
+{
+    context
+        .capture
+        .capture_upstream_response_headers(context.head)
+        .await;
+
+    let outbound_headers = filter_forwardable_headers(&context.head.headers);
+    context
+        .capture
+        .capture_outbound_response_headers(
+            context.head.status,
+            context.head.content_type().as_ref().map(AsRef::as_ref),
+            &outbound_headers,
+        )
+        .await;
+
+    let capture_writer = context
+        .capture
+        .create_upstream_response_writer(context.head.content_type().as_ref());
+    let stream = MonitoredUpstreamBodyStream::new(
+        upstream_response.bytes_stream(),
+        context.head.clone(),
+        context.started,
+        observer,
+        capture_writer,
+        context.span.clone(),
+        Some(context.read_idle_timeout),
+    );
+
+    (outbound_headers, Box::pin(stream))
+}
+
 #[cfg(test)]
-#[path = "monitor_tests.rs"]
+#[path = "streaming_tests.rs"]
 mod tests;

@@ -2,7 +2,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{header, Response};
 use serde_json::{json, Value};
 
-use super::translate_response;
+use super::{translate_non_streaming_response, translate_streaming_response};
 
 #[tokio::test]
 async fn translates_chat_completion_response_to_responses_shape() {
@@ -38,7 +38,7 @@ async fn translates_chat_completion_response_to_responses_shape() {
         header::HeaderValue::from_static("application/json"),
     );
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_non_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let value: Value = serde_json::from_slice(&body).unwrap();
 
@@ -72,7 +72,7 @@ async fn translates_chat_stream_to_responses_sse() {
         header::HeaderValue::from_static("text/event-stream"),
     );
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let text = String::from_utf8(body.to_vec()).unwrap();
 

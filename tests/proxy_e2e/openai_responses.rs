@@ -170,7 +170,7 @@ async fn proxy_can_capture_zed_request_case_without_header_secrets() {
     let metadata = read_json_file(&files, "inbound-request.metadata").await;
     assert_eq!(metadata["headers"]["authorization"], "<redacted>");
 
-    let normalized = read_json_file(&files, "forwarded-request.body").await;
+    let normalized = read_json_file(&files, "provider-request.body").await;
     assert_eq!(normalized["instructions"], "Capture this instruction.");
     assert_eq!(normalized["input"].as_array().unwrap().len(), 1);
 

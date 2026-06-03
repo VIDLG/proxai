@@ -804,7 +804,7 @@ async fn spawn_shim_with_options(upstream_address: SocketAddr, options: ShimOpti
     .with_capture_dir(options.capture_dir)
     .with_capture_config(proxai::config::CaptureConfig {
         inbound_request_enabled: options.request_capture_enabled,
-        forwarded_request_enabled: options.request_capture_enabled,
+        provider_request_enabled: options.request_capture_enabled,
         upstream_response_enabled: options.upstream_capture_enabled,
         outbound_response_enabled: false,
     })

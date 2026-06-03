@@ -3,6 +3,7 @@ use crate::protocol::openai::responses::{
     TextResponseFormatConfiguration, ToolChoiceFunction, ToolChoiceParam, Verbosity,
 };
 use crate::provider::openai::responses::ToolCategory;
+use crate::request::RequestId;
 
 use serde_json::json;
 
@@ -170,7 +171,7 @@ fn request_projection_accepts_zed_assistant_output_text_history() {
 }
 
 #[test]
-fn prepare_forwarded_request_preserves_model_when_route_keeps_it() {
+fn prepare_provider_request_preserves_model_when_route_keeps_it() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [{
@@ -181,7 +182,8 @@ fn prepare_forwarded_request_preserves_model_when_route_keeps_it() {
     });
 
     let prepared =
-        super::prepare_forwarded_request(&payload, Some(7), "gpt-5.5", "gpt-5.5").unwrap();
+        super::prepare_provider_request(&payload, Some(RequestId::from(7)), "gpt-5.5", "gpt-5.5")
+            .unwrap();
 
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap(),
@@ -192,7 +194,7 @@ fn prepare_forwarded_request_preserves_model_when_route_keeps_it() {
 }
 
 #[test]
-fn prepare_forwarded_request_rewrites_model_and_builds_summary() {
+fn prepare_provider_request_rewrites_model_and_builds_summary() {
     let payload = json!({
         "model": "gpt-5.5",
         "tools": [
@@ -210,8 +212,13 @@ fn prepare_forwarded_request_rewrites_model_and_builds_summary() {
         }]
     });
 
-    let prepared =
-        super::prepare_forwarded_request(&payload, Some(8), "gpt-5.5", "claude-sonnet").unwrap();
+    let prepared = super::prepare_provider_request(
+        &payload,
+        Some(RequestId::from(8)),
+        "gpt-5.5",
+        "claude-sonnet",
+    )
+    .unwrap();
     let rewritten = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
     assert_eq!(

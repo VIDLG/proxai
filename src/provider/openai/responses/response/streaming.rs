@@ -1,5 +1,5 @@
 use axum::body::{Body, Bytes};
-use axum::http::{HeaderMap, Response};
+use axum::http::Response;
 
 use futures_util::Future;
 
@@ -8,60 +8,76 @@ use std::time::Duration;
 
 use super::compat::normalize_nested_error_sse_stream;
 use super::diagnostic::ResponsesStreamDiagnostics;
-use super::{ResponsesUpstreamEvent, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
-use crate::formatting::compact_tail;
-use crate::logging;
-use crate::provider::{
-    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundResponseContext,
-    OutboundStream, ProgressFields, UpstreamResponseError,
+use super::{
+    ResponsesUpstreamEvent, ResponsesUpstreamMetadata, ResponsesUpstreamStreamSnapshot,
+    ResponsesUpstreamTracker,
 };
+
+use crate::formatting::compact_tail;
+use crate::http_model::UpstreamResponseHead;
+use crate::http_utils::response_with_headers;
+use crate::logging;
+use crate::provider::ProviderStreamingResponseContext;
+use crate::request::RequestId;
 use crate::sse::{encode_sse_json_or_error, SseEventScanner};
-use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 use super::sse::is_terminal_event;
+use crate::upstream::{
+    prepare_response_stream, BodyAction, BodyObserver, ProgressFields, StreamingResponseContext,
+    UpstreamBodyStreamStats, UpstreamStreamError,
+};
+
 use super::tool_arguments::ToolArgumentStreamState;
 
 const TOOL_ARGUMENT_STALL_MESSAGE: &str = "upstream SSE stalled while streaming tool arguments";
 
-pub(crate) async fn handle_success_response(
-    ctx: OutboundResponseContext<'_>,
-    upstream_response: reqwest::Response,
-) -> crate::error::Result<Response<Body>> {
-    let upstream_headers = upstream_response.headers().clone();
-
+pub(crate) async fn handle_streaming_response(
+    context: ProviderStreamingResponseContext<'_>,
+    response: reqwest::Response,
+) -> Response<Body> {
+    let ProviderStreamingResponseContext {
+        request_id,
+        started,
+        capture,
+        span,
+        policy,
+        ..
+    } = context;
+    let head = UpstreamResponseHead::from_response(&response, started.elapsed());
     let observer = OpenaiResponsesUpstreamBodyObserver::new(
-        &upstream_headers,
-        ctx.sse_tool_call_timeout,
-        ctx.request_id,
-        ctx.span.clone(),
+        policy.sse_tool_call_timeout(),
+        request_id,
+        span.clone(),
     );
 
-    let OutboundStream {
-        head,
-        outbound_headers,
-        stream,
-        ..
-    } = build_outbound_stream(&ctx, upstream_response, observer).await?;
+    let (outbound_headers, body_stream) = prepare_response_stream(
+        StreamingResponseContext {
+            capture,
+            started,
+            span,
+            read_idle_timeout: policy.read_idle_timeout(),
+            head: &head,
+        },
+        response,
+        observer,
+    )
+    .await;
 
-    ctx.span.in_scope(|| {
+    span.in_scope(|| {
         logging::ResponsesLogRecord::from_event(&ResponsesUpstreamEvent::Headers {
             head: head.clone(),
         })
         .emit()
     });
 
-    let stream = if head.is_sse() {
-        Box::pin(normalize_nested_error_sse_stream(stream))
-    } else {
-        stream
-    };
-    Ok(streaming_response(head.status, outbound_headers, stream))
+    let stream = Box::pin(normalize_nested_error_sse_stream(body_stream));
+    response_with_headers(head.status, outbound_headers, Body::from_stream(stream))
 }
 
 struct OpenaiResponsesUpstreamBodyObserver {
     upstream_response_tracker: ResponsesUpstreamTracker,
     saw_terminal_event: bool,
-    stream_error: Option<UpstreamResponseError>,
+    stream_error: Option<UpstreamStreamError>,
     tool_arguments: ToolArgumentStreamState,
     diagnostics: ResponsesStreamDiagnostics,
     timeout: Option<Duration>,
@@ -70,14 +86,9 @@ struct OpenaiResponsesUpstreamBodyObserver {
 }
 
 impl OpenaiResponsesUpstreamBodyObserver {
-    fn new(
-        headers: &HeaderMap,
-        timeout: Option<Duration>,
-        request_id: u64,
-        span: tracing::Span,
-    ) -> Self {
+    fn new(timeout: Option<Duration>, request_id: RequestId, span: tracing::Span) -> Self {
         Self {
-            upstream_response_tracker: ResponsesUpstreamTracker::from_headers(headers),
+            upstream_response_tracker: ResponsesUpstreamTracker::new(),
             saw_terminal_event: false,
             stream_error: None,
             tool_arguments: ToolArgumentStreamState::default(),
@@ -92,7 +103,7 @@ impl OpenaiResponsesUpstreamBodyObserver {
         self.tool_arguments.clear();
     }
 
-    fn record_stream_error(&mut self, error: UpstreamResponseError) {
+    fn record_stream_error(&mut self, error: UpstreamStreamError) {
         self.stream_error = Some(error);
         self.mark_terminal_event();
     }
@@ -106,6 +117,7 @@ impl OpenaiResponsesUpstreamBodyObserver {
             head: head.clone(),
             metrics: stats.metrics(),
             state: self.upstream_response_tracker.state.clone(),
+            metadata: ResponsesUpstreamMetadata::from_head(head),
         }
     }
 }
@@ -120,7 +132,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
                 return BodyAction::Continue;
             }
             if let Err(message) = self.tool_arguments.observe_event(&event, self.timeout) {
-                self.record_stream_error(UpstreamResponseError::Stream {
+                self.record_stream_error(UpstreamStreamError::Stream {
                     message: message.clone(),
                 });
                 return BodyAction::InjectAndClose(error_sse_chunk(
@@ -133,7 +145,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
     }
 
     fn observe_error(&mut self, error: &reqwest::Error) {
-        self.record_stream_error(UpstreamResponseError::Stream {
+        self.record_stream_error(UpstreamStreamError::Stream {
             message: error.to_string(),
         });
     }
@@ -147,7 +159,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             return BodyAction::Continue;
         }
 
-        self.record_stream_error(UpstreamResponseError::Stream {
+        self.record_stream_error(UpstreamStreamError::Stream {
             message: format!(
                 "{TOOL_ARGUMENT_STALL_MESSAGE} after {}s",
                 self.timeout.unwrap_or_default().as_secs()
@@ -190,7 +202,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
                 })
                 .emit()
             });
-        } else if snapshot.state.eof_is_complete(self.saw_terminal_event) {
+        } else if self.saw_terminal_event {
             self.span.in_scope(|| {
                 logging::ResponsesLogRecord::from_event(&ResponsesUpstreamEvent::Completed {
                     snapshot,
@@ -198,7 +210,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
                 .emit()
             });
         } else if self.tool_arguments.has_pending_items() {
-            let error = UpstreamResponseError::UnfinishedTool {
+            let error = UpstreamStreamError::UnfinishedTool {
                 sequence_number: snapshot.state.sequence_number,
             };
             let diagnostic_path = self.diagnostics.write_unfinished_tool_diagnostic(&snapshot);

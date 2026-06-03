@@ -1,18 +1,41 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use axum::body::Body;
-use axum::http::{HeaderMap, HeaderValue, Method, Response, Uri};
+use axum::http::{HeaderMap, HeaderValue, Method};
 use getset::{CopyGetters, Getters};
-use http::header::AUTHORIZATION;
+use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
 use crate::capture::CaptureSession;
-use crate::config::{
-    normalize_provider_name, ErrorResponseFormat, ProviderCompatibility, ProviderConfig,
-};
-use crate::error::{InternalError, Result};
+use crate::config::{normalize_provider_name, ProviderCompatibility, ProviderConfig};
+use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
+use crate::http_utils::filter_forwardable_headers;
 use crate::protocol::ProviderProtocol;
-use crate::provider::{ForwardedRequest, OutboundResponseContext};
+use crate::provider::{apply_request_auth_headers, ProviderRequest};
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ProviderTransportError {
+    #[error(transparent)]
+    Internal(#[from] InternalError),
+    #[error(transparent)]
+    Upstream(#[from] UpstreamError),
+}
+
+impl From<ProviderTransportError> for ProxyError {
+    fn from(error: ProviderTransportError) -> Self {
+        match error {
+            ProviderTransportError::Internal(error) => error.into(),
+            ProviderTransportError::Upstream(error) => error.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, CopyGetters)]
+pub(crate) struct ProviderStreamingResponsePolicy {
+    #[getset(get_copy = "pub(crate)")]
+    read_idle_timeout: Duration,
+    #[getset(get_copy = "pub(crate)")]
+    sse_tool_call_timeout: Option<Duration>,
+}
 
 #[derive(Debug, Clone, Getters, CopyGetters)]
 pub(crate) struct ProviderTransport {
@@ -20,90 +43,15 @@ pub(crate) struct ProviderTransport {
     name: String,
     #[getset(get_copy = "pub(crate)")]
     protocol: ProviderProtocol,
+    #[getset(get_copy = "pub(crate)")]
+    compatibility: ProviderCompatibility,
+    #[getset(get_copy = "pub(crate)")]
+    read_idle_timeout: Duration,
+    #[getset(get_copy = "pub(crate)")]
+    sse_tool_call_timeout: Option<Duration>,
     base_url: Url,
     api_key: String,
-    compatibility: ProviderCompatibility,
-    read_idle_timeout: Duration,
     client: Client,
-}
-
-pub(crate) struct ProviderSendContext<'a> {
-    request_id: u64,
-    started: Instant,
-    capture: &'a CaptureSession,
-    span: &'a tracing::Span,
-    sse_tool_call_timeout: Option<Duration>,
-    error_response_format: ErrorResponseFormat,
-}
-
-impl<'a> ProviderSendContext<'a> {
-    pub(crate) fn new(
-        request_id: u64,
-        started: Instant,
-        capture: &'a CaptureSession,
-        span: &'a tracing::Span,
-        sse_tool_call_timeout: Option<Duration>,
-        error_response_format: ErrorResponseFormat,
-    ) -> Self {
-        Self {
-            request_id,
-            started,
-            capture,
-            span,
-            sse_tool_call_timeout,
-            error_response_format,
-        }
-    }
-}
-
-pub(crate) struct ProviderSendRequest<'a> {
-    method: Method,
-    uri: &'a Uri,
-    inbound_headers: &'a HeaderMap,
-    forwarded_request: ForwardedRequest,
-}
-
-impl<'a> ProviderSendRequest<'a> {
-    pub(crate) fn new(
-        method: Method,
-        uri: &'a Uri,
-        inbound_headers: &'a HeaderMap,
-        forwarded_request: ForwardedRequest,
-    ) -> Self {
-        Self {
-            method,
-            uri,
-            inbound_headers,
-            forwarded_request,
-        }
-    }
-
-    fn method(&self) -> &Method {
-        &self.method
-    }
-
-    fn upstream_path(&self) -> String {
-        match self.uri.query() {
-            Some(query) => format!("{}?{}", self.forwarded_request.upstream_path(), query),
-            None => self.forwarded_request.upstream_path().to_string(),
-        }
-    }
-
-    fn inbound_headers(&self) -> &HeaderMap {
-        self.inbound_headers
-    }
-
-    fn body_len(&self) -> usize {
-        self.forwarded_request.body().len()
-    }
-
-    fn capture_payload(&self) -> &serde_json::Value {
-        self.forwarded_request.capture_payload()
-    }
-
-    fn into_body(self) -> Vec<u8> {
-        self.forwarded_request.into_body()
-    }
 }
 
 impl ProviderTransport {
@@ -125,114 +73,110 @@ impl ProviderTransport {
         Ok(Self {
             name: normalized_name,
             protocol: config.protocol,
-            base_url,
-            api_key: config.api_key,
             compatibility: config.compatibility,
             read_idle_timeout: config.read_idle_timeout,
+            sse_tool_call_timeout: Some(Duration::from_secs(120)),
+            base_url,
+            api_key: config.api_key,
             client,
         })
     }
 
+    pub(crate) fn streaming_response_policy(&self) -> ProviderStreamingResponsePolicy {
+        ProviderStreamingResponsePolicy {
+            read_idle_timeout: self.read_idle_timeout,
+            sse_tool_call_timeout: self.sse_tool_call_timeout,
+        }
+    }
+
+    pub(crate) fn set_sse_tool_call_timeout(&mut self, timeout: Option<Duration>) {
+        self.sse_tool_call_timeout = timeout;
+    }
+
     pub(crate) async fn send(
         &self,
-        request: ProviderSendRequest<'_>,
-        request_context: ProviderSendContext<'_>,
-    ) -> Result<Response<Body>, crate::error::Error> {
-        let upstream_url = self.upstream_url_for_path(&request.upstream_path())?;
-        let forwarded_headers =
-            self.forwarded_request_headers(request.inbound_headers(), request.body_len());
-        let forwarded_request_capture_payload = request.capture_payload().clone();
-        let method = request.method().clone();
-        let forwarded_body = request.into_body();
-
-        request_context
-            .capture
-            .capture_forwarded_request(
-                &method,
-                upstream_url.as_str(),
-                &forwarded_headers,
-                &forwarded_body,
-                Some(&forwarded_request_capture_payload),
-            )
-            .await?;
-
-        let upstream_response = self
-            .client
-            .request(method, upstream_url)
-            .headers(forwarded_headers)
-            .body(forwarded_body)
-            .send()
-            .await?;
-        OutboundResponseContext {
-            request_id: request_context.request_id,
-            started: request_context.started,
-            capture: request_context.capture,
-            span: request_context.span,
-            sse_tool_call_timeout: request_context.sse_tool_call_timeout,
-            read_idle_timeout: self.read_idle_timeout,
-            error_response_format: request_context.error_response_format,
-            provider_protocol: self.protocol,
-            provider_compatibility: self.compatibility,
-        }
-        .handle_response(upstream_response)
-        .await
-    }
-
-    fn upstream_url_for_path(&self, path_and_query: &str) -> Result<Url, InternalError> {
-        let base_path = self.base_url.path().trim_matches('/');
-        let request = path_and_query.trim_start_matches('/');
-
-        // Avoid duplicating an API root that is already present in `base_url`.
-        // For example, `base_url = https://api.example/v1/` and
-        // `path_and_query = /v1/responses` should join as `/v1/responses`, not
-        // `/v1/v1/responses`. Non-matching gateway prefixes such as `/openai`
-        // are kept.
-        let relative_path = if base_path.is_empty() {
-            request.to_string()
-        } else {
-            match request.strip_prefix(base_path) {
-                Some("") => String::new(),
-                Some(suffix) if suffix.starts_with('/') => {
-                    suffix.trim_start_matches('/').to_string()
-                }
-                Some(suffix) if suffix.starts_with('?') => suffix.to_string(),
-                _ => request.to_string(),
-            }
+        method: Method,
+        inbound_query: Option<String>,
+        inbound_headers: HeaderMap,
+        provider_request: ProviderRequest,
+        capture: &CaptureSession,
+    ) -> std::result::Result<reqwest::Response, ProviderTransportError> {
+        let upstream_path = match inbound_query {
+            Some(query) => format!("{}?{}", provider_request.upstream_path(), query),
+            None => provider_request.upstream_path().to_string(),
         };
+        let url = upstream_url_for_path(&self.base_url, &upstream_path)?;
+        let headers = provider_request_headers(
+            &inbound_headers,
+            provider_request.body().len(),
+            self.protocol,
+            &self.api_key,
+        );
+        let capture_payload = provider_request.capture_payload().clone();
+        let body = provider_request.into_body();
 
-        Ok(self.base_url.join(&relative_path)?)
-    }
+        capture
+            .capture_provider_request(
+                &method,
+                url.as_str(),
+                &headers,
+                &body,
+                Some(&capture_payload),
+            )
+            .await;
 
-    fn forwarded_request_headers(&self, headers: &HeaderMap, body_len: usize) -> HeaderMap {
-        let mut forwarded = filter_forwardable_headers(headers);
-        if !forwarded.contains_key(http::header::USER_AGENT) {
-            forwarded.insert(
-                http::header::USER_AGENT,
-                HeaderValue::from_static("ProxAI/1.0"),
-            );
-        }
-        if body_len > 0 {
-            if let Ok(value) = HeaderValue::from_str(&body_len.to_string()) {
-                forwarded.insert(http::header::CONTENT_LENGTH, value);
-            }
-        }
-        match self.protocol {
-            ProviderProtocol::OpenaiResponses | ProviderProtocol::OpenaiChatCompletions => {
-                forwarded.remove("x-api-key");
-                if let Ok(value) = HeaderValue::from_str(&format!("Bearer {}", self.api_key.trim()))
-                {
-                    forwarded.insert(AUTHORIZATION, value);
-                }
-            }
-            ProviderProtocol::AnthropicMessages => {
-                forwarded.remove(http::header::AUTHORIZATION);
-                if let Ok(value) = HeaderValue::from_str(self.api_key.trim()) {
-                    forwarded.insert("x-api-key", value);
-                }
-            }
-        }
-        forwarded
+        self.client
+            .request(method, url)
+            .headers(headers)
+            .body(body)
+            .send()
+            .await
+            .map_err(UpstreamError::RequestSend)
+            .map_err(Into::into)
     }
+}
+
+fn provider_request_headers(
+    headers: &HeaderMap,
+    body_len: usize,
+    protocol: ProviderProtocol,
+    api_key: &str,
+) -> HeaderMap {
+    let mut provider_headers = filter_forwardable_headers(headers);
+    if !provider_headers.contains_key(http::header::USER_AGENT) {
+        provider_headers.insert(
+            http::header::USER_AGENT,
+            HeaderValue::from_static("ProxAI/1.0"),
+        );
+    }
+    if body_len > 0 {
+        provider_headers.typed_insert(ContentLength(body_len as u64));
+    }
+    apply_request_auth_headers(protocol, &mut provider_headers, api_key);
+    provider_headers
+}
+
+fn upstream_url_for_path(base_url: &Url, path_and_query: &str) -> Result<Url, InternalError> {
+    let base_path = base_url.path().trim_matches('/');
+    let request = path_and_query.trim_start_matches('/');
+
+    // Avoid duplicating an API root that is already present in `base_url`.
+    // For example, `base_url = https://api.example/v1/` and
+    // `path_and_query = /v1/responses` should join as `/v1/responses`, not
+    // `/v1/v1/responses`. Non-matching gateway prefixes such as `/openai`
+    // are kept.
+    let relative_path = if base_path.is_empty() {
+        request.to_string()
+    } else {
+        match request.strip_prefix(base_path) {
+            Some("") => String::new(),
+            Some(suffix) if suffix.starts_with('/') => suffix.trim_start_matches('/').to_string(),
+            Some(suffix) if suffix.starts_with('?') => suffix.to_string(),
+            _ => request.to_string(),
+        }
+    };
+
+    Ok(base_url.join(&relative_path)?)
 }
 
 fn is_loopback_url(url: &Url) -> bool {
@@ -242,33 +186,6 @@ fn is_loopback_url(url: &Url) -> bool {
         Some(url::Host::Ipv6(address)) => address.is_loopback(),
         _ => false,
     }
-}
-
-pub(crate) fn filter_forwardable_headers(headers: &HeaderMap) -> HeaderMap {
-    let mut forwarded = HeaderMap::new();
-    for (key, value) in headers {
-        if !is_hop_by_hop_header(key.as_str()) {
-            forwarded.append(key, value.clone());
-        }
-    }
-    forwarded
-}
-
-fn is_hop_by_hop_header(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        "accept-encoding"
-            | "connection"
-            | "content-length"
-            | "host"
-            | "keep-alive"
-            | "proxy-authenticate"
-            | "proxy-authorization"
-            | "te"
-            | "trailer"
-            | "transfer-encoding"
-            | "upgrade"
-    )
 }
 
 #[cfg(test)]

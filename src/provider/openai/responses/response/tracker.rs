@@ -1,5 +1,4 @@
 use async_openai::types::responses::ResponseStreamEvent as OpenaiResponseStreamEvent;
-use axum::http::HeaderMap;
 
 use crate::protocol::openai_responses::{
     ResponseErrorEvent, ResponseProjection, ResponseStreamEvent,
@@ -134,11 +133,8 @@ pub(crate) struct ResponsesUpstreamTracker {
 }
 
 impl ResponsesUpstreamTracker {
-    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
-        Self {
-            state: ResponsesUpstreamState::from_headers(headers),
-            ..Self::default()
-        }
+    pub(crate) fn new() -> Self {
+        Self::default()
     }
 
     pub(crate) fn scan_bytes(&mut self, chunk: &[u8]) {

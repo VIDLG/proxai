@@ -6,19 +6,19 @@ use valuable::Valuable;
 
 use crate::config::LogOutputFormat;
 use crate::formatting::{compact_tail, truncate_chars};
+
 use crate::provider::openai::responses::{
     ResponseOutputItemKind, ResponsesUpstreamEvent, ResponsesUpstreamState,
     ResponsesUpstreamStreamSnapshot,
 };
-use crate::provider::UpstreamResponseError;
-use crate::upstream::ContentType;
+use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
     compact_output_items_for_human, compact_tool_calls, full_count_map, join_call_maps,
     merge_count_maps, source_count_maps, string_count_map,
 };
 use super::record::ValuableJson;
-use super::upstream::{error_text, error_token};
+use super::upstream::{stream_error_text, stream_error_token};
 use super::{
     active_log_format, emit_json_log, extend_json_object, optional_f64, optional_u64,
     rename_json_field, UpstreamLogRecord,
@@ -199,7 +199,7 @@ pub(crate) enum ResponsesLogRecord<'a> {
     },
     StreamError {
         snapshot: &'a ResponsesUpstreamStreamSnapshot,
-        error: &'a UpstreamResponseError,
+        error: &'a UpstreamStreamError,
     },
 }
 
@@ -240,8 +240,9 @@ fn response_fields_from_snapshot(snapshot: &ResponsesUpstreamStreamSnapshot) -> 
 fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
     let head = &snapshot.head;
     let response = response_fields_from_snapshot(snapshot);
-    let rate_limit = snapshot.state.rate_limit;
-    let codex_limits = snapshot.state.codex_limits;
+    let limits = snapshot.metadata.limits;
+    let rate_limit = limits.rate;
+    let codex_limits = limits.codex;
 
     match active_log_format() {
         LogOutputFormat::Human => info!(
@@ -252,11 +253,7 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -313,21 +310,8 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
-                    (
-                        "sse",
-                        JsonValue::Bool(
-                            head.content_type.as_ref().is_some_and(ContentType::is_sse),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
+                    ("sse", JsonValue::Bool(head.is_sse())),
                     (
                         "rate_limit_limit_requests",
                         optional_u64(rate_limit.limit_requests),
@@ -395,67 +379,50 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
     }
 }
 
-fn emit_stream_error(snapshot: &ResponsesUpstreamStreamSnapshot, error: &UpstreamResponseError) {
+fn emit_stream_error(snapshot: &ResponsesUpstreamStreamSnapshot, error: &UpstreamStreamError) {
     emit_stream_error_with_diagnostic(snapshot, error, None);
 }
 
 pub(crate) fn emit_stream_error_with_diagnostic(
     snapshot: &ResponsesUpstreamStreamSnapshot,
-    error: &UpstreamResponseError,
+    error: &UpstreamStreamError,
     diagnostic_path: Option<&str>,
 ) {
     let head = &snapshot.head;
     let response = response_fields_from_snapshot(snapshot);
-    let rate_limit = snapshot.state.rate_limit;
-    let codex_limits = snapshot.state.codex_limits;
-    let response_error = match error {
-        UpstreamResponseError::Protocol(error) => Some(error),
-        _ => None,
+    let limits = snapshot.metadata.limits;
+    let rate_limit = limits.rate;
+    let codex_limits = limits.codex;
+    let (response_error_code, response_error_message) = match error {
+        UpstreamStreamError::Stream { message } => (None, Some(message.as_str())),
+        UpstreamStreamError::UnfinishedTool { .. } => (None, None),
     };
     let sequence_number = match error {
-        UpstreamResponseError::UnfinishedTool { sequence_number } => *sequence_number,
+        UpstreamStreamError::UnfinishedTool { sequence_number } => *sequence_number,
         _ => response.sequence_number,
     };
-    let error_code = if response_error
-        .map(|value| value.code.as_str())
-        .unwrap_or("")
-        .is_empty()
-    {
+    let error_code = if response_error_code.unwrap_or("").is_empty() {
         response.error_code.clone()
     } else {
-        response_error
-            .map(|value| value.code.as_str())
-            .unwrap_or("")
-            .to_string()
+        response_error_code.unwrap_or("").to_string()
     };
-    let error_message = if response_error
-        .map(|value| value.message.as_str())
-        .unwrap_or("")
-        .is_empty()
-    {
+    let error_message = if response_error_message.unwrap_or("").is_empty() {
         response.error_message.clone()
     } else {
-        response_error
-            .map(|value| value.message.as_str())
-            .unwrap_or("")
-            .to_string()
+        response_error_message.unwrap_or("").to_string()
     };
     let error_param = response.error_param.clone();
 
     match active_log_format() {
         LogOutputFormat::Human => warn!(
-            event = error_token(error),
+            event = stream_error_token(error),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -493,7 +460,7 @@ pub(crate) fn emit_stream_error_with_diagnostic(
             codex_secondary_reset_after_secs = codex_limits.secondary_reset_after_secs,
             codex_secondary_window_minutes = codex_limits.secondary_window_minutes,
             codex_primary_over_secondary_percent = codex_limits.primary_over_secondary_percent,
-            err = error_text(error),
+            err = stream_error_text(error),
         ),
         LogOutputFormat::Json => {
             let mut payload = response.to_json_value();
@@ -515,21 +482,8 @@ pub(crate) fn emit_stream_error_with_diagnostic(
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
-                    (
-                        "sse",
-                        JsonValue::Bool(
-                            head.content_type.as_ref().is_some_and(ContentType::is_sse),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
+                    ("sse", JsonValue::Bool(head.is_sse())),
                     ("error_code", JsonValue::String(error_code)),
                     ("error_message", JsonValue::String(error_message)),
                     ("error_param", JsonValue::String(error_param)),
@@ -599,10 +553,10 @@ pub(crate) fn emit_stream_error_with_diagnostic(
                         "codex_primary_over_secondary_percent",
                         optional_f64(codex_limits.primary_over_secondary_percent),
                     ),
-                    ("err", JsonValue::String(error_text(error).to_string())),
+                    ("err", JsonValue::String(stream_error_text(error))),
                 ],
             );
-            emit_json_log("WARN", error_token(error), payload);
+            emit_json_log("WARN", stream_error_token(error), payload);
         }
     }
 }

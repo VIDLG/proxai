@@ -1,13 +1,17 @@
 use axum::body::{to_bytes, Body};
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderValue, Method, Response, StatusCode, Uri};
+use axum::http::Response;
 use axum::response::IntoResponse;
-use axum::{http, routing::any, Router};
-use capture::CaptureController;
+use axum::{routing::any, Router};
+use capture::{CaptureController, CaptureSession};
 
-use serde_json::json;
-use std::collections::BTreeSet;
+use getset::{CopyGetters, Getters};
+use headers::{ContentLength, HeaderMapExt};
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tower::limit::ConcurrencyLimitLayer;
+use tower::ServiceBuilder;
+use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{field::Empty, info_span, Instrument};
 
 pub mod capture;
@@ -15,12 +19,16 @@ pub mod config;
 pub mod diagnostics;
 pub mod error;
 pub mod formatting;
+pub mod http_model;
+pub(crate) mod http_utils;
 pub mod ingress;
 pub mod logging;
 pub mod mcp;
 pub mod paths;
+pub(crate) mod pipeline;
 pub mod protocol;
 pub mod provider;
+pub mod request;
 pub mod routing;
 pub mod sse;
 pub mod translation;
@@ -31,28 +39,31 @@ use config::{
 };
 pub use error::Error;
 use error::{InternalError, RequestError, Result};
-use ingress::prepare_inbound_request;
 pub use logging::TOOL_NAME_ALIASES;
-use logging::{ForwardedRequestEvent, RequestBodySizes};
-use protocol::RequestProtocol;
-use provider::{ProviderSendContext, ProviderSendRequest, ProviderTransport};
-use routing::{resolve_route, EffectiveDefaultProviderNames, EffectiveRoute};
-use translation::{translate_request, translate_response};
+use pipeline::{run_provider_flow, InboundHttpFlow};
+use protocol::ProviderProtocol;
+use provider::ProviderTransport;
+use request::RequestId;
+use routing::{EffectiveDefaultProviderNames, EffectiveRoute};
 
-#[derive(Clone)]
+#[derive(Clone, Getters, CopyGetters)]
 pub struct AppState {
+    provider_protocols: BTreeMap<String, ProviderProtocol>,
     default_provider_names: EffectiveDefaultProviderNames,
-    providers: std::collections::BTreeMap<String, ProviderTransport>,
+    providers: BTreeMap<String, ProviderTransport>,
     routes: Vec<EffectiveRoute>,
+    #[getset(get_copy = "pub(crate)")]
     error_response_format: ErrorResponseFormat,
+    #[getset(get = "pub(crate)")]
     capture: CaptureController,
-    sse_tool_call_timeout: Option<Duration>,
+    max_request_body_bytes: usize,
+    max_concurrent_requests: usize,
 }
 
 impl AppState {
     pub fn new(
         default_provider_names: DefaultProviderNamesConfig,
-        providers: std::collections::BTreeMap<String, ProviderConfig>,
+        providers: BTreeMap<String, ProviderConfig>,
         routes: Vec<RouteConfig>,
     ) -> Result<Self> {
         let provider_transports = providers
@@ -61,7 +72,7 @@ impl AppState {
                 let transport = ProviderTransport::build(name, config)?;
                 Ok((transport.name().to_string(), transport))
             })
-            .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
+            .collect::<Result<BTreeMap<_, _>>>()?;
         let provider_protocols = provider_transports
             .values()
             .map(|transport| (transport.name().to_string(), transport.protocol()))
@@ -72,13 +83,25 @@ impl AppState {
         let effective_routes = EffectiveRoute::build(&provider_protocols, routes)?;
 
         Ok(Self {
+            provider_protocols,
             default_provider_names: effective_default_provider_names,
             providers: provider_transports,
             routes: effective_routes,
             error_response_format: ErrorResponseFormat::Text,
             capture: CaptureController::new(None, CaptureConfig::default()),
-            sse_tool_call_timeout: Some(Duration::from_secs(120)),
+            max_request_body_bytes: 50 * 1024 * 1024,
+            max_concurrent_requests: 64,
         })
+    }
+
+    pub fn with_server_limits(
+        mut self,
+        max_request_body_bytes: usize,
+        max_concurrent_requests: usize,
+    ) -> Self {
+        self.max_request_body_bytes = max_request_body_bytes;
+        self.max_concurrent_requests = max_concurrent_requests;
+        self
     }
 
     pub fn with_error_response_format(mut self, format: ErrorResponseFormat) -> Self {
@@ -97,12 +120,22 @@ impl AppState {
     }
 
     pub fn with_sse_tool_call_timeout(mut self, timeout: Option<Duration>) -> Self {
-        self.sse_tool_call_timeout = timeout;
+        // Unlike provider read_idle_timeout, this semantic stream timeout is not baked into
+        // the reqwest client and can be applied to built provider transports.
+        for provider in self.providers.values_mut() {
+            provider.set_sse_tool_call_timeout(timeout);
+        }
         self
     }
 
     pub fn capture_controller(&self) -> CaptureController {
         self.capture.clone()
+    }
+
+    pub(crate) fn provider(&self, name: &str) -> Result<&ProviderTransport> {
+        self.providers
+            .get(name)
+            .ok_or_else(|| InternalError::InvalidProviderResolution(name.to_string()).into())
     }
 
     pub async fn serve(
@@ -117,6 +150,11 @@ impl AppState {
             .route("/chat/completions", any(proxy))
             .route("/v1/messages", any(proxy))
             .route("/messages", any(proxy))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(ConcurrencyLimitLayer::new(self.max_concurrent_requests))
+                    .layer(RequestBodyLimitLayer::new(self.max_request_body_bytes)),
+            )
             .with_state(self);
 
         axum::serve(listener, app)
@@ -126,197 +164,81 @@ impl AppState {
     }
 }
 
-async fn proxy(
-    State(state): State<AppState>,
-    method: Method,
-    uri: Uri,
-    headers: HeaderMap,
-    request: Request<Body>,
-) -> impl IntoResponse {
-    let request_id = request_id();
-    let span = info_span!("request", request_id, request_reasoning_effort = Empty);
-    let inbound_request_context = ProxyRequestContext {
-        request_id,
-        started: Instant::now(),
-        span: span.clone(),
-    };
-    let content_length = headers
-        .get(http::header::CONTENT_LENGTH)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
+async fn proxy(State(state): State<AppState>, request: Request<Body>) -> impl IntoResponse {
+    let request_id = generate_request_id();
+    let raw_request_id: u64 = request_id.into();
+    let span = info_span!(
+        "request",
+        request_id = raw_request_id,
+        request_reasoning_effort = Empty
+    );
+    let started = Instant::now();
+    let capture = state.capture().session(request_id);
+    let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    let content_length = request
+        .headers()
+        .typed_get::<ContentLength>()
+        .map(|value| value.0);
 
     span.in_scope(|| {
         tracing::debug!(
             event = "recv",
-            request_id,
+            request_id = raw_request_id,
             method = %method,
-            path = uri.path(),
+            path,
             content_length,
         );
     });
 
-    let format = state.error_response_format;
-    let response = proxy_inner(
-        state,
-        method,
-        uri,
-        headers,
-        request,
-        inbound_request_context,
-    )
-    .instrument(span)
-    .await
-    .unwrap_or_else(|error| error_response(error, format));
+    let format = state.error_response_format();
+    let response = proxy_inner(state, request, request_id, started, span.clone(), capture)
+        .instrument(span)
+        .await
+        .unwrap_or_else(|error| error.into_response_with_format(format));
     response
-}
-
-struct ProxyRequestContext {
-    request_id: u64,
-    started: Instant,
-    span: tracing::Span,
-}
-
-fn request_id() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or_default()
-}
-
-fn request_protocol_for_path(path: &str) -> Result<RequestProtocol, RequestError> {
-    match path {
-        "/v1/responses" | "/responses" => Ok(RequestProtocol::OpenaiResponses),
-        "/v1/chat/completions" | "/chat/completions" => Ok(RequestProtocol::OpenaiChatCompletions),
-        "/v1/messages" | "/messages" => Ok(RequestProtocol::AnthropicMessages),
-        _ => Err(RequestError::Invalid(format!(
-            "unsupported request path `{path}`"
-        ))),
-    }
-}
-
-fn error_response(error: error::Error, format: ErrorResponseFormat) -> Response<Body> {
-    tracing::warn!(error = %error, "request failed");
-
-    match &error {
-        error::Error::Request(_) => return error.into_response(),
-        error::Error::Config(_) | error::Error::Internal(_) => return error.into_response(),
-        error::Error::Upstream(_) => {}
-    }
-
-    let status = StatusCode::BAD_GATEWAY;
-    match format {
-        ErrorResponseFormat::Text => {
-            let mut response = Response::new(Body::from(error.to_string()));
-            *response.status_mut() = status;
-            response.headers_mut().insert(
-                http::header::CONTENT_TYPE,
-                HeaderValue::from_static("text/plain; charset=utf-8"),
-            );
-            response
-        }
-        ErrorResponseFormat::Json => {
-            let body = serde_json::to_vec(&json!({
-                "error": {
-                    "message": error.to_string(),
-                    "type": status.canonical_reason().unwrap_or("error"),
-                    "code": status.as_u16(),
-                }
-            }))
-            .expect("serialize error response");
-            let mut response = Response::new(Body::from(body));
-            *response.status_mut() = status;
-            response.headers_mut().insert(
-                http::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json"),
-            );
-            response
-        }
-    }
 }
 
 async fn proxy_inner(
     state: AppState,
-    method: Method,
-    uri: Uri,
-    inbound_request_headers: HeaderMap,
     inbound_request: Request<Body>,
-    inbound_request_context: ProxyRequestContext,
+    request_id: RequestId,
+    started: Instant,
+    span: tracing::Span,
+    capture: CaptureSession,
 ) -> Result<Response<Body>> {
-    let request_started = inbound_request_context.started;
-    let request_id = inbound_request_context.request_id;
-    let request_span = inbound_request_context.span;
-    let inbound_request_body_bytes = to_bytes(inbound_request.into_body(), usize::MAX)
+    let (inbound_request_parts, inbound_body) = inbound_request.into_parts();
+    let body_bytes = to_bytes(inbound_body, usize::MAX)
         .await
         .map_err(RequestError::Body)?;
-    let request_protocol = request_protocol_for_path(uri.path())?;
-    let inbound_request = prepare_inbound_request(request_protocol, &inbound_request_body_bytes)?;
+    let inbound_http = InboundHttpFlow::new(
+        inbound_request_parts,
+        body_bytes,
+        request_id,
+        started,
+        span,
+        capture,
+        state.error_response_format(),
+    );
+    let prepared_provider = inbound_http
+        .prepare_inbound()
+        .await?
+        .route_to_provider(
+            &state.default_provider_names,
+            &state.routes,
+            &state.provider_protocols,
+        )?
+        .translate_to_provider()?;
 
-    let capture = state.capture.session(request_id);
+    let transport = state.provider(prepared_provider.provider_name())?;
 
-    capture
-        .capture_inbound_request(
-            &method,
-            &uri,
-            &inbound_request_headers,
-            &inbound_request_body_bytes,
-        )
-        .await?;
+    run_provider_flow(prepared_provider, transport).await
+}
 
-    let resolved_route = resolve_route(
-        &state.default_provider_names,
-        &state.routes,
-        inbound_request.protocol(),
-        inbound_request.model(),
-    )?;
-    let provider = state
-        .providers
-        .get(&resolved_route.provider)
-        .ok_or_else(|| InternalError::InvalidProviderResolution(resolved_route.provider.clone()))?;
-    let forwarded_request = translate_request(
-        &inbound_request,
-        provider.protocol(),
-        &resolved_route.upstream_model,
-    )?;
-    let forwarded_request_view = forwarded_request.view();
-
-    let forwarded_request_body_len = forwarded_request.body().len();
-
-    request_span.in_scope(|| {
-        ForwardedRequestEvent {
-            request_id,
-            method: method.clone(),
-            uri: uri.clone(),
-            request_sizes: RequestBodySizes {
-                inbound: inbound_request_body_bytes.len() as u64,
-                forwarded: forwarded_request_body_len as u64,
-            },
-            request_protocol: inbound_request.protocol(),
-            provider: resolved_route.provider.clone(),
-            route_name: resolved_route.route_name.clone(),
-            provider_protocol: provider.protocol(),
-            forwarded_request: forwarded_request_view,
-            capture: capture.forwarded_request_enabled(),
-        }
-        .emit()
-    });
-
-    let response = provider
-        .send(
-            ProviderSendRequest::new(
-                method.clone(),
-                &uri,
-                &inbound_request_headers,
-                forwarded_request,
-            ),
-            ProviderSendContext::new(
-                request_id,
-                request_started,
-                &capture,
-                &request_span,
-                state.sse_tool_call_timeout,
-                state.error_response_format,
-            ),
-        )
-        .await?;
-    Ok(translate_response(inbound_request.protocol(), provider.protocol(), response).await?)
+fn generate_request_id() -> RequestId {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or_default()
+        .into()
 }

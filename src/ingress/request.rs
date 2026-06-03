@@ -24,6 +24,14 @@ impl PreparedInboundRequest {
             Self::AnthropicMessages(request) => &request.model,
         }
     }
+
+    pub(crate) fn body_len(&self) -> usize {
+        match self {
+            Self::OpenaiResponses(request) => request.normalized_payload.to_string().len(),
+            Self::OpenaiChatCompletions(request) => request.normalized_payload.to_string().len(),
+            Self::AnthropicMessages(request) => request.normalized_payload.to_string().len(),
+        }
+    }
 }
 
 pub(crate) fn prepare_inbound_request(

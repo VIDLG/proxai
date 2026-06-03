@@ -4,14 +4,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use axum::http::{HeaderMap, Method, Uri};
 use serde_json::Value;
 
-use crate::upstream::ContentType;
+use crate::http_utils::ContentType;
+use crate::request::RequestId;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CaptureRecord {
-    pub request_id: u64,
+    pub request_id: RequestId,
     pub prefix: String,
     pub inbound_request: Option<InboundRequestArtifacts>,
-    pub forwarded_request: Option<ForwardedRequestArtifacts>,
+    pub provider_request: Option<ProviderRequestArtifacts>,
     pub upstream_response: Option<UpstreamResponseArtifacts>,
     pub outbound_response: Option<OutboundResponseArtifacts>,
 }
@@ -23,7 +24,7 @@ pub struct InboundRequestArtifacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ForwardedRequestArtifacts {
+pub struct ProviderRequestArtifacts {
     pub metadata_path: PathBuf,
     pub body_path: PathBuf,
 }
@@ -43,7 +44,7 @@ pub struct OutboundResponseArtifacts {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureShowTarget {
     InboundRequest,
-    ForwardedRequest,
+    ProviderRequest,
     UpstreamResponse,
     OutboundResponse,
 }
@@ -82,14 +83,14 @@ impl CaptureDestination {
             .join(format!("{}-inbound-request.body.json", self.prefix.0))
     }
 
-    pub(crate) fn forwarded_request_metadata_path(&self) -> PathBuf {
+    pub(crate) fn provider_request_metadata_path(&self) -> PathBuf {
         self.dir
-            .join(format!("{}-forwarded-request.metadata.json", self.prefix.0))
+            .join(format!("{}-provider-request.metadata.json", self.prefix.0))
     }
 
-    pub(crate) fn forwarded_request_body_path(&self) -> PathBuf {
+    pub(crate) fn provider_request_body_path(&self) -> PathBuf {
         self.dir
-            .join(format!("{}-forwarded-request.body.json", self.prefix.0))
+            .join(format!("{}-provider-request.body.json", self.prefix.0))
     }
 
     pub(crate) fn upstream_response_headers_path(&self) -> PathBuf {
@@ -115,25 +116,26 @@ impl CaptureDestination {
 }
 
 impl CapturePrefix {
-    pub(crate) fn new(request_id: u64) -> Self {
+    pub(crate) fn new(request_id: RequestId) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        Self(format!("{timestamp}-{request_id:06}"))
+        let raw_request_id: u64 = request_id.into();
+        Self(format!("{timestamp}-{raw_request_id:06}"))
     }
 }
 
 pub(crate) struct InboundRequestCapture<'a> {
-    pub(crate) request_id: u64,
+    pub(crate) request_id: RequestId,
     pub(crate) method: &'a Method,
     pub(crate) uri: &'a Uri,
     pub(crate) headers: &'a HeaderMap,
     pub(crate) body: &'a [u8],
 }
 
-pub(crate) struct ForwardedRequestCapture<'a> {
-    pub(crate) request_id: u64,
+pub(crate) struct ProviderRequestCapture<'a> {
+    pub(crate) request_id: RequestId,
     pub(crate) method: &'a Method,
     pub(crate) url: &'a str,
     pub(crate) headers: &'a HeaderMap,

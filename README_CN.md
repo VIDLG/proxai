@@ -101,13 +101,13 @@ proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview
 
 简要来说，配置主要围绕这些部分组织：
 
-- `[server]`
+- `[server]`（监听地址，以及请求体大小和并发限制）
 - `[mcp]`
 - `[routing.default_provider_names]`
 - `[[routing.routes]]`
 - `[providers.<name>]`
 - `[tool_calls]`
-- `[capture]`（`inbound_request_enabled` / `forwarded_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`）
+- `[capture]`（`inbound_request_enabled` / `provider_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`）
 - `[logging]`
 - `[error_responses]`
 
@@ -172,14 +172,14 @@ Anthropic Messages provider 如果连接官方 Anthropic API，建议使用
 - `cargo run -- capture enable`
 - `cargo run -- capture disable`
 - `cargo run -- capture enable inbound-request`
-- `cargo run -- capture enable forwarded-request`
+- `cargo run -- capture enable provider-request`
 - `cargo run -- capture enable upstream-response`
 - `cargo run -- capture enable outbound-response`
 
 常用临时调试覆盖项：
 
 - `cargo run -- --capture-inbound-request`
-- `cargo run -- --capture-forwarded-request`
+- `cargo run -- --capture-provider-request`
 - `cargo run -- --capture-upstream-response`
 - `cargo run -- --capture-outbound-response`
 

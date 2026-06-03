@@ -2,23 +2,24 @@ use serde_json::Value;
 
 use crate::error::{InternalError, Result};
 use crate::protocol::openai_responses::RequestProjection;
+use crate::request::RequestId;
 
 use super::projection::project_payload;
 use super::summary::RequestSummary;
 
 #[derive(Debug, Clone)]
-pub(crate) struct PreparedForwardedRequest {
+pub(crate) struct PreparedProviderRequest {
     pub(crate) body: Vec<u8>,
     pub(crate) projection: RequestProjection,
     pub(crate) summary: RequestSummary,
 }
 
-pub(crate) fn prepare_forwarded_request(
+pub(crate) fn prepare_provider_request(
     payload: &Value,
-    request_id: Option<u64>,
+    request_id: Option<RequestId>,
     request_model: &str,
     upstream_model: &str,
-) -> Result<PreparedForwardedRequest, InternalError> {
+) -> Result<PreparedProviderRequest, InternalError> {
     let projection = project_payload(payload, request_id).unwrap_or_default();
     let summary = RequestSummary::from(&projection);
 
@@ -30,7 +31,7 @@ pub(crate) fn prepare_forwarded_request(
     }
     let body = serde_json::to_vec(&payload)?;
 
-    Ok(PreparedForwardedRequest {
+    Ok(PreparedProviderRequest {
         body,
         projection,
         summary,

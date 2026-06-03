@@ -1,39 +1,38 @@
 use serde_json::json;
 
-use super::{prepare_forwarded_request, ToolCategory};
+use super::{prepare_provider_request, ToolCategory};
 
 #[test]
-fn prepare_forwarded_request_preserves_model_when_route_keeps_it() {
+fn prepare_provider_request_preserves_model_when_route_keeps_it() {
     let payload = json!({
         "model": "claude-request",
         "max_tokens": 256,
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared = prepare_forwarded_request(&payload, "claude-request", "claude-request").unwrap();
-    let forwarded = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
+    let prepared = prepare_provider_request(&payload, "claude-request", "claude-request").unwrap();
+    let provider_body = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
-    assert_eq!(forwarded["model"], "claude-request");
+    assert_eq!(provider_body["model"], "claude-request");
 }
 
 #[test]
-fn prepare_forwarded_request_rewrites_model() {
+fn prepare_provider_request_rewrites_model() {
     let payload = json!({
         "model": "claude-request",
         "max_tokens": 256,
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared =
-        prepare_forwarded_request(&payload, "claude-request", "claude-upstream").unwrap();
-    let forwarded = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
+    let prepared = prepare_provider_request(&payload, "claude-request", "claude-upstream").unwrap();
+    let provider_body = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
-    assert_eq!(forwarded["model"], "claude-upstream");
+    assert_eq!(provider_body["model"], "claude-upstream");
     assert_eq!(prepared.projection.model, "claude-upstream");
 }
 
 #[test]
-fn prepare_forwarded_request_builds_projection_and_summary() {
+fn prepare_provider_request_builds_projection_and_summary() {
     let payload = json!({
         "model": "claude-request",
         "max_tokens": 256,
@@ -53,7 +52,7 @@ fn prepare_forwarded_request_builds_projection_and_summary() {
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared = prepare_forwarded_request(&payload, "claude-request", "claude-request").unwrap();
+    let prepared = prepare_provider_request(&payload, "claude-request", "claude-request").unwrap();
 
     assert_eq!(prepared.projection.model, "claude-request");
     assert_eq!(prepared.projection.max_tokens, 256);

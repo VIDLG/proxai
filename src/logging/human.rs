@@ -312,7 +312,7 @@ fn format_forward(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) 
             write!(writer, " {}", paint(color, value, style))?;
         }
     }
-    if let Some(value) = fields.u64("forwarded_request_bytes") {
+    if let Some(value) = fields.u64("provider_request_bytes") {
         write_traffic(writer, color, TrafficDirection::Up, value)?;
     }
     if let Some(model) = fields.text("model") {
@@ -487,7 +487,7 @@ fn format_stream_end(
         }
         (None, None) => {}
     }
-    if let Some(value) = fields.u64("forwarded_request_bytes") {
+    if let Some(value) = fields.u64("provider_request_bytes") {
         write_traffic(writer, color, TrafficDirection::Up, value)?;
     }
     if let Some(value) = fields.u64("down") {

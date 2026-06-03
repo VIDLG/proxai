@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::protocol::openai::chat_completions::{ReasoningEffort, ServiceTier, Verbosity};
 use crate::provider::openai::chat_completions::ToolCategory;
 
-use super::prepare_forwarded_request;
+use super::prepare_provider_request;
 
 #[test]
 fn request_projection_uses_async_openai_parse_for_standard_chat_fields() {
@@ -39,7 +39,7 @@ fn request_projection_uses_async_openai_parse_for_standard_chat_fields() {
         "stream_options": {"include_usage": true, "include_obfuscation": false}
     });
 
-    let prepared = prepare_forwarded_request(&payload, "gpt-4.1", "gpt-4.1").unwrap();
+    let prepared = prepare_provider_request(&payload, "gpt-4.1", "gpt-4.1").unwrap();
 
     assert_eq!(prepared.projection.model.as_deref(), Some("gpt-4.1"));
     assert_eq!(prepared.projection.stream, Some(true));
@@ -71,13 +71,13 @@ fn request_projection_uses_async_openai_parse_for_standard_chat_fields() {
 }
 
 #[test]
-fn prepare_forwarded_request_rewrites_model() {
+fn prepare_provider_request_rewrites_model() {
     let payload = json!({
         "model": "gpt-4.1",
         "messages": [{"role": "user", "content": "Hello"}]
     });
 
-    let prepared = prepare_forwarded_request(&payload, "gpt-4.1", "gpt-4.1-mini").unwrap();
+    let prepared = prepare_provider_request(&payload, "gpt-4.1", "gpt-4.1-mini").unwrap();
     let rewritten = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
     assert_eq!(

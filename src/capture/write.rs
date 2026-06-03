@@ -8,19 +8,21 @@ use tokio::fs;
 use tracing::info;
 
 use crate::error::Result;
-use crate::upstream::{ContentType, UpstreamResponseHead};
+use crate::http_model::UpstreamResponseHead;
+use crate::http_utils::ContentType;
+use crate::request::RequestId;
 
-use super::model::{CaptureDestination, ForwardedRequestCapture, InboundRequestCapture};
+use super::model::{CaptureDestination, InboundRequestCapture, ProviderRequestCapture};
 
 pub(crate) struct InboundRequestCaptureArtifacts {
-    pub(crate) request_id: u64,
+    pub(crate) request_id: RequestId,
     pub(crate) prefix: String,
     pub(crate) metadata_path: PathBuf,
     pub(crate) body_path: PathBuf,
 }
 
-pub(crate) struct ForwardedRequestCaptureArtifacts {
-    pub(crate) request_id: u64,
+pub(crate) struct ProviderRequestCaptureArtifacts {
+    pub(crate) request_id: RequestId,
     pub(crate) prefix: String,
     pub(crate) metadata_path: PathBuf,
     pub(crate) body_path: PathBuf,
@@ -44,7 +46,7 @@ pub(crate) async fn capture_inbound_request(
     fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?).await?;
     fs::write(&body_path, pretty_json_or_raw(request.body)?).await?;
     info!(
-        request_id = request.request_id,
+        request_id = %request.request_id,
         event = "capture",
         kind = "inbound_request",
         metadata_path = %metadata_path.display(),
@@ -59,12 +61,12 @@ pub(crate) async fn capture_inbound_request(
     })
 }
 
-pub(crate) async fn capture_forwarded_request(
+pub(crate) async fn capture_provider_request(
     destination: &CaptureDestination,
-    request: ForwardedRequestCapture<'_>,
-) -> Result<ForwardedRequestCaptureArtifacts> {
-    let metadata_path = destination.forwarded_request_metadata_path();
-    let body_path = destination.forwarded_request_body_path();
+    request: ProviderRequestCapture<'_>,
+) -> Result<ProviderRequestCaptureArtifacts> {
+    let metadata_path = destination.provider_request_metadata_path();
+    let body_path = destination.provider_request_body_path();
     ensure_parent_dir(&metadata_path).await?;
 
     let metadata = serde_json::json!({
@@ -72,20 +74,20 @@ pub(crate) async fn capture_forwarded_request(
         "method": request.method.as_str(),
         "url": request.url,
         "headers": sanitized_headers(request.headers),
-        "forwarded_request_body_bytes": request.body.len(),
+        "provider_request_body_bytes": request.body.len(),
         "normalized": request.normalized_payload.is_some(),
     });
     fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?).await?;
     fs::write(&body_path, pretty_json_or_raw(request.body)?).await?;
     info!(
-        request_id = request.request_id,
+        request_id = %request.request_id,
         event = "capture",
-        kind = "forwarded_request",
+        kind = "provider_request",
         metadata_path = %metadata_path.display(),
         body_path = %body_path.display(),
         "capture saved"
     );
-    Ok(ForwardedRequestCaptureArtifacts {
+    Ok(ProviderRequestCaptureArtifacts {
         request_id: request.request_id,
         prefix: destination.prefix_string(),
         metadata_path,
@@ -95,24 +97,23 @@ pub(crate) async fn capture_forwarded_request(
 
 pub(crate) async fn capture_upstream_response_headers(
     destination: &CaptureDestination,
-    request_id: u64,
+    request_id: RequestId,
     head: &UpstreamResponseHead,
-    headers: &HeaderMap,
 ) -> Result<PathBuf> {
     let headers_path = destination.upstream_response_headers_path();
     ensure_parent_dir(&headers_path).await?;
     let metadata = serde_json::json!({
         "request_id": request_id,
         "status": head.status.as_u16(),
-        "content_type": head.content_type.as_ref().map(ToString::to_string).unwrap_or_default(),
-        "content_length": head.content_length,
-        "transfer_encoding": head.transfer_encoding.clone().unwrap_or_default(),
+        "content_type": head.content_type().map(|value| value.to_string()).unwrap_or_default(),
+        "content_length": head.content_length(),
+        "transfer_encoding": head.transfer_encoding().unwrap_or_default(),
         "ttfb_ms": head.ttfb.as_millis() as u64,
-        "headers": sanitized_headers(headers),
+        "headers": sanitized_headers(&head.headers),
     });
     fs::write(&headers_path, serde_json::to_vec_pretty(&metadata)?).await?;
     info!(
-        request_id,
+        request_id = %request_id,
         event = "capture",
         kind = "upstream_response_headers",
         status = head.status.as_u16(),
@@ -143,7 +144,7 @@ pub(crate) async fn capture_upstream_response_body(
 
 pub(crate) async fn capture_outbound_response_headers(
     destination: &CaptureDestination,
-    request_id: u64,
+    request_id: RequestId,
     status: axum::http::StatusCode,
     content_type: Option<&str>,
     headers: &HeaderMap,
@@ -158,7 +159,7 @@ pub(crate) async fn capture_outbound_response_headers(
     });
     fs::write(&headers_path, serde_json::to_vec_pretty(&metadata)?).await?;
     info!(
-        request_id,
+        request_id = %request_id,
         event = "capture",
         kind = "outbound_response_headers",
         status = status.as_u16(),

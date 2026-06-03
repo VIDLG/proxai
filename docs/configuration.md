@@ -28,7 +28,14 @@ Important files and folders:
 
 ## `[server]`
 
-Controls the local listen host and port.
+Controls the local listen host, port, and HTTP admission limits.
+
+Fields:
+
+- `host`
+- `port`
+- `max_request_body_bytes`: maximum inbound request body accepted by the local proxy
+- `max_concurrent_requests`: maximum concurrently handled local proxy requests
 
 ## `[mcp]`
 
@@ -199,8 +206,8 @@ It is always enabled and must be greater than zero.
 
 - `inbound_request_enabled = true` writes the client request as proxai received it to the predefined app-dir `captures/` folder.
 - `inbound_request_enabled = false` disables inbound request capture output.
-- `forwarded_request_enabled = true` writes the request proxai actually forwards upstream after adaptation.
-- `forwarded_request_enabled = false` disables forwarded request capture output.
+- `provider_request_enabled = true` writes the request proxai actually forwards upstream after adaptation.
+- `provider_request_enabled = false` disables provider request capture output.
 - `upstream_response_enabled = true` writes upstream response headers and raw upstream response bytes.
 - `upstream_response_enabled = false` disables upstream response capture output.
 - `outbound_response_enabled = true` writes the final response proxai sends back to the client.
@@ -213,8 +220,8 @@ request writes artifacts there.
 These are runtime defaults. For persistent local changes, the CLI supports:
 
 - `proxai capture status`
-- `proxai capture enable [inbound-request|forwarded-request|upstream-response|outbound-response]`
-- `proxai capture disable [inbound-request|forwarded-request|upstream-response|outbound-response]`
+- `proxai capture enable [inbound-request|provider-request|upstream-response|outbound-response]`
+- `proxai capture disable [inbound-request|provider-request|upstream-response|outbound-response]`
 
 For temporary debugging, run-time flags can enable any capture phase for a single process invocation.
 

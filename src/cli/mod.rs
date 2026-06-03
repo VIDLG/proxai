@@ -7,6 +7,7 @@ use proxai::{
     protocol::RequestProtocol,
     AppState,
 };
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -54,9 +55,9 @@ struct RunArgs {
     #[arg(long)]
     capture_inbound_request: bool,
 
-    /// Temporarily enable forwarded request capture for this run.
+    /// Temporarily enable provider request capture for this run.
     #[arg(long)]
-    capture_forwarded_request: bool,
+    capture_provider_request: bool,
 
     /// Temporarily enable upstream response capture for this run.
     #[arg(long)]
@@ -70,7 +71,7 @@ struct RunArgs {
 #[derive(Debug, Clone, ValueEnum)]
 enum CaptureTarget {
     InboundRequest,
-    ForwardedRequest,
+    ProviderRequest,
     UpstreamResponse,
     OutboundResponse,
 }
@@ -170,8 +171,8 @@ fn capture_status(args: CaptureStatusArgs) -> anyhow::Result<()> {
         config.capture.inbound_request_enabled
     );
     println!(
-        "  forwarded_request_enabled: {}",
-        config.capture.forwarded_request_enabled
+        "  provider_request_enabled: {}",
+        config.capture.provider_request_enabled
     );
     println!(
         "  upstream_response_enabled: {}",
@@ -205,8 +206,8 @@ fn set_capture_defaults(args: CaptureToggleArgs, enabled: bool) -> anyhow::Resul
         Some(CaptureTarget::InboundRequest) => {
             capture["inbound_request_enabled"] = toml_edit::value(enabled);
         }
-        Some(CaptureTarget::ForwardedRequest) => {
-            capture["forwarded_request_enabled"] = toml_edit::value(enabled);
+        Some(CaptureTarget::ProviderRequest) => {
+            capture["provider_request_enabled"] = toml_edit::value(enabled);
         }
         Some(CaptureTarget::UpstreamResponse) => {
             capture["upstream_response_enabled"] = toml_edit::value(enabled);
@@ -216,7 +217,7 @@ fn set_capture_defaults(args: CaptureToggleArgs, enabled: bool) -> anyhow::Resul
         }
         None => {
             capture["inbound_request_enabled"] = toml_edit::value(enabled);
-            capture["forwarded_request_enabled"] = toml_edit::value(enabled);
+            capture["provider_request_enabled"] = toml_edit::value(enabled);
             capture["upstream_response_enabled"] = toml_edit::value(enabled);
             capture["outbound_response_enabled"] = toml_edit::value(enabled);
         }
@@ -230,14 +231,14 @@ fn set_capture_defaults(args: CaptureToggleArgs, enabled: bool) -> anyhow::Resul
     println!(
         "  inbound_request_enabled: {}",
         match args.target {
-            Some(CaptureTarget::ForwardedRequest)
+            Some(CaptureTarget::ProviderRequest)
             | Some(CaptureTarget::UpstreamResponse)
             | Some(CaptureTarget::OutboundResponse) => "unchanged".to_string(),
             _ => enabled.to_string(),
         }
     );
     println!(
-        "  forwarded_request_enabled: {}",
+        "  provider_request_enabled: {}",
         match args.target {
             Some(CaptureTarget::InboundRequest)
             | Some(CaptureTarget::UpstreamResponse)
@@ -249,7 +250,7 @@ fn set_capture_defaults(args: CaptureToggleArgs, enabled: bool) -> anyhow::Resul
         "  upstream_response_enabled: {}",
         match args.target {
             Some(CaptureTarget::InboundRequest)
-            | Some(CaptureTarget::ForwardedRequest)
+            | Some(CaptureTarget::ProviderRequest)
             | Some(CaptureTarget::OutboundResponse) => "unchanged".to_string(),
             _ => enabled.to_string(),
         }
@@ -258,7 +259,7 @@ fn set_capture_defaults(args: CaptureToggleArgs, enabled: bool) -> anyhow::Resul
         "  outbound_response_enabled: {}",
         match args.target {
             Some(CaptureTarget::InboundRequest)
-            | Some(CaptureTarget::ForwardedRequest)
+            | Some(CaptureTarget::ProviderRequest)
             | Some(CaptureTarget::UpstreamResponse) => "unchanged".to_string(),
             _ => enabled.to_string(),
         }
@@ -303,8 +304,8 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
     if cli.capture_inbound_request {
         config.capture.inbound_request_enabled = true;
     }
-    if cli.capture_forwarded_request {
-        config.capture.forwarded_request_enabled = true;
+    if cli.capture_provider_request {
+        config.capture.provider_request_enabled = true;
     }
     if cli.capture_upstream_response {
         config.capture.upstream_response_enabled = true;
@@ -358,7 +359,7 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
     );
 
     let address = SocketAddr::new(config.server.host, config.server.port);
-    let mut providers = std::collections::BTreeMap::new();
+    let mut providers = BTreeMap::new();
     providers.insert(
         default_provider_name.clone(),
         proxai::config::ProviderConfig {
@@ -391,6 +392,10 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
         config.routing.routes.clone(),
     )
     .context("parse upstream URL")?
+    .with_server_limits(
+        config.server.max_request_body_bytes,
+        config.server.max_concurrent_requests,
+    )
     .with_error_response_format(config.error_responses.format)
     .with_capture_dir(Some(app_paths.captures_dir.clone()))
     .with_capture_config(config.capture)
@@ -417,6 +422,22 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
         "  {} {}",
         startup_label(startup_color, "mcp:"),
         startup_url(startup_color, &mcp::endpoint_url(mcp_address))
+    );
+    println!(
+        "  {} {}",
+        startup_label(startup_color, "max_request_body_bytes:"),
+        startup_value(
+            startup_color,
+            &config.server.max_request_body_bytes.to_string()
+        )
+    );
+    println!(
+        "  {} {}",
+        startup_label(startup_color, "max_concurrent_requests:"),
+        startup_value(
+            startup_color,
+            &config.server.max_concurrent_requests.to_string()
+        )
     );
     println!(
         "  {} {}",
@@ -555,8 +576,8 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
     );
     println!(
         "  {} {}",
-        startup_label(startup_color, "capture.forwarded_request_enabled:"),
-        startup_bool(startup_color, config.capture.forwarded_request_enabled)
+        startup_label(startup_color, "capture.provider_request_enabled:"),
+        startup_bool(startup_color, config.capture.provider_request_enabled)
     );
     println!(
         "  {} {}",

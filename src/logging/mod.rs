@@ -19,7 +19,8 @@ use tracing_subscriber::EnvFilter;
 
 use crate::config::{LogLevel, LogOutputFormat};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::provider::ForwardedRequestView;
+use crate::provider::ProviderRequestView;
+use crate::request::RequestId;
 pub(crate) use anthropic_messages::AnthropicLogRecord;
 pub(crate) use openai_chat_completions::ChatLogRecord;
 pub(crate) use openai_responses::{
@@ -27,7 +28,7 @@ pub(crate) use openai_responses::{
     ResponsesLogRecord,
 };
 pub(crate) use output_alias::compact_output_item_kind;
-use record::{ForwardFields, ValuableJson};
+use record::{ProviderRequestFields, ValuableJson};
 pub(crate) use tool_alias::compact_tool_call_name;
 pub use tool_alias::TOOL_NAME_ALIASES;
 pub(crate) use upstream::UpstreamLogRecord;
@@ -69,13 +70,13 @@ pub fn init(
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RequestBodySizes {
-    pub(crate) inbound: u64,
-    pub(crate) forwarded: u64,
+    pub(crate) inbound: usize,
+    pub(crate) provider: usize,
 }
 
 /// Request-level logging payload for the initial forward event.
-pub(crate) struct ForwardedRequestEvent<'a> {
-    pub(crate) request_id: u64,
+pub(crate) struct ProviderRequestEvent<'a> {
+    pub(crate) request_id: RequestId,
     pub(crate) method: Method,
     pub(crate) uri: Uri,
     pub(crate) request_sizes: RequestBodySizes,
@@ -83,19 +84,19 @@ pub(crate) struct ForwardedRequestEvent<'a> {
     pub(crate) provider: String,
     pub(crate) route_name: Option<String>,
     pub(crate) provider_protocol: ProviderProtocol,
-    pub(crate) forwarded_request: ForwardedRequestView<'a>,
+    pub(crate) provider_request: ProviderRequestView<'a>,
     pub(crate) capture: bool,
 }
 
 impl RequestBodySizes {
     pub(crate) fn delta(self) -> i128 {
-        self.forwarded as i128 - self.inbound as i128
+        self.provider as i128 - self.inbound as i128
     }
 }
 
-impl ForwardedRequestEvent<'_> {
+impl ProviderRequestEvent<'_> {
     pub(crate) fn emit(&self) {
-        let fields = ForwardFields::from(self);
+        let fields = ProviderRequestFields::from(self);
         tracing::Span::current().record(
             "request_reasoning_effort",
             if fields.reasoning_effort.is_empty() {
@@ -109,7 +110,7 @@ impl ForwardedRequestEvent<'_> {
                 event = "fwd",
                 method = fields.method,
                 path = fields.path,
-                forwarded_request_bytes = fields.forwarded_request_bytes,
+                provider_request_bytes = fields.provider_request_bytes,
                 inbound_request_bytes = fields.inbound_request_bytes,
                 request_protocol = fields.request_protocol,
                 provider = fields.provider,

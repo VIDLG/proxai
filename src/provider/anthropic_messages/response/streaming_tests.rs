@@ -1,15 +1,9 @@
-use axum::http::HeaderMap;
-
-use super::{AnthropicResponseTracker, AnthropicSseObserver};
-use crate::provider::BodyObserver;
+use super::super::tracker::AnthropicResponseTracker;
+use super::AnthropicSseObserver;
+use crate::upstream::BodyObserver;
 
 fn sse_tracker() -> AnthropicResponseTracker {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    AnthropicResponseTracker::from_headers(&headers)
+    AnthropicResponseTracker::new()
 }
 
 #[test]
@@ -23,7 +17,7 @@ fn sse_eof_without_message_stop_is_incomplete() {
     );
 
     assert!(!observer.saw_terminal);
-    assert!(observer.error_message.is_none());
+    assert!(observer.stream_error.is_none());
 }
 
 #[test]
@@ -37,5 +31,5 @@ fn sse_eof_after_message_stop_is_complete() {
     );
 
     assert!(observer.saw_terminal);
-    assert!(observer.error_message.is_none());
+    assert!(observer.stream_error.is_none());
 }

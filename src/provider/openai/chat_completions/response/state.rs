@@ -1,4 +1,5 @@
-use crate::upstream::{UpstreamResponseHead, UpstreamStreamMetrics};
+use crate::http_model::UpstreamResponseHead;
+use crate::upstream::UpstreamStreamMetrics;
 
 use super::observed::{ChatResponseObservation, ObservedChatState, ObservedChatUpdate};
 use super::summary::ChatResponseSummary;

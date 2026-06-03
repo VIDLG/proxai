@@ -1,18 +1,31 @@
+use axum::http::HeaderMap;
+
 pub(crate) mod anthropic_messages;
 
-mod error;
-mod forwarded;
 pub(crate) mod openai;
-mod outbound;
-
+mod request;
+mod response;
 mod transport;
 
-pub(crate) use error::{normalize_upstream_error_body, UpstreamResponseError};
-pub(crate) use forwarded::{ForwardedRequest, ForwardedRequestView};
-pub(crate) use outbound::{
-    build_outbound_stream, outbound_response, streaming_response, BodyAction, BodyObserver,
-    MonitoredBodyStream, OutboundResponseContext, OutboundStream, ProgressFields,
-};
+use crate::protocol::ProviderProtocol;
+
+pub(crate) use request::{ProviderRequest, ProviderRequestView};
+pub(crate) use response::{ProviderNonStreamingResponseContext, ProviderStreamingResponseContext};
 pub(crate) use transport::{
-    filter_forwardable_headers, ProviderSendContext, ProviderSendRequest, ProviderTransport,
+    ProviderStreamingResponsePolicy, ProviderTransport, ProviderTransportError,
 };
+
+pub(crate) fn apply_request_auth_headers(
+    protocol: ProviderProtocol,
+    headers: &mut HeaderMap,
+    api_key: &str,
+) {
+    match protocol {
+        ProviderProtocol::OpenaiResponses | ProviderProtocol::OpenaiChatCompletions => {
+            openai::apply_request_auth_headers(headers, api_key);
+        }
+        ProviderProtocol::AnthropicMessages => {
+            anthropic_messages::apply_request_auth_headers(headers, api_key);
+        }
+    }
+}

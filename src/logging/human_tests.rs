@@ -28,7 +28,7 @@ fn forward_line_renders_translation_tools_and_request_id() {
     fields.insert("request_protocol_alias", "chat");
     fields.insert("provider", "anthropic");
     fields.insert("provider_protocol_alias", "ant");
-    fields.insert("forwarded_request_bytes", "1536");
+    fields.insert("provider_request_bytes", "1536");
     fields.insert("model", "claude-sonnet");
     fields.insert("stream", "true");
     fields.insert("max_output_tokens", "4096");

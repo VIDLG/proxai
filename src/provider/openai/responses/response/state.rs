@@ -1,12 +1,10 @@
-use axum::http::HeaderMap;
-
 use crate::protocol::openai_responses::ResponseProjection;
 use crate::protocol::ErrorObject;
 
-use crate::provider::UpstreamResponseError;
-use crate::upstream::{ContentType, UpstreamResponseHead, UpstreamStreamMetrics};
+use crate::http_model::UpstreamResponseHead;
+use crate::upstream::{UpstreamStreamError, UpstreamStreamMetrics};
 
-use super::limits::{CodexLimits, RateLimit};
+use super::limits::ResponseLimits;
 use super::observed::{ObservedState, ObservedUpdate};
 use super::summary::ResponseSummary;
 
@@ -28,8 +26,6 @@ pub(crate) struct ResponseSnapshot {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ResponsesUpstreamState {
-    is_sse: bool,
-
     /// The latest response snapshot received from upstream `response.*` events.
     pub(crate) latest_snapshot: Option<ResponseSnapshot>,
 
@@ -44,30 +40,9 @@ pub(crate) struct ResponsesUpstreamState {
     /// diagnostics.
     observed: ObservedState,
     pub(crate) sequence_number: Option<u64>,
-    pub(crate) rate_limit: RateLimit,
-    pub(crate) codex_limits: CodexLimits,
 }
 
 impl ResponsesUpstreamState {
-    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
-        Self {
-            is_sse: headers
-                .get(axum::http::header::CONTENT_TYPE)
-                .and_then(|value| ContentType::try_from(value).ok())
-                .is_some_and(|content_type| content_type.is_sse()),
-            rate_limit: RateLimit::from_headers(headers),
-            codex_limits: CodexLimits::from_headers(headers),
-            ..Self::default()
-        }
-    }
-
-    /// Non-SSE responses are complete when the HTTP body reaches EOF. SSE
-    /// responses need an explicit terminal event; EOF without one is a closed
-    /// or incomplete stream.
-    pub(crate) fn eof_is_complete(&self, saw_terminal_event: bool) -> bool {
-        !self.is_sse || saw_terminal_event
-    }
-
     pub(crate) fn set_snapshot(
         &mut self,
         kind: ResponseSnapshotKind,
@@ -118,11 +93,25 @@ impl ResponsesUpstreamState {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ResponsesUpstreamMetadata {
+    pub(crate) limits: ResponseLimits,
+}
+
+impl ResponsesUpstreamMetadata {
+    pub(crate) fn from_head(head: &UpstreamResponseHead) -> Self {
+        Self {
+            limits: ResponseLimits::from_headers(&head.headers),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ResponsesUpstreamStreamSnapshot {
     pub(crate) head: UpstreamResponseHead,
     pub(crate) metrics: UpstreamStreamMetrics,
     pub(crate) state: ResponsesUpstreamState,
+    pub(crate) metadata: ResponsesUpstreamMetadata,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +127,6 @@ pub(crate) enum ResponsesUpstreamEvent {
     },
     Error {
         snapshot: Box<ResponsesUpstreamStreamSnapshot>,
-        error: UpstreamResponseError,
+        error: UpstreamStreamError,
     },
 }

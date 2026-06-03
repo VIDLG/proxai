@@ -1,16 +1,12 @@
 use serde_json::{Map, Value};
 
-use super::insert_nulls;
-
-pub(super) fn normalize_message_object(object: &mut Map<String, Value>) {
-    normalize_message_status_fields(object);
+fn insert_nulls(object: &mut Map<String, Value>, keys: &[&str]) {
+    for key in keys {
+        object.entry((*key).to_string()).or_insert(Value::Null);
+    }
 }
 
-pub(super) fn normalize_message_delta(delta: &mut Map<String, Value>) {
-    normalize_message_status_fields(delta);
-}
-
-fn normalize_message_status_fields(object: &mut Map<String, Value>) {
+pub(super) fn normalize_message_status_fields(object: &mut Map<String, Value>) {
     insert_nulls(
         object,
         &["container", "stop_details", "stop_reason", "stop_sequence"],

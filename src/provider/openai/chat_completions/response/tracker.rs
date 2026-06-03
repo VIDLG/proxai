@@ -1,12 +1,12 @@
 use axum::http::HeaderMap;
 use std::time::Duration;
 
+use crate::http_model::UpstreamResponseHead;
 use crate::protocol::openai::chat_completions::{
     ChatResponseProjection, ChatStreamResponseProjection, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,
 };
 use crate::sse::SseEventScanner;
-use crate::upstream::UpstreamResponseHead;
 
 use super::observed::{observed_updates_from_stream_projection, ChatResponseObservation};
 use super::state::ChatUpstreamResponseState;

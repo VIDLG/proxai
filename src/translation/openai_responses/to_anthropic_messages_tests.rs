@@ -5,7 +5,10 @@ use crate::protocol::anthropic::messages::ContentBlock;
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Response};
 
-use super::{translate_request_payload, translate_response_payload, OpenaiResponseBody};
+use super::{
+    translate_request_payload, translate_response_payload, translate_streaming_response,
+    OpenaiResponseBody,
+};
 
 #[test]
 fn translates_text_request_with_instructions_and_function_tool() {
@@ -284,7 +287,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
         ))
         .unwrap();
 
-    let translated = super::translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 

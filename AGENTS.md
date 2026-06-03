@@ -47,7 +47,7 @@ If a route omits `request_protocol`, match the actual inbound protocol detected 
 Keep protocol names separate from chain phases:
 
 - `inbound_request`
-- `forwarded_request`
+- `provider_request`
 - `upstream_response`
 - `outbound_response`
 

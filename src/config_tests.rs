@@ -13,6 +13,8 @@ fn loads_config_file_with_providers_and_routes() {
 [server]
 host = "0.0.0.0"
 port = 19090
+max_request_body_bytes = 123456
+max_concurrent_requests = 17
 
 [mcp]
 host = "127.0.0.1"
@@ -67,7 +69,7 @@ format = "json"
 
 [capture]
 inbound_request_enabled = true
-forwarded_request_enabled = false
+provider_request_enabled = false
 upstream_response_enabled = false
 outbound_response_enabled = false
 "#,
@@ -77,6 +79,8 @@ outbound_response_enabled = false
     let config = AppConfig::load(path.clone()).unwrap();
     assert_eq!(config.server.host, "0.0.0.0".parse::<IpAddr>().unwrap());
     assert_eq!(config.server.port, 19090);
+    assert_eq!(config.server.max_request_body_bytes, 123456);
+    assert_eq!(config.server.max_concurrent_requests, 17);
     assert_eq!(config.mcp.host, "127.0.0.1".parse::<IpAddr>().unwrap());
     assert_eq!(config.mcp.port, 19091);
     assert_eq!(
@@ -118,7 +122,7 @@ outbound_response_enabled = false
     assert_eq!(config.error_responses.format, ErrorResponseFormat::Json);
     assert_eq!(config.tool_calls.timeout, Duration::from_secs(120));
     assert!(config.capture.inbound_request_enabled);
-    assert!(!config.capture.forwarded_request_enabled);
+    assert!(!config.capture.provider_request_enabled);
     assert!(!config.capture.upstream_response_enabled);
     assert!(!config.capture.outbound_response_enabled);
 

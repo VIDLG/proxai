@@ -107,13 +107,13 @@ For the full field-by-field explanation, see:
 
 In short, the config is organized around:
 
-- `[server]`
+- `[server]` (listen address plus request body and concurrency limits)
 - `[mcp]`
 - `[routing.default_provider_names]`
 - `[[routing.routes]]`
 - `[providers.<name>]`
 - `[tool_calls]`
-- `[capture]` (`inbound_request_enabled` / `forwarded_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`)
+- `[capture]` (`inbound_request_enabled` / `provider_request_enabled` / `upstream_response_enabled` / `outbound_response_enabled`)
 - `[logging]`
 - `[error_responses]`
 
@@ -182,14 +182,14 @@ Useful capture control commands:
 - `cargo run -- capture enable`
 - `cargo run -- capture disable`
 - `cargo run -- capture enable inbound-request`
-- `cargo run -- capture enable forwarded-request`
+- `cargo run -- capture enable provider-request`
 - `cargo run -- capture enable upstream-response`
 - `cargo run -- capture enable outbound-response`
 
 Useful temporary debug overrides for a single run:
 
 - `cargo run -- --capture-inbound-request`
-- `cargo run -- --capture-forwarded-request`
+- `cargo run -- --capture-provider-request`
 - `cargo run -- --capture-upstream-response`
 - `cargo run -- --capture-outbound-response`
 

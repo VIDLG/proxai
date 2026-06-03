@@ -1,19 +1,20 @@
 use crate::protocol::anthropic::messages::ThinkingConfigParam;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::provider::ForwardedRequestView;
+use crate::provider::ProviderRequestView;
+use crate::request::RequestId;
 use serde_json::{json, Value as JsonValue};
 use valuable::Valuable;
 
 use super::request_hints;
-use super::ForwardedRequestEvent;
+use super::ProviderRequestEvent;
 
 #[derive(Debug, Clone, Valuable)]
-pub(crate) struct ForwardFields {
-    pub(crate) request_id: u64,
+pub(crate) struct ProviderRequestFields {
+    pub(crate) request_id: RequestId,
     pub(crate) method: String,
     pub(crate) path: String,
-    pub(crate) forwarded_request_bytes: u64,
-    pub(crate) inbound_request_bytes: u64,
+    pub(crate) provider_request_bytes: usize,
+    pub(crate) inbound_request_bytes: usize,
     pub(crate) request_delta_bytes: i128,
     pub(crate) request_protocol: String,
     pub(crate) provider: String,
@@ -32,17 +33,17 @@ pub(crate) struct ForwardFields {
     pub(crate) capture: bool,
 }
 
-impl From<&ForwardedRequestEvent<'_>> for ForwardFields {
-    fn from(event: &ForwardedRequestEvent<'_>) -> Self {
+impl From<&ProviderRequestEvent<'_>> for ProviderRequestFields {
+    fn from(event: &ProviderRequestEvent<'_>) -> Self {
         let mut hint_parts = Vec::new();
-        let projection_hints = request_hints::render_projection_compact(&event.forwarded_request);
+        let projection_hints = request_hints::render_projection_compact(&event.provider_request);
         if !projection_hints.is_empty() {
             hint_parts.push(projection_hints);
         }
         hint_parts.extend(request_hints::render_summary_compact(
-            &event.forwarded_request,
+            &event.provider_request,
         ));
-        let common = ForwardRequestCommonFields::from(&event.forwarded_request);
+        let common = ProviderRequestCommonFields::from(&event.provider_request);
 
         let request_hints = hint_parts.join(" ");
 
@@ -50,7 +51,7 @@ impl From<&ForwardedRequestEvent<'_>> for ForwardFields {
             request_id: event.request_id,
             method: event.method.to_string(),
             path: event.uri.to_string(),
-            forwarded_request_bytes: event.request_sizes.forwarded,
+            provider_request_bytes: event.request_sizes.provider,
             inbound_request_bytes: event.request_sizes.inbound,
             request_delta_bytes: event.request_sizes.delta(),
             request_protocol: event.request_protocol.to_string(),
@@ -117,17 +118,17 @@ fn compact_provider_protocol(protocol: ProviderProtocol) -> &'static str {
     }
 }
 
-struct ForwardRequestCommonFields {
+struct ProviderRequestCommonFields {
     model: String,
     reasoning_effort: String,
     stream: Option<bool>,
     max_output_tokens: Option<u32>,
 }
 
-impl From<&ForwardedRequestView<'_>> for ForwardRequestCommonFields {
-    fn from(forwarded_request: &ForwardedRequestView<'_>) -> Self {
-        match forwarded_request {
-            ForwardedRequestView::OpenaiResponses {
+impl From<&ProviderRequestView<'_>> for ProviderRequestCommonFields {
+    fn from(provider_request: &ProviderRequestView<'_>) -> Self {
+        match provider_request {
+            ProviderRequestView::OpenaiResponses {
                 projection,
                 summary: _,
             } => Self {
@@ -141,7 +142,7 @@ impl From<&ForwardedRequestView<'_>> for ForwardRequestCommonFields {
                 stream: projection.stream,
                 max_output_tokens: projection.max_output_tokens,
             },
-            ForwardedRequestView::OpenaiChatCompletions {
+            ProviderRequestView::OpenaiChatCompletions {
                 projection,
                 summary: _,
             } => Self {
@@ -153,7 +154,7 @@ impl From<&ForwardedRequestView<'_>> for ForwardRequestCommonFields {
                 stream: projection.stream,
                 max_output_tokens: projection.max_completion_tokens.or(projection.max_tokens),
             },
-            ForwardedRequestView::AnthropicMessages {
+            ProviderRequestView::AnthropicMessages {
                 projection,
                 summary: _,
             } => Self {
@@ -182,13 +183,13 @@ pub(crate) trait ValuableJson {
     fn to_json_value(&self) -> JsonValue;
 }
 
-impl ValuableJson for ForwardFields {
+impl ValuableJson for ProviderRequestFields {
     fn to_json_value(&self) -> JsonValue {
         json!({
             "request_id": self.request_id,
             "method": self.method,
             "path": self.path,
-            "forwarded_request_bytes": self.forwarded_request_bytes,
+            "provider_request_bytes": self.provider_request_bytes,
             "inbound_request_bytes": self.inbound_request_bytes,
             "request_delta_bytes": self.request_delta_bytes,
             "request_protocol": self.request_protocol,

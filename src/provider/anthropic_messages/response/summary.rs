@@ -47,7 +47,7 @@ impl From<&Message> for AnthropicResponseSummary {
             summary.record_content_block(block);
         }
         if let Some(reason) = message.stop_reason {
-            summary.add_stop_reason(reason);
+            summary.increment_stop_reason(reason);
         }
         summary
     }
@@ -62,33 +62,31 @@ impl From<&MessageStreamEvent> for AnthropicResponseSummary {
                     summary.record_content_block(block);
                 }
                 if let Some(reason) = event.message.stop_reason {
-                    summary.add_stop_reason(reason);
+                    summary.increment_stop_reason(reason);
                 }
             }
-            MessageStreamEvent::MessageDelta(event) => summary.record_message_delta(event),
+            MessageStreamEvent::MessageDelta(event) => summary.observe_message_delta(event),
             MessageStreamEvent::ContentBlockStart(event) => {
-                summary.add_item_kind(AnthropicResponseOutputKind::StreamContentBlockStart);
+                summary.increment_item_kind(AnthropicResponseOutputKind::StreamContentBlockStart);
                 summary.record_content_block(&event.content_block);
             }
-            MessageStreamEvent::ContentBlockDelta(event) => match &event.delta {
-                ContentBlockDelta::TextDelta(_) => {
-                    summary.add_item_kind(AnthropicResponseOutputKind::StreamTextDelta)
+            MessageStreamEvent::ContentBlockDelta(event) => {
+                match &event.delta {
+                    ContentBlockDelta::TextDelta(_) => {
+                        summary.increment_item_kind(AnthropicResponseOutputKind::StreamTextDelta)
+                    }
+                    ContentBlockDelta::InputJsonDelta(_) => summary
+                        .increment_item_kind(AnthropicResponseOutputKind::StreamInputJsonDelta),
+                    ContentBlockDelta::CitationsDelta(_) => summary
+                        .increment_item_kind(AnthropicResponseOutputKind::StreamCitationsDelta),
+                    ContentBlockDelta::ThinkingDelta(_) => summary
+                        .increment_item_kind(AnthropicResponseOutputKind::StreamThinkingDelta),
+                    ContentBlockDelta::SignatureDelta(_) => summary
+                        .increment_item_kind(AnthropicResponseOutputKind::StreamSignatureDelta),
                 }
-                ContentBlockDelta::InputJsonDelta(_) => {
-                    summary.add_item_kind(AnthropicResponseOutputKind::StreamInputJsonDelta)
-                }
-                ContentBlockDelta::CitationsDelta(_) => {
-                    summary.add_item_kind(AnthropicResponseOutputKind::StreamCitationsDelta)
-                }
-                ContentBlockDelta::ThinkingDelta(_) => {
-                    summary.add_item_kind(AnthropicResponseOutputKind::StreamThinkingDelta)
-                }
-                ContentBlockDelta::SignatureDelta(_) => {
-                    summary.add_item_kind(AnthropicResponseOutputKind::StreamSignatureDelta)
-                }
-            },
+            }
             MessageStreamEvent::ContentBlockStop(_) => {
-                summary.add_item_kind(AnthropicResponseOutputKind::StreamContentBlockStop);
+                summary.increment_item_kind(AnthropicResponseOutputKind::StreamContentBlockStop);
             }
             MessageStreamEvent::Ping(_) | MessageStreamEvent::MessageStop(_) => {}
         }
@@ -112,71 +110,73 @@ impl AnthropicResponseSummary {
         }
     }
 
-    fn record_message_delta(&mut self, event: &MessageDeltaEvent) {
+    fn observe_message_delta(&mut self, event: &MessageDeltaEvent) {
         if let Some(reason) = event.delta.stop_reason {
-            self.add_stop_reason(reason);
+            self.increment_stop_reason(reason);
         }
         if let Some(server_tool_use) = event.usage.server_tool_use.as_ref() {
             if server_tool_use.web_search_requests > 0 {
-                self.add_server_tool_use_count("web_search", server_tool_use.web_search_requests);
+                self.increment_server_tool_use("web_search", server_tool_use.web_search_requests);
             }
             if server_tool_use.web_fetch_requests > 0 {
-                self.add_server_tool_use_count("web_fetch", server_tool_use.web_fetch_requests);
+                self.increment_server_tool_use("web_fetch", server_tool_use.web_fetch_requests);
             }
         }
     }
 
     fn record_content_block(&mut self, block: &ContentBlock) {
         match block {
-            ContentBlock::Text(_) => self.add_item_kind(AnthropicResponseOutputKind::Text),
-            ContentBlock::Thinking(_) => self.add_item_kind(AnthropicResponseOutputKind::Thinking),
+            ContentBlock::Text(_) => self.increment_item_kind(AnthropicResponseOutputKind::Text),
+            ContentBlock::Thinking(_) => {
+                self.increment_item_kind(AnthropicResponseOutputKind::Thinking)
+            }
             ContentBlock::RedactedThinking(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::RedactedThinking)
+                self.increment_item_kind(AnthropicResponseOutputKind::RedactedThinking)
             }
             ContentBlock::ToolUse(block) => {
-                self.add_item_kind(AnthropicResponseOutputKind::ToolUse);
+                self.increment_item_kind(AnthropicResponseOutputKind::ToolUse);
                 *self.tool_uses.entry(block.name.clone()).or_default() += 1;
             }
             ContentBlock::ServerToolUse(block) => {
-                self.add_item_kind(AnthropicResponseOutputKind::ServerToolUse);
+                self.increment_item_kind(AnthropicResponseOutputKind::ServerToolUse);
                 *self
                     .server_tool_uses
                     .entry(block.name.to_string())
                     .or_default() += 1;
             }
             ContentBlock::WebSearchToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::WebSearchToolResult)
+                self.increment_item_kind(AnthropicResponseOutputKind::WebSearchToolResult)
             }
             ContentBlock::WebFetchToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::WebFetchToolResult)
+                self.increment_item_kind(AnthropicResponseOutputKind::WebFetchToolResult)
             }
             ContentBlock::CodeExecutionToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::CodeExecutionToolResult)
+                self.increment_item_kind(AnthropicResponseOutputKind::CodeExecutionToolResult)
             }
             ContentBlock::BashCodeExecutionToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::BashCodeExecutionToolResult)
+                self.increment_item_kind(AnthropicResponseOutputKind::BashCodeExecutionToolResult)
             }
-            ContentBlock::TextEditorCodeExecutionToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::TextEditorCodeExecutionToolResult)
-            }
+            ContentBlock::TextEditorCodeExecutionToolResult(_) => self.increment_item_kind(
+                AnthropicResponseOutputKind::TextEditorCodeExecutionToolResult,
+            ),
             ContentBlock::ToolSearchToolResult(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::ToolSearchToolResult)
+                self.increment_item_kind(AnthropicResponseOutputKind::ToolSearchToolResult)
             }
             ContentBlock::ContainerUpload(_) => {
-                self.add_item_kind(AnthropicResponseOutputKind::ContainerUpload)
+                self.increment_item_kind(AnthropicResponseOutputKind::ContainerUpload)
             }
         }
     }
 
-    fn add_item_kind(&mut self, kind: AnthropicResponseOutputKind) {
+    fn increment_item_kind(&mut self, kind: AnthropicResponseOutputKind) {
         *self.output_items.entry(kind).or_default() += 1;
     }
 
-    fn add_stop_reason(&mut self, reason: StopReason) {
+    fn increment_stop_reason(&mut self, reason: StopReason) {
         *self.stop_reasons.entry(reason.to_string()).or_default() += 1;
     }
 
-    fn add_server_tool_use_count(&mut self, name: &str, count: u32) {
+    fn increment_server_tool_use(&mut self, name: &str, count: u32) {
         *self.server_tool_uses.entry(name.to_string()).or_default() += u64::from(count);
     }
 }

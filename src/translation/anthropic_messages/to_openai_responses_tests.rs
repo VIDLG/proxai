@@ -6,7 +6,7 @@ use crate::sse::SseEventScanner;
 use axum::body::{to_bytes, Body};
 use axum::http::{header, Response};
 
-use super::{translate_message, translate_response};
+use super::{translate_message, translate_non_streaming_response, translate_streaming_response};
 
 fn assert_openai_response_stream_events_deserialize(body: &str) {
     let mut scanner = SseEventScanner::default();
@@ -124,7 +124,7 @@ async fn translates_provider_message_with_required_nullable_normalization() {
         ))
         .unwrap();
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_non_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let _: async_openai::types::responses::Response = serde_json::from_value(value.clone())
@@ -156,7 +156,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
@@ -189,7 +189,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
@@ -227,7 +227,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
@@ -259,7 +259,7 @@ data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":
         ))
         .unwrap();
 
-    let translated = translate_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).await.unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 

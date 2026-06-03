@@ -70,22 +70,19 @@ pub(crate) fn translate_request_payload(
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) async fn translate_response(
+pub(crate) async fn translate_streaming_response(
     response: Response<Body>,
 ) -> Result<Response<Body>, InternalError> {
-    if response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.starts_with("text/event-stream"))
-    {
-        return Ok(translate_sse_response_with_error_encoder(
-            response,
-            AnthropicToOpenaiStreamTranslator::default(),
-            encode_openai_responses_error_event,
-        ));
-    }
+    Ok(translate_sse_response_with_error_encoder(
+        response,
+        AnthropicToOpenaiStreamTranslator::default(),
+        encode_openai_responses_error_event,
+    ))
+}
 
+pub(crate) async fn translate_non_streaming_response(
+    response: Response<Body>,
+) -> Result<Response<Body>, InternalError> {
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX)
         .await

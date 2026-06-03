@@ -4,6 +4,7 @@ use std::fs as stdfs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::paths;
+use crate::request::RequestId;
 use crate::upstream::UpstreamStreamMetrics;
 
 use super::sse::{is_terminal_event, is_tool_argument_done};
@@ -14,12 +15,12 @@ use crate::protocol::ErrorObject;
 use crate::sse::SseEventScanner;
 
 pub(super) struct ResponsesStreamDiagnostics {
-    request_id: u64,
+    request_id: RequestId,
     recent_tail: Vec<u8>,
 }
 
 impl ResponsesStreamDiagnostics {
-    pub(super) fn new(request_id: u64) -> Self {
+    pub(super) fn new(request_id: RequestId) -> Self {
         Self {
             request_id,
             recent_tail: Vec::new(),
@@ -47,9 +48,9 @@ impl ResponsesStreamDiagnostics {
             .duration_since(UNIX_EPOCH)
             .ok()?
             .as_millis();
+        let raw_request_id: u64 = self.request_id.into();
         let path = logs_dir.join(format!(
-            "unfinished-tool-diagnostic-{timestamp}-{:06}.json",
-            self.request_id
+            "unfinished-tool-diagnostic-{timestamp}-{raw_request_id:06}.json"
         ));
 
         let body =
@@ -62,7 +63,7 @@ impl ResponsesStreamDiagnostics {
 
 #[derive(Serialize)]
 struct UnfinishedToolDiagnosticReport {
-    request_id: u64,
+    request_id: RequestId,
     kind: &'static str,
     error: DiagnosticErrorSection,
     upstream: DiagnosticUpstreamSection,
@@ -75,7 +76,7 @@ struct UnfinishedToolDiagnosticReport {
 
 impl UnfinishedToolDiagnosticReport {
     fn new(
-        request_id: u64,
+        request_id: RequestId,
         snapshot: &ResponsesUpstreamStreamSnapshot,
         recent_tail: &[u8],
     ) -> Self {
@@ -118,18 +119,8 @@ impl From<&ResponsesUpstreamStreamSnapshot> for DiagnosticUpstreamSection {
     fn from(snapshot: &ResponsesUpstreamStreamSnapshot) -> Self {
         Self {
             status: snapshot.head.status.as_u16(),
-            content_type: snapshot
-                .head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            transfer_encoding: snapshot
-                .head
-                .transfer_encoding
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            content_type: snapshot.head.content_type_text(),
+            transfer_encoding: snapshot.head.transfer_encoding_text(),
             sse: snapshot.head.is_sse(),
             ttfb_ms: snapshot.head.ttfb.as_millis() as u64,
         }

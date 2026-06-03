@@ -28,7 +28,7 @@ impl ProxaiMcpServer {
 #[serde(rename_all = "snake_case")]
 pub enum CaptureTarget {
     InboundRequest,
-    ForwardedRequest,
+    ProviderRequest,
     UpstreamResponse,
     OutboundResponse,
     All,
@@ -43,7 +43,7 @@ pub struct CaptureToggleParams {
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct CaptureShowParams {
     #[schemars(
-        description = "Which capture artifact group to show. Omit for inbound_request, forwarded_request, upstream_response, and outbound_response."
+        description = "Which capture artifact group to show. Omit for inbound_request, provider_request, upstream_response, and outbound_response."
     )]
     pub target: Option<CaptureShowSingleTarget>,
 }
@@ -52,7 +52,7 @@ pub struct CaptureShowParams {
 #[serde(rename_all = "snake_case")]
 pub enum CaptureShowSingleTarget {
     InboundRequest,
-    ForwardedRequest,
+    ProviderRequest,
     UpstreamResponse,
     OutboundResponse,
 }
@@ -78,8 +78,8 @@ impl ProxaiMcpServer {
                 status.defaults.inbound_request_enabled
             ),
             format!(
-                "defaults.forwarded_request_enabled: {}",
-                status.defaults.forwarded_request_enabled
+                "defaults.provider_request_enabled: {}",
+                status.defaults.provider_request_enabled
             ),
             format!(
                 "defaults.upstream_response_enabled: {}",
@@ -98,10 +98,10 @@ impl ProxaiMcpServer {
                     .unwrap_or_else(|| "none".to_string())
             ),
             format!(
-                "overrides.forwarded_request_enabled: {}",
+                "overrides.provider_request_enabled: {}",
                 status
                     .overrides
-                    .forwarded_request_enabled
+                    .provider_request_enabled
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "none".to_string())
             ),
@@ -126,8 +126,8 @@ impl ProxaiMcpServer {
                 status.effective.inbound_request_enabled
             ),
             format!(
-                "effective.forwarded_request_enabled: {}",
-                status.effective.forwarded_request_enabled
+                "effective.provider_request_enabled: {}",
+                status.effective.provider_request_enabled
             ),
             format!(
                 "effective.upstream_response_enabled: {}",
@@ -152,9 +152,9 @@ impl ProxaiMcpServer {
             CaptureTarget::InboundRequest => self
                 .capture
                 .set_inbound_request_enabled_override(Some(true)),
-            CaptureTarget::ForwardedRequest => self
+            CaptureTarget::ProviderRequest => self
                 .capture
-                .set_forwarded_request_enabled_override(Some(true)),
+                .set_provider_request_enabled_override(Some(true)),
             CaptureTarget::UpstreamResponse => self
                 .capture
                 .set_upstream_response_enabled_override(Some(true)),
@@ -165,7 +165,7 @@ impl ProxaiMcpServer {
                 .capture
                 .set_overrides(crate::capture::CaptureOverrides {
                     inbound_request_enabled: Some(true),
-                    forwarded_request_enabled: Some(true),
+                    provider_request_enabled: Some(true),
                     upstream_response_enabled: Some(true),
                     outbound_response_enabled: Some(true),
                 }),
@@ -179,9 +179,9 @@ impl ProxaiMcpServer {
             CaptureTarget::InboundRequest => self
                 .capture
                 .set_inbound_request_enabled_override(Some(false)),
-            CaptureTarget::ForwardedRequest => self
+            CaptureTarget::ProviderRequest => self
                 .capture
-                .set_forwarded_request_enabled_override(Some(false)),
+                .set_provider_request_enabled_override(Some(false)),
             CaptureTarget::UpstreamResponse => self
                 .capture
                 .set_upstream_response_enabled_override(Some(false)),
@@ -192,7 +192,7 @@ impl ProxaiMcpServer {
                 .capture
                 .set_overrides(crate::capture::CaptureOverrides {
                     inbound_request_enabled: Some(false),
-                    forwarded_request_enabled: Some(false),
+                    provider_request_enabled: Some(false),
                     upstream_response_enabled: Some(false),
                     outbound_response_enabled: Some(false),
                 }),
@@ -206,8 +206,8 @@ impl ProxaiMcpServer {
             Some(CaptureShowSingleTarget::InboundRequest) => {
                 Some(CaptureShowTarget::InboundRequest)
             }
-            Some(CaptureShowSingleTarget::ForwardedRequest) => {
-                Some(CaptureShowTarget::ForwardedRequest)
+            Some(CaptureShowSingleTarget::ProviderRequest) => {
+                Some(CaptureShowTarget::ProviderRequest)
             }
             Some(CaptureShowSingleTarget::UpstreamResponse) => {
                 Some(CaptureShowTarget::UpstreamResponse)

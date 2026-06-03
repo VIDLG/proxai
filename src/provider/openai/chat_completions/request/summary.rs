@@ -11,7 +11,11 @@ pub(crate) enum ToolCategory {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ToolInventoryItem {
     pub(crate) category: ToolCategory,
+    /// Total number of tool declarations in this category, including duplicate
+    /// names and built-in tools that do not expose a stable display name.
     pub(crate) count: usize,
+    /// Distinct display names we can extract for this category. This can be
+    /// smaller than `count` when names repeat or built-in tools are unnamed.
     pub(crate) names: Vec<String>,
 }
 

@@ -9,12 +9,14 @@ use crate::formatting::{compact_tail, format_count_map_with};
 use crate::provider::openai::chat_completions::{
     ChatResponseOutputKind, ChatUpstreamStreamSnapshot,
 };
+use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
     compact_output_items_for_human, compact_tool_calls, join_call_maps, merge_count_maps,
     source_count_maps, string_count_map,
 };
 use super::record::ValuableJson;
+use super::upstream::{stream_error_text, stream_error_token};
 use super::{
     active_log_format, emit_json_log, extend_json_object, rename_json_field, UpstreamLogRecord,
 };
@@ -150,7 +152,7 @@ pub(crate) enum ChatLogRecord<'a> {
     },
     StreamError {
         snapshot: &'a ChatUpstreamStreamSnapshot,
-        message: &'a str,
+        error: &'a UpstreamStreamError,
     },
 }
 
@@ -160,7 +162,7 @@ impl ChatLogRecord<'_> {
             Self::Upstream(record) => record.emit(),
             Self::Completed { snapshot } => emit_chat_stream_info("end", snapshot),
             Self::Closed { snapshot } => emit_chat_stream_info("closed", snapshot),
-            Self::StreamError { snapshot, message } => emit_chat_stream_error(snapshot, message),
+            Self::StreamError { snapshot, error } => emit_chat_stream_error(snapshot, error),
         }
     }
 }
@@ -182,11 +184,7 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -218,15 +216,7 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
                 ],
             );
@@ -235,24 +225,20 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
     }
 }
 
-fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, message: &str) {
+fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, error: &UpstreamStreamError) {
     let head = &snapshot.head;
     let response = chat_response_fields_from_snapshot(snapshot);
 
     match active_log_format() {
         LogOutputFormat::Human => warn!(
-            event = "stream-error",
+            event = stream_error_token(error),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
             duration_ms = snapshot.metrics.duration_ms(),
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            ct = head.content_type_text(),
             sse = head.is_sse(),
             response_id = response.id,
             model = response.model,
@@ -265,7 +251,7 @@ fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, message: &str) 
             output_items_human = response.output_items_human,
             finish_reasons = format_count_map_with(&response.finish_reasons, |key| key.clone()),
             calls_human = response.calls_human,
-            err = message,
+            err = stream_error_text(error),
         ),
         LogOutputFormat::Json => {
             let mut payload = response.to_json_value();
@@ -285,20 +271,12 @@ fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, message: &str) 
                         "duration_ms",
                         JsonValue::from(snapshot.metrics.duration_ms()),
                     ),
-                    (
-                        "ct",
-                        JsonValue::String(
-                            head.content_type
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_default(),
-                        ),
-                    ),
+                    ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
-                    ("err", JsonValue::String(message.to_string())),
+                    ("err", JsonValue::String(stream_error_text(error))),
                 ],
             );
-            emit_json_log("WARN", "stream-error", payload);
+            emit_json_log("WARN", stream_error_token(error), payload);
         }
     }
 }

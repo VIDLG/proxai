@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
 
 use super::ChatUpstreamBodyObserver;
-use crate::provider::BodyObserver;
+use crate::upstream::BodyObserver;
 
 fn sse_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
@@ -26,7 +26,7 @@ fn sse_eof_without_done_sentinel_is_incomplete() {
     );
 
     assert!(!observer.tracker.state.stream_done);
-    assert!(observer.error_message.is_none());
+    assert!(observer.stream_error.is_none());
 }
 
 #[test]
@@ -39,5 +39,5 @@ fn sse_eof_after_done_sentinel_is_complete() {
     observer.observe_chunk(b"data: [DONE]\n\n");
 
     assert!(observer.tracker.state.stream_done);
-    assert!(observer.error_message.is_none());
+    assert!(observer.stream_error.is_none());
 }

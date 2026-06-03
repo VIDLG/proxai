@@ -3,18 +3,21 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use axum::http::{HeaderMap, Method, StatusCode, Uri};
+use tracing::warn;
 
 use crate::config::CaptureConfig;
-use crate::error::Result;
-use crate::upstream::{ContentType, UpstreamResponseHead};
+
+use crate::http_model::UpstreamResponseHead;
+use crate::http_utils::ContentType;
+use crate::request::RequestId;
 
 use super::model::{
-    CaptureDestination, CaptureQuery, CaptureRecord, CaptureShowTarget, ForwardedRequestArtifacts,
-    ForwardedRequestCapture, InboundRequestCapture, OutboundResponseArtifacts,
+    CaptureDestination, CaptureQuery, CaptureRecord, CaptureShowTarget, InboundRequestCapture,
+    OutboundResponseArtifacts, ProviderRequestArtifacts, ProviderRequestCapture,
     UpstreamResponseArtifacts,
 };
 use super::write::{
-    capture_forwarded_request, capture_inbound_request, capture_outbound_response_headers,
+    capture_inbound_request, capture_outbound_response_headers, capture_provider_request,
     capture_upstream_response_body, capture_upstream_response_headers,
     UpstreamResponseCaptureWriter,
 };
@@ -30,7 +33,7 @@ pub struct CaptureStatus {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CaptureOverrides {
     pub inbound_request_enabled: Option<bool>,
-    pub forwarded_request_enabled: Option<bool>,
+    pub provider_request_enabled: Option<bool>,
     pub upstream_response_enabled: Option<bool>,
     pub outbound_response_enabled: Option<bool>,
 }
@@ -103,10 +106,10 @@ impl CaptureController {
                 .overrides
                 .inbound_request_enabled
                 .unwrap_or(self.defaults.inbound_request_enabled),
-            forwarded_request_enabled: runtime
+            provider_request_enabled: runtime
                 .overrides
-                .forwarded_request_enabled
-                .unwrap_or(self.defaults.forwarded_request_enabled),
+                .provider_request_enabled
+                .unwrap_or(self.defaults.provider_request_enabled),
             upstream_response_enabled: runtime
                 .overrides
                 .upstream_response_enabled
@@ -148,9 +151,9 @@ impl CaptureController {
     }
 
     #[allow(dead_code)]
-    pub fn set_forwarded_request_enabled_override(&self, enabled: Option<bool>) {
+    pub fn set_provider_request_enabled_override(&self, enabled: Option<bool>) {
         let mut runtime = self.runtime.write().expect("capture runtime lock poisoned");
-        runtime.overrides.forwarded_request_enabled = enabled;
+        runtime.overrides.provider_request_enabled = enabled;
     }
 
     #[allow(dead_code)]
@@ -173,7 +176,7 @@ impl CaptureController {
         self.dir = dir;
     }
 
-    pub fn session(&self, request_id: u64) -> CaptureSession {
+    pub fn session(&self, request_id: RequestId) -> CaptureSession {
         let config = self.effective_config();
         let destination = self
             .dir
@@ -203,14 +206,14 @@ impl CaptureController {
             CaptureDirective::Start => {
                 runtime.mode = CaptureSessionMode::Active;
                 runtime.overrides.inbound_request_enabled = Some(true);
-                runtime.overrides.forwarded_request_enabled = Some(true);
+                runtime.overrides.provider_request_enabled = Some(true);
                 runtime.overrides.upstream_response_enabled = Some(true);
                 runtime.overrides.outbound_response_enabled = Some(true);
             }
             CaptureDirective::Stop => {
                 runtime.mode = CaptureSessionMode::Inactive;
                 runtime.overrides.inbound_request_enabled = Some(false);
-                runtime.overrides.forwarded_request_enabled = Some(false);
+                runtime.overrides.provider_request_enabled = Some(false);
                 runtime.overrides.upstream_response_enabled = Some(false);
                 runtime.overrides.outbound_response_enabled = Some(false);
             }
@@ -237,7 +240,7 @@ impl CaptureController {
     }
 
     #[allow(dead_code)]
-    pub fn record_for_request(&self, request_id: u64) -> Option<CaptureRecord> {
+    pub fn record_for_request(&self, request_id: RequestId) -> Option<CaptureRecord> {
         self.records
             .read()
             .expect("capture records lock poisoned")
@@ -246,7 +249,12 @@ impl CaptureController {
             .cloned()
     }
 
-    fn update_record(&self, request_id: u64, prefix: String, f: impl FnOnce(&mut CaptureRecord)) {
+    fn update_record(
+        &self,
+        request_id: RequestId,
+        prefix: String,
+        f: impl FnOnce(&mut CaptureRecord),
+    ) {
         const MAX_RECORDS: usize = 128;
 
         let mut records = self.records.write().expect("capture records lock poisoned");
@@ -283,7 +291,7 @@ impl CaptureController {
         if !matches!(
             target,
             Some(
-                CaptureShowTarget::ForwardedRequest
+                CaptureShowTarget::ProviderRequest
                     | CaptureShowTarget::UpstreamResponse
                     | CaptureShowTarget::OutboundResponse
             )
@@ -308,14 +316,14 @@ impl CaptureController {
                     | CaptureShowTarget::OutboundResponse
             )
         ) {
-            if let Some(forwarded_request) = record.forwarded_request.as_ref() {
+            if let Some(provider_request) = record.provider_request.as_ref() {
                 lines.push(format!(
-                    "forwarded_request.metadata: {}",
-                    forwarded_request.metadata_path.display()
+                    "provider_request.metadata: {}",
+                    provider_request.metadata_path.display()
                 ));
                 lines.push(format!(
-                    "forwarded_request.body: {}",
-                    forwarded_request.body_path.display()
+                    "provider_request.body: {}",
+                    provider_request.body_path.display()
                 ));
             }
         }
@@ -324,7 +332,7 @@ impl CaptureController {
             target,
             Some(
                 CaptureShowTarget::InboundRequest
-                    | CaptureShowTarget::ForwardedRequest
+                    | CaptureShowTarget::ProviderRequest
                     | CaptureShowTarget::OutboundResponse
             )
         ) {
@@ -342,7 +350,7 @@ impl CaptureController {
             target,
             Some(
                 CaptureShowTarget::InboundRequest
-                    | CaptureShowTarget::ForwardedRequest
+                    | CaptureShowTarget::ProviderRequest
                     | CaptureShowTarget::UpstreamResponse
             )
         ) {
@@ -363,7 +371,7 @@ impl CaptureController {
 #[derive(Debug, Clone)]
 pub struct CaptureSession {
     controller: CaptureController,
-    request_id: u64,
+    request_id: RequestId,
     config: CaptureConfig,
     destination: Option<CaptureDestination>,
 }
@@ -373,8 +381,8 @@ impl CaptureSession {
         self.config
     }
 
-    pub fn forwarded_request_enabled(&self) -> bool {
-        self.config.forwarded_request_enabled && self.destination.is_some()
+    pub fn provider_request_enabled(&self) -> bool {
+        self.config.provider_request_enabled && self.destination.is_some()
     }
 
     pub(crate) fn destination_for_upstream_response(&self) -> Option<&CaptureDestination> {
@@ -390,14 +398,14 @@ impl CaptureSession {
         uri: &Uri,
         headers: &HeaderMap,
         body: &[u8],
-    ) -> Result<()> {
+    ) {
         if !self.config.inbound_request_enabled {
-            return Ok(());
+            return;
         }
         let Some(destination) = self.destination.as_ref() else {
-            return Ok(());
+            return;
         };
-        let record = capture_inbound_request(
+        let record = match capture_inbound_request(
             destination,
             InboundRequestCapture {
                 request_id: self.request_id,
@@ -407,7 +415,14 @@ impl CaptureSession {
                 body,
             },
         )
-        .await?;
+        .await
+        {
+            Ok(record) => record,
+            Err(error) => {
+                self.log_capture_failure("inbound_request", &error);
+                return;
+            }
+        };
         self.controller
             .update_record(record.request_id, record.prefix, |entry| {
                 entry.inbound_request = Some(super::model::InboundRequestArtifacts {
@@ -415,26 +430,25 @@ impl CaptureSession {
                     body_path: record.body_path,
                 });
             });
-        Ok(())
     }
 
-    pub(crate) async fn capture_forwarded_request(
+    pub(crate) async fn capture_provider_request(
         &self,
         method: &Method,
         url: &str,
         headers: &HeaderMap,
         body: &[u8],
         normalized_payload: Option<&serde_json::Value>,
-    ) -> Result<()> {
-        if !self.config.forwarded_request_enabled {
-            return Ok(());
+    ) {
+        if !self.config.provider_request_enabled {
+            return;
         }
         let Some(destination) = self.destination.as_ref() else {
-            return Ok(());
+            return;
         };
-        let record = capture_forwarded_request(
+        let record = match capture_provider_request(
             destination,
-            ForwardedRequestCapture {
+            ProviderRequestCapture {
                 request_id: self.request_id,
                 method,
                 url,
@@ -443,27 +457,41 @@ impl CaptureSession {
                 normalized_payload,
             },
         )
-        .await?;
+        .await
+        {
+            Ok(record) => record,
+            Err(error) => {
+                self.log_capture_failure("provider_request", &error);
+                return;
+            }
+        };
         self.controller
             .update_record(record.request_id, record.prefix, |entry| {
-                entry.forwarded_request = Some(ForwardedRequestArtifacts {
+                entry.provider_request = Some(ProviderRequestArtifacts {
                     metadata_path: record.metadata_path,
                     body_path: record.body_path,
                 });
             });
-        Ok(())
     }
 
-    pub(crate) async fn capture_upstream_response_headers(
-        &self,
-        head: &UpstreamResponseHead,
-        headers: &HeaderMap,
-    ) -> Result<()> {
+    pub(crate) async fn capture_upstream_response(&self, head: &UpstreamResponseHead, body: &[u8]) {
+        self.capture_upstream_response_headers(head).await;
+        self.capture_upstream_response_body(head.content_type().as_ref(), body)
+            .await;
+    }
+
+    pub(crate) async fn capture_upstream_response_headers(&self, head: &UpstreamResponseHead) {
         let Some(destination) = self.destination_for_upstream_response() else {
-            return Ok(());
+            return;
         };
-        let path =
-            capture_upstream_response_headers(destination, self.request_id, head, headers).await?;
+        let path = match capture_upstream_response_headers(destination, self.request_id, head).await
+        {
+            Ok(path) => path,
+            Err(error) => {
+                self.log_capture_failure("upstream_response_headers", &error);
+                return;
+            }
+        };
         self.controller
             .update_record(self.request_id, destination.prefix_string(), |entry| {
                 entry
@@ -471,18 +499,23 @@ impl CaptureSession {
                     .get_or_insert_with(UpstreamResponseArtifacts::default)
                     .headers_path = Some(path);
             });
-        Ok(())
     }
 
     pub(crate) async fn capture_upstream_response_body(
         &self,
         content_type: Option<&ContentType>,
         body: &[u8],
-    ) -> Result<()> {
+    ) {
         let Some(destination) = self.destination_for_upstream_response() else {
-            return Ok(());
+            return;
         };
-        let path = capture_upstream_response_body(destination, content_type, body).await?;
+        let path = match capture_upstream_response_body(destination, content_type, body).await {
+            Ok(path) => path,
+            Err(error) => {
+                self.log_capture_failure("upstream_response_body", &error);
+                return;
+            }
+        };
         self.controller
             .update_record(self.request_id, destination.prefix_string(), |entry| {
                 entry
@@ -490,7 +523,6 @@ impl CaptureSession {
                     .get_or_insert_with(UpstreamResponseArtifacts::default)
                     .body_path = Some(path);
             });
-        Ok(())
     }
 
     pub(crate) fn create_upstream_response_writer(
@@ -498,9 +530,8 @@ impl CaptureSession {
         content_type: Option<&ContentType>,
     ) -> Option<UpstreamResponseCaptureWriter> {
         let destination = self.destination_for_upstream_response()?;
-        UpstreamResponseCaptureWriter::create(destination, content_type)
-            .ok()
-            .inspect(|writer| {
+        match UpstreamResponseCaptureWriter::create(destination, content_type) {
+            Ok(writer) => {
                 self.controller.update_record(
                     self.request_id,
                     destination.prefix_string(),
@@ -511,7 +542,23 @@ impl CaptureSession {
                             .body_path = Some(writer.path().to_path_buf());
                     },
                 );
-            })
+                Some(writer)
+            }
+            Err(error) => {
+                self.log_capture_failure("upstream_response_stream", &error);
+                None
+            }
+        }
+    }
+
+    fn log_capture_failure(&self, kind: &'static str, error: &dyn std::fmt::Display) {
+        warn!(
+            request_id = %self.request_id,
+            event = "capture_failed",
+            kind,
+            error = %error,
+            "capture failed"
+        );
     }
 
     pub(crate) async fn capture_outbound_response_headers(
@@ -519,21 +566,28 @@ impl CaptureSession {
         status: StatusCode,
         content_type: Option<&str>,
         headers: &HeaderMap,
-    ) -> Result<()> {
+    ) {
         if !self.config.outbound_response_enabled {
-            return Ok(());
+            return;
         }
         let Some(destination) = self.destination.as_ref() else {
-            return Ok(());
+            return;
         };
-        let path = capture_outbound_response_headers(
+        let path = match capture_outbound_response_headers(
             destination,
             self.request_id,
             status,
             content_type,
             headers,
         )
-        .await?;
+        .await
+        {
+            Ok(path) => path,
+            Err(error) => {
+                self.log_capture_failure("outbound_response_headers", &error);
+                return;
+            }
+        };
         self.controller
             .update_record(self.request_id, destination.prefix_string(), |entry| {
                 entry
@@ -541,7 +595,6 @@ impl CaptureSession {
                     .get_or_insert_with(OutboundResponseArtifacts::default)
                     .headers_path = Some(path);
             });
-        Ok(())
     }
 }
 
@@ -558,7 +611,7 @@ impl CaptureController {
             .take(limit)
             .map(|record| {
                 let inbound_request = record.inbound_request.is_some();
-                let forwarded_request = record.forwarded_request.is_some();
+                let provider_request = record.provider_request.is_some();
                 let upstream_response = record
                     .upstream_response
                     .as_ref()
@@ -570,11 +623,11 @@ impl CaptureController {
                     .map(|group| group.headers_path.is_some() || group.body_path.is_some())
                     .unwrap_or(false);
                 format!(
-                    "request_id={} prefix={} inbound_request={} forwarded_request={} upstream_response={} outbound_response={}",
+                    "request_id={} prefix={} inbound_request={} provider_request={} upstream_response={} outbound_response={}",
                     record.request_id,
                     record.prefix,
                     inbound_request,
-                    forwarded_request,
+                    provider_request,
                     upstream_response,
                     outbound_response
                 )

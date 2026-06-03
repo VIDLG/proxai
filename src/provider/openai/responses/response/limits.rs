@@ -2,6 +2,21 @@ use axum::http::HeaderMap;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct ResponseLimits {
+    pub(crate) rate: RateLimit,
+    pub(crate) codex: CodexLimits,
+}
+
+impl ResponseLimits {
+    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
+        Self {
+            rate: RateLimit::from_headers(headers),
+            codex: CodexLimits::from_headers(headers),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct RateLimit {
     pub(crate) limit_requests: Option<u64>,
     pub(crate) limit_tokens: Option<u64>,

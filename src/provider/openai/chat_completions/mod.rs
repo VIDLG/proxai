@@ -3,5 +3,5 @@ mod response;
 
 pub(crate) use request::{RequestSummary, ToolCategory};
 pub(crate) use response::{
-    handle_success_response, ChatResponseOutputKind, ChatUpstreamStreamSnapshot,
+    handle_streaming_response, ChatResponseOutputKind, ChatUpstreamStreamSnapshot,
 };

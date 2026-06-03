@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::provider::anthropic_messages::request::RequestSummary;
 use crate::provider::openai::responses::RequestSummary as ResponsesRequestSummary;
-use crate::provider::ForwardedRequestView;
+use crate::provider::ProviderRequestView;
 
 #[test]
 fn openai_responses_include_hints_use_readable_names() {
@@ -13,7 +13,7 @@ fn openai_responses_include_hints_use_readable_names() {
     }))
     .unwrap();
     let summary = ResponsesRequestSummary::from(&projection);
-    let view = ForwardedRequestView::OpenaiResponses {
+    let view = ProviderRequestView::OpenaiResponses {
         projection: &projection,
         summary: &summary,
     };
@@ -43,7 +43,7 @@ fn anthropic_hints_render_display_tokens_from_projection() {
     }))
     .unwrap();
     let summary = RequestSummary::from(&projection);
-    let view = ForwardedRequestView::AnthropicMessages {
+    let view = ProviderRequestView::AnthropicMessages {
         projection: &projection,
         summary: &summary,
     };

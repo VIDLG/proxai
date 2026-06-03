@@ -2,8 +2,9 @@ use serde_json::Value as JsonValue;
 use tracing::{info, warn};
 
 use crate::config::LogOutputFormat;
-use crate::provider::UpstreamResponseError;
-use crate::upstream::{ContentType, UpstreamResponseHead};
+use crate::error::{UpstreamError, UpstreamResponseError};
+use crate::http_model::UpstreamResponseHead;
+use crate::upstream::UpstreamStreamError;
 
 use super::{active_log_format, emit_json_log, json_object};
 
@@ -14,7 +15,7 @@ pub(crate) enum UpstreamLogRecord<'a> {
     },
     HeadError {
         head: &'a UpstreamResponseHead,
-        error: &'a UpstreamResponseError,
+        error: &'a UpstreamError,
     },
 }
 
@@ -27,24 +28,48 @@ impl UpstreamLogRecord<'_> {
     }
 }
 
-pub(crate) fn error_token(error: &UpstreamResponseError) -> &'static str {
+pub(crate) fn stream_error_token(error: &UpstreamStreamError) -> &'static str {
     match error {
-        UpstreamResponseError::Protocol(_)
-        | UpstreamResponseError::Proxy { .. }
-        | UpstreamResponseError::Stream { .. } => "stream-error",
-        UpstreamResponseError::UnfinishedTool { .. } => "unfinished-tool",
+        UpstreamStreamError::Stream { .. } => "stream-error",
+        UpstreamStreamError::UnfinishedTool { .. } => "unfinished-tool",
     }
 }
 
-pub(crate) fn error_text(error: &UpstreamResponseError) -> &str {
+pub(crate) fn stream_error_text(error: &UpstreamStreamError) -> String {
     match error {
-        UpstreamResponseError::Protocol(error) => error.message.as_str(),
-        UpstreamResponseError::Proxy { message } | UpstreamResponseError::Stream { message } => {
-            message.as_str()
-        }
-        UpstreamResponseError::UnfinishedTool { .. } => {
-            "upstream stream ended with unfinished tool arguments"
-        }
+        UpstreamStreamError::Stream { message } => message.clone(),
+        UpstreamStreamError::UnfinishedTool { .. } => error.to_string(),
+    }
+}
+
+pub(crate) fn error_text(error: &UpstreamError) -> String {
+    match error {
+        UpstreamError::RequestSend(error) => error.to_string(),
+        UpstreamError::ErrorStatus { parsed, .. } => response_error_text(parsed),
+        UpstreamError::ResponseBodyRead { source, .. } => source.to_string(),
+    }
+}
+
+fn response_error_text(error: &UpstreamResponseError) -> String {
+    match error {
+        UpstreamResponseError::Upstream { message, .. } => message.clone(),
+        UpstreamResponseError::EmptyBody
+        | UpstreamResponseError::NonJsonBody { .. }
+        | UpstreamResponseError::UnknownBodyShape { .. } => error.to_string(),
+    }
+}
+
+fn upstream_error_code(error: &UpstreamError) -> Option<&str> {
+    match error {
+        UpstreamError::ErrorStatus { parsed, .. } => parsed.upstream_code(),
+        UpstreamError::RequestSend(_) | UpstreamError::ResponseBodyRead { .. } => None,
+    }
+}
+
+fn upstream_error_message(error: &UpstreamError) -> Option<&str> {
+    match error {
+        UpstreamError::ErrorStatus { parsed, .. } => parsed.upstream_message(),
+        UpstreamError::RequestSend(_) | UpstreamError::ResponseBodyRead { .. } => None,
     }
 }
 
@@ -53,56 +78,30 @@ fn emit_head_info(head: &UpstreamResponseHead) {
         return;
     }
 
+    let content_type = head.content_type_text();
+    let transfer_encoding = head.transfer_encoding_text();
+    let content_length = head.content_length().unwrap_or_default();
+
     match active_log_format() {
         LogOutputFormat::Human => info!(
             event = "hdr",
             status = head.status.as_u16(),
-            down = head.content_length.unwrap_or_default(),
+            down = content_length,
             ttfb_ms = head.ttfb.as_millis() as u64,
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            te = head
-                .transfer_encoding
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            sse = head.content_type.as_ref().is_some_and(ContentType::is_sse),
+            ct = content_type,
+            te = transfer_encoding,
+            sse = head.is_sse(),
         ),
         LogOutputFormat::Json => emit_json_log(
             "INFO",
             "hdr",
             json_object([
                 ("status", JsonValue::from(head.status.as_u16())),
-                (
-                    "down",
-                    JsonValue::from(head.content_length.unwrap_or_default()),
-                ),
+                ("down", JsonValue::from(content_length)),
                 ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
-                (
-                    "ct",
-                    JsonValue::String(
-                        head.content_type
-                            .as_ref()
-                            .map(ToString::to_string)
-                            .unwrap_or_default(),
-                    ),
-                ),
-                (
-                    "te",
-                    JsonValue::String(
-                        head.transfer_encoding
-                            .as_ref()
-                            .map(ToString::to_string)
-                            .unwrap_or_default(),
-                    ),
-                ),
-                (
-                    "sse",
-                    JsonValue::Bool(head.content_type.as_ref().is_some_and(ContentType::is_sse)),
-                ),
+                ("ct", JsonValue::String(content_type)),
+                ("te", JsonValue::String(transfer_encoding.to_string())),
+                ("sse", JsonValue::Bool(head.is_sse())),
             ]),
         ),
     }
@@ -110,42 +109,30 @@ fn emit_head_info(head: &UpstreamResponseHead) {
 
 fn is_default_success_sse_head(head: &UpstreamResponseHead) -> bool {
     head.status.is_success()
-        && head.content_type.as_ref().is_some_and(ContentType::is_sse)
+        && head.is_sse()
         && head
-            .transfer_encoding
-            .as_ref()
+            .transfer_encoding()
             .is_some_and(|value| value.eq_ignore_ascii_case("chunked"))
 }
 
-fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamResponseError) {
-    let response_error = match error {
-        UpstreamResponseError::Protocol(error) => Some(error),
-        _ => None,
-    };
+fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError) {
+    let error_code = upstream_error_code(error).unwrap_or("");
+    let error_message = upstream_error_message(error).unwrap_or("");
+    let content_type = head.content_type_text();
+    let transfer_encoding = head.transfer_encoding_text();
+    let content_length = head.content_length().unwrap_or_default();
 
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = "hdr-error",
             status = head.status.as_u16(),
-            down = head.content_length.unwrap_or_default(),
+            down = content_length,
             ttfb_ms = head.ttfb.as_millis() as u64,
-            ct = head
-                .content_type
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            te = head
-                .transfer_encoding
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
-            sse = head.content_type.as_ref().is_some_and(ContentType::is_sse),
-            error_code = response_error
-                .map(|value| value.code.as_str())
-                .unwrap_or(""),
-            error_message = response_error
-                .map(|value| value.message.as_str())
-                .unwrap_or(""),
+            ct = content_type,
+            te = transfer_encoding,
+            sse = head.is_sse(),
+            error_code,
+            error_message,
             error_param = "",
             err = error_text(error),
         ),
@@ -154,53 +141,18 @@ fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamResponseError) {
             "hdr-error",
             json_object([
                 ("status", JsonValue::from(head.status.as_u16())),
-                (
-                    "down",
-                    JsonValue::from(head.content_length.unwrap_or_default()),
-                ),
+                ("down", JsonValue::from(content_length)),
                 ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
-                (
-                    "ct",
-                    JsonValue::String(
-                        head.content_type
-                            .as_ref()
-                            .map(ToString::to_string)
-                            .unwrap_or_default(),
-                    ),
-                ),
-                (
-                    "te",
-                    JsonValue::String(
-                        head.transfer_encoding
-                            .as_ref()
-                            .map(ToString::to_string)
-                            .unwrap_or_default(),
-                    ),
-                ),
-                (
-                    "sse",
-                    JsonValue::Bool(head.content_type.as_ref().is_some_and(ContentType::is_sse)),
-                ),
-                (
-                    "error_code",
-                    JsonValue::String(
-                        response_error
-                            .map(|value| value.code.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    ),
-                ),
+                ("ct", JsonValue::String(content_type)),
+                ("te", JsonValue::String(transfer_encoding.to_string())),
+                ("sse", JsonValue::Bool(head.is_sse())),
+                ("error_code", JsonValue::String(error_code.to_string())),
                 (
                     "error_message",
-                    JsonValue::String(
-                        response_error
-                            .map(|value| value.message.as_str())
-                            .unwrap_or("")
-                            .to_string(),
-                    ),
+                    JsonValue::String(error_message.to_string()),
                 ),
                 ("error_param", JsonValue::String(String::new())),
-                ("err", JsonValue::String(error_text(error).to_string())),
+                ("err", JsonValue::String(error_text(error))),
             ]),
         ),
     }

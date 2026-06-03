@@ -6,20 +6,20 @@ use crate::provider::anthropic_messages as anthropic_provider;
 use crate::provider::openai::{chat_completions as chat_provider, responses as responses_provider};
 
 #[derive(Debug, Clone)]
-pub(crate) struct ForwardedRequest {
-    prepared: PreparedForwardedRequest,
+pub(crate) struct ProviderRequest {
+    prepared: PreparedProviderRequest,
     capture_payload: Value,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum PreparedForwardedRequest {
-    OpenaiResponses(Box<responses_provider::request::PreparedForwardedRequest>),
-    OpenaiChatCompletions(Box<chat_provider::request::PreparedForwardedRequest>),
-    AnthropicMessages(Box<anthropic_provider::request::PreparedForwardedRequest>),
+pub(crate) enum PreparedProviderRequest {
+    OpenaiResponses(Box<responses_provider::request::PreparedProviderRequest>),
+    OpenaiChatCompletions(Box<chat_provider::request::PreparedProviderRequest>),
+    AnthropicMessages(Box<anthropic_provider::request::PreparedProviderRequest>),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum ForwardedRequestView<'a> {
+pub(crate) enum ProviderRequestView<'a> {
     OpenaiResponses {
         projection: &'a openai_responses::RequestProjection,
         summary: &'a responses_provider::RequestSummary,
@@ -34,54 +34,54 @@ pub(crate) enum ForwardedRequestView<'a> {
     },
 }
 
-impl ForwardedRequest {
+impl ProviderRequest {
     pub(crate) fn anthropic_messages(
-        prepared: anthropic_provider::request::PreparedForwardedRequest,
+        prepared: anthropic_provider::request::PreparedProviderRequest,
         capture_payload: Value,
     ) -> Self {
         Self {
-            prepared: PreparedForwardedRequest::AnthropicMessages(Box::new(prepared)),
+            prepared: PreparedProviderRequest::AnthropicMessages(Box::new(prepared)),
             capture_payload,
         }
     }
 
     pub(crate) fn openai_responses(
-        prepared: responses_provider::request::PreparedForwardedRequest,
+        prepared: responses_provider::request::PreparedProviderRequest,
         capture_payload: Value,
     ) -> Self {
         Self {
-            prepared: PreparedForwardedRequest::OpenaiResponses(Box::new(prepared)),
+            prepared: PreparedProviderRequest::OpenaiResponses(Box::new(prepared)),
             capture_payload,
         }
     }
 
     pub(crate) fn openai_chat_completions(
-        prepared: chat_provider::request::PreparedForwardedRequest,
+        prepared: chat_provider::request::PreparedProviderRequest,
         capture_payload: Value,
     ) -> Self {
         Self {
-            prepared: PreparedForwardedRequest::OpenaiChatCompletions(Box::new(prepared)),
+            prepared: PreparedProviderRequest::OpenaiChatCompletions(Box::new(prepared)),
             capture_payload,
         }
     }
 
     pub(crate) fn body(&self) -> &[u8] {
         match &self.prepared {
-            PreparedForwardedRequest::OpenaiResponses(request) => &request.body,
-            PreparedForwardedRequest::OpenaiChatCompletions(request) => &request.body,
-            PreparedForwardedRequest::AnthropicMessages(request) => &request.body,
+            PreparedProviderRequest::OpenaiResponses(request) => &request.body,
+            PreparedProviderRequest::OpenaiChatCompletions(request) => &request.body,
+            PreparedProviderRequest::AnthropicMessages(request) => &request.body,
         }
     }
 
     pub(crate) fn upstream_path(&self) -> &'static str {
         match &self.prepared {
-            PreparedForwardedRequest::OpenaiResponses(_) => {
+            PreparedProviderRequest::OpenaiResponses(_) => {
                 responses_provider::request::UPSTREAM_PATH
             }
-            PreparedForwardedRequest::OpenaiChatCompletions(_) => {
+            PreparedProviderRequest::OpenaiChatCompletions(_) => {
                 chat_provider::request::UPSTREAM_PATH
             }
-            PreparedForwardedRequest::AnthropicMessages(_) => {
+            PreparedProviderRequest::AnthropicMessages(_) => {
                 anthropic_provider::request::UPSTREAM_PATH
             }
         }
@@ -89,9 +89,9 @@ impl ForwardedRequest {
 
     pub(crate) fn into_body(self) -> Vec<u8> {
         match self.prepared {
-            PreparedForwardedRequest::OpenaiResponses(request) => request.body,
-            PreparedForwardedRequest::OpenaiChatCompletions(request) => request.body,
-            PreparedForwardedRequest::AnthropicMessages(request) => request.body,
+            PreparedProviderRequest::OpenaiResponses(request) => request.body,
+            PreparedProviderRequest::OpenaiChatCompletions(request) => request.body,
+            PreparedProviderRequest::AnthropicMessages(request) => request.body,
         }
     }
 
@@ -99,22 +99,22 @@ impl ForwardedRequest {
         &self.capture_payload
     }
 
-    pub(crate) fn view(&self) -> ForwardedRequestView<'_> {
+    pub(crate) fn view(&self) -> ProviderRequestView<'_> {
         match &self.prepared {
-            PreparedForwardedRequest::OpenaiResponses(request) => {
-                ForwardedRequestView::OpenaiResponses {
+            PreparedProviderRequest::OpenaiResponses(request) => {
+                ProviderRequestView::OpenaiResponses {
                     projection: &request.projection,
                     summary: &request.summary,
                 }
             }
-            PreparedForwardedRequest::OpenaiChatCompletions(request) => {
-                ForwardedRequestView::OpenaiChatCompletions {
+            PreparedProviderRequest::OpenaiChatCompletions(request) => {
+                ProviderRequestView::OpenaiChatCompletions {
                     projection: &request.projection,
                     summary: &request.summary,
                 }
             }
-            PreparedForwardedRequest::AnthropicMessages(request) => {
-                ForwardedRequestView::AnthropicMessages {
+            PreparedProviderRequest::AnthropicMessages(request) => {
+                ProviderRequestView::AnthropicMessages {
                     projection: &request.projection,
                     summary: &request.summary,
                 }

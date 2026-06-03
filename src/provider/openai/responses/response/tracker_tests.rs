@@ -2,12 +2,7 @@ use super::ResponsesUpstreamTracker;
 
 #[test]
 fn records_nested_generic_error_event() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut tracker = ResponsesUpstreamTracker::from_headers(&headers);
+    let mut tracker = ResponsesUpstreamTracker::new();
 
     tracker.scan_bytes(
         br#"event: error
@@ -27,12 +22,7 @@ data: {"type":"error","error":{"type":"invalid_request_error","code":"context_le
 
 #[test]
 fn nested_generic_error_overrides_in_progress_snapshot_for_diagnostics() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut tracker = ResponsesUpstreamTracker::from_headers(&headers);
+    let mut tracker = ResponsesUpstreamTracker::new();
 
     tracker.scan_bytes(
         br#"event: response.created
@@ -58,12 +48,7 @@ data: {"type":"error","error":{"type":"invalid_request_error","code":"context_le
 
 #[test]
 fn completed_snapshot_without_output_uses_fallback_summary() {
-    let mut headers = http::HeaderMap::new();
-    headers.insert(
-        http::header::CONTENT_TYPE,
-        http::HeaderValue::from_static("text/event-stream"),
-    );
-    let mut tracker = ResponsesUpstreamTracker::from_headers(&headers);
+    let mut tracker = ResponsesUpstreamTracker::new();
 
     tracker.scan_bytes(
         br#"event: response.output_item.done

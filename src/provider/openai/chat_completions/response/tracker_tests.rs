@@ -3,8 +3,8 @@ use bytes::Bytes;
 use serde_json::json;
 
 use super::{ChatResponseObservation, ChatUpstreamResponseTracker};
+use crate::http_utils::ContentType;
 use crate::protocol::openai::chat_completions::FinishReason;
-use crate::upstream::ContentType;
 
 #[test]
 fn tracker_extracts_non_stream_chat_completion_usage() {

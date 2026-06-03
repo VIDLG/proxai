@@ -1,45 +1,63 @@
 use axum::body::Body;
 use axum::http::Response;
 
+use crate::http_model::UpstreamResponseHead;
+use crate::http_utils::response_with_headers;
 use crate::logging;
-use crate::provider::{
-    build_outbound_stream, streaming_response, BodyAction, BodyObserver, OutboundResponseContext,
-    OutboundStream,
+use crate::provider::ProviderStreamingResponseContext;
+use crate::upstream::{
+    prepare_response_stream, BodyAction, BodyObserver, StreamingResponseContext,
+    UpstreamBodyStreamStats, UpstreamStreamError,
 };
-use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
 
 use super::state::ChatUpstreamStreamSnapshot;
 use super::tracker::ChatUpstreamResponseTracker;
 
-pub(crate) async fn handle_success_response(
-    ctx: OutboundResponseContext<'_>,
-    upstream_response: reqwest::Response,
-) -> crate::error::Result<Response<Body>> {
-    let upstream_headers = upstream_response.headers().clone();
-
+pub(crate) async fn handle_streaming_response(
+    context: ProviderStreamingResponseContext<'_>,
+    response: reqwest::Response,
+) -> Response<Body> {
+    let ProviderStreamingResponseContext {
+        started,
+        capture,
+        span,
+        policy,
+        ..
+    } = context;
+    let head = UpstreamResponseHead::from_response(&response, started.elapsed());
     let observer = ChatUpstreamBodyObserver::new(
-        ChatUpstreamResponseTracker::from_headers(&upstream_headers),
-        ctx.span.clone(),
+        ChatUpstreamResponseTracker::from_headers(&head.headers),
+        span.clone(),
     );
 
-    let OutboundStream {
-        head,
-        outbound_headers,
-        stream,
-        ..
-    } = build_outbound_stream(&ctx, upstream_response, observer).await?;
+    let (outbound_headers, body_stream) = prepare_response_stream(
+        StreamingResponseContext {
+            capture,
+            started,
+            span,
+            read_idle_timeout: policy.read_idle_timeout(),
+            head: &head,
+        },
+        response,
+        observer,
+    )
+    .await;
 
-    ctx.span.in_scope(|| {
+    span.in_scope(|| {
         logging::ChatLogRecord::Upstream(logging::UpstreamLogRecord::HeadInfo { head: &head })
             .emit()
     });
 
-    Ok(streaming_response(head.status, outbound_headers, stream))
+    response_with_headers(
+        head.status,
+        outbound_headers,
+        Body::from_stream(body_stream),
+    )
 }
 
 struct ChatUpstreamBodyObserver {
     tracker: ChatUpstreamResponseTracker,
-    error_message: Option<String>,
+    stream_error: Option<UpstreamStreamError>,
     span: tracing::Span,
 }
 
@@ -47,7 +65,7 @@ impl ChatUpstreamBodyObserver {
     fn new(tracker: ChatUpstreamResponseTracker, span: tracing::Span) -> Self {
         Self {
             tracker,
-            error_message: None,
+            stream_error: None,
             span,
         }
     }
@@ -72,16 +90,18 @@ impl BodyObserver for ChatUpstreamBodyObserver {
     }
 
     fn observe_error(&mut self, error: &reqwest::Error) {
-        self.error_message = Some(error.to_string());
+        self.stream_error = Some(UpstreamStreamError::Stream {
+            message: error.to_string(),
+        });
     }
 
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let snapshot = self.stream_snapshot(head, stats);
-        if let Some(ref message) = self.error_message {
+        if let Some(ref error) = self.stream_error {
             self.span.in_scope(|| {
                 logging::ChatLogRecord::StreamError {
                     snapshot: &snapshot,
-                    message,
+                    error,
                 }
                 .emit()
             });

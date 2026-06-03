@@ -2,12 +2,12 @@ use serde_json::json;
 
 use crate::ingress;
 use crate::protocol::ProviderProtocol;
-use crate::provider::ForwardedRequestView;
+use crate::provider::ProviderRequestView;
 
 use super::translate_request;
 
 #[test]
-fn translates_openai_responses_inbound_to_chat_forwarded_request() {
+fn translates_openai_responses_inbound_to_chat_provider_request() {
     let inbound_body = serde_json::to_vec(&json!({
         "model": "glm-5.1",
         "instructions": "Be concise.",
@@ -24,25 +24,26 @@ fn translates_openai_responses_inbound_to_chat_forwarded_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let forwarded = translate_request(
+    let provider_request = translate_request(
         &inbound,
         ProviderProtocol::OpenaiChatCompletions,
         "MiniMax-M3",
     )
-    .expect("translation should produce a Chat Completions forwarded request");
+    .expect("translation should produce a Chat Completions provider request");
 
-    let forwarded_body: serde_json::Value =
-        serde_json::from_slice(forwarded.body()).expect("forwarded body must be JSON");
-    assert_eq!(forwarded_body["model"], "MiniMax-M3");
-    assert_eq!(forwarded_body["max_completion_tokens"], 64);
-    assert_eq!(forwarded_body["stream"], true);
-    assert_eq!(forwarded_body["messages"][0]["role"], "system");
-    assert_eq!(forwarded_body["messages"][0]["content"], "Be concise.");
-    assert_eq!(forwarded_body["messages"][1]["role"], "user");
-    assert_eq!(forwarded_body["messages"][1]["content"][0]["text"], "hello");
-    assert_eq!(*forwarded.capture_payload(), forwarded_body);
+    let provider_body: serde_json::Value =
+        serde_json::from_slice(provider_request.body()).expect("provider body must be JSON");
+    assert_eq!(provider_body["model"], "MiniMax-M3");
+    assert_eq!(provider_body["max_completion_tokens"], 64);
+    assert_eq!(provider_body["stream"], true);
+    assert_eq!(provider_body["messages"][0]["role"], "system");
+    assert_eq!(provider_body["messages"][0]["content"], "Be concise.");
+    assert_eq!(provider_body["messages"][1]["role"], "user");
+    assert_eq!(provider_body["messages"][1]["content"][0]["text"], "hello");
+    assert_eq!(*provider_request.capture_payload(), provider_body);
 
-    let ForwardedRequestView::OpenaiChatCompletions { projection, .. } = forwarded.view() else {
+    let ProviderRequestView::OpenaiChatCompletions { projection, .. } = provider_request.view()
+    else {
         panic!("expected Chat Completions log view");
     };
     assert_eq!(projection.model.as_deref(), Some("MiniMax-M3"));
@@ -50,7 +51,7 @@ fn translates_openai_responses_inbound_to_chat_forwarded_request() {
     assert_eq!(projection.stream, Some(true));
 }
 #[test]
-fn translates_glm_openai_responses_inbound_to_anthropic_forwarded_request() {
+fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
     let inbound_body = serde_json::to_vec(&json!({
         "model": "glm-5.1",
         "instructions": "You are a proxai live translation smoke test. Reply briefly.",
@@ -70,29 +71,30 @@ fn translates_glm_openai_responses_inbound_to_anthropic_forwarded_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let forwarded = translate_request(&inbound, ProviderProtocol::AnthropicMessages, "glm-5.1")
-        .expect("translation should produce an Anthropic forwarded request");
+    let provider_request =
+        translate_request(&inbound, ProviderProtocol::AnthropicMessages, "glm-5.1")
+            .expect("translation should produce an Anthropic provider request");
 
-    let forwarded_body: serde_json::Value =
-        serde_json::from_slice(forwarded.body()).expect("forwarded body must be JSON");
-    assert_eq!(forwarded_body["model"], "glm-5.1");
-    assert_eq!(forwarded_body["max_tokens"], 64);
+    let provider_body: serde_json::Value =
+        serde_json::from_slice(provider_request.body()).expect("provider body must be JSON");
+    assert_eq!(provider_body["model"], "glm-5.1");
+    assert_eq!(provider_body["max_tokens"], 64);
     assert_eq!(
-        forwarded_body["system"],
+        provider_body["system"],
         "You are a proxai live translation smoke test. Reply briefly."
     );
-    assert_eq!(forwarded_body["stream"], false);
-    assert_eq!(forwarded_body["messages"][0]["role"], "user");
+    assert_eq!(provider_body["stream"], false);
+    assert_eq!(provider_body["messages"][0]["role"], "user");
     assert_eq!(
-        forwarded_body["messages"][0]["content"][0],
+        provider_body["messages"][0]["content"][0],
         json!({
             "type": "text",
             "text": "Reply with the exact text: proxai-translation-live-ok"
         })
     );
-    assert_eq!(*forwarded.capture_payload(), forwarded_body);
+    assert_eq!(*provider_request.capture_payload(), provider_body);
 
-    let ForwardedRequestView::AnthropicMessages { projection, .. } = forwarded.view() else {
+    let ProviderRequestView::AnthropicMessages { projection, .. } = provider_request.view() else {
         panic!("expected Anthropic log view");
     };
     assert_eq!(projection.model, "glm-5.1");

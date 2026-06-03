@@ -2,36 +2,36 @@ mod anthropic_messages;
 mod openai_chat_completions;
 mod openai_responses;
 
-use crate::provider::ForwardedRequestView;
+use crate::provider::ProviderRequestView;
 
-pub(crate) fn render_projection_compact(forwarded_request: &ForwardedRequestView<'_>) -> String {
-    match forwarded_request {
-        ForwardedRequestView::OpenaiResponses {
+pub(crate) fn render_projection_compact(provider_request: &ProviderRequestView<'_>) -> String {
+    match provider_request {
+        ProviderRequestView::OpenaiResponses {
             projection,
             summary: _,
         } => openai_responses::render_projection_compact(projection),
-        ForwardedRequestView::OpenaiChatCompletions {
+        ProviderRequestView::OpenaiChatCompletions {
             projection,
             summary: _,
         } => openai_chat_completions::render_projection_compact(projection),
-        ForwardedRequestView::AnthropicMessages {
+        ProviderRequestView::AnthropicMessages {
             projection,
             summary: _,
         } => anthropic_messages::render_projection_compact(projection),
     }
 }
 
-pub(crate) fn render_summary_compact(forwarded_request: &ForwardedRequestView<'_>) -> Vec<String> {
-    match forwarded_request {
-        ForwardedRequestView::OpenaiResponses {
+pub(crate) fn render_summary_compact(provider_request: &ProviderRequestView<'_>) -> Vec<String> {
+    match provider_request {
+        ProviderRequestView::OpenaiResponses {
             projection: _,
             summary,
         } => openai_responses::render_summary_compact(summary),
-        ForwardedRequestView::OpenaiChatCompletions {
+        ProviderRequestView::OpenaiChatCompletions {
             projection: _,
             summary,
         } => openai_chat_completions::render_summary_compact(summary),
-        ForwardedRequestView::AnthropicMessages {
+        ProviderRequestView::AnthropicMessages {
             projection,
             summary,
         } => anthropic_messages::render_summary_compact(projection, summary),

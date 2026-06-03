@@ -15,7 +15,7 @@ Current config concepts include:
 - providers with explicit upstream protocol, base URL, API key, and read-idle timeout
 - logging level / format / thresholds
 - upstream error response format
-- capture switches for inbound requests, forwarded requests, upstream responses, and outbound responses, with captures written to the app-dir `captures/`
+- capture switches for inbound requests, provider requests, upstream responses, and outbound responses, with captures written to the app-dir `captures/`
 - semantic tool-call timeout
 
 CLI options should stay limited to common temporary overrides: `--config`, `--upstream`, `--api-key`, `--port`, `--log-level`, and `--log-format`.
@@ -42,7 +42,7 @@ If a route omits `request_protocol`, it can match any inbound protocol detected 
 The proxy has a phase axis separate from protocol names:
 
 - `inbound_request`
-- `forwarded_request`
+- `provider_request`
 - `upstream_response`
 - `outbound_response`
 
@@ -52,7 +52,7 @@ Do not mix protocol names and phase names into one overloaded concept when a two
 Preferred mental model:
 
 - `inbound_request.protocol` = what the client sent
-- `forwarded_request.protocol` = what proxai sent upstream
+- `provider_request.protocol` = what proxai sent upstream
 - `upstream_response.protocol` = what the provider returned
 - `outbound_response.protocol` = what proxai returned to the client
 

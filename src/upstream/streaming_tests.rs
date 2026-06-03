@@ -4,8 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::task::Context;
 use std::time::Instant;
 
-use super::{BodyAction, BodyObserver, MonitoredBodyStream};
-use crate::upstream::{UpstreamBodyStreamStats, UpstreamResponseHead};
+use super::{BodyAction, BodyObserver, MonitoredUpstreamBodyStream};
+use crate::http_model::UpstreamResponseHead;
+use crate::upstream::UpstreamBodyStreamStats;
 
 #[derive(Default)]
 struct ObserverState {
@@ -68,7 +69,7 @@ fn test_head() -> UpstreamResponseHead {
 async fn generic_stream_records_chunks_and_outcome() {
     let observer = TestObserver::default();
     let state = observer.state.clone();
-    let stream = MonitoredBodyStream::new(
+    let stream = MonitoredUpstreamBodyStream::new(
         stream::iter([
             Ok::<_, reqwest::Error>(Bytes::from_static(b"a")),
             Ok(Bytes::from_static(b"b")),
@@ -103,7 +104,7 @@ async fn generic_stream_allows_observer_inject_and_close_on_pending() {
         ..TestObserver::default()
     };
     let state = observer.state.clone();
-    let stream = MonitoredBodyStream::new(
+    let stream = MonitoredUpstreamBodyStream::new(
         futures_util::stream::pending::<reqwest::Result<Bytes>>(),
         test_head(),
         Instant::now(),

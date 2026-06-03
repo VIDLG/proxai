@@ -6,17 +6,17 @@ use crate::protocol::anthropic::messages::MessageCreateParamsBase;
 use super::summary::RequestSummary;
 
 #[derive(Debug, Clone)]
-pub(crate) struct PreparedForwardedRequest {
+pub(crate) struct PreparedProviderRequest {
     pub(crate) body: Vec<u8>,
     pub(crate) projection: MessageCreateParamsBase,
     pub(crate) summary: RequestSummary,
 }
 
-pub(crate) fn prepare_forwarded_request(
+pub(crate) fn prepare_provider_request(
     payload: &Value,
     request_model: &str,
     upstream_model: &str,
-) -> Result<PreparedForwardedRequest, InternalError> {
+) -> Result<PreparedProviderRequest, InternalError> {
     let mut payload = payload.clone();
     if upstream_model != request_model {
         if let Some(model) = payload.get_mut("model") {
@@ -27,7 +27,7 @@ pub(crate) fn prepare_forwarded_request(
     let projection = serde_json::from_value::<MessageCreateParamsBase>(payload.clone())?;
     let summary = RequestSummary::from(&projection);
 
-    Ok(PreparedForwardedRequest {
+    Ok(PreparedProviderRequest {
         body: serde_json::to_vec(&payload)?,
         projection,
         summary,

@@ -3,17 +3,17 @@ use crate::ingress::PreparedInboundRequest;
 use crate::protocol::ProviderProtocol;
 use crate::provider::anthropic_messages;
 use crate::provider::openai::{chat_completions, responses as openai_responses};
-use crate::provider::ForwardedRequest;
+use crate::provider::ProviderRequest;
 
 pub(crate) fn translate_request(
     inbound: &PreparedInboundRequest,
     provider_protocol: ProviderProtocol,
     upstream_model: &str,
-) -> Result<ForwardedRequest, InternalError> {
+) -> Result<ProviderRequest, InternalError> {
     match (inbound, provider_protocol) {
         (PreparedInboundRequest::OpenaiResponses(inbound), ProviderProtocol::OpenaiResponses) => {
-            Ok(ForwardedRequest::openai_responses(
-                openai_responses::request::prepare_forwarded_request(
+            Ok(ProviderRequest::openai_responses(
+                openai_responses::request::prepare_provider_request(
                     &inbound.normalized_payload,
                     None,
                     &inbound.model,
@@ -25,8 +25,8 @@ pub(crate) fn translate_request(
         (
             PreparedInboundRequest::OpenaiChatCompletions(inbound),
             ProviderProtocol::OpenaiChatCompletions,
-        ) => Ok(ForwardedRequest::openai_chat_completions(
-            chat_completions::request::prepare_forwarded_request(
+        ) => Ok(ProviderRequest::openai_chat_completions(
+            chat_completions::request::prepare_provider_request(
                 &inbound.normalized_payload,
                 &inbound.model,
                 upstream_model,
@@ -42,8 +42,8 @@ pub(crate) fn translate_request(
                 &inbound.model,
                 upstream_model,
             )?;
-            Ok(ForwardedRequest::openai_chat_completions(
-                chat_completions::request::prepare_forwarded_request(
+            Ok(ProviderRequest::openai_chat_completions(
+                chat_completions::request::prepare_provider_request(
                     &translated,
                     upstream_model,
                     upstream_model,
@@ -57,8 +57,8 @@ pub(crate) fn translate_request(
                 &inbound.model,
                 upstream_model,
             )?;
-            Ok(ForwardedRequest::anthropic_messages(
-                anthropic_messages::request::prepare_forwarded_request(
+            Ok(ProviderRequest::anthropic_messages(
+                anthropic_messages::request::prepare_provider_request(
                     &translated,
                     upstream_model,
                     upstream_model,
@@ -81,8 +81,8 @@ pub(crate) fn translate_request(
                 &inbound.model,
                 upstream_model,
             )?;
-            Ok(ForwardedRequest::anthropic_messages(
-                anthropic_messages::request::prepare_forwarded_request(
+            Ok(ProviderRequest::anthropic_messages(
+                anthropic_messages::request::prepare_provider_request(
                     &translated,
                     upstream_model,
                     upstream_model,
@@ -96,8 +96,8 @@ pub(crate) fn translate_request(
                 &inbound.model,
                 upstream_model,
             )?;
-            Ok(ForwardedRequest::openai_responses(
-                openai_responses::request::prepare_forwarded_request(
+            Ok(ProviderRequest::openai_responses(
+                openai_responses::request::prepare_provider_request(
                     &translated,
                     None,
                     upstream_model,
@@ -115,8 +115,8 @@ pub(crate) fn translate_request(
         (
             PreparedInboundRequest::AnthropicMessages(inbound),
             ProviderProtocol::AnthropicMessages,
-        ) => Ok(ForwardedRequest::anthropic_messages(
-            anthropic_messages::request::prepare_forwarded_request(
+        ) => Ok(ProviderRequest::anthropic_messages(
+            anthropic_messages::request::prepare_provider_request(
                 &inbound.normalized_payload,
                 &inbound.model,
                 upstream_model,

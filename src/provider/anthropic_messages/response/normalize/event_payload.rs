@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use super::{normalize_message_object, provider_gaps, response_shape};
+use super::{message::normalize_message_object, provider_gaps, response_shape};
 
 pub(crate) fn normalize_stream_event_payload(mut payload: Value) -> Value {
     if let Some(object) = payload.as_object_mut() {
@@ -34,7 +34,7 @@ fn normalize_content_block_start(object: &mut Map<String, Value>) {
 
 fn normalize_message_delta_event(object: &mut Map<String, Value>) {
     if let Some(delta) = object.get_mut("delta").and_then(Value::as_object_mut) {
-        response_shape::normalize_message_delta(delta);
+        response_shape::normalize_message_status_fields(delta);
     }
 
     if let Some(usage) = object.get_mut("usage").and_then(Value::as_object_mut) {

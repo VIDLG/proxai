@@ -4,6 +4,6 @@ mod response;
 pub(crate) use self::request::{RequestSummary, ToolCategory};
 
 pub(crate) use self::response::{
-    handle_success_response, ResponseOutputItemKind, ResponsesUpstreamEvent,
+    handle_streaming_response, ResponseOutputItemKind, ResponsesUpstreamEvent,
     ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
 };
