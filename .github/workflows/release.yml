@@ -24,15 +24,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Pixi
-        uses: prefix-dev/setup-pixi@v0.9.0
+      - name: Install Python
+        uses: actions/setup-python@v6
         with:
-          pixi-version: latest
-          cache: true
-
-      - name: Validate tag matches Cargo.toml version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: pixi run just check_release_tag_version
+          python-version: "3.12"
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal --component clippy --component rustfmt
@@ -43,11 +38,20 @@ jobs:
           shared-key: windows-msvc
           cache-on-failure: true
 
+      - name: Install CI tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Validate tag matches Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: just ci-check-release-tag-version
+
       - name: Check
-        run: pixi run just check
+        run: just ci-check
 
       - name: Build release exe
-        run: pixi run just build
+        run: just ci-build
 
       - name: Set package name
         run: |
@@ -64,17 +68,19 @@ jobs:
           rm -f "dist/${PACKAGE_NAME}.exe"
           cp target/release/proxai.exe "dist/${PACKAGE_NAME}.exe"
 
+      - name: Install release note tools
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RELEASE_PACKAGE_NAME: ${{ env.PACKAGE_NAME }}
-        run: |
-          pixi run git-cliff --latest --output dist/release-notes.raw.md
-          pixi run python scripts/polish_release_notes.py \
-            --input dist/release-notes.raw.md \
-            --output dist/release-notes.md
+        run: just ci-release-notes
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1

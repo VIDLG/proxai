@@ -1,5 +1,29 @@
 set shell := ["pwsh", "-NoLogo", "-NoProfile", "-Command"]
 
+ci-fmt-check:
+    cargo fmt --check
+
+ci-clippy:
+    cargo clippy --all-targets -- -D warnings
+
+ci-test:
+    $env:CARGO_TARGET_DIR = ".cargo-target-tests"; cargo test
+
+ci-check-release-tag-version:
+    python scripts/check_release_tag_version.py
+
+ci-check:
+    just ci-fmt-check
+    just ci-clippy
+    just ci-test
+
+ci-build:
+    cargo build --release
+
+ci-release-notes:
+    git-cliff --latest --output dist/release-notes.raw.md
+    python scripts/polish_release_notes.py --input dist/release-notes.raw.md --output dist/release-notes.md
+
 fmt:
     pixi run -- cargo fmt
 
@@ -55,11 +79,11 @@ capture-disable:
 
 # Compare proxai Anthropic protocol types against official SDK
 compare-anthropic-protocol level="2":
-    pixi run -- python tools/compare_anthropic_protocol.py --level {{level}}
+    pixi run -- python tools/compare_anthropic_protocol.py --level {{ level }}
 
 # Compare proxai OpenAI protocol types against async-openai v0.40.2
 compare-openai-protocol level="2":
-    pixi run -- python tools/compare_openai_protocol.py --level {{level}}
+    pixi run -- python tools/compare_openai_protocol.py --level {{ level }}
 
 # Alias for backward compatibility
 compare-protocol: compare-anthropic-protocol
