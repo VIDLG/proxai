@@ -3,8 +3,7 @@
 //! This is intentionally request-focused. Response translation is not handled here;
 //! the selected provider protocol owns upstream response handling.
 
-use axum::body::Bytes;
-use axum::body::{Body, to_bytes};
+use axum::body::{Body, Bytes};
 use axum::http::{HeaderValue, Response, header};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -12,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 
 use crate::error::{InternalError, Result};
+use crate::http_support::NonStreamingResponse;
 use crate::protocol::anthropic::messages::{
     ContentBlock, DirectCaller, Message as AnthropicMessage, MessageCreateParamsBase, MessageType,
     Role, StopReason, TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock, Usage,
@@ -111,7 +111,7 @@ pub(crate) fn translate_request_payload(
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) async fn translate_streaming_response(
+pub(crate) fn translate_streaming_response(
     response: Response<Body>,
 ) -> Result<Response<Body>, InternalError> {
     Ok(translate_sse_response(
@@ -120,15 +120,12 @@ pub(crate) async fn translate_streaming_response(
     ))
 }
 
-pub(crate) async fn translate_non_streaming_response(
-    response: Response<Body>,
+pub(crate) fn translate_non_streaming_response(
+    response: NonStreamingResponse,
 ) -> Result<Response<Body>, InternalError> {
-    let status = response.status();
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .map_err(|error| InternalError::Io(std::io::Error::other(error.to_string())))?;
-    let value = serde_json::from_slice::<OpenaiResponseBody>(&body)?;
+    let value = serde_json::from_slice::<OpenaiResponseBody>(&response.body)?;
     let translated = translate_response_payload(&value);
+    let status = response.status;
     let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
     *response.status_mut() = status;
     response.headers_mut().insert(

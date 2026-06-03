@@ -1,4 +1,4 @@
-use crate::http_model::UpstreamResponseHead;
+use crate::http_support::UpstreamResponseHead;
 use crate::upstream::{UpstreamBodyStreamStats, UpstreamStreamMetrics};
 use getset::{CopyGetters, Getters};
 

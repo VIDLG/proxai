@@ -5,7 +5,7 @@ use crate::request::RequestId;
 use serde_json::{Value as JsonValue, json};
 use valuable::Valuable;
 
-use super::ProviderRequestEvent;
+use super::ProviderRequestLogPayload;
 use super::request_hints;
 
 #[derive(Debug, Clone, Valuable)]
@@ -33,8 +33,8 @@ pub(crate) struct ProviderRequestFields {
     pub(crate) capture: bool,
 }
 
-impl From<&ProviderRequestEvent<'_>> for ProviderRequestFields {
-    fn from(event: &ProviderRequestEvent<'_>) -> Self {
+impl From<&ProviderRequestLogPayload<'_>> for ProviderRequestFields {
+    fn from(event: &ProviderRequestLogPayload<'_>) -> Self {
         let mut hint_parts = Vec::new();
         let projection_hints = request_hints::render_projection_compact(&event.provider_request);
         if !projection_hints.is_empty() {

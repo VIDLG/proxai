@@ -1,5 +1,5 @@
 mod compat;
-mod diagnostic;
+
 mod limits;
 mod observed;
 mod sse;
@@ -10,8 +10,7 @@ mod tool_arguments;
 mod tracker;
 
 pub(crate) use state::{
-    ResponsesUpstreamEvent, ResponsesUpstreamMetadata, ResponsesUpstreamState,
-    ResponsesUpstreamStreamSnapshot,
+    ResponsesUpstreamMetadata, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
 };
 pub(crate) use streaming::handle_streaming_response;
 pub(crate) use summary::{ResponseOutputItemKind, ResponseSummary};

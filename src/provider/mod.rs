@@ -10,7 +10,9 @@ mod transport;
 use crate::protocol::ProviderProtocol;
 
 pub(crate) use request::{ProviderRequest, ProviderRequestView};
-pub(crate) use response::{ProviderNonStreamingResponseContext, ProviderStreamingResponseContext};
+pub(crate) use response::{
+    handle_non_streaming_success_response, handle_streaming_success_response,
+};
 pub(crate) use transport::{
     ProviderStreamingResponsePolicy, ProviderTransport, ProviderTransportError,
 };

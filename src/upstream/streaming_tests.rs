@@ -5,7 +5,18 @@ use std::task::Context;
 use std::time::Instant;
 
 use super::{BodyAction, BodyObserver, MonitoredUpstreamBodyStream};
-use crate::http_model::UpstreamResponseHead;
+
+fn test_obs() -> crate::observe::ObserveContext {
+    let request_id = crate::request::RequestId::from(1);
+    crate::observe::ObserveContext::new(
+        request_id,
+        std::time::Instant::now(),
+        crate::observe::CaptureController::new(None, crate::config::CaptureConfig::default())
+            .session(request_id),
+        tracing::Span::none(),
+    )
+}
+use crate::http_support::UpstreamResponseHead;
 use crate::upstream::UpstreamBodyStreamStats;
 
 #[derive(Default)]
@@ -77,8 +88,7 @@ async fn generic_stream_records_chunks_and_outcome() {
         test_head(),
         Instant::now(),
         observer,
-        None,
-        tracing::Span::none(),
+        test_obs(),
         None,
     );
 
@@ -109,8 +119,7 @@ async fn generic_stream_allows_observer_inject_and_close_on_pending() {
         test_head(),
         Instant::now(),
         observer,
-        None,
-        tracing::Span::none(),
+        test_obs(),
         None,
     );
 

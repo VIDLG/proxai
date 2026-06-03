@@ -1,6 +1,6 @@
 use crate::{
     error::ConfigError,
-    logging::DurationThresholds,
+    observe::DurationThresholds,
     protocol::{ProviderProtocol, RequestProtocol},
 };
 use serde::{Deserialize, Serialize};

@@ -7,27 +7,25 @@ use crate::paths;
 use crate::request::RequestId;
 use crate::upstream::UpstreamStreamMetrics;
 
-use super::ResponsesUpstreamStreamSnapshot;
-use super::sse::{is_terminal_event, is_tool_argument_done};
-use super::summary::ResponseSummary;
 use crate::protocol::ErrorObject;
 use crate::protocol::openai_responses::{Billing, Conversation};
+use crate::provider::openai::responses::{ResponseSummary, ResponsesUpstreamStreamSnapshot};
 use crate::sse::SseEventScanner;
 
-pub(super) struct ResponsesStreamDiagnostics {
+pub(crate) struct OpenaiResponsesStreamDiagnostics {
     request_id: RequestId,
     recent_tail: Vec<u8>,
 }
 
-impl ResponsesStreamDiagnostics {
-    pub(super) fn new(request_id: RequestId) -> Self {
+impl OpenaiResponsesStreamDiagnostics {
+    pub(crate) fn new(request_id: RequestId) -> Self {
         Self {
             request_id,
             recent_tail: Vec::new(),
         }
     }
 
-    pub(super) fn observe_chunk(&mut self, chunk: &[u8]) {
+    pub(crate) fn observe_chunk(&mut self, chunk: &[u8]) {
         const MAX_STREAM_DIAGNOSTIC_TAIL_BYTES: usize = 16 * 1024;
 
         self.recent_tail.extend_from_slice(chunk);
@@ -37,7 +35,7 @@ impl ResponsesStreamDiagnostics {
         }
     }
 
-    pub(super) fn write_unfinished_tool_diagnostic(
+    pub(crate) fn write_unfinished_tool_diagnostic(
         &self,
         snapshot: &ResponsesUpstreamStreamSnapshot,
     ) -> Option<String> {
@@ -48,9 +46,9 @@ impl ResponsesStreamDiagnostics {
             .duration_since(UNIX_EPOCH)
             .ok()?
             .as_millis();
-        let raw_request_id: u64 = self.request_id.into();
+        let request_id = self.request_id.as_u64();
         let path = logs_dir.join(format!(
-            "unfinished-tool-diagnostic-{timestamp}-{raw_request_id:06}.json"
+            "unfinished-tool-diagnostic-{timestamp}-{request_id:06}.json"
         ));
 
         let body =
@@ -310,6 +308,27 @@ enum ToolArgumentsParseResult {
     },
 }
 
+const TERMINAL_EVENT_TYPES: &[&str] = &[
+    "response.function_call_arguments.done",
+    "response.completed",
+    "response.incomplete",
+    "response.failed",
+    "response.error",
+];
+
+fn is_tool_argument_done(event: &crate::sse::SseEvent) -> bool {
+    event.matches_type_or_data("response.function_call_arguments.done")
+}
+
+fn is_terminal_event(event: &crate::sse::SseEvent) -> bool {
+    TERMINAL_EVENT_TYPES
+        .iter()
+        .copied()
+        .any(|event_type| event.matches_type_or_data(event_type))
+        || event.data.contains("\"type\":\"error\"")
+        || event.data.contains("\"type\": \"error\"")
+}
+
 #[derive(Deserialize)]
 struct FunctionCallArgumentsDeltaEventData {
     #[serde(rename = "type")]
@@ -320,5 +339,5 @@ struct FunctionCallArgumentsDeltaEventData {
 }
 
 #[cfg(test)]
-#[path = "diagnostic_tests.rs"]
+#[path = "openai_responses_tests.rs"]
 mod tests;

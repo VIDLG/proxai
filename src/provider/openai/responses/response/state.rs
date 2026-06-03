@@ -1,8 +1,8 @@
 use crate::protocol::ErrorObject;
 use crate::protocol::openai_responses::ResponseProjection;
 
-use crate::http_model::UpstreamResponseHead;
-use crate::upstream::{UpstreamStreamError, UpstreamStreamMetrics};
+use crate::http_support::UpstreamResponseHead;
+use crate::upstream::UpstreamStreamMetrics;
 
 use super::limits::ResponseLimits;
 use super::observed::{ObservedState, ObservedUpdate};
@@ -112,21 +112,4 @@ pub(crate) struct ResponsesUpstreamStreamSnapshot {
     pub(crate) metrics: UpstreamStreamMetrics,
     pub(crate) state: ResponsesUpstreamState,
     pub(crate) metadata: ResponsesUpstreamMetadata,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum ResponsesUpstreamEvent {
-    Headers {
-        head: UpstreamResponseHead,
-    },
-    Completed {
-        snapshot: Box<ResponsesUpstreamStreamSnapshot>,
-    },
-    Closed {
-        snapshot: Box<ResponsesUpstreamStreamSnapshot>,
-    },
-    Error {
-        snapshot: Box<ResponsesUpstreamStreamSnapshot>,
-        error: UpstreamStreamError,
-    },
 }

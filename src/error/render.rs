@@ -2,14 +2,12 @@ use axum::body::Body;
 use axum::http::{HeaderMap, HeaderValue, Response, StatusCode, header};
 
 use crate::config::ErrorResponseFormat;
-use crate::http_utils::{is_forwardable_error_response_header, response_with_headers};
+use crate::http_support::{is_forwardable_error_response_header, response_with_headers};
 
 use super::{Error, RequestError, UpstreamError, UpstreamResponseError};
 
 impl Error {
     pub(crate) fn into_response_with_format(self, format: ErrorResponseFormat) -> Response<Body> {
-        tracing::warn!(error = %self, "request failed");
-
         let (status, message, error_type, response_format) = match self {
             Error::Request(error) => {
                 let message = match error {

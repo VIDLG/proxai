@@ -17,9 +17,7 @@ use super::counts::{
 };
 use super::record::ValuableJson;
 use super::upstream::{stream_error_text, stream_error_token};
-use super::{
-    UpstreamLogRecord, active_log_format, emit_json_log, extend_json_object, rename_json_field,
-};
+use super::{active_log_format, emit_json_log, extend_json_object, rename_json_field};
 
 #[derive(Debug, Clone, Default, Valuable)]
 struct ChatResponseFields {
@@ -141,30 +139,12 @@ impl ValuableJson for ChatResponseFields {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum ChatLogRecord<'a> {
-    Upstream(UpstreamLogRecord<'a>),
-    Completed {
-        snapshot: &'a ChatUpstreamStreamSnapshot,
-    },
-    Closed {
-        snapshot: &'a ChatUpstreamStreamSnapshot,
-    },
-    StreamError {
-        snapshot: &'a ChatUpstreamStreamSnapshot,
-        error: &'a UpstreamStreamError,
-    },
+pub(crate) fn emit_chat_stream_completed(snapshot: &ChatUpstreamStreamSnapshot) {
+    emit_chat_stream_info("end", snapshot);
 }
 
-impl ChatLogRecord<'_> {
-    pub(crate) fn emit(self) {
-        match self {
-            Self::Upstream(record) => record.emit(),
-            Self::Completed { snapshot } => emit_chat_stream_info("end", snapshot),
-            Self::Closed { snapshot } => emit_chat_stream_info("closed", snapshot),
-            Self::StreamError { snapshot, error } => emit_chat_stream_error(snapshot, error),
-        }
-    }
+pub(crate) fn emit_chat_stream_closed(snapshot: &ChatUpstreamStreamSnapshot) {
+    emit_chat_stream_info("closed", snapshot);
 }
 
 fn chat_response_fields_from_snapshot(snapshot: &ChatUpstreamStreamSnapshot) -> ChatResponseFields {
@@ -225,7 +205,10 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
     }
 }
 
-fn emit_chat_stream_error(snapshot: &ChatUpstreamStreamSnapshot, error: &UpstreamStreamError) {
+pub(crate) fn emit_chat_stream_error(
+    snapshot: &ChatUpstreamStreamSnapshot,
+    error: &UpstreamStreamError,
+) {
     let head = &snapshot.head;
     let response = chat_response_fields_from_snapshot(snapshot);
 

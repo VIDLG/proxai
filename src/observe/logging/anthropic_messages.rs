@@ -126,28 +126,12 @@ impl ValuableJson for AnthropicResponseFields {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum AnthropicLogRecord<'a> {
-    Completed {
-        snapshot: &'a AnthropicUpstreamResponseSnapshot,
-    },
-    Closed {
-        snapshot: &'a AnthropicUpstreamResponseSnapshot,
-    },
-    StreamError {
-        snapshot: &'a AnthropicUpstreamResponseSnapshot,
-        error: &'a UpstreamStreamError,
-    },
+pub(crate) fn emit_anthropic_stream_completed(snapshot: &AnthropicUpstreamResponseSnapshot) {
+    emit_anthropic_stream_info("end", snapshot);
 }
 
-impl AnthropicLogRecord<'_> {
-    pub(crate) fn emit(self) {
-        match self {
-            Self::Completed { snapshot } => emit_anthropic_stream_info("end", snapshot),
-            Self::Closed { snapshot } => emit_anthropic_stream_info("closed", snapshot),
-            Self::StreamError { snapshot, error } => emit_anthropic_stream_error(snapshot, error),
-        }
-    }
+pub(crate) fn emit_anthropic_stream_closed(snapshot: &AnthropicUpstreamResponseSnapshot) {
+    emit_anthropic_stream_info("closed", snapshot);
 }
 
 fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseSnapshot) {
@@ -205,7 +189,7 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
     }
 }
 
-fn emit_anthropic_stream_error(
+pub(crate) fn emit_anthropic_stream_error(
     snapshot: &AnthropicUpstreamResponseSnapshot,
     error: &UpstreamStreamError,
 ) {

@@ -5,10 +5,10 @@ use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
-use crate::capture::CaptureSession;
 use crate::config::{ProviderCompatibility, ProviderConfig, normalize_provider_name};
 use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
-use crate::http_utils::filter_forwardable_headers;
+use crate::http_support::filter_forwardable_request_headers;
+use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
 use crate::protocol::ProviderProtocol;
 use crate::provider::{ProviderRequest, apply_request_auth_headers};
 
@@ -99,7 +99,7 @@ impl ProviderTransport {
         inbound_query: Option<String>,
         inbound_headers: HeaderMap,
         provider_request: ProviderRequest,
-        capture: &CaptureSession,
+        obs: &ObserveContext,
     ) -> std::result::Result<reqwest::Response, ProviderTransportError> {
         let upstream_path = match inbound_query {
             Some(query) => format!("{}?{}", provider_request.upstream_path(), query),
@@ -115,15 +115,13 @@ impl ProviderTransport {
         let capture_payload = provider_request.capture_payload().clone();
         let body = provider_request.into_body();
 
-        capture
-            .capture_provider_request(
-                &method,
-                url.as_str(),
-                &headers,
-                &body,
-                Some(&capture_payload),
-            )
-            .await;
+        obs.observe_provider_http_request_prepared(ProviderHttpRequestPrepared {
+            method: &method,
+            url: url.as_str(),
+            headers: &headers,
+            body: &body,
+            normalized_payload: Some(&capture_payload),
+        });
 
         self.client
             .request(method, url)
@@ -142,7 +140,7 @@ fn provider_request_headers(
     protocol: ProviderProtocol,
     api_key: &str,
 ) -> HeaderMap {
-    let mut provider_headers = filter_forwardable_headers(headers);
+    let mut provider_headers = filter_forwardable_request_headers(headers);
     if !provider_headers.contains_key(http::header::USER_AGENT) {
         provider_headers.insert(
             http::header::USER_AGENT,

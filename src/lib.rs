@@ -3,27 +3,22 @@ use axum::extract::{Request, State};
 use axum::http::Response;
 use axum::response::IntoResponse;
 use axum::{Router, routing::any};
-use capture::{CaptureController, CaptureSession};
+use observe::{CaptureController, InboundRequestReceived, RequestFailed};
 
 use getset::{CopyGetters, Getters};
-use headers::{ContentLength, HeaderMapExt};
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tracing::{Instrument, field::Empty, info_span};
 
-pub mod capture;
 pub mod config;
-pub mod diagnostics;
 pub mod error;
 pub mod formatting;
-pub mod http_model;
-pub(crate) mod http_utils;
+pub mod http_support;
 pub mod ingress;
-pub mod logging;
 pub mod mcp;
+pub mod observe;
 pub mod paths;
 pub(crate) mod pipeline;
 pub mod protocol;
@@ -39,11 +34,11 @@ use config::{
 };
 pub use error::Error;
 use error::{InternalError, RequestError, Result};
-pub use logging::TOOL_NAME_ALIASES;
+use observe::ObserveContext;
+pub use observe::TOOL_NAME_ALIASES;
 use pipeline::{InboundHttpFlow, run_provider_flow};
 use protocol::ProviderProtocol;
 use provider::ProviderTransport;
-use request::RequestId;
 use routing::{EffectiveDefaultProviderNames, EffectiveRoute};
 
 #[derive(Clone, Getters, CopyGetters)]
@@ -165,47 +160,31 @@ impl AppState {
 }
 
 async fn proxy(State(state): State<AppState>, request: Request<Body>) -> impl IntoResponse {
-    let request_id = generate_request_id();
-    let raw_request_id: u64 = request_id.into();
-    let span = info_span!(
-        "request",
-        request_id = raw_request_id,
-        request_reasoning_effort = Empty
-    );
-    let started = Instant::now();
-    let capture = state.capture().session(request_id);
-    let method = request.method().clone();
-    let path = request.uri().path().to_string();
-    let content_length = request
-        .headers()
-        .typed_get::<ContentLength>()
-        .map(|value| value.0);
-
-    span.in_scope(|| {
-        tracing::debug!(
-            event = "recv",
-            request_id = raw_request_id,
-            method = %method,
-            path,
-            content_length,
-        );
+    let obs = ObserveContext::start(state.capture().clone());
+    obs.observe_inbound_request_received(InboundRequestReceived {
+        method: request.method(),
+        uri: request.uri(),
+        headers: request.headers(),
     });
 
     let format = state.error_response_format();
 
-    proxy_inner(state, request, request_id, started, span.clone(), capture)
-        .instrument(span)
+    match obs
+        .instrument(proxy_inner(state, request, obs.clone()))
         .await
-        .unwrap_or_else(|error| error.into_response_with_format(format))
+    {
+        Ok(response) => response,
+        Err(error) => {
+            obs.observe_request_failed(RequestFailed { error: &error });
+            error.into_response_with_format(format)
+        }
+    }
 }
 
 async fn proxy_inner(
     state: AppState,
     inbound_request: Request<Body>,
-    request_id: RequestId,
-    started: Instant,
-    span: tracing::Span,
-    capture: CaptureSession,
+    obs: ObserveContext,
 ) -> Result<Response<Body>> {
     let (inbound_request_parts, inbound_body) = inbound_request.into_parts();
     let body_bytes = to_bytes(inbound_body, usize::MAX)
@@ -214,10 +193,7 @@ async fn proxy_inner(
     let inbound_http = InboundHttpFlow::new(
         inbound_request_parts,
         body_bytes,
-        request_id,
-        started,
-        span,
-        capture,
+        obs,
         state.error_response_format(),
     );
     let prepared_provider = inbound_http
@@ -233,12 +209,4 @@ async fn proxy_inner(
     let transport = state.provider(prepared_provider.provider_name())?;
 
     run_provider_flow(prepared_provider, transport).await
-}
-
-fn generate_request_id() -> RequestId {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or_default()
-        .into()
 }

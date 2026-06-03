@@ -1,7 +1,7 @@
 use axum::http::HeaderMap;
 use std::time::Duration;
 
-use crate::http_model::UpstreamResponseHead;
+use crate::http_support::UpstreamResponseHead;
 use crate::protocol::openai::chat_completions::{
     ChatResponseProjection, ChatStreamResponseProjection, CreateChatCompletionResponse,
     CreateChatCompletionStreamResponse,

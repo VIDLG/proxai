@@ -1,8 +1,8 @@
 use serde_json::Value;
 
 use crate::error::{InternalError, Result};
+use crate::observe::ObserveContext;
 use crate::protocol::openai_responses::RequestProjection;
-use crate::request::RequestId;
 
 use super::projection::project_payload;
 use super::summary::RequestSummary;
@@ -16,11 +16,11 @@ pub(crate) struct PreparedProviderRequest {
 
 pub(crate) fn prepare_provider_request(
     payload: &Value,
-    request_id: Option<RequestId>,
+    obs: Option<&ObserveContext>,
     request_model: &str,
     upstream_model: &str,
 ) -> Result<PreparedProviderRequest, InternalError> {
-    let projection = project_payload(payload, request_id).unwrap_or_default();
+    let projection = project_payload(payload, obs).unwrap_or_default();
     let summary = RequestSummary::from(&projection);
 
     let mut payload = payload.clone();

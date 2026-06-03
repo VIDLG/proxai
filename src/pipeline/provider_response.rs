@@ -1,7 +1,8 @@
-use axum::body::Body;
+use axum::body::{Body, to_bytes};
 use axum::http::Response;
 
 use crate::error::{InternalError, Result};
+use crate::http_support::NonStreamingResponse;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::{translate_non_streaming_response, translate_streaming_response};
 
@@ -48,7 +49,7 @@ impl ProviderStreamingHttpFlow {
             ..
         } = self;
 
-        translate_streaming_response(inbound_protocol, provider_protocol, response).await
+        translate_streaming_response(inbound_protocol, provider_protocol, response)
     }
 }
 
@@ -64,6 +65,11 @@ impl ProviderNonStreamingHttpFlow {
             ..
         } = self;
 
-        translate_non_streaming_response(inbound_protocol, provider_protocol, response).await
+        let (parts, body) = response.into_parts();
+        let body = to_bytes(body, usize::MAX)
+            .await
+            .map_err(|error| InternalError::Io(std::io::Error::other(error.to_string())))?;
+        let response = NonStreamingResponse::from_parts(parts, body);
+        translate_non_streaming_response(inbound_protocol, provider_protocol, response)
     }
 }

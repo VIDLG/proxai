@@ -8,8 +8,8 @@ use tokio::fs;
 use tracing::info;
 
 use crate::error::Result;
-use crate::http_model::UpstreamResponseHead;
-use crate::http_utils::ContentType;
+use crate::http_support::ContentType;
+use crate::http_support::UpstreamResponseHead;
 use crate::request::RequestId;
 
 use super::model::{CaptureDestination, InboundRequestCapture, ProviderRequestCapture};

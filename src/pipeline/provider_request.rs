@@ -6,7 +6,7 @@ use getset::Getters;
 
 use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
-use crate::logging::{ProviderRequestEvent, RequestBodySizes};
+use crate::observe::{ProviderRequestPrepared, RequestBodySizes};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::{ProviderRequest, ProviderTransport, ProviderTransportError};
 use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
@@ -44,10 +44,7 @@ impl PreparedInboundFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: PreparedInbound { request },
         } = self;
@@ -65,10 +62,7 @@ impl PreparedInboundFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: RoutedInbound {
                 request,
@@ -85,10 +79,7 @@ impl RoutedInboundFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage:
                 RoutedInbound {
@@ -103,35 +94,28 @@ impl RoutedInboundFlow {
                 },
         } = self;
 
-        let provider_request = translate_request(&request, provider_protocol, &upstream_model)?;
+        let provider_request =
+            translate_request(&request, provider_protocol, &upstream_model, &obs)?;
 
-        span.in_scope(|| {
-            ProviderRequestEvent {
-                request_id,
-                method: method.clone(),
-                uri: uri.clone(),
-                request_sizes: RequestBodySizes {
-                    inbound: request.body_len(),
-                    provider: provider_request.body().len(),
-                },
-                request_protocol: request.protocol(),
-                provider: provider_name.clone(),
-                route_name: route_name.clone(),
-                provider_protocol,
-                provider_request: provider_request.view(),
-                capture: capture.provider_request_enabled(),
-            }
-            .emit()
+        obs.observe_provider_request_prepared(ProviderRequestPrepared {
+            method: method.clone(),
+            uri: uri.clone(),
+            request_sizes: RequestBodySizes {
+                inbound: request.body_len(),
+                provider: provider_request.body().len(),
+            },
+            request_protocol: request.protocol(),
+            provider: provider_name.clone(),
+            route_name: route_name.clone(),
+            provider_protocol,
+            provider_request: provider_request.view(),
         });
 
         Ok(PreparedProviderFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: PreparedProvider {
                 inbound_protocol: request.protocol(),
@@ -157,10 +141,7 @@ impl PreparedProviderFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage:
                 PreparedProvider {
@@ -176,7 +157,7 @@ impl PreparedProviderFlow {
                 inbound_query,
                 headers.clone(),
                 request,
-                &capture,
+                &obs,
             )
             .await?;
 
@@ -184,10 +165,7 @@ impl PreparedProviderFlow {
             method,
             uri,
             headers: HeaderMap::new(),
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: UpstreamHttp {
                 inbound_protocol,

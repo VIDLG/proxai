@@ -4,7 +4,7 @@ use owo_colors::OwoColorize;
 use proxai::{
     AppState,
     config::{AppConfig, LogLevel, LogOutputFormat, MatchKind, RouteConfig},
-    logging, mcp, paths,
+    mcp, observe, paths,
     protocol::RequestProtocol,
 };
 use std::collections::BTreeMap;
@@ -351,7 +351,7 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
         .and_then(|value| normalize_config_value(Some(value)))
         .unwrap_or_else(|| default_provider.api_key.clone());
 
-    logging::init(
+    observe::init_logging(
         config.logging.level,
         config.logging.output_format,
         config.logging.use_color,

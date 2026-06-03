@@ -2,13 +2,15 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+use axum::body::Bytes;
 use axum::http::{HeaderMap, Method, StatusCode, Uri};
+use tokio::sync::{mpsc, oneshot};
 use tracing::warn;
 
 use crate::config::CaptureConfig;
 
-use crate::http_model::UpstreamResponseHead;
-use crate::http_utils::ContentType;
+use crate::http_support::ContentType;
+use crate::http_support::UpstreamResponseHead;
 use crate::request::RequestId;
 
 use super::model::{
@@ -20,6 +22,50 @@ use super::write::{
     UpstreamResponseCaptureWriter, capture_inbound_request, capture_outbound_response_headers,
     capture_provider_request, capture_upstream_response_body, capture_upstream_response_headers,
 };
+
+const CAPTURE_QUEUE_CAPACITY: usize = 1024;
+
+#[derive(Debug)]
+enum CaptureJob {
+    InboundRequest {
+        request_id: RequestId,
+        destination: CaptureDestination,
+        method: Method,
+        uri: Uri,
+        headers: HeaderMap,
+        body: Bytes,
+    },
+    ProviderRequest {
+        request_id: RequestId,
+        destination: CaptureDestination,
+        method: Method,
+        url: String,
+        headers: HeaderMap,
+        body: Bytes,
+        normalized_payload: Option<serde_json::Value>,
+    },
+    UpstreamResponseHeaders {
+        request_id: RequestId,
+        destination: CaptureDestination,
+        head: UpstreamResponseHead,
+    },
+    UpstreamResponseBody {
+        request_id: RequestId,
+        destination: CaptureDestination,
+        content_type: Option<ContentType>,
+        body: Bytes,
+    },
+    OutboundResponseHeaders {
+        request_id: RequestId,
+        destination: CaptureDestination,
+        status: StatusCode,
+        content_type: Option<String>,
+        headers: HeaderMap,
+    },
+    Flush {
+        done: oneshot::Sender<()>,
+    },
+}
 
 #[derive(Debug, Clone)]
 pub struct CaptureStatus {
@@ -70,16 +116,21 @@ pub struct CaptureController {
     defaults: CaptureConfig,
     runtime: Arc<RwLock<CaptureRuntimeState>>,
     records: Arc<RwLock<VecDeque<CaptureRecord>>>,
+    jobs: mpsc::Sender<CaptureJob>,
 }
 
 impl CaptureController {
     pub fn new(dir: Option<PathBuf>, defaults: CaptureConfig) -> Self {
-        Self {
+        let (jobs, rx) = mpsc::channel(CAPTURE_QUEUE_CAPACITY);
+        let controller = Self {
             dir,
             defaults,
             runtime: Arc::new(RwLock::new(CaptureRuntimeState::default())),
             records: Arc::new(RwLock::new(VecDeque::new())),
-        }
+            jobs,
+        };
+        controller.spawn_worker(rx);
+        controller
     }
 
     #[allow(dead_code)]
@@ -196,6 +247,195 @@ impl CaptureController {
         match query {
             CaptureQuery::Show(target) => self.render_latest(target.as_ref()),
             CaptureQuery::List(limit) => self.render_list(limit.unwrap_or(10)),
+        }
+    }
+
+    pub async fn flush(&self) {
+        let (done, wait) = oneshot::channel();
+        if self.jobs.send(CaptureJob::Flush { done }).await.is_ok() {
+            let _ = wait.await;
+        }
+    }
+
+    fn enqueue(&self, job: CaptureJob) {
+        if let Err(error) = self.jobs.try_send(job) {
+            warn!(
+                event = "capture_drop",
+                reason = %error,
+                "capture job dropped"
+            );
+        }
+    }
+
+    fn spawn_worker(&self, mut rx: mpsc::Receiver<CaptureJob>) {
+        let controller = self.clone();
+        let worker = async move {
+            while let Some(job) = rx.recv().await {
+                controller.handle_job(job).await;
+            }
+        };
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(worker);
+        } else {
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("capture worker runtime should build");
+                runtime.block_on(worker);
+            });
+        }
+    }
+
+    async fn handle_job(&self, job: CaptureJob) {
+        match job {
+            CaptureJob::InboundRequest {
+                request_id,
+                destination,
+                method,
+                uri,
+                headers,
+                body,
+            } => {
+                let record = match capture_inbound_request(
+                    &destination,
+                    InboundRequestCapture {
+                        request_id,
+                        method: &method,
+                        uri: &uri,
+                        headers: &headers,
+                        body: &body,
+                    },
+                )
+                .await
+                {
+                    Ok(record) => record,
+                    Err(error) => {
+                        log_capture_failure(request_id, "inbound_request", &error);
+                        return;
+                    }
+                };
+                self.update_record(record.request_id, record.prefix, |entry| {
+                    entry.inbound_request = Some(super::model::InboundRequestArtifacts {
+                        metadata_path: record.metadata_path,
+                        body_path: record.body_path,
+                    });
+                });
+            }
+            CaptureJob::ProviderRequest {
+                request_id,
+                destination,
+                method,
+                url,
+                headers,
+                body,
+                normalized_payload,
+            } => {
+                let record = match capture_provider_request(
+                    &destination,
+                    ProviderRequestCapture {
+                        request_id,
+                        method: &method,
+                        url: &url,
+                        headers: &headers,
+                        body: &body,
+                        normalized_payload: normalized_payload.as_ref(),
+                    },
+                )
+                .await
+                {
+                    Ok(record) => record,
+                    Err(error) => {
+                        log_capture_failure(request_id, "provider_request", &error);
+                        return;
+                    }
+                };
+                self.update_record(record.request_id, record.prefix, |entry| {
+                    entry.provider_request = Some(ProviderRequestArtifacts {
+                        metadata_path: record.metadata_path,
+                        body_path: record.body_path,
+                    });
+                });
+            }
+            CaptureJob::UpstreamResponseHeaders {
+                request_id,
+                destination,
+                head,
+            } => {
+                let path = match capture_upstream_response_headers(&destination, request_id, &head)
+                    .await
+                {
+                    Ok(path) => path,
+                    Err(error) => {
+                        log_capture_failure(request_id, "upstream_response_headers", &error);
+                        return;
+                    }
+                };
+                self.update_record(request_id, destination.prefix_string(), |entry| {
+                    entry
+                        .upstream_response
+                        .get_or_insert_with(UpstreamResponseArtifacts::default)
+                        .headers_path = Some(path);
+                });
+            }
+            CaptureJob::UpstreamResponseBody {
+                request_id,
+                destination,
+                content_type,
+                body,
+            } => {
+                let path = match capture_upstream_response_body(
+                    &destination,
+                    content_type.as_ref(),
+                    &body,
+                )
+                .await
+                {
+                    Ok(path) => path,
+                    Err(error) => {
+                        log_capture_failure(request_id, "upstream_response_body", &error);
+                        return;
+                    }
+                };
+                self.update_record(request_id, destination.prefix_string(), |entry| {
+                    entry
+                        .upstream_response
+                        .get_or_insert_with(UpstreamResponseArtifacts::default)
+                        .body_path = Some(path);
+                });
+            }
+            CaptureJob::OutboundResponseHeaders {
+                request_id,
+                destination,
+                status,
+                content_type,
+                headers,
+            } => {
+                let path = match capture_outbound_response_headers(
+                    &destination,
+                    request_id,
+                    status,
+                    content_type.as_deref(),
+                    &headers,
+                )
+                .await
+                {
+                    Ok(path) => path,
+                    Err(error) => {
+                        log_capture_failure(request_id, "outbound_response_headers", &error);
+                        return;
+                    }
+                };
+                self.update_record(request_id, destination.prefix_string(), |entry| {
+                    entry
+                        .outbound_response
+                        .get_or_insert_with(OutboundResponseArtifacts::default)
+                        .headers_path = Some(path);
+                });
+            }
+            CaptureJob::Flush { done } => {
+                let _ = done.send(());
+            }
         }
     }
 
@@ -363,6 +603,16 @@ impl CaptureController {
     }
 }
 
+fn log_capture_failure(request_id: RequestId, kind: &'static str, error: &dyn std::fmt::Display) {
+    warn!(
+        request_id = %request_id,
+        event = "capture_failed",
+        kind,
+        error = %error,
+        "capture failed"
+    );
+}
+
 #[derive(Debug, Clone)]
 pub struct CaptureSession {
     controller: CaptureController,
@@ -387,7 +637,7 @@ impl CaptureSession {
             .flatten()
     }
 
-    pub(crate) async fn capture_inbound_request(
+    pub(crate) fn capture_inbound_request(
         &self,
         method: &Method,
         uri: &Uri,
@@ -397,37 +647,20 @@ impl CaptureSession {
         if !self.config.inbound_request_enabled {
             return;
         }
-        let Some(destination) = self.destination.as_ref() else {
+        let Some(destination) = self.destination.clone() else {
             return;
         };
-        let record = match capture_inbound_request(
+        self.controller.enqueue(CaptureJob::InboundRequest {
+            request_id: self.request_id,
             destination,
-            InboundRequestCapture {
-                request_id: self.request_id,
-                method,
-                uri,
-                headers,
-                body,
-            },
-        )
-        .await
-        {
-            Ok(record) => record,
-            Err(error) => {
-                self.log_capture_failure("inbound_request", &error);
-                return;
-            }
-        };
-        self.controller
-            .update_record(record.request_id, record.prefix, |entry| {
-                entry.inbound_request = Some(super::model::InboundRequestArtifacts {
-                    metadata_path: record.metadata_path,
-                    body_path: record.body_path,
-                });
-            });
+            method: method.clone(),
+            uri: uri.clone(),
+            headers: headers.clone(),
+            body: Bytes::copy_from_slice(body),
+        });
     }
 
-    pub(crate) async fn capture_provider_request(
+    pub(crate) fn capture_provider_request(
         &self,
         method: &Method,
         url: &str,
@@ -438,86 +671,51 @@ impl CaptureSession {
         if !self.config.provider_request_enabled {
             return;
         }
-        let Some(destination) = self.destination.as_ref() else {
+        let Some(destination) = self.destination.clone() else {
             return;
         };
-        let record = match capture_provider_request(
+        self.controller.enqueue(CaptureJob::ProviderRequest {
+            request_id: self.request_id,
             destination,
-            ProviderRequestCapture {
-                request_id: self.request_id,
-                method,
-                url,
-                headers,
-                body,
-                normalized_payload,
-            },
-        )
-        .await
-        {
-            Ok(record) => record,
-            Err(error) => {
-                self.log_capture_failure("provider_request", &error);
-                return;
-            }
-        };
-        self.controller
-            .update_record(record.request_id, record.prefix, |entry| {
-                entry.provider_request = Some(ProviderRequestArtifacts {
-                    metadata_path: record.metadata_path,
-                    body_path: record.body_path,
-                });
-            });
+            method: method.clone(),
+            url: url.to_string(),
+            headers: headers.clone(),
+            body: Bytes::copy_from_slice(body),
+            normalized_payload: normalized_payload.cloned(),
+        });
     }
 
-    pub(crate) async fn capture_upstream_response(&self, head: &UpstreamResponseHead, body: &[u8]) {
-        self.capture_upstream_response_headers(head).await;
-        self.capture_upstream_response_body(head.content_type().as_ref(), body)
-            .await;
+    pub(crate) fn capture_upstream_response(&self, head: &UpstreamResponseHead, body: &[u8]) {
+        self.capture_upstream_response_headers(head);
+        self.capture_upstream_response_body(head.content_type(), body);
     }
 
-    pub(crate) async fn capture_upstream_response_headers(&self, head: &UpstreamResponseHead) {
-        let Some(destination) = self.destination_for_upstream_response() else {
+    pub(crate) fn capture_upstream_response_headers(&self, head: &UpstreamResponseHead) {
+        let Some(destination) = self.destination_for_upstream_response().cloned() else {
             return;
         };
-        let path = match capture_upstream_response_headers(destination, self.request_id, head).await
-        {
-            Ok(path) => path,
-            Err(error) => {
-                self.log_capture_failure("upstream_response_headers", &error);
-                return;
-            }
-        };
         self.controller
-            .update_record(self.request_id, destination.prefix_string(), |entry| {
-                entry
-                    .upstream_response
-                    .get_or_insert_with(UpstreamResponseArtifacts::default)
-                    .headers_path = Some(path);
+            .enqueue(CaptureJob::UpstreamResponseHeaders {
+                request_id: self.request_id,
+                destination,
+                head: head.clone(),
             });
     }
 
-    pub(crate) async fn capture_upstream_response_body(
+    pub(crate) fn capture_upstream_response_body(
         &self,
-        content_type: Option<&ContentType>,
+        content_type: Option<ContentType>,
         body: &[u8],
     ) {
-        let Some(destination) = self.destination_for_upstream_response() else {
+        let Some(destination) = self.destination_for_upstream_response().cloned() else {
             return;
         };
-        let path = match capture_upstream_response_body(destination, content_type, body).await {
-            Ok(path) => path,
-            Err(error) => {
-                self.log_capture_failure("upstream_response_body", &error);
-                return;
-            }
-        };
-        self.controller
-            .update_record(self.request_id, destination.prefix_string(), |entry| {
-                entry
-                    .upstream_response
-                    .get_or_insert_with(UpstreamResponseArtifacts::default)
-                    .body_path = Some(path);
-            });
+        self.controller.enqueue(CaptureJob::UpstreamResponseBody {
+            request_id: self.request_id,
+            destination,
+            content_type,
+            body: Bytes::copy_from_slice(body),
+        });
     }
 
     pub(crate) fn create_upstream_response_writer(
@@ -540,23 +738,13 @@ impl CaptureSession {
                 Some(writer)
             }
             Err(error) => {
-                self.log_capture_failure("upstream_response_stream", &error);
+                log_capture_failure(self.request_id, "upstream_response_stream", &error);
                 None
             }
         }
     }
 
-    fn log_capture_failure(&self, kind: &'static str, error: &dyn std::fmt::Display) {
-        warn!(
-            request_id = %self.request_id,
-            event = "capture_failed",
-            kind,
-            error = %error,
-            "capture failed"
-        );
-    }
-
-    pub(crate) async fn capture_outbound_response_headers(
+    pub(crate) fn capture_outbound_response_headers(
         &self,
         status: StatusCode,
         content_type: Option<&str>,
@@ -565,30 +753,16 @@ impl CaptureSession {
         if !self.config.outbound_response_enabled {
             return;
         }
-        let Some(destination) = self.destination.as_ref() else {
+        let Some(destination) = self.destination.clone() else {
             return;
         };
-        let path = match capture_outbound_response_headers(
-            destination,
-            self.request_id,
-            status,
-            content_type,
-            headers,
-        )
-        .await
-        {
-            Ok(path) => path,
-            Err(error) => {
-                self.log_capture_failure("outbound_response_headers", &error);
-                return;
-            }
-        };
         self.controller
-            .update_record(self.request_id, destination.prefix_string(), |entry| {
-                entry
-                    .outbound_response
-                    .get_or_insert_with(OutboundResponseArtifacts::default)
-                    .headers_path = Some(path);
+            .enqueue(CaptureJob::OutboundResponseHeaders {
+                request_id: self.request_id,
+                destination,
+                status,
+                content_type: content_type.map(ToString::to_string),
+                headers: headers.clone(),
             });
     }
 }

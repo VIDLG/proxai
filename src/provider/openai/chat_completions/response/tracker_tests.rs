@@ -3,7 +3,7 @@ use bytes::Bytes;
 use serde_json::json;
 
 use super::{ChatResponseObservation, ChatUpstreamResponseTracker};
-use crate::http_utils::ContentType;
+use crate::http_support::ContentType;
 use crate::protocol::openai::chat_completions::FinishReason;
 
 #[test]

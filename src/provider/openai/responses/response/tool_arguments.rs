@@ -41,10 +41,6 @@ impl ToolArgumentStreamState {
         !self.pending_items.is_empty()
     }
 
-    pub(super) fn pending_item_count(&self) -> usize {
-        self.pending_items.len()
-    }
-
     fn observe_delta(&mut self, event: &SseEvent, timeout: Option<Duration>) -> Result<(), String> {
         let item_id = event
             .payload_json()

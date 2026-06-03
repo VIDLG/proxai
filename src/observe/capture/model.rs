@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use axum::http::{HeaderMap, Method, Uri};
 use serde_json::Value;
 
-use crate::http_utils::ContentType;
+use crate::http_support::ContentType;
 use crate::request::RequestId;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -121,8 +121,8 @@ impl CapturePrefix {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        let raw_request_id: u64 = request_id.into();
-        Self(format!("{timestamp}-{raw_request_id:06}"))
+        let request_id = request_id.as_u64();
+        Self(format!("{timestamp}-{request_id:06}"))
     }
 }
 

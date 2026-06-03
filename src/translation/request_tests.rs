@@ -3,8 +3,20 @@ use serde_json::json;
 use crate::ingress;
 use crate::protocol::ProviderProtocol;
 use crate::provider::ProviderRequestView;
+use crate::request::RequestId;
 
 use super::translate_request;
+
+fn test_obs() -> crate::observe::ObserveContext {
+    let request_id = RequestId::from(1);
+    crate::observe::ObserveContext::new(
+        request_id,
+        std::time::Instant::now(),
+        crate::observe::CaptureController::new(None, crate::config::CaptureConfig::default())
+            .session(request_id),
+        tracing::Span::none(),
+    )
+}
 
 #[test]
 fn translates_openai_responses_inbound_to_chat_provider_request() {
@@ -24,10 +36,12 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
+    let obs = test_obs();
     let provider_request = translate_request(
         &inbound,
         ProviderProtocol::OpenaiChatCompletions,
         "MiniMax-M3",
+        &obs,
     )
     .expect("translation should produce a Chat Completions provider request");
 
@@ -71,9 +85,14 @@ fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let provider_request =
-        translate_request(&inbound, ProviderProtocol::AnthropicMessages, "glm-5.1")
-            .expect("translation should produce an Anthropic provider request");
+    let obs = test_obs();
+    let provider_request = translate_request(
+        &inbound,
+        ProviderProtocol::AnthropicMessages,
+        "glm-5.1",
+        &obs,
+    )
+    .expect("translation should produce an Anthropic provider request");
 
     let provider_body: serde_json::Value =
         serde_json::from_slice(provider_request.body()).expect("provider body must be JSON");

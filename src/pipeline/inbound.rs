@@ -1,14 +1,11 @@
-use std::time::Instant;
-
 use axum::body::Bytes;
 use axum::http::request::Parts;
 
-use crate::capture::CaptureSession;
 use crate::config::ErrorResponseFormat;
 use crate::error::{RequestError, Result};
 use crate::ingress::{PreparedInboundRequest, prepare_inbound_request};
+use crate::observe::{InboundRequestPrepared, ObserveContext};
 use crate::protocol::RequestProtocol;
-use crate::request::RequestId;
 
 use super::ProxyFlow;
 
@@ -27,20 +24,14 @@ impl InboundHttpFlow {
     pub(crate) fn new(
         parts: Parts,
         body: Bytes,
-        request_id: RequestId,
-        started: Instant,
-        span: tracing::Span,
-        capture: CaptureSession,
+        obs: ObserveContext,
         error_response_format: ErrorResponseFormat,
     ) -> Self {
         Self {
             method: parts.method,
             uri: parts.uri,
             headers: parts.headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: InboundHttp { body },
         }
@@ -51,10 +42,7 @@ impl InboundHttpFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: InboundHttp { body },
         } = self;
@@ -70,18 +58,18 @@ impl InboundHttpFlow {
             }
         };
         let request = prepare_inbound_request(request_protocol, &body)?;
-        capture
-            .capture_inbound_request(&method, &uri, &headers, &body)
-            .await;
+        obs.observe_inbound_request_prepared(InboundRequestPrepared {
+            method: &method,
+            uri: &uri,
+            headers: &headers,
+            body: &body,
+        });
 
         Ok(PreparedInboundFlow {
             method,
             uri,
             headers,
-            request_id,
-            started,
-            span,
-            capture,
+            obs,
             error_response_format,
             stage: PreparedInbound { request },
         })

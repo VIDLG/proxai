@@ -1,6 +1,6 @@
 //! `openai_chat_completions -> openai_responses` response translation.
 
-use axum::body::{Body, Bytes, to_bytes};
+use axum::body::{Body, Bytes};
 use axum::http::{HeaderValue, Response, header};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::io;
 
 use crate::error::{InternalError, Result};
+use crate::http_support::NonStreamingResponse;
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
@@ -16,7 +17,7 @@ use crate::translation::sse::{
     SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
 };
 
-pub(crate) async fn translate_streaming_response(
+pub(crate) fn translate_streaming_response(
     response: Response<Body>,
 ) -> Result<Response<Body>, InternalError> {
     Ok(translate_sse_response(
@@ -25,17 +26,15 @@ pub(crate) async fn translate_streaming_response(
     ))
 }
 
-pub(crate) async fn translate_non_streaming_response(
-    response: Response<Body>,
+pub(crate) fn translate_non_streaming_response(
+    response: NonStreamingResponse,
 ) -> Result<Response<Body>, InternalError> {
-    let status = response.status();
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .map_err(|error| InternalError::Io(std::io::Error::other(error.to_string())))?;
-    let chat =
-        serde_json::from_slice::<async_openai::types::chat::CreateChatCompletionResponse>(&body)
-            .map(CreateChatCompletionResponse::from)?;
+    let chat = serde_json::from_slice::<async_openai::types::chat::CreateChatCompletionResponse>(
+        &response.body,
+    )
+    .map(CreateChatCompletionResponse::from)?;
     let translated = translate_chat_response(&chat);
+    let status = response.status;
     let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
     *response.status_mut() = status;
     response.headers_mut().insert(

@@ -1,72 +1,54 @@
 use axum::body::Body;
 use axum::http::Response;
 
-use crate::http_model::UpstreamResponseHead;
-use crate::http_utils::response_with_headers;
-use crate::logging;
-use crate::provider::ProviderStreamingResponseContext;
+use crate::http_support::UpstreamResponseHead;
+use crate::http_support::response_with_headers;
+use crate::observe::{
+    ObserveContext, ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
+};
+use crate::provider::ProviderStreamingResponsePolicy;
 use crate::upstream::{
-    BodyAction, BodyObserver, StreamingResponseContext, UpstreamBodyStreamStats,
-    UpstreamStreamError, prepare_response_stream,
+    BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
 };
 
 use super::state::ChatUpstreamStreamSnapshot;
 use super::tracker::ChatUpstreamResponseTracker;
 
-pub(crate) async fn handle_streaming_response(
-    context: ProviderStreamingResponseContext<'_>,
+pub(crate) fn handle_streaming_response(
+    obs: &ObserveContext,
+    policy: ProviderStreamingResponsePolicy,
     response: reqwest::Response,
 ) -> Response<Body> {
-    let ProviderStreamingResponseContext {
-        started,
-        capture,
-        span,
-        policy,
-        ..
-    } = context;
-    let head = UpstreamResponseHead::from_response(&response, started.elapsed());
-    let observer = ChatUpstreamBodyObserver::new(
+    let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
+    let body_observer = ChatUpstreamBodyObserver::new(
         ChatUpstreamResponseTracker::from_headers(&head.headers),
-        span.clone(),
+        (*obs).clone(),
     );
 
-    let (outbound_headers, body_stream) = prepare_response_stream(
-        StreamingResponseContext {
-            capture,
-            started,
-            span,
-            read_idle_timeout: policy.read_idle_timeout(),
-            head: &head,
-        },
+    let (outbound_head, body_stream) = prepare_response_stream(
+        obs,
+        &head,
+        policy.read_idle_timeout(),
         response,
-        observer,
-    )
-    .await;
+        body_observer,
+    );
 
-    span.in_scope(|| {
-        logging::ChatLogRecord::Upstream(logging::UpstreamLogRecord::HeadInfo { head: &head })
-            .emit()
-    });
-
-    response_with_headers(
-        head.status,
-        outbound_headers,
-        Body::from_stream(body_stream),
-    )
+    let (status, headers) = outbound_head.into_parts();
+    response_with_headers(status, headers, Body::from_stream(body_stream))
 }
 
 struct ChatUpstreamBodyObserver {
     tracker: ChatUpstreamResponseTracker,
     stream_error: Option<UpstreamStreamError>,
-    span: tracing::Span,
+    obs: crate::observe::ObserveContext,
 }
 
 impl ChatUpstreamBodyObserver {
-    fn new(tracker: ChatUpstreamResponseTracker, span: tracing::Span) -> Self {
+    fn new(tracker: ChatUpstreamResponseTracker, obs: crate::observe::ObserveContext) -> Self {
         Self {
             tracker,
             stream_error: None,
-            span,
+            obs,
         }
     }
 
@@ -97,29 +79,18 @@ impl BodyObserver for ChatUpstreamBodyObserver {
 
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let snapshot = self.stream_snapshot(head, stats);
-        if let Some(ref error) = self.stream_error {
-            self.span.in_scope(|| {
-                logging::ChatLogRecord::StreamError {
-                    snapshot: &snapshot,
-                    error,
-                }
-                .emit()
-            });
+        let outcome = if let Some(ref error) = self.stream_error {
+            ProviderStreamOutcome::Error(error)
         } else if self.tracker.state.eof_is_complete() {
-            self.span.in_scope(|| {
-                logging::ChatLogRecord::Completed {
-                    snapshot: &snapshot,
-                }
-                .emit()
-            });
+            ProviderStreamOutcome::Completed
         } else {
-            self.span.in_scope(|| {
-                logging::ChatLogRecord::Closed {
-                    snapshot: &snapshot,
-                }
-                .emit()
+            ProviderStreamOutcome::Closed
+        };
+        self.obs
+            .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
+                snapshot: ProviderStreamSnapshot::OpenaiChatCompletions(&snapshot),
+                outcome,
             });
-        }
     }
 }
 

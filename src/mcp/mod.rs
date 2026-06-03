@@ -8,8 +8,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::net::SocketAddr;
 
-use crate::capture::{CaptureController, CaptureQuery, CaptureShowTarget};
 use crate::error::Result;
+use crate::observe::{CaptureController, CaptureOverrides, CaptureQuery, CaptureShowTarget};
 
 pub const MCP_PATH: &str = "/mcp";
 
@@ -161,14 +161,12 @@ impl ProxaiMcpServer {
             CaptureTarget::OutboundResponse => self
                 .capture
                 .set_outbound_response_enabled_override(Some(true)),
-            CaptureTarget::All => self
-                .capture
-                .set_overrides(crate::capture::CaptureOverrides {
-                    inbound_request_enabled: Some(true),
-                    provider_request_enabled: Some(true),
-                    upstream_response_enabled: Some(true),
-                    outbound_response_enabled: Some(true),
-                }),
+            CaptureTarget::All => self.capture.set_overrides(CaptureOverrides {
+                inbound_request_enabled: Some(true),
+                provider_request_enabled: Some(true),
+                upstream_response_enabled: Some(true),
+                outbound_response_enabled: Some(true),
+            }),
         }
         self.capture_status()
     }
@@ -188,14 +186,12 @@ impl ProxaiMcpServer {
             CaptureTarget::OutboundResponse => self
                 .capture
                 .set_outbound_response_enabled_override(Some(false)),
-            CaptureTarget::All => self
-                .capture
-                .set_overrides(crate::capture::CaptureOverrides {
-                    inbound_request_enabled: Some(false),
-                    provider_request_enabled: Some(false),
-                    upstream_response_enabled: Some(false),
-                    outbound_response_enabled: Some(false),
-                }),
+            CaptureTarget::All => self.capture.set_overrides(CaptureOverrides {
+                inbound_request_enabled: Some(false),
+                provider_request_enabled: Some(false),
+                upstream_response_enabled: Some(false),
+                outbound_response_enabled: Some(false),
+            }),
         }
         self.capture_status()
     }

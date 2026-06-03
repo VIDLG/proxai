@@ -8,8 +8,7 @@ use crate::config::LogOutputFormat;
 use crate::formatting::{compact_tail, truncate_chars};
 
 use crate::provider::openai::responses::{
-    ResponseOutputItemKind, ResponsesUpstreamEvent, ResponsesUpstreamState,
-    ResponsesUpstreamStreamSnapshot,
+    ResponseOutputItemKind, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
 };
 use crate::upstream::UpstreamStreamError;
 
@@ -20,8 +19,8 @@ use super::counts::{
 use super::record::ValuableJson;
 use super::upstream::{stream_error_text, stream_error_token};
 use super::{
-    UpstreamLogRecord, active_log_format, emit_json_log, extend_json_object, optional_f64,
-    optional_u64, rename_json_field,
+    active_log_format, emit_json_log, extend_json_object, optional_f64, optional_u64,
+    rename_json_field,
 };
 
 #[derive(Debug, Clone, Default, Valuable)]
@@ -190,47 +189,12 @@ impl ValuableJson for ResponseFields {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum ResponsesLogRecord<'a> {
-    Upstream(UpstreamLogRecord<'a>),
-    StreamInfo {
-        event: &'static str,
-        snapshot: &'a ResponsesUpstreamStreamSnapshot,
-    },
-    StreamError {
-        snapshot: &'a ResponsesUpstreamStreamSnapshot,
-        error: &'a UpstreamStreamError,
-    },
+pub(crate) fn emit_stream_completed(snapshot: &ResponsesUpstreamStreamSnapshot) {
+    emit_stream_info("end", snapshot);
 }
 
-impl<'a> ResponsesLogRecord<'a> {
-    pub(crate) fn from_event(event: &'a ResponsesUpstreamEvent) -> Self {
-        match event {
-            ResponsesUpstreamEvent::Headers { head } => {
-                Self::Upstream(UpstreamLogRecord::HeadInfo { head })
-            }
-            ResponsesUpstreamEvent::Completed { snapshot } => Self::StreamInfo {
-                event: "end",
-                snapshot: snapshot.as_ref(),
-            },
-            ResponsesUpstreamEvent::Closed { snapshot } => Self::StreamInfo {
-                event: "closed",
-                snapshot: snapshot.as_ref(),
-            },
-            ResponsesUpstreamEvent::Error { snapshot, error } => Self::StreamError {
-                snapshot: snapshot.as_ref(),
-                error,
-            },
-        }
-    }
-
-    pub(crate) fn emit(self) {
-        match self {
-            Self::Upstream(record) => record.emit(),
-            Self::StreamInfo { event, snapshot } => emit_stream_info(event, snapshot),
-            Self::StreamError { snapshot, error } => emit_stream_error(snapshot, error),
-        }
-    }
+pub(crate) fn emit_stream_closed(snapshot: &ResponsesUpstreamStreamSnapshot) {
+    emit_stream_info("closed", snapshot);
 }
 
 fn response_fields_from_snapshot(snapshot: &ResponsesUpstreamStreamSnapshot) -> ResponseFields {
@@ -379,7 +343,10 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
     }
 }
 
-fn emit_stream_error(snapshot: &ResponsesUpstreamStreamSnapshot, error: &UpstreamStreamError) {
+pub(crate) fn emit_stream_error(
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+    error: &UpstreamStreamError,
+) {
     emit_stream_error_with_diagnostic(snapshot, error, None);
 }
 

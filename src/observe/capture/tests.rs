@@ -70,18 +70,15 @@ async fn capture_session_records_and_queries_artifacts() {
     let uri = Uri::from_static("/v1/responses");
     let headers = HeaderMap::new();
 
-    session
-        .capture_inbound_request(&method, &uri, &headers, br#"{"model":"gpt"}"#)
-        .await;
-    session
-        .capture_provider_request(
-            &method,
-            "https://example.test/v1/responses",
-            &headers,
-            br#"{"model":"gpt"}"#,
-            None,
-        )
-        .await;
+    session.capture_inbound_request(&method, &uri, &headers, br#"{"model":"gpt"}"#);
+    session.capture_provider_request(
+        &method,
+        "https://example.test/v1/responses",
+        &headers,
+        br#"{"model":"gpt"}"#,
+        None,
+    );
+    controller.flush().await;
 
     let latest = controller.latest_record().unwrap();
     assert_eq!(latest.request_id, RequestId::from(7));
@@ -109,14 +106,13 @@ async fn runtime_override_can_enable_capture_when_defaults_are_disabled() {
     controller.set_inbound_request_enabled_override(Some(true));
 
     let session = controller.session(RequestId::from(8));
-    session
-        .capture_inbound_request(
-            &Method::POST,
-            &Uri::from_static("/v1/responses"),
-            &HeaderMap::new(),
-            br#"{"model":"gpt"}"#,
-        )
-        .await;
+    session.capture_inbound_request(
+        &Method::POST,
+        &Uri::from_static("/v1/responses"),
+        &HeaderMap::new(),
+        br#"{"model":"gpt"}"#,
+    );
+    controller.flush().await;
 
     let latest = controller.latest_record().unwrap();
     assert_eq!(latest.request_id, RequestId::from(8));
@@ -149,9 +145,9 @@ async fn capture_controller_trims_old_records() {
     for request_id in 0..140 {
         controller
             .session(RequestId::from(request_id))
-            .capture_inbound_request(&method, &uri, &headers, b"{}")
-            .await;
+            .capture_inbound_request(&method, &uri, &headers, b"{}");
     }
+    controller.flush().await;
 
     let records = controller.records();
     assert_eq!(records.len(), 128);

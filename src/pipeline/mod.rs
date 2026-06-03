@@ -1,10 +1,7 @@
-use std::time::Instant;
-
 use axum::http::{HeaderMap, Method, Uri};
 
-use crate::capture::CaptureSession;
 use crate::config::ErrorResponseFormat;
-use crate::request::RequestId;
+use crate::observe::ObserveContext;
 
 mod inbound;
 mod provider_request;
@@ -19,10 +16,7 @@ pub(crate) struct ProxyFlow<S> {
     pub(super) method: Method,
     pub(super) uri: Uri,
     pub(super) headers: HeaderMap,
-    pub(super) request_id: RequestId,
-    pub(super) started: Instant,
-    pub(super) span: tracing::Span,
-    pub(super) capture: CaptureSession,
+    pub(super) obs: ObserveContext,
     pub(super) error_response_format: ErrorResponseFormat,
     pub(super) stage: S,
 }

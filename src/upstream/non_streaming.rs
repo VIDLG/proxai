@@ -1,38 +1,27 @@
 use axum::body::{Body, Bytes};
 use axum::http::Response;
 
-use crate::capture::CaptureSession;
-use crate::http_model::UpstreamResponseHead;
-use crate::http_utils::{filter_forwardable_headers, response_with_headers};
-use crate::logging;
+use crate::http_support::response_with_headers;
+use crate::http_support::{OutboundResponseHead, UpstreamResponseHead};
+use crate::observe::{
+    ObserveContext, OutboundResponseHeadPrepared, UpstreamNonStreamingResponseReceived,
+};
 
-pub(crate) async fn forward_non_streaming_response(
-    capture: &CaptureSession,
-    span: &tracing::Span,
+pub(crate) fn forward_non_streaming_response(
+    obs: &ObserveContext,
     head: UpstreamResponseHead,
     body: Bytes,
     transform_body: impl FnOnce(Bytes) -> Bytes,
 ) -> Response<Body> {
-    capture.capture_upstream_response_headers(&head).await;
+    obs.observe_upstream_non_streaming_success(UpstreamNonStreamingResponseReceived {
+        head: &head,
+        body: &body,
+    });
+    let outbound_head = OutboundResponseHead::from_upstream(&head);
+    obs.observe_outbound_response_head_prepared(OutboundResponseHeadPrepared {
+        head: &outbound_head,
+    });
 
-    let outbound_headers = filter_forwardable_headers(&head.headers);
-    capture
-        .capture_outbound_response_headers(
-            head.status,
-            head.content_type().as_ref().map(AsRef::as_ref),
-            &outbound_headers,
-        )
-        .await;
-
-    capture
-        .capture_upstream_response_body(head.content_type().as_ref(), &body)
-        .await;
-
-    span.in_scope(|| logging::UpstreamLogRecord::HeadInfo { head: &head }.emit());
-
-    response_with_headers(
-        head.status,
-        outbound_headers,
-        Body::from(transform_body(body)),
-    )
+    let (status, headers) = outbound_head.into_parts();
+    response_with_headers(status, headers, Body::from(transform_body(body)))
 }

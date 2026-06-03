@@ -1,31 +1,59 @@
+use axum::http::{HeaderMap, Method, Uri};
+use headers::{ContentLength, HeaderMapExt};
 use serde_json::Value as JsonValue;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::LogOutputFormat;
 use crate::error::{UpstreamError, UpstreamResponseError};
-use crate::http_model::UpstreamResponseHead;
+use crate::http_support::UpstreamResponseHead;
+use crate::request::RequestId;
 use crate::upstream::UpstreamStreamError;
 
 use super::{active_log_format, emit_json_log, json_object};
+use crate::observe::point::UpstreamStreamProgress;
 
-#[derive(Clone, Copy)]
-pub(crate) enum UpstreamLogRecord<'a> {
-    HeadInfo {
-        head: &'a UpstreamResponseHead,
-    },
-    HeadError {
-        head: &'a UpstreamResponseHead,
-        error: &'a UpstreamError,
-    },
+pub(crate) fn emit_inbound_request_received(
+    request_id: RequestId,
+    method: &Method,
+    uri: &Uri,
+    headers: &HeaderMap,
+) {
+    debug!(
+        event = "recv",
+        request_id = request_id.as_u64(),
+        method = %method,
+        path = uri.path(),
+        content_length = headers.typed_get::<ContentLength>().map(|value| value.0),
+    );
 }
 
-impl UpstreamLogRecord<'_> {
-    pub(crate) fn emit(self) {
-        match self {
-            Self::HeadInfo { head } => emit_head_info(head),
-            Self::HeadError { head, error } => emit_head_error(head, error),
-        }
-    }
+pub(crate) fn emit_request_info_parse_failure(request_id: RequestId, error: &serde_json::Error) {
+    debug!(
+        error = %error,
+        request_id = request_id.as_u64(),
+        "failed to parse normalized /v1/responses payload for RequestProjection extraction"
+    );
+}
+
+pub(crate) fn emit_stream_wait(point: UpstreamStreamProgress) {
+    info!(
+        event = "wait",
+        idle_ms = point.idle_ms,
+        duration_ms = point.duration_ms,
+        chunks = point.chunks,
+        down = point.down
+    );
+}
+
+pub(crate) fn emit_stream_timeout(point: UpstreamStreamProgress) {
+    warn!(
+        event = "timeout",
+        idle_ms = point.idle_ms,
+        duration_ms = point.duration_ms,
+        chunks = point.chunks,
+        down = point.down,
+        "stream idle timeout exceeded"
+    );
 }
 
 pub(crate) fn stream_error_token(error: &UpstreamStreamError) -> &'static str {
@@ -73,7 +101,7 @@ fn upstream_error_message(error: &UpstreamError) -> Option<&str> {
     }
 }
 
-fn emit_head_info(head: &UpstreamResponseHead) {
+pub(crate) fn emit_head_info(head: &UpstreamResponseHead) {
     if matches!(active_log_format(), LogOutputFormat::Human) && is_default_success_sse_head(head) {
         return;
     }
@@ -115,7 +143,7 @@ fn is_default_success_sse_head(head: &UpstreamResponseHead) -> bool {
             .is_some_and(|value| value.eq_ignore_ascii_case("chunked"))
 }
 
-fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError) {
+pub(crate) fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError) {
     let error_code = upstream_error_code(error).unwrap_or("");
     let error_message = upstream_error_message(error).unwrap_or("");
     let content_type = head.content_type_text();

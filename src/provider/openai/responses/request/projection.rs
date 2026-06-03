@@ -1,31 +1,23 @@
 use serde_json::Value;
-use tracing::debug;
 
-use crate::request::RequestId;
-use crate::{diagnostics, protocol::openai_responses::RequestProjection};
+use crate::observe::{ObserveContext, RequestInfoParseFailure};
+use crate::protocol::openai_responses::RequestProjection;
 
 pub(crate) fn project_payload(
     payload: &Value,
-    request_id: Option<RequestId>,
+    obs: Option<&ObserveContext>,
 ) -> Result<RequestProjection, serde_json::Error> {
     let adapted = adapt_payload_for_projection(payload);
     match RequestProjection::from_payload(&adapted) {
         Ok(request) => Ok(request),
         Err(error) => {
-            if let Some(request_id) = request_id {
-                let raw_request_id: u64 = request_id.into();
-                let _diagnostic_path = diagnostics::write_request_info_parse_failure(
-                    raw_request_id,
-                    payload,
-                    &adapted,
-                    &error,
-                );
+            if let Some(obs) = obs {
+                obs.observe_request_info_parse_failure(RequestInfoParseFailure {
+                    normalized_payload: payload,
+                    request_info_parse_payload: &adapted,
+                    error: &error,
+                });
             }
-            debug!(
-                error = %error,
-                request_id = request_id.map(u64::from),
-                "failed to parse normalized /v1/responses payload for RequestProjection extraction"
-            );
             Err(error)
         }
     }

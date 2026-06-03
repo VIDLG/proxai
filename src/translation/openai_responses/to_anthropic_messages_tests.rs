@@ -287,7 +287,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).await.unwrap();
+    let translated = translate_streaming_response(response).unwrap();
     let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 

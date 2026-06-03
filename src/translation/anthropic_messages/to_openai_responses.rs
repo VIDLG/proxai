@@ -1,7 +1,6 @@
 //! `anthropic_messages -> openai_responses` response translation.
 
-use axum::body::Bytes;
-use axum::body::{Body, to_bytes};
+use axum::body::{Body, Bytes};
 use axum::http::{HeaderValue, Response, header};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -9,6 +8,7 @@ use std::collections::BTreeMap;
 use std::io;
 
 use crate::error::{InternalError, Result};
+use crate::http_support::NonStreamingResponse;
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, Message, MessageStreamEvent, StopReason,
 };
@@ -70,7 +70,7 @@ pub(crate) fn translate_request_payload(
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) async fn translate_streaming_response(
+pub(crate) fn translate_streaming_response(
     response: Response<Body>,
 ) -> Result<Response<Body>, InternalError> {
     Ok(translate_sse_response_with_error_encoder(
@@ -80,18 +80,15 @@ pub(crate) async fn translate_streaming_response(
     ))
 }
 
-pub(crate) async fn translate_non_streaming_response(
-    response: Response<Body>,
+pub(crate) fn translate_non_streaming_response(
+    response: NonStreamingResponse,
 ) -> Result<Response<Body>, InternalError> {
-    let status = response.status();
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .map_err(|error| InternalError::Io(std::io::Error::other(error.to_string())))?;
-    let payload = serde_json::from_slice::<Value>(&body)?;
+    let payload = serde_json::from_slice::<Value>(&response.body)?;
     let message = serde_json::from_value::<Message>(
         anthropic_messages::normalize::normalize_message_payload(payload),
     )?;
     let translated = translate_message(&message)?;
+    let status = response.status;
     let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
     *response.status_mut() = status;
     response.headers_mut().insert(

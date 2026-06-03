@@ -3,6 +3,17 @@ use axum::http::HeaderMap;
 use super::ChatUpstreamBodyObserver;
 use crate::upstream::BodyObserver;
 
+fn test_obs() -> crate::observe::ObserveContext {
+    let request_id = crate::request::RequestId::from(1);
+    crate::observe::ObserveContext::new(
+        request_id,
+        std::time::Instant::now(),
+        crate::observe::CaptureController::new(None, crate::config::CaptureConfig::default())
+            .session(request_id),
+        tracing::Span::none(),
+    )
+}
+
 fn sse_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -16,7 +27,7 @@ fn sse_headers() -> HeaderMap {
 fn sse_eof_without_done_sentinel_is_incomplete() {
     let mut observer = ChatUpstreamBodyObserver::new(
         super::ChatUpstreamResponseTracker::from_headers(&sse_headers()),
-        tracing::Span::none(),
+        test_obs(),
     );
 
     observer.observe_chunk(
@@ -33,7 +44,7 @@ fn sse_eof_without_done_sentinel_is_incomplete() {
 fn sse_eof_after_done_sentinel_is_complete() {
     let mut observer = ChatUpstreamBodyObserver::new(
         super::ChatUpstreamResponseTracker::from_headers(&sse_headers()),
-        tracing::Span::none(),
+        test_obs(),
     );
 
     observer.observe_chunk(b"data: [DONE]\n\n");

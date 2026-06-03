@@ -1,5 +1,6 @@
 use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
+use crate::observe::ObserveContext;
 use crate::protocol::ProviderProtocol;
 use crate::provider::ProviderRequest;
 use crate::provider::anthropic_messages;
@@ -9,13 +10,14 @@ pub(crate) fn translate_request(
     inbound: &PreparedInboundRequest,
     provider_protocol: ProviderProtocol,
     upstream_model: &str,
+    obs: &ObserveContext,
 ) -> Result<ProviderRequest, InternalError> {
     match (inbound, provider_protocol) {
         (PreparedInboundRequest::OpenaiResponses(inbound), ProviderProtocol::OpenaiResponses) => {
             Ok(ProviderRequest::openai_responses(
                 openai_responses::request::prepare_provider_request(
                     &inbound.normalized_payload,
-                    None,
+                    Some(obs),
                     &inbound.model,
                     upstream_model,
                 )?,
@@ -99,7 +101,7 @@ pub(crate) fn translate_request(
             Ok(ProviderRequest::openai_responses(
                 openai_responses::request::prepare_provider_request(
                     &translated,
-                    None,
+                    Some(obs),
                     upstream_model,
                     upstream_model,
                 )?,

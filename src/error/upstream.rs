@@ -1,7 +1,7 @@
 use axum::body::Bytes;
 use serde_json::Value;
 
-use crate::http_model::UpstreamResponseHead;
+use crate::http_support::UpstreamResponseHead;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum UpstreamResponseError {

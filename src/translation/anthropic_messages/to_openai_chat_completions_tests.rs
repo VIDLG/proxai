@@ -3,6 +3,13 @@ use axum::http::{Response, header};
 use serde_json::json;
 
 use super::{translate_non_streaming_response, translate_streaming_response};
+use crate::http_support::NonStreamingResponse;
+
+async fn read_non_streaming(response: Response<Body>) -> NonStreamingResponse {
+    let (parts, body) = response.into_parts();
+    let body = to_bytes(body, usize::MAX).await.unwrap();
+    NonStreamingResponse::from_parts(parts, body)
+}
 
 #[tokio::test]
 async fn translates_anthropic_message_to_chat_completion_shape() {
@@ -27,7 +34,7 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         header::HeaderValue::from_static("application/json"),
     );
 
-    let response = translate_non_streaming_response(response).await.unwrap();
+    let response = translate_non_streaming_response(read_non_streaming(response).await).unwrap();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let translated: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
@@ -75,7 +82,7 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
         header::HeaderValue::from_static("text/event-stream"),
     );
 
-    let response = translate_streaming_response(response).await.unwrap();
+    let response = translate_streaming_response(response).unwrap();
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = std::str::from_utf8(&body).unwrap();
 

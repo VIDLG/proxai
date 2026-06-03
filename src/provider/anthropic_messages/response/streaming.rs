@@ -1,63 +1,51 @@
 use axum::body::Body;
 use axum::http::Response;
 
-use crate::http_model::UpstreamResponseHead;
-use crate::http_utils::response_with_headers;
-use crate::logging;
-use crate::provider::ProviderStreamingResponseContext;
+use crate::config::ProviderCompatibility;
+use crate::http_support::UpstreamResponseHead;
+use crate::http_support::response_with_headers;
+use crate::observe::{
+    ObserveContext, ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
+};
+use crate::provider::ProviderStreamingResponsePolicy;
 use crate::upstream::{
-    BodyAction, BodyObserver, StreamingResponseContext, UpstreamBodyStreamStats,
-    UpstreamStreamError, prepare_response_stream,
+    BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
 };
 
 use super::normalize;
 use super::state::AnthropicUpstreamResponseSnapshot;
 use super::tracker::AnthropicResponseTracker;
 
-pub(crate) async fn handle_streaming_response(
-    context: ProviderStreamingResponseContext<'_>,
+pub(crate) fn handle_streaming_response(
+    obs: &ObserveContext,
+    policy: ProviderStreamingResponsePolicy,
+    compatibility: ProviderCompatibility,
     response: reqwest::Response,
 ) -> Response<Body> {
-    let ProviderStreamingResponseContext {
-        started,
-        capture,
-        span,
-        policy,
-        compatibility,
-        ..
-    } = context;
-    let head = UpstreamResponseHead::from_response(&response, started.elapsed());
-    let observer = AnthropicSseObserver::new(AnthropicResponseTracker::new(), span.clone());
-    let (outbound_headers, body_stream) = prepare_response_stream(
-        StreamingResponseContext {
-            capture,
-            started,
-            span,
-            read_idle_timeout: policy.read_idle_timeout(),
-            head: &head,
-        },
+    let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
+    let body_observer = AnthropicSseObserver::new(AnthropicResponseTracker::new(), (*obs).clone());
+    let (outbound_head, body_stream) = prepare_response_stream(
+        obs,
+        &head,
+        policy.read_idle_timeout(),
         response,
-        observer,
-    )
-    .await;
-    span.in_scope(|| logging::UpstreamLogRecord::HeadInfo { head: &head }.emit());
+        body_observer,
+    );
 
     if matches!(
         compatibility,
         crate::config::ProviderCompatibility::AnthropicCompatible
     ) {
+        let (status, headers) = outbound_head.clone().into_parts();
         return response_with_headers(
-            head.status,
-            outbound_headers,
+            status,
+            headers,
             Body::from_stream(normalize::normalize_sse_stream(body_stream)),
         );
     }
 
-    response_with_headers(
-        head.status,
-        outbound_headers,
-        Body::from_stream(body_stream),
-    )
+    let (status, headers) = outbound_head.into_parts();
+    response_with_headers(status, headers, Body::from_stream(body_stream))
 }
 
 /// Minimal SSE observer for Anthropic Messages streaming responses.
@@ -66,17 +54,20 @@ pub(super) struct AnthropicSseObserver {
     saw_terminal: bool,
     stream_error: Option<UpstreamStreamError>,
     recent_tail: Vec<u8>,
-    span: tracing::Span,
+    obs: crate::observe::ObserveContext,
 }
 
 impl AnthropicSseObserver {
-    pub(super) fn new(tracker: AnthropicResponseTracker, span: tracing::Span) -> Self {
+    pub(super) fn new(
+        tracker: AnthropicResponseTracker,
+        obs: crate::observe::ObserveContext,
+    ) -> Self {
         Self {
             tracker,
             saw_terminal: false,
             stream_error: None,
             recent_tail: Vec::new(),
-            span,
+            obs,
         }
     }
 
@@ -109,29 +100,18 @@ impl BodyObserver for AnthropicSseObserver {
 
     fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let snapshot = self.stream_snapshot(head, stats);
-        if let Some(ref error) = self.stream_error {
-            self.span.in_scope(|| {
-                logging::AnthropicLogRecord::StreamError {
-                    snapshot: &snapshot,
-                    error,
-                }
-                .emit()
-            });
+        let outcome = if let Some(ref error) = self.stream_error {
+            ProviderStreamOutcome::Error(error)
         } else if self.saw_terminal {
-            self.span.in_scope(|| {
-                logging::AnthropicLogRecord::Completed {
-                    snapshot: &snapshot,
-                }
-                .emit()
-            });
+            ProviderStreamOutcome::Completed
         } else {
-            self.span.in_scope(|| {
-                logging::AnthropicLogRecord::Closed {
-                    snapshot: &snapshot,
-                }
-                .emit()
+            ProviderStreamOutcome::Closed
+        };
+        self.obs
+            .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
+                snapshot: ProviderStreamSnapshot::AnthropicMessages(&snapshot),
+                outcome,
             });
-        }
     }
 }
 

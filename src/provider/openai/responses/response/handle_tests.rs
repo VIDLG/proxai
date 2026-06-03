@@ -2,8 +2,19 @@ use super::OpenaiResponsesUpstreamBodyObserver;
 use crate::request::RequestId;
 use crate::upstream::BodyObserver;
 
+fn test_obs() -> crate::observe::ObserveContext {
+    let request_id = RequestId::from(1);
+    crate::observe::ObserveContext::new(
+        request_id,
+        std::time::Instant::now(),
+        crate::observe::CaptureController::new(None, crate::config::CaptureConfig::default())
+            .session(request_id),
+        tracing::Span::none(),
+    )
+}
+
 fn test_observer() -> OpenaiResponsesUpstreamBodyObserver {
-    OpenaiResponsesUpstreamBodyObserver::new(None, RequestId::from(1), tracing::Span::none())
+    OpenaiResponsesUpstreamBodyObserver::new(None, test_obs())
 }
 
 #[test]

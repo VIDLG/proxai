@@ -829,13 +829,28 @@ pub(super) fn unique_capture_dir() -> PathBuf {
 }
 
 pub(super) async fn capture_files(capture_dir: &Path) -> Vec<PathBuf> {
-    let mut reader = fs::read_dir(capture_dir).await.unwrap();
-    let mut files = Vec::new();
-    while let Some(entry) = reader.next_entry().await.unwrap() {
-        files.push(entry.path());
+    let mut last_files = Vec::new();
+    let mut stable_iterations = 0;
+    for _ in 0..50 {
+        let mut files = Vec::new();
+        if let Ok(mut reader) = fs::read_dir(capture_dir).await {
+            while let Some(entry) = reader.next_entry().await.unwrap() {
+                files.push(entry.path());
+            }
+            files.sort();
+            if !files.is_empty() && files == last_files {
+                stable_iterations += 1;
+                if stable_iterations >= 5 {
+                    return files;
+                }
+            } else {
+                stable_iterations = 0;
+            }
+            last_files = files;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    files.sort();
-    files
+    last_files
 }
 
 pub(super) async fn read_json_file(files: &[PathBuf], kind: &str) -> Value {
