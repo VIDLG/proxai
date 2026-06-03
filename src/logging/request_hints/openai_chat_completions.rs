@@ -42,10 +42,10 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
     if projection.logprobs == Some(true) {
         parts.push("logprobs".to_string());
     }
-    if let Some(value) = projection.n {
-        if value != 1 {
-            parts.push(format!("n:{value}"));
-        }
+    if let Some(value) = projection.n
+        && value != 1
+    {
+        parts.push(format!("n:{value}"));
     }
     if projection
         .stream_options
@@ -63,13 +63,13 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
     {
         parts.push("so:no-obf".to_string());
     }
-    if let Some(value) = projection.service_tier {
-        if !matches!(
+    if let Some(value) = projection.service_tier
+        && !matches!(
             value,
             chat_completions::ServiceTier::Auto | chat_completions::ServiceTier::Default
-        ) {
-            parts.push(format!("tier:{value}"));
-        }
+        )
+    {
+        parts.push(format!("tier:{value}"));
     }
     if let Some(value) = projection.verbosity {
         parts.push(format!("v:{value}"));

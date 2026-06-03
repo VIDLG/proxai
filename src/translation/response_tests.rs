@@ -1,4 +1,4 @@
-use axum::body::{to_bytes, Body};
+use axum::body::{Body, to_bytes};
 use axum::http::{Response, StatusCode};
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};

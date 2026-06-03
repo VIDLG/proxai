@@ -3,8 +3,8 @@ use serde_json::json;
 use crate::protocol::anthropic::messages::Message;
 use crate::sse::SseEventScanner;
 
-use axum::body::{to_bytes, Body};
-use axum::http::{header, Response};
+use axum::body::{Body, to_bytes};
+use axum::http::{Response, header};
 
 use super::{translate_message, translate_non_streaming_response, translate_streaming_response};
 

@@ -10,6 +10,8 @@ use super::{
     citations::TextCitation,
     common::CacheControlEphemeral,
     tools::{
+        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlockParam, ToolUseBlock,
+        ToolUseBlockParam,
         bash::{BashCodeExecutionToolResultBlock, BashCodeExecutionToolResultBlockParam},
         code_execution::{CodeExecutionToolResultBlock, CodeExecutionToolResultBlockParam},
         search::{
@@ -23,8 +25,6 @@ use super::{
             WebFetchToolResultBlock, WebFetchToolResultBlockParam, WebSearchToolResultBlock,
             WebSearchToolResultBlockParam,
         },
-        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlockParam, ToolUseBlock,
-        ToolUseBlockParam,
     },
 };
 

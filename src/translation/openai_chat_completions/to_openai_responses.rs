@@ -1,9 +1,9 @@
 //! `openai_chat_completions -> openai_responses` response translation.
 
-use axum::body::{to_bytes, Body, Bytes};
-use axum::http::{header, HeaderValue, Response};
+use axum::body::{Body, Bytes, to_bytes};
+use axum::http::{HeaderValue, Response, header};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io;
 
@@ -13,7 +13,7 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::sse::SseEvent;
 use crate::translation::sse::{
-    encode_sse_json, event_payload_with_type, translate_sse_response, SseEventTranslator,
+    SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
 };
 
 pub(crate) async fn translate_streaming_response(
@@ -287,27 +287,27 @@ impl SseEventTranslator for ChatToResponsesStreamTranslator {
                         .unwrap_or(index as u64) as u32;
                     self.ensure_tool_item(tool_index, tool_call, &mut chunks)?;
                     if let Some(function) = tool_call.get("function").and_then(Value::as_object) {
-                        if let Some(name) = function.get("name").and_then(Value::as_str) {
-                            if let Some(item) = self.tool_items.get_mut(&tool_index) {
-                                item.name = name.to_string();
-                            }
+                        if let Some(name) = function.get("name").and_then(Value::as_str)
+                            && let Some(item) = self.tool_items.get_mut(&tool_index)
+                        {
+                            item.name = name.to_string();
                         }
-                        if let Some(arguments) = function.get("arguments").and_then(Value::as_str) {
-                            if let Some(item) = self.tool_items.get_mut(&tool_index) {
-                                item.arguments.push_str(arguments);
-                                let item_id = item.item_id.clone();
-                                let sequence_number = self.next_sequence_number();
-                                chunks.push(self.responses_event(
-                                    "response.function_call_arguments.delta",
-                                    json!({
-                                        "type": "response.function_call_arguments.delta",
-                                        "sequence_number": sequence_number,
-                                        "item_id": item_id,
-                                        "output_index": tool_index,
-                                        "delta": arguments
-                                    }),
-                                )?);
-                            }
+                        if let Some(arguments) = function.get("arguments").and_then(Value::as_str)
+                            && let Some(item) = self.tool_items.get_mut(&tool_index)
+                        {
+                            item.arguments.push_str(arguments);
+                            let item_id = item.item_id.clone();
+                            let sequence_number = self.next_sequence_number();
+                            chunks.push(self.responses_event(
+                                "response.function_call_arguments.delta",
+                                json!({
+                                    "type": "response.function_call_arguments.delta",
+                                    "sequence_number": sequence_number,
+                                    "item_id": item_id,
+                                    "output_index": tool_index,
+                                    "delta": arguments
+                                }),
+                            )?);
                         }
                     }
                 }

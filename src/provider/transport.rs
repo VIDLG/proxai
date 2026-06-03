@@ -6,11 +6,11 @@ use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
 use crate::capture::CaptureSession;
-use crate::config::{normalize_provider_name, ProviderCompatibility, ProviderConfig};
+use crate::config::{ProviderCompatibility, ProviderConfig, normalize_provider_name};
 use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_utils::filter_forwardable_headers;
 use crate::protocol::ProviderProtocol;
-use crate::provider::{apply_request_auth_headers, ProviderRequest};
+use crate::provider::{ProviderRequest, apply_request_auth_headers};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProviderTransportError {

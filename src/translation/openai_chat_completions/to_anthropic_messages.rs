@@ -1,6 +1,6 @@
 //! `openai_chat_completions -> anthropic_messages` request translation.
 
-use serde_json::{json, Map, Number, Value};
+use serde_json::{Map, Number, Value, json};
 
 use crate::error::{InternalError, Result};
 use crate::protocol::anthropic::messages as anthropic;

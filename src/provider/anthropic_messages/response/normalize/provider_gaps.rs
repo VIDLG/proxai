@@ -1,4 +1,4 @@
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 pub(super) fn normalize_content_block(block: &mut Map<String, Value>) {
     match block.get("type").and_then(Value::as_str) {

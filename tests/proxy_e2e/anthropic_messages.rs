@@ -1,6 +1,6 @@
 use super::common::*;
 use axum::http::StatusCode;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 #[tokio::test]

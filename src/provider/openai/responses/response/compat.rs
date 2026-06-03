@@ -3,7 +3,7 @@ use futures_util::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
-use crate::sse::{sse_frame_stream, SseEvent, SseFrame, SseSegment};
+use crate::sse::{SseEvent, SseFrame, SseSegment, sse_frame_stream};
 
 /// Rewrites a narrow upstream compatibility gap in OpenAI Responses SSE streams.
 ///

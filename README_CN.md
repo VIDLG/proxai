@@ -147,6 +147,7 @@ Anthropic Messages provider 如果连接官方 Anthropic API，建议使用
 
 常用命令：
 
+- Rust toolchain：stable，需支持 Rust 2024 edition
 - `pixi install`
 - `just run`
 - `just check`

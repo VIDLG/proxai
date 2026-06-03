@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::protocol::openai_responses::OutputItem;
 use crate::protocol::ErrorObject;
+use crate::protocol::openai_responses::OutputItem;
 
 use super::{ResponseOutputItemKind, ResponseSummary};
 

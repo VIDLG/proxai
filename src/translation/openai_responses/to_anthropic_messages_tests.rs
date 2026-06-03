@@ -1,13 +1,13 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::protocol::anthropic::messages::ContentBlock;
 
-use axum::body::{to_bytes, Body};
-use axum::http::{header, Response};
+use axum::body::{Body, to_bytes};
+use axum::http::{Response, header};
 
 use super::{
-    translate_request_payload, translate_response_payload, translate_streaming_response,
-    OpenaiResponseBody,
+    OpenaiResponseBody, translate_request_payload, translate_response_payload,
+    translate_streaming_response,
 };
 
 #[test]

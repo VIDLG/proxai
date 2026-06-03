@@ -2,10 +2,10 @@ use anyhow::Context;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use owo_colors::OwoColorize;
 use proxai::{
+    AppState,
     config::{AppConfig, LogLevel, LogOutputFormat, MatchKind, RouteConfig},
     logging, mcp, paths,
     protocol::RequestProtocol,
-    AppState,
 };
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use update_informer::{registry, Check};
+use update_informer::{Check, registry};
 use url::Url;
 
 const GITHUB_REPOSITORY: &str = "VIDLG/proxai";

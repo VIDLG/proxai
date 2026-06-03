@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::{prepare_provider_request, ToolCategory};
+use super::{ToolCategory, prepare_provider_request};
 
 #[test]
 fn prepare_provider_request_preserves_model_when_route_keeps_it() {

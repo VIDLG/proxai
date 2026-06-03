@@ -1,6 +1,6 @@
-use super::{sse_event_stream, sse_frame_stream, SseEvent, SseEventScanner, SseSegment};
+use super::{SseEvent, SseEventScanner, SseSegment, sse_event_stream, sse_frame_stream};
 use bytes::Bytes;
-use futures_util::{stream, StreamExt};
+use futures_util::{StreamExt, stream};
 
 #[tokio::test]
 async fn frame_stream_yields_completed_frames_and_flushes_tail() {

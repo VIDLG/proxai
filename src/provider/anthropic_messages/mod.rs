@@ -19,6 +19,6 @@ pub(crate) fn apply_request_auth_headers(headers: &mut HeaderMap, api_key: &str)
 }
 
 pub(crate) use self::response::{
-    handle_non_streaming_response, handle_streaming_response, AnthropicResponseOutputKind,
-    AnthropicUpstreamResponseSnapshot,
+    AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot, handle_non_streaming_response,
+    handle_streaming_response,
 };

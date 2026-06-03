@@ -6,7 +6,7 @@ use axum::http::request::Parts;
 use crate::capture::CaptureSession;
 use crate::config::ErrorResponseFormat;
 use crate::error::{RequestError, Result};
-use crate::ingress::{prepare_inbound_request, PreparedInboundRequest};
+use crate::ingress::{PreparedInboundRequest, prepare_inbound_request};
 use crate::protocol::RequestProtocol;
 use crate::request::RequestId;
 

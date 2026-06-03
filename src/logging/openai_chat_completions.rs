@@ -18,7 +18,7 @@ use super::counts::{
 use super::record::ValuableJson;
 use super::upstream::{stream_error_text, stream_error_token};
 use super::{
-    active_log_format, emit_json_log, extend_json_object, rename_json_field, UpstreamLogRecord,
+    UpstreamLogRecord, active_log_format, emit_json_log, extend_json_object, rename_json_field,
 };
 
 #[derive(Debug, Clone, Default, Valuable)]

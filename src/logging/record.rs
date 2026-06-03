@@ -2,11 +2,11 @@ use crate::protocol::anthropic::messages::ThinkingConfigParam;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::ProviderRequestView;
 use crate::request::RequestId;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use valuable::Valuable;
 
-use super::request_hints;
 use super::ProviderRequestEvent;
+use super::request_hints;
 
 #[derive(Debug, Clone, Valuable)]
 pub(crate) struct ProviderRequestFields {

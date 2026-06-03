@@ -5,7 +5,7 @@
 //! payload is validated by the provider request preparation path.
 
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::error::{InternalError, Result};
 use crate::protocol::openai::responses::{Reasoning, ReasoningEffort};
@@ -32,13 +32,13 @@ pub(crate) fn translate_request_payload(
     let source = serde_json::from_value::<ResponsesRequestView>(payload.clone())?;
 
     let mut messages = Vec::new();
-    if let Some(instructions) = source.instructions.as_deref() {
-        if !instructions.trim().is_empty() {
-            messages.push(json!({
-                "role": "system",
-                "content": instructions,
-            }));
-        }
+    if let Some(instructions) = source.instructions.as_deref()
+        && !instructions.trim().is_empty()
+    {
+        messages.push(json!({
+            "role": "system",
+            "content": instructions,
+        }));
     }
     messages.extend(translate_input(source.input.as_ref())?);
     if messages.is_empty() {
@@ -172,13 +172,13 @@ fn translate_message_object(
     let mut message = Map::new();
     message.insert("role".to_string(), Value::String(chat_role.to_string()));
     message.insert("content".to_string(), translate_message_content(content));
-    if chat_role == "tool" {
-        if let Some(tool_call_id) = object.get("tool_call_id").and_then(Value::as_str) {
-            message.insert(
-                "tool_call_id".to_string(),
-                Value::String(tool_call_id.to_string()),
-            );
-        }
+    if chat_role == "tool"
+        && let Some(tool_call_id) = object.get("tool_call_id").and_then(Value::as_str)
+    {
+        message.insert(
+            "tool_call_id".to_string(),
+            Value::String(tool_call_id.to_string()),
+        );
     }
     messages.push(Value::Object(message));
     Ok(())
@@ -248,15 +248,15 @@ fn translate_content_part(part: &Value) -> Vec<Value> {
 }
 
 fn append_assistant_tool_call(messages: &mut Vec<Value>, tool_call: Value) {
-    if let Some(last) = messages.last_mut().and_then(Value::as_object_mut) {
-        if last.get("role").and_then(Value::as_str) == Some("assistant") {
-            let tool_calls = last
-                .entry("tool_calls".to_string())
-                .or_insert_with(|| Value::Array(Vec::new()));
-            if let Some(tool_calls) = tool_calls.as_array_mut() {
-                tool_calls.push(tool_call);
-                return;
-            }
+    if let Some(last) = messages.last_mut().and_then(Value::as_object_mut)
+        && last.get("role").and_then(Value::as_str) == Some("assistant")
+    {
+        let tool_calls = last
+            .entry("tool_calls".to_string())
+            .or_insert_with(|| Value::Array(Vec::new()));
+        if let Some(tool_calls) = tool_calls.as_array_mut() {
+            tool_calls.push(tool_call);
+            return;
         }
     }
 

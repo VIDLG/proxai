@@ -1,9 +1,9 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use rmcp::transport::{
-    streamable_http_server::{session::local::LocalSessionManager, tower::StreamableHttpService},
     StreamableHttpServerConfig,
+    streamable_http_server::{session::local::LocalSessionManager, tower::StreamableHttpService},
 };
-use rmcp::{handler::server::wrapper::Parameters, tool, tool_handler, tool_router, ServerHandler};
+use rmcp::{ServerHandler, handler::server::wrapper::Parameters, tool, tool_handler, tool_router};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::net::SocketAddr;

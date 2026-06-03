@@ -4,10 +4,10 @@
 //! the selected provider protocol owns upstream response handling.
 
 use axum::body::Bytes;
-use axum::body::{to_bytes, Body};
-use axum::http::{header, HeaderValue, Response};
+use axum::body::{Body, to_bytes};
+use axum::http::{HeaderValue, Response, header};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 
@@ -19,7 +19,7 @@ use crate::protocol::anthropic::messages::{
 
 use crate::sse::SseEvent;
 use crate::translation::sse::{
-    encode_sse_json, event_payload_with_type, translate_sse_response, SseEventTranslator,
+    SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
 };
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
@@ -52,10 +52,10 @@ pub(crate) fn translate_request_payload(
     let metadata = source.metadata.as_ref();
 
     let mut system_parts = Vec::new();
-    if let Some(instructions) = source.instructions.as_deref() {
-        if !instructions.trim().is_empty() {
-            system_parts.push(instructions.to_string());
-        }
+    if let Some(instructions) = source.instructions.as_deref()
+        && !instructions.trim().is_empty()
+    {
+        system_parts.push(instructions.to_string());
     }
 
     let mut messages = translate_input(input, &mut system_parts)?;
@@ -1032,10 +1032,10 @@ fn translate_tool_choice(
         _ => return None,
     };
 
-    if let (Some(disable), Some(map)) = (disable_parallel_tool_use, object.as_object_mut()) {
-        if map.get("type").and_then(Value::as_str) != Some("none") {
-            map.insert("disable_parallel_tool_use".to_string(), disable);
-        }
+    if let (Some(disable), Some(map)) = (disable_parallel_tool_use, object.as_object_mut())
+        && map.get("type").and_then(Value::as_str) != Some("none")
+    {
+        map.insert("disable_parallel_tool_use".to_string(), disable);
     }
     Some(object)
 }

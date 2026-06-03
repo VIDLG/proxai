@@ -87,12 +87,14 @@ async fn capture_session_records_and_queries_artifacts() {
     assert_eq!(latest.request_id, RequestId::from(7));
     assert!(latest.inbound_request.is_some());
     assert!(latest.provider_request.is_some());
-    assert!(latest
-        .inbound_request
-        .as_ref()
-        .unwrap()
-        .metadata_path
-        .exists());
+    assert!(
+        latest
+            .inbound_request
+            .as_ref()
+            .unwrap()
+            .metadata_path
+            .exists()
+    );
     assert!(latest.provider_request.as_ref().unwrap().body_path.exists());
 
     let rendered = controller.render_query(&super::CaptureQuery::Show(None));
@@ -118,12 +120,14 @@ async fn runtime_override_can_enable_capture_when_defaults_are_disabled() {
 
     let latest = controller.latest_record().unwrap();
     assert_eq!(latest.request_id, RequestId::from(8));
-    assert!(latest
-        .inbound_request
-        .as_ref()
-        .unwrap()
-        .body_path
-        .starts_with(&dir));
+    assert!(
+        latest
+            .inbound_request
+            .as_ref()
+            .unwrap()
+            .body_path
+            .starts_with(&dir)
+    );
 }
 
 #[tokio::test]

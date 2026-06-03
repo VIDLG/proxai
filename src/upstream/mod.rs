@@ -10,7 +10,7 @@ mod streaming;
 pub(crate) use error_response::{classify_error_response, log_upstream_body_read_error};
 pub(crate) use non_streaming::forward_non_streaming_response;
 pub(crate) use streaming::{
-    prepare_response_stream, BodyAction, BodyObserver, ProgressFields, StreamingResponseContext,
+    BodyAction, BodyObserver, ProgressFields, StreamingResponseContext, prepare_response_stream,
 };
 
 #[derive(Debug, Clone, Error)]

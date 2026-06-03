@@ -157,6 +157,7 @@ in `~/.proxai/config.toml`.
 
 Common commands:
 
+- Rust toolchain: stable with Rust 2024 edition support
 - `pixi install`
 - `just run`
 - `just check`

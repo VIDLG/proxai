@@ -24,10 +24,10 @@ pub(crate) fn prepare_provider_request(
     let summary = RequestSummary::from(&projection);
 
     let mut payload = payload.clone();
-    if upstream_model != request_model {
-        if let Some(model) = payload.get_mut("model") {
-            *model = Value::String(upstream_model.to_string());
-        }
+    if upstream_model != request_model
+        && let Some(model) = payload.get_mut("model")
+    {
+        *model = Value::String(upstream_model.to_string());
     }
     let body = serde_json::to_vec(&payload)?;
 

@@ -9,11 +9,11 @@ use crate::provider::{
 };
 use crate::upstream::{classify_error_response, log_upstream_body_read_error};
 
+use super::ProxyFlow;
 use super::provider_response::{
     ProviderHttpFlow, ProviderNonStreamingHttp, ProviderNonStreamingHttpFlow,
     ProviderStreamingHttp, ProviderStreamingHttpFlow,
 };
-use super::ProxyFlow;
 
 pub(crate) struct UpstreamHttp {
     pub(super) inbound_protocol: RequestProtocol,

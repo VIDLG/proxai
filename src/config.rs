@@ -4,7 +4,7 @@ use crate::{
     protocol::{ProviderProtocol, RequestProtocol},
 };
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DurationSeconds};
+use serde_with::{DurationSeconds, serde_as};
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::IpAddr;
 use std::path::PathBuf;

@@ -63,28 +63,27 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
     if let Some(value) = projection.truncation {
         parts.push(format!("tr:{value}"));
     }
-    if let Some(stream_options) = projection.stream_options.as_ref() {
-        if stream_options.include_obfuscation == Some(false) {
-            parts.push("so:no-obf".to_string());
-        }
+    if let Some(stream_options) = projection.stream_options.as_ref()
+        && stream_options.include_obfuscation == Some(false)
+    {
+        parts.push("so:no-obf".to_string());
     }
-    if let Some(value) = projection.service_tier {
-        if !matches!(
+    if let Some(value) = projection.service_tier
+        && !matches!(
             value,
             crate::protocol::openai::responses::ServiceTier::Auto
                 | crate::protocol::openai::responses::ServiceTier::Default
-        ) {
-            parts.push(format!("tier:{value}"));
-        }
+        )
+    {
+        parts.push(format!("tier:{value}"));
     }
     if let Some(value) = projection
         .reasoning
         .as_ref()
         .and_then(|reasoning| reasoning.summary)
+        && !matches!(value, ReasoningSummary::Auto)
     {
-        if !matches!(value, ReasoningSummary::Auto) {
-            parts.push(format!("rs:{value}"));
-        }
+        parts.push(format!("rs:{value}"));
     }
     if let Some(value) = projection.previous_response_id.as_deref() {
         parts.push(format!("prev={}", compact_tail(value, 8)));
@@ -109,10 +108,10 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
     if let Some(value) = projection.text.as_ref().and_then(|text| text.verbosity) {
         parts.push(format!("tv:{value}"));
     }
-    if let Some(value) = projection.text.as_ref().map(|text| &text.format) {
-        if !matches!(value, TextResponseFormatConfiguration::Text) {
-            parts.push(format!("tf:{value}"));
-        }
+    if let Some(value) = projection.text.as_ref().map(|text| &text.format)
+        && !matches!(value, TextResponseFormatConfiguration::Text)
+    {
+        parts.push(format!("tf:{value}"));
     }
 
     parts.join(" ")

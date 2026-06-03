@@ -1,6 +1,6 @@
 use tracing::Level;
 
-use super::{base36, format_event_line, short_request_id, DurationThresholds, LogFields};
+use super::{DurationThresholds, LogFields, base36, format_event_line, short_request_id};
 
 #[test]
 fn short_request_id_compacts_millisecond_timestamp() {

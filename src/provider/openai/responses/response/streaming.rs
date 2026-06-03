@@ -19,12 +19,12 @@ use crate::http_utils::response_with_headers;
 use crate::logging;
 use crate::provider::ProviderStreamingResponseContext;
 use crate::request::RequestId;
-use crate::sse::{encode_sse_json_or_error, SseEventScanner};
+use crate::sse::{SseEventScanner, encode_sse_json_or_error};
 
 use super::sse::is_terminal_event;
 use crate::upstream::{
-    prepare_response_stream, BodyAction, BodyObserver, ProgressFields, StreamingResponseContext,
-    UpstreamBodyStreamStats, UpstreamStreamError,
+    BodyAction, BodyObserver, ProgressFields, StreamingResponseContext, UpstreamBodyStreamStats,
+    UpstreamStreamError, prepare_response_stream,
 };
 
 use super::tool_arguments::ToolArgumentStreamState;

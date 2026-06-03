@@ -5,7 +5,7 @@ use proxai::protocol::openai::chat_completions::{
 };
 use proxai::protocol::openai_responses::{Response, ResponseProjection};
 use proxai::protocol::{ProviderProtocol, RequestProtocol};
-use proxai::{paths, AppState};
+use proxai::{AppState, paths};
 use serde_json::json;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -355,7 +355,9 @@ async fn live_anthropic_compatible_upstream_shape_diagnostic() {
         let Some((provider_name, upstream_model)) =
             resolve_live_anthropic_provider_for_model(&config, model)
         else {
-            println!("SKIP direct Anthropic shape diagnostic: no Anthropic provider route for model={model}");
+            println!(
+                "SKIP direct Anthropic shape diagnostic: no Anthropic provider route for model={model}"
+            );
             continue;
         };
         let provider = config

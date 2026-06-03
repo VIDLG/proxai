@@ -7,11 +7,11 @@ use crate::paths;
 use crate::request::RequestId;
 use crate::upstream::UpstreamStreamMetrics;
 
+use super::ResponsesUpstreamStreamSnapshot;
 use super::sse::{is_terminal_event, is_tool_argument_done};
 use super::summary::ResponseSummary;
-use super::ResponsesUpstreamStreamSnapshot;
-use crate::protocol::openai_responses::{Billing, Conversation};
 use crate::protocol::ErrorObject;
+use crate::protocol::openai_responses::{Billing, Conversation};
 use crate::sse::SseEventScanner;
 
 pub(super) struct ResponsesStreamDiagnostics {

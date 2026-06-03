@@ -17,9 +17,8 @@ use super::model::{
     UpstreamResponseArtifacts,
 };
 use super::write::{
-    capture_inbound_request, capture_outbound_response_headers, capture_provider_request,
-    capture_upstream_response_body, capture_upstream_response_headers,
-    UpstreamResponseCaptureWriter,
+    UpstreamResponseCaptureWriter, capture_inbound_request, capture_outbound_response_headers,
+    capture_provider_request, capture_upstream_response_body, capture_upstream_response_headers,
 };
 
 #[derive(Debug, Clone)]
@@ -295,17 +294,16 @@ impl CaptureController {
                     | CaptureShowTarget::UpstreamResponse
                     | CaptureShowTarget::OutboundResponse
             )
-        ) {
-            if let Some(inbound_request) = record.inbound_request.as_ref() {
-                lines.push(format!(
-                    "inbound_request.metadata: {}",
-                    inbound_request.metadata_path.display()
-                ));
-                lines.push(format!(
-                    "inbound_request.body: {}",
-                    inbound_request.body_path.display()
-                ));
-            }
+        ) && let Some(inbound_request) = record.inbound_request.as_ref()
+        {
+            lines.push(format!(
+                "inbound_request.metadata: {}",
+                inbound_request.metadata_path.display()
+            ));
+            lines.push(format!(
+                "inbound_request.body: {}",
+                inbound_request.body_path.display()
+            ));
         }
 
         if !matches!(
@@ -315,17 +313,16 @@ impl CaptureController {
                     | CaptureShowTarget::UpstreamResponse
                     | CaptureShowTarget::OutboundResponse
             )
-        ) {
-            if let Some(provider_request) = record.provider_request.as_ref() {
-                lines.push(format!(
-                    "provider_request.metadata: {}",
-                    provider_request.metadata_path.display()
-                ));
-                lines.push(format!(
-                    "provider_request.body: {}",
-                    provider_request.body_path.display()
-                ));
-            }
+        ) && let Some(provider_request) = record.provider_request.as_ref()
+        {
+            lines.push(format!(
+                "provider_request.metadata: {}",
+                provider_request.metadata_path.display()
+            ));
+            lines.push(format!(
+                "provider_request.body: {}",
+                provider_request.body_path.display()
+            ));
         }
 
         if !matches!(
@@ -335,14 +332,13 @@ impl CaptureController {
                     | CaptureShowTarget::ProviderRequest
                     | CaptureShowTarget::OutboundResponse
             )
-        ) {
-            if let Some(upstream_response) = record.upstream_response.as_ref() {
-                if let Some(path) = upstream_response.headers_path.as_ref() {
-                    lines.push(format!("upstream_response.headers: {}", path.display()));
-                }
-                if let Some(path) = upstream_response.body_path.as_ref() {
-                    lines.push(format!("upstream_response.body: {}", path.display()));
-                }
+        ) && let Some(upstream_response) = record.upstream_response.as_ref()
+        {
+            if let Some(path) = upstream_response.headers_path.as_ref() {
+                lines.push(format!("upstream_response.headers: {}", path.display()));
+            }
+            if let Some(path) = upstream_response.body_path.as_ref() {
+                lines.push(format!("upstream_response.body: {}", path.display()));
             }
         }
 
@@ -353,14 +349,13 @@ impl CaptureController {
                     | CaptureShowTarget::ProviderRequest
                     | CaptureShowTarget::UpstreamResponse
             )
-        ) {
-            if let Some(outbound_response) = record.outbound_response.as_ref() {
-                if let Some(path) = outbound_response.headers_path.as_ref() {
-                    lines.push(format!("outbound_response.headers: {}", path.display()));
-                }
-                if let Some(path) = outbound_response.body_path.as_ref() {
-                    lines.push(format!("outbound_response.body: {}", path.display()));
-                }
+        ) && let Some(outbound_response) = record.outbound_response.as_ref()
+        {
+            if let Some(path) = outbound_response.headers_path.as_ref() {
+                lines.push(format!("outbound_response.headers: {}", path.display()));
+            }
+            if let Some(path) = outbound_response.body_path.as_ref() {
+                lines.push(format!("outbound_response.body: {}", path.display()));
             }
         }
 

@@ -1,7 +1,7 @@
 use crate::sse::SseEvent;
 use serde_json::json;
 
-use super::{tool_argument_item_id, ToolArgumentStreamState};
+use super::{ToolArgumentStreamState, tool_argument_item_id};
 
 #[test]
 fn tool_argument_item_id_reads_non_empty_item_id() {

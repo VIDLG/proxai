@@ -1,4 +1,4 @@
-use async_openai::types::{chat::CreateChatCompletionRequest, Metadata};
+use async_openai::types::{Metadata, chat::CreateChatCompletionRequest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

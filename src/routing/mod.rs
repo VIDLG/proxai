@@ -2,7 +2,7 @@ mod matcher;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::config::{normalize_provider_name, DefaultProviderNamesConfig, RouteConfig};
+use crate::config::{DefaultProviderNamesConfig, RouteConfig, normalize_provider_name};
 use crate::error::{InternalError, Result};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
@@ -117,30 +117,30 @@ pub(crate) fn resolve_route(
         let Some(upstream_model) = route.match_model(model)? else {
             continue;
         };
-        if let Some(route_protocol) = route.request_protocol {
-            if route_protocol != request_protocol {
-                protocol_mismatch = Some(route);
-                continue;
-            }
+        if let Some(route_protocol) = route.request_protocol
+            && route_protocol != request_protocol
+        {
+            protocol_mismatch = Some(route);
+            continue;
         }
         matched = Some((route, upstream_model));
         break;
     }
 
-    if matched.is_none() {
-        if let Some(route) = protocol_mismatch {
-            let route_label = route
-                .name
-                .as_deref()
-                .map(|name| format!(" `{name}`"))
-                .unwrap_or_default();
-            let configured = route
-                .request_protocol
-                .expect("protocol_mismatch is only set for explicit request_protocol");
-            return Err(InternalError::InvalidRoute(format!(
-                "routing route{route_label} matches model `{model}` but request_protocol is `{configured}` while the inbound request uses `{request_protocol}`; remove request_protocol to accept any inbound protocol, or update it to `{request_protocol}`"
-            )));
-        }
+    if matched.is_none()
+        && let Some(route) = protocol_mismatch
+    {
+        let route_label = route
+            .name
+            .as_deref()
+            .map(|name| format!(" `{name}`"))
+            .unwrap_or_default();
+        let configured = route
+            .request_protocol
+            .expect("protocol_mismatch is only set for explicit request_protocol");
+        return Err(InternalError::InvalidRoute(format!(
+            "routing route{route_label} matches model `{model}` but request_protocol is `{configured}` while the inbound request uses `{request_protocol}`; remove request_protocol to accept any inbound protocol, or update it to `{request_protocol}`"
+        )));
     }
 
     let default_provider = default_provider_names.for_request_protocol(request_protocol);

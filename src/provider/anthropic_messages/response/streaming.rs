@@ -6,8 +6,8 @@ use crate::http_utils::response_with_headers;
 use crate::logging;
 use crate::provider::ProviderStreamingResponseContext;
 use crate::upstream::{
-    prepare_response_stream, BodyAction, BodyObserver, StreamingResponseContext,
-    UpstreamBodyStreamStats, UpstreamStreamError,
+    BodyAction, BodyObserver, StreamingResponseContext, UpstreamBodyStreamStats,
+    UpstreamStreamError, prepare_response_stream,
 };
 
 use super::normalize;

@@ -1,5 +1,5 @@
-use crate::protocol::openai_responses::ResponseProjection;
 use crate::protocol::ErrorObject;
+use crate::protocol::openai_responses::ResponseProjection;
 
 use crate::http_model::UpstreamResponseHead;
 use crate::upstream::{UpstreamStreamError, UpstreamStreamMetrics};
@@ -83,10 +83,10 @@ impl ResponsesUpstreamState {
     }
 
     pub(crate) fn effective_error(&self) -> Option<&ErrorObject> {
-        if let Some(snapshot) = self.latest_snapshot.as_ref() {
-            if let Some(error) = snapshot.projection.error.as_ref() {
-                return Some(error);
-            }
+        if let Some(snapshot) = self.latest_snapshot.as_ref()
+            && let Some(error) = snapshot.projection.error.as_ref()
+        {
+            return Some(error);
         }
 
         self.observed_error()

@@ -9,7 +9,7 @@ use crate::protocol::ProviderProtocol;
 use crate::request::RequestId;
 use crate::upstream::forward_non_streaming_response;
 
-use super::{anthropic_messages, openai, ProviderStreamingResponsePolicy};
+use super::{ProviderStreamingResponsePolicy, anthropic_messages, openai};
 
 pub(crate) struct ProviderStreamingResponseContext<'a> {
     pub(crate) request_id: RequestId,

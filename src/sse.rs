@@ -1,6 +1,6 @@
 use async_stream::stream;
 use bytes::{Bytes, BytesMut};
-use futures_util::{pin_mut, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, pin_mut};
 use getset::Getters;
 use serde::Serialize;
 use serde_json::Value;
@@ -106,12 +106,12 @@ impl SseEvent {
 
     pub(crate) fn payload_with_type(&self) -> io::Result<Value> {
         let mut payload = serde_json::from_str::<Value>(&self.data).map_err(io::Error::other)?;
-        if !self.is_default_event_type() {
-            if let Some(object) = payload.as_object_mut() {
-                object
-                    .entry("type".to_string())
-                    .or_insert_with(|| Value::String(self.event_type.clone()));
-            }
+        if !self.is_default_event_type()
+            && let Some(object) = payload.as_object_mut()
+        {
+            object
+                .entry("type".to_string())
+                .or_insert_with(|| Value::String(self.event_type.clone()));
         }
         Ok(payload)
     }

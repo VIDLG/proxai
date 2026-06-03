@@ -5,8 +5,8 @@ use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::super::OutputStatus;
-use super::function::{FunctionCallOutputStatusEnum, FunctionCallStatus};
 use super::Tool;
+use super::function::{FunctionCallOutputStatusEnum, FunctionCallStatus};
 
 // ============================================================
 // Tool Definition Supporting Types

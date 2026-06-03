@@ -1,6 +1,6 @@
 use async_stream::stream;
 use axum::body::Bytes;
-use futures_util::{pin_mut, Stream, StreamExt};
+use futures_util::{Stream, StreamExt, pin_mut};
 use std::io;
 
 use crate::sse::{encode_sse_json, sse_event_stream};

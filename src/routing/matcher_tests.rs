@@ -4,7 +4,7 @@ use std::time::Duration;
 use url::Url;
 
 use crate::config::{
-    normalize_provider_name, MatchKind, ProviderCompatibility, ProviderConfig, RouteConfig,
+    MatchKind, ProviderCompatibility, ProviderConfig, RouteConfig, normalize_provider_name,
 };
 use crate::error::InternalError;
 use crate::protocol::{ProviderProtocol, RequestProtocol};

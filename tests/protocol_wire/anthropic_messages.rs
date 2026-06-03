@@ -1,5 +1,5 @@
 use proxai::protocol::anthropic::messages::*;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[test]
 fn deserializes_basic_message_response_from_api_shape() {

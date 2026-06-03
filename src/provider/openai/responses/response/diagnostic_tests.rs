@@ -1,4 +1,4 @@
-use super::{analyze_unfinished_tool_tail, ToolArgumentsParseResult};
+use super::{ToolArgumentsParseResult, analyze_unfinished_tool_tail};
 use serde_json::json;
 
 #[test]

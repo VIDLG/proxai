@@ -8,7 +8,7 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::sse::SseEventScanner;
 
-use super::observed::{observed_updates_from_stream_projection, ChatResponseObservation};
+use super::observed::{ChatResponseObservation, observed_updates_from_stream_projection};
 use super::state::ChatUpstreamResponseState;
 
 #[derive(Debug, Default)]

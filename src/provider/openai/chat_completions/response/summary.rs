@@ -93,10 +93,10 @@ impl From<&ChatStreamResponseProjection> for ChatResponseSummary {
             if let Some(tool_calls) = choice.delta.tool_calls.as_deref() {
                 for tool_call in tool_calls {
                     summary.add_item_kind(ChatResponseOutputKind::StreamToolCallDelta);
-                    if let Some(function) = tool_call.function.as_ref() {
-                        if let Some(name) = function.name.as_deref() {
-                            summary.add_tool_call_name(name);
-                        }
+                    if let Some(function) = tool_call.function.as_ref()
+                        && let Some(name) = function.name.as_deref()
+                    {
+                        summary.add_tool_call_name(name);
                     }
                 }
             }

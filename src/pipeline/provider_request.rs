@@ -9,12 +9,12 @@ use crate::ingress::PreparedInboundRequest;
 use crate::logging::{ProviderRequestEvent, RequestBodySizes};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::{ProviderRequest, ProviderTransport, ProviderTransportError};
-use crate::routing::{resolve_route, EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget};
+use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
 use crate::translation::translate_request;
 
+use super::ProxyFlow;
 use super::inbound::{PreparedInbound, PreparedInboundFlow};
 use super::upstream_response::{UpstreamHttp, UpstreamHttpFlow};
-use super::ProxyFlow;
 
 pub(crate) struct RoutedInbound {
     request: PreparedInboundRequest,

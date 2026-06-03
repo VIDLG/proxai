@@ -1,10 +1,10 @@
 //! `anthropic_messages -> openai_responses` response translation.
 
 use axum::body::Bytes;
-use axum::body::{to_bytes, Body};
-use axum::http::{header, HeaderValue, Response};
+use axum::body::{Body, to_bytes};
+use axum::http::{HeaderValue, Response, header};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io;
 
@@ -16,8 +16,8 @@ use crate::protocol::openai_responses::ResponseCreateParams;
 use crate::provider::anthropic_messages;
 use crate::sse::SseEvent;
 use crate::translation::sse::{
-    encode_sse_json, event_payload_with_type, translate_sse_response_with_error_encoder,
-    SseEventTranslator,
+    SseEventTranslator, encode_sse_json, event_payload_with_type,
+    translate_sse_response_with_error_encoder,
 };
 
 pub(crate) fn translate_request_payload(

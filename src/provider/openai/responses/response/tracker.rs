@@ -1,15 +1,15 @@
 use async_openai::types::responses::ResponseStreamEvent as OpenaiResponseStreamEvent;
 
+use crate::protocol::ErrorObject;
 use crate::protocol::openai_responses::{
     ResponseErrorEvent, ResponseProjection, ResponseStreamEvent,
 };
-use crate::protocol::ErrorObject;
 use crate::sse::{SseEvent, SseEventScanner};
 use serde_json::Value;
 
+use super::ResponsesUpstreamState;
 use super::observed::ObservedUpdate;
 use super::state::ResponseSnapshotKind;
-use super::ResponsesUpstreamState;
 
 enum TrackerEvent {
     Snapshot {

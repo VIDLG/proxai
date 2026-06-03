@@ -1,9 +1,9 @@
 use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
 use crate::protocol::ProviderProtocol;
+use crate::provider::ProviderRequest;
 use crate::provider::anthropic_messages;
 use crate::provider::openai::{chat_completions, responses as openai_responses};
-use crate::provider::ProviderRequest;
 
 pub(crate) fn translate_request(
     inbound: &PreparedInboundRequest,

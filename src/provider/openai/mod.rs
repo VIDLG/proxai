@@ -1,5 +1,5 @@
 use axum::http::HeaderMap;
-use headers::{authorization::Bearer, Authorization, HeaderMapExt};
+use headers::{Authorization, HeaderMapExt, authorization::Bearer};
 
 pub(crate) mod chat_completions;
 pub(crate) mod responses;

@@ -1,18 +1,18 @@
-use axum::body::{to_bytes, Body};
+use axum::body::{Body, to_bytes};
 use axum::extract::{Request, State};
 use axum::http::Response;
 use axum::response::IntoResponse;
-use axum::{routing::any, Router};
+use axum::{Router, routing::any};
 use capture::{CaptureController, CaptureSession};
 
 use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tower::limit::ConcurrencyLimitLayer;
 use tower::ServiceBuilder;
+use tower::limit::ConcurrencyLimitLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tracing::{field::Empty, info_span, Instrument};
+use tracing::{Instrument, field::Empty, info_span};
 
 pub mod capture;
 pub mod config;
@@ -40,7 +40,7 @@ use config::{
 pub use error::Error;
 use error::{InternalError, RequestError, Result};
 pub use logging::TOOL_NAME_ALIASES;
-use pipeline::{run_provider_flow, InboundHttpFlow};
+use pipeline::{InboundHttpFlow, run_provider_flow};
 use protocol::ProviderProtocol;
 use provider::ProviderTransport;
 use request::RequestId;
@@ -192,11 +192,11 @@ async fn proxy(State(state): State<AppState>, request: Request<Body>) -> impl In
     });
 
     let format = state.error_response_format();
-    let response = proxy_inner(state, request, request_id, started, span.clone(), capture)
+
+    proxy_inner(state, request, request_id, started, span.clone(), capture)
         .instrument(span)
         .await
-        .unwrap_or_else(|error| error.into_response_with_format(format));
-    response
+        .unwrap_or_else(|error| error.into_response_with_format(format))
 }
 
 async fn proxy_inner(

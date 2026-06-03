@@ -1,8 +1,8 @@
 use serde_json::json;
 
+use crate::provider::ProviderRequestView;
 use crate::provider::anthropic_messages::request::RequestSummary;
 use crate::provider::openai::responses::RequestSummary as ResponsesRequestSummary;
-use crate::provider::ProviderRequestView;
 
 #[test]
 fn openai_responses_include_hints_use_readable_names() {

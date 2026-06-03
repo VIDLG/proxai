@@ -18,10 +18,10 @@ pub(crate) fn prepare_provider_request(
     upstream_model: &str,
 ) -> Result<PreparedProviderRequest, InternalError> {
     let mut payload = payload.clone();
-    if upstream_model != request_model {
-        if let Some(model) = payload.get_mut("model") {
-            *model = Value::String(upstream_model.to_string());
-        }
+    if upstream_model != request_model
+        && let Some(model) = payload.get_mut("model")
+    {
+        *model = Value::String(upstream_model.to_string());
     }
 
     let projection = RequestProjection::from_payload(&payload)?;

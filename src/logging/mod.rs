@@ -14,8 +14,8 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::io::Write;
 use std::sync::OnceLock;
 use tracing::info;
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 use crate::config::{LogLevel, LogOutputFormat};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
@@ -24,13 +24,13 @@ use crate::request::RequestId;
 pub(crate) use anthropic_messages::AnthropicLogRecord;
 pub(crate) use openai_chat_completions::ChatLogRecord;
 pub(crate) use openai_responses::{
-    emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
     ResponsesLogRecord,
+    emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
 };
 pub(crate) use output_alias::compact_output_item_kind;
 use record::{ProviderRequestFields, ValuableJson};
-pub(crate) use tool_alias::compact_tool_call_name;
 pub use tool_alias::TOOL_NAME_ALIASES;
+pub(crate) use tool_alias::compact_tool_call_name;
 pub(crate) use upstream::UpstreamLogRecord;
 
 pub use human::DurationThresholds;
@@ -183,10 +183,10 @@ pub(crate) fn extend_json_object<const N: usize>(
 }
 
 pub(crate) fn rename_json_field(value: &mut JsonValue, from: &str, to: &str) {
-    if let JsonValue::Object(map) = value {
-        if let Some(value) = map.remove(from) {
-            map.insert(to.to_string(), value);
-        }
+    if let JsonValue::Object(map) = value
+        && let Some(value) = map.remove(from)
+    {
+        map.insert(to.to_string(), value);
     }
 }
 
