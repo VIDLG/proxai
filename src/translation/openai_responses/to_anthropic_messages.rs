@@ -18,9 +18,7 @@ use crate::protocol::anthropic::messages::{
 };
 
 use crate::sse::SseEvent;
-use crate::translation::sse::{
-    SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
-};
+use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
@@ -240,7 +238,7 @@ impl SseEventTranslator for OpenaiToAnthropicStreamTranslator {
             return Ok(Vec::new());
         }
 
-        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event_payload_with_type(&event)?)
+        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)
             .map_err(io::Error::other)?;
         let mut chunks = Vec::new();
 

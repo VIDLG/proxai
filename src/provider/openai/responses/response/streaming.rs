@@ -1,32 +1,25 @@
 use axum::body::{Body, Bytes};
 use axum::http::Response;
-
 use futures_util::Future;
-
 use std::task::Context;
 use std::time::Duration;
 
-use super::compat::normalize_nested_error_sse_stream;
-
-use super::{ResponsesUpstreamMetadata, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
-
-use crate::http_support::UpstreamResponseHead;
-use crate::http_support::response_with_headers;
+use crate::error::ErrorResponseFields;
+use crate::http_support::{UpstreamResponseHead, response_with_headers};
 use crate::observe::{
     ObserveContext, ProviderStreamChunkObserved, ProviderStreamOutcome,
     ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
 use crate::protocol::ProviderProtocol;
 use crate::provider::ProviderStreamingResponsePolicy;
-
-use crate::sse::{SseEventScanner, encode_sse_json_or_error};
-
-use super::sse::is_terminal_event;
+use crate::sse::{SseEventScanner, encode_sse_json};
 use crate::upstream::{
     BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
 };
 
+use super::sse::is_terminal_event;
 use super::tool_arguments::ToolArgumentStreamState;
+use super::{ResponsesUpstreamMetadata, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
 
 const TOOL_ARGUMENT_STALL_MESSAGE: &str = "upstream SSE stalled while streaming tool arguments";
 
@@ -47,9 +40,8 @@ pub(crate) fn handle_streaming_response(
         body_observer,
     );
 
-    let stream = Box::pin(normalize_nested_error_sse_stream(body_stream));
     let (status, headers) = outbound_head.into_parts();
-    response_with_headers(status, headers, Body::from_stream(stream))
+    response_with_headers(status, headers, Body::from_stream(body_stream))
 }
 
 struct OpenaiResponsesUpstreamBodyObserver {
@@ -185,18 +177,34 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
     }
 }
 
+#[derive(serde::Serialize)]
+struct ResponsesGenericErrorEvent<'a> {
+    #[serde(rename = "type")]
+    event_type: &'static str,
+    sequence_number: Option<u64>,
+    code: Option<&'a str>,
+    message: &'a str,
+    param: Option<&'a str>,
+}
+
 fn error_sse_chunk(sequence_number: Option<u64>, message: &str) -> Bytes {
-    encode_sse_json_or_error(
+    // Zed v1.5.3 parses OpenAI Responses `type: "error"` events via
+    // `GenericStreamErrorPayload`, accepting either top-level fields or a nested
+    // `error` object. Prefer the top-level generic Responses shape here because
+    // this error is injected while handling an OpenAI Responses stream.
+    encode_sse_json(
         "error",
-        &serde_json::json!({
-            "type": "error",
-            "sequence_number": sequence_number,
-            "code": null,
-            "message": message,
-            "param": null
-        }),
-        message,
+        &ResponsesGenericErrorEvent {
+            event_type: "error",
+            sequence_number,
+            code: None,
+            message,
+            param: None,
+        },
     )
+    .unwrap_or_else(|_| {
+        ErrorResponseFields::sse_translation(message).encode_sse_event_or_fallback()
+    })
 }
 
 #[cfg(test)]

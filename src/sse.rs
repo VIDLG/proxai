@@ -1,6 +1,6 @@
-use async_stream::stream;
+use async_stream::try_stream;
 use bytes::{Bytes, BytesMut};
-use futures_util::{Stream, StreamExt, pin_mut};
+use futures_util::{Stream, StreamExt};
 use getset::Getters;
 use serde::Serialize;
 use serde_json::Value;
@@ -50,10 +50,6 @@ pub(crate) struct SseEventScanner {
 impl SseFrame {
     pub(crate) fn new(bytes: Bytes) -> Self {
         Self { bytes }
-    }
-
-    pub(crate) fn into_bytes(self) -> Bytes {
-        self.bytes
     }
 }
 
@@ -156,27 +152,20 @@ impl SseEventScanner {
 pub(crate) fn sse_frame_stream(
     input: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
 ) -> impl Stream<Item = io::Result<SseSegment>> + Send {
-    stream! {
-        pin_mut!(input);
+    try_stream! {
+        let mut input = Box::pin(input);
         let mut buffer = BytesMut::new();
 
         while let Some(chunk) = input.next().await {
-            match chunk {
-                Ok(chunk) => {
-                    buffer.extend_from_slice(&chunk);
-                    while let Some(frame_end) = complete_sse_frame_end(&buffer) {
-                        yield Ok(SseSegment::Frame(SseFrame::new(buffer.split_to(frame_end).freeze())));
-                    }
-                }
-                Err(error) => {
-                    yield Err(error);
-                    return;
-                }
+            let chunk = chunk?;
+            buffer.extend_from_slice(&chunk);
+            while let Some(frame_end) = complete_sse_frame_end(&buffer) {
+                yield SseSegment::Frame(SseFrame::new(buffer.split_to(frame_end).freeze()));
             }
         }
 
         if !buffer.is_empty() {
-            yield Ok(SseSegment::Tail(buffer.freeze()));
+            yield SseSegment::Tail(buffer.freeze());
         }
     }
 }
@@ -188,22 +177,17 @@ pub(crate) fn sse_frame_stream(
 pub(crate) fn sse_event_stream(
     input: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
 ) -> impl Stream<Item = io::Result<SseEvent>> + Send {
-    stream! {
-        let segments = sse_frame_stream(input);
-        pin_mut!(segments);
+    try_stream! {
+        let mut segments = Box::pin(sse_frame_stream(input));
 
         while let Some(segment) = segments.next().await {
-            match segment {
-                Ok(SseSegment::Frame(frame)) => {
+            match segment? {
+                SseSegment::Frame(frame) => {
                     if let Some(event) = Option::<SseEvent>::try_from(&frame)? {
-                        yield Ok(event);
+                        yield event;
                     }
                 }
-                Ok(SseSegment::Tail(_)) => {}
-                Err(error) => {
-                    yield Err(error);
-                    return;
-                }
+                SseSegment::Tail(_) => {}
             }
         }
     }
@@ -217,23 +201,6 @@ where
     Ok(Bytes::from(format!(
         "event: {event_type}\ndata: {data}\n\n"
     )))
-}
-
-pub(crate) fn encode_sse_json_or_error<T>(
-    event_type: &str,
-    payload: &T,
-    fallback_message: &str,
-) -> Bytes
-where
-    T: Serialize,
-{
-    encode_sse_json(event_type, payload).unwrap_or_else(|_| {
-        Bytes::from(format!(
-            "event: error\ndata: {{\"type\":\"error\",\"message\":{}}}\n\n",
-            serde_json::to_string(fallback_message)
-                .unwrap_or_else(|_| "\"stream error\"".to_string())
-        ))
-    })
 }
 
 fn complete_sse_frame_end(buffer: &[u8]) -> Option<usize> {

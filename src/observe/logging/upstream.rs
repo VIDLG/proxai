@@ -101,6 +101,19 @@ fn upstream_error_message(error: &UpstreamError) -> Option<&str> {
     }
 }
 
+fn upstream_error_param(error: &UpstreamError) -> String {
+    match error {
+        UpstreamError::ErrorStatus { parsed, .. } => parsed
+            .upstream_param()
+            .map(|value| match value {
+                JsonValue::String(value) => value.clone(),
+                value => value.to_string(),
+            })
+            .unwrap_or_default(),
+        UpstreamError::RequestSend(_) | UpstreamError::ResponseBodyRead { .. } => String::new(),
+    }
+}
+
 pub(crate) fn emit_head_info(head: &UpstreamResponseHead) {
     if matches!(active_log_format(), LogOutputFormat::Human) && is_default_success_sse_head(head) {
         return;
@@ -146,6 +159,7 @@ fn is_default_success_sse_head(head: &UpstreamResponseHead) -> bool {
 pub(crate) fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError) {
     let error_code = upstream_error_code(error).unwrap_or("");
     let error_message = upstream_error_message(error).unwrap_or("");
+    let error_param = upstream_error_param(error);
     let content_type = head.content_type_text();
     let transfer_encoding = head.transfer_encoding_text();
     let content_length = head.content_length().unwrap_or_default();
@@ -161,7 +175,7 @@ pub(crate) fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError
             sse = head.is_sse(),
             error_code,
             error_message,
-            error_param = "",
+            error_param = error_param.as_str(),
             err = error_text(error),
         ),
         LogOutputFormat::Json => emit_json_log(
@@ -179,7 +193,7 @@ pub(crate) fn emit_head_error(head: &UpstreamResponseHead, error: &UpstreamError
                     "error_message",
                     JsonValue::String(error_message.to_string()),
                 ),
-                ("error_param", JsonValue::String(String::new())),
+                ("error_param", JsonValue::String(error_param)),
                 ("err", JsonValue::String(error_text(error))),
             ]),
         ),

@@ -174,7 +174,7 @@ async fn proxy_preserves_useful_upstream_error_headers_for_anthropic_messages() 
         Some("0")
     );
     let body = response.text().await.unwrap();
-    assert!(body.contains("upstream 429: quota exhausted"));
+    assert!(body.contains("quota exhausted"));
 
     let paths = capture.paths.lock().await;
     assert_eq!(paths.as_slice(), &["/v1/messages".to_string()]);

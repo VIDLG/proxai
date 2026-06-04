@@ -15,10 +15,7 @@ use crate::protocol::anthropic::messages::{
 use crate::protocol::openai_responses::ResponseCreateParams;
 use crate::provider::anthropic_messages;
 use crate::sse::SseEvent;
-use crate::translation::sse::{
-    SseEventTranslator, encode_sse_json, event_payload_with_type,
-    translate_sse_response_with_error_encoder,
-};
+use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
 
 pub(crate) fn translate_request_payload(
     payload: &Value,
@@ -73,10 +70,9 @@ pub(crate) fn translate_request_payload(
 pub(crate) fn translate_streaming_response(
     response: Response<Body>,
 ) -> Result<Response<Body>, InternalError> {
-    Ok(translate_sse_response_with_error_encoder(
+    Ok(translate_sse_response(
         response,
         AnthropicToOpenaiStreamTranslator::default(),
-        encode_openai_responses_error_event,
     ))
 }
 
@@ -96,17 +92,6 @@ pub(crate) fn translate_non_streaming_response(
         HeaderValue::from_static("application/json"),
     );
     Ok(response)
-}
-
-fn encode_openai_responses_error_event(context: &str, error: io::Error) -> io::Result<Bytes> {
-    let payload = json!({
-        "type": "error",
-        "sequence_number": 0,
-        "code": null,
-        "message": format!("{context}: {error}"),
-        "param": null
-    });
-    encode_sse_json("error", &payload)
 }
 
 #[derive(Debug, Serialize)]
@@ -154,7 +139,7 @@ enum AnthropicStreamBlock {
 impl SseEventTranslator for AnthropicToOpenaiStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>> {
         let payload = anthropic_messages::normalize::normalize_stream_event_payload(
-            event_payload_with_type(&event)?,
+            event.payload_with_type()?,
         );
         if !is_anthropic_stream_event(&payload) {
             return Ok(Vec::new());

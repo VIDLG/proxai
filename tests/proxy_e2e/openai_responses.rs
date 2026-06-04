@@ -128,7 +128,7 @@ async fn proxy_preserves_useful_upstream_error_headers_for_openai_responses() {
         Some("0")
     );
     let body = response.text().await.unwrap();
-    assert!(body.contains("upstream 429: quota exhausted"));
+    assert!(body.contains("quota exhausted"));
 
     let paths = capture.paths.lock().await;
     assert_eq!(paths.as_slice(), &["/v1/responses".to_string()]);
@@ -261,12 +261,11 @@ async fn proxy_rejects_openai_responses_requests_without_model() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body = response.json::<Value>().await.unwrap();
+    let body = response.text().await.unwrap();
     assert_eq!(
-        body["error"]["message"],
+        body,
         "OpenAI Responses requests must include a non-empty `model`."
     );
-    assert_eq!(body["error"]["type"], "invalid_request_error");
 }
 
 #[tokio::test]

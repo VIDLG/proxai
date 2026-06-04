@@ -6,7 +6,7 @@ use getset::Getters;
 
 use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
-use crate::observe::{ProviderRequestPrepared, RequestBodySizes};
+use crate::observe::{ProviderProtocolRequestPrepared, ProviderRequestBodySizes};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::{ProviderRequest, ProviderTransport, ProviderTransportError};
 use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
@@ -97,10 +97,10 @@ impl RoutedInboundFlow {
         let provider_request =
             translate_request(&request, provider_protocol, &upstream_model, &obs)?;
 
-        obs.observe_provider_request_prepared(ProviderRequestPrepared {
+        obs.observe_provider_request_prepared(ProviderProtocolRequestPrepared {
             method: method.clone(),
             uri: uri.clone(),
-            request_sizes: RequestBodySizes {
+            request_sizes: ProviderRequestBodySizes {
                 inbound: request.body_len(),
                 provider: provider_request.body().len(),
             },

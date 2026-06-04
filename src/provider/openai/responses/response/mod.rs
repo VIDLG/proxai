@@ -1,5 +1,3 @@
-mod compat;
-
 mod limits;
 mod observed;
 mod sse;

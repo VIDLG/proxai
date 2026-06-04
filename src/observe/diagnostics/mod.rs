@@ -12,16 +12,16 @@ use crate::paths;
 use crate::provider::openai::responses::ResponsesUpstreamStreamSnapshot;
 use crate::request::RequestId;
 
-pub(crate) use openai_responses::OpenaiResponsesStreamDiagnostics;
+use openai_responses::OpenaiResponsesStreamDiagnostics;
 
 #[derive(Clone)]
-pub(crate) struct DiagnosticsSink {
+pub(super) struct DiagnosticsSink {
     request_id: RequestId,
     openai_responses_stream: Arc<Mutex<OpenaiResponsesStreamDiagnostics>>,
 }
 
 impl DiagnosticsSink {
-    pub(crate) fn new(request_id: RequestId) -> Self {
+    pub(super) fn new(request_id: RequestId) -> Self {
         Self {
             request_id,
             openai_responses_stream: Arc::new(Mutex::new(OpenaiResponsesStreamDiagnostics::new(
@@ -30,7 +30,7 @@ impl DiagnosticsSink {
         }
     }
 
-    pub(crate) fn record_request_info_parse_failure(
+    pub(super) fn record_request_info_parse_failure(
         &self,
         normalized_payload: &Value,
         request_info_parse_payload: &Value,
@@ -44,14 +44,14 @@ impl DiagnosticsSink {
         )
     }
 
-    pub(crate) fn observe_openai_responses_stream_chunk(&self, chunk: &[u8]) {
+    pub(super) fn observe_openai_responses_stream_chunk(&self, chunk: &[u8]) {
         self.openai_responses_stream
             .lock()
             .expect("openai responses stream diagnostics lock poisoned")
             .observe_chunk(chunk);
     }
 
-    pub(crate) fn record_openai_responses_unfinished_tool_stream(
+    pub(super) fn record_openai_responses_unfinished_tool_stream(
         &self,
         snapshot: &ResponsesUpstreamStreamSnapshot,
     ) -> Option<String> {
@@ -89,7 +89,7 @@ struct DiagnosticRecord<'a> {
     artifacts: DiagnosticArtifacts<'a>,
 }
 
-pub(crate) fn write_request_info_parse_failure(
+fn write_request_info_parse_failure(
     request_id: u64,
     normalized_payload: &Value,
     request_info_parse_payload: &Value,

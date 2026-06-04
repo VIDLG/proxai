@@ -1,6 +1,6 @@
-use async_stream::stream;
+use async_stream::try_stream;
 use axum::body::Bytes;
-use futures_util::{Stream, StreamExt, pin_mut};
+use futures_util::{Stream, StreamExt};
 use std::io;
 
 use crate::sse::{encode_sse_json, sse_event_stream};
@@ -10,22 +10,14 @@ use super::normalize_stream_event_payload;
 pub(in super::super) fn normalize_sse_stream(
     input: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
 ) -> impl Stream<Item = io::Result<Bytes>> + Send {
-    stream! {
-        let events = sse_event_stream(input);
-        pin_mut!(events);
+    try_stream! {
+        let mut events = Box::pin(sse_event_stream(input));
 
         while let Some(event) = events.next().await {
-            match event {
-                Ok(event) => {
-                    match normalize_sse_event(&event) {
-                        Ok(chunk) => yield Ok(chunk),
-                        Err(_) => yield Ok(encode_raw_sse_event(&event)),
-                    }
-                }
-                Err(error) => {
-                    yield Err(error);
-                    return;
-                }
+            let event = event?;
+            match normalize_sse_event(&event) {
+                Ok(chunk) => yield chunk,
+                Err(_) => yield encode_raw_sse_event(&event),
             }
         }
     }

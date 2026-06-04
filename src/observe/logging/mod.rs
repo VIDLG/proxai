@@ -10,8 +10,8 @@ mod tool_alias;
 mod upstream;
 
 use super::point::{
-    ProviderRequestPrepared, ProviderStreamOutcome, ProviderStreamOutcomeObserved,
-    ProviderStreamSnapshot, RequestBodySizes,
+    ProviderProtocolRequestPrepared, ProviderRequestBodySizes, ProviderStreamOutcome,
+    ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
 use axum::http::{Method, Uri};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -25,23 +25,23 @@ use crate::config::{LogLevel, LogOutputFormat};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::ProviderRequestView;
 use crate::request::RequestId;
-pub(crate) use anthropic_messages::{
+use anthropic_messages::{
     emit_anthropic_stream_closed, emit_anthropic_stream_completed, emit_anthropic_stream_error,
 };
-pub(crate) use openai_chat_completions::{
+use openai_chat_completions::{
     emit_chat_stream_closed, emit_chat_stream_completed, emit_chat_stream_error,
 };
-pub(crate) use openai_responses::{
+use openai_responses::{
     emit_stream_closed as emit_responses_stream_closed,
     emit_stream_completed as emit_responses_stream_completed,
     emit_stream_error as emit_responses_stream_error,
     emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
 };
-pub(crate) use output_alias::compact_output_item_kind;
+use output_alias::compact_output_item_kind;
 use record::{ProviderRequestFields, ValuableJson};
 pub use tool_alias::TOOL_NAME_ALIASES;
-pub(crate) use tool_alias::compact_tool_call_name;
-pub(crate) use upstream::{
+use tool_alias::compact_tool_call_name;
+use upstream::{
     emit_head_error, emit_head_info, emit_inbound_request_received,
     emit_request_info_parse_failure, emit_stream_timeout, emit_stream_wait,
 };
@@ -81,12 +81,76 @@ pub fn init(
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct LoggingSink;
+
+impl LoggingSink {
+    pub(super) fn emit_request_failed(self, error: &crate::error::Error) {
+        emit_request_failed(error);
+    }
+
+    pub(super) fn emit_provider_request_prepared(
+        self,
+        request_id: RequestId,
+        event: &ProviderProtocolRequestPrepared<'_>,
+        capture: bool,
+    ) {
+        emit_provider_request_prepared(request_id, event, capture);
+    }
+
+    pub(super) fn emit_provider_stream_outcome(
+        self,
+        point: &ProviderStreamOutcomeObserved<'_>,
+        diagnostic_path: Option<&str>,
+    ) {
+        emit_provider_stream_outcome(point, diagnostic_path);
+    }
+
+    pub(super) fn emit_inbound_request_received(
+        self,
+        request_id: RequestId,
+        method: &axum::http::Method,
+        uri: &axum::http::Uri,
+        headers: &axum::http::HeaderMap,
+    ) {
+        emit_inbound_request_received(request_id, method, uri, headers);
+    }
+
+    pub(super) fn emit_request_info_parse_failure(
+        self,
+        request_id: RequestId,
+        error: &serde_json::Error,
+    ) {
+        emit_request_info_parse_failure(request_id, error);
+    }
+
+    pub(super) fn emit_stream_wait(self, point: crate::observe::point::UpstreamStreamProgress) {
+        emit_stream_wait(point);
+    }
+
+    pub(super) fn emit_stream_timeout(self, point: crate::observe::point::UpstreamStreamProgress) {
+        emit_stream_timeout(point);
+    }
+
+    pub(super) fn emit_head_info(self, head: &crate::http_support::UpstreamResponseHead) {
+        emit_head_info(head);
+    }
+
+    pub(super) fn emit_head_error(
+        self,
+        head: &crate::http_support::UpstreamResponseHead,
+        error: &crate::error::UpstreamError,
+    ) {
+        emit_head_error(head, error);
+    }
+}
+
 /// Request-level logging payload for the initial forward event.
 pub(super) struct ProviderRequestLogPayload<'a> {
     pub(crate) request_id: RequestId,
     pub(crate) method: Method,
     pub(crate) uri: Uri,
-    pub(crate) request_sizes: RequestBodySizes,
+    pub(crate) request_sizes: ProviderRequestBodySizes,
     pub(crate) request_protocol: RequestProtocol,
     pub(crate) provider: String,
     pub(crate) route_name: Option<String>,
@@ -95,11 +159,11 @@ pub(super) struct ProviderRequestLogPayload<'a> {
     pub(crate) capture: bool,
 }
 
-pub(crate) fn emit_request_failed(error: &crate::error::Error) {
+fn emit_request_failed(error: &crate::error::Error) {
     tracing::warn!(error = %error, "request failed");
 }
 
-pub(crate) fn emit_provider_stream_outcome(
+fn emit_provider_stream_outcome(
     point: &ProviderStreamOutcomeObserved<'_>,
     diagnostic_path: Option<&str>,
 ) {
@@ -129,9 +193,9 @@ pub(crate) fn emit_provider_stream_outcome(
     }
 }
 
-pub(crate) fn emit_provider_request_prepared(
+fn emit_provider_request_prepared(
     request_id: RequestId,
-    event: &ProviderRequestPrepared<'_>,
+    event: &ProviderProtocolRequestPrepared<'_>,
     capture: bool,
 ) {
     let log_payload = ProviderRequestLogPayload {

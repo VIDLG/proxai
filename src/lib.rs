@@ -176,7 +176,7 @@ async fn proxy(State(state): State<AppState>, request: Request<Body>) -> impl In
         Ok(response) => response,
         Err(error) => {
             obs.observe_request_failed(RequestFailed { error: &error });
-            error.into_response_with_format(format)
+            error.response_spec().into_response(format)
         }
     }
 }

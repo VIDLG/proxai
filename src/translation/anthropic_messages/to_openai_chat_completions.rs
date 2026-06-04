@@ -14,9 +14,7 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::provider::anthropic_messages;
 use crate::sse::SseEvent;
-use crate::translation::sse::{
-    SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
-};
+use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
 
 pub(crate) fn translate_streaming_response(
     response: Response<Body>,
@@ -176,7 +174,7 @@ enum ChatStreamBlock {
 impl SseEventTranslator for AnthropicToChatStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>> {
         let payload = anthropic_messages::normalize::normalize_stream_event_payload(
-            event_payload_with_type(&event)?,
+            event.payload_with_type()?,
         );
         if !is_anthropic_stream_event(&payload) {
             return Ok(Vec::new());

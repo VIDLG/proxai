@@ -13,9 +13,7 @@ use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
 use crate::sse::SseEvent;
-use crate::translation::sse::{
-    SseEventTranslator, encode_sse_json, event_payload_with_type, translate_sse_response,
-};
+use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
 
 pub(crate) fn translate_streaming_response(
     response: Response<Body>,
@@ -221,7 +219,7 @@ impl SseEventTranslator for ChatToResponsesStreamTranslator {
         if event.data.trim() == "[DONE]" {
             return self.finish();
         }
-        let payload = event_payload_with_type(&event)?;
+        let payload = event.payload_with_type()?;
         let mut chunks = Vec::new();
 
         if self.response_id.is_none() {

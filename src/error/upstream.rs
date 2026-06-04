@@ -6,7 +6,11 @@ use crate::http_support::UpstreamResponseHead;
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum UpstreamResponseError {
     #[error("upstream response error: {message}")]
-    Upstream { code: String, message: String },
+    Upstream {
+        code: Option<String>,
+        message: String,
+        param: Option<Value>,
+    },
     #[error("proxy could not parse upstream error response: empty body")]
     EmptyBody,
     #[error("proxy could not parse upstream error response as json: {text}")]
@@ -32,6 +36,11 @@ impl UpstreamResponseError {
             .and_then(Value::as_str)
             .map(str::to_string);
 
+        let param = value
+            .pointer("/error/param")
+            .or_else(|| value.pointer("/param"))
+            .cloned();
+
         if let Some(message) = value
             .pointer("/error/message")
             .or_else(|| value.pointer("/error"))
@@ -40,8 +49,9 @@ impl UpstreamResponseError {
             .and_then(Value::as_str)
         {
             return Self::Upstream {
-                code: code.unwrap_or_else(|| "upstream_error".to_string()),
+                code,
                 message: message.to_string(),
+                param,
             };
         }
         if let Some(array) = value.pointer("/detail").and_then(Value::as_array) {
@@ -56,8 +66,9 @@ impl UpstreamResponseError {
                 .join("; ");
             if !joined.is_empty() {
                 return Self::Upstream {
-                    code: code.unwrap_or_else(|| "upstream_error".to_string()),
+                    code,
                     message: joined,
+                    param,
                 };
             }
         }
@@ -67,7 +78,7 @@ impl UpstreamResponseError {
 
     pub(crate) fn upstream_code(&self) -> Option<&str> {
         match self {
-            Self::Upstream { code, .. } => Some(code),
+            Self::Upstream { code, .. } => code.as_deref(),
             Self::EmptyBody | Self::NonJsonBody { .. } | Self::UnknownBodyShape { .. } => None,
         }
     }
@@ -79,25 +90,10 @@ impl UpstreamResponseError {
         }
     }
 
-    pub(crate) fn response_message(&self) -> String {
+    pub(crate) fn upstream_param(&self) -> Option<&Value> {
         match self {
-            Self::Upstream { message, .. } => message.clone(),
-            Self::EmptyBody => "upstream error response body is empty".to_string(),
-            Self::NonJsonBody { text } => {
-                format!("upstream error response body is not JSON: {text}")
-            }
-            Self::UnknownBodyShape { text } => {
-                format!("upstream error response body has unknown shape: {text}")
-            }
-        }
-    }
-
-    pub(crate) fn response_type(&self) -> &'static str {
-        match self {
-            Self::Upstream { .. } => "upstream_error",
-            Self::EmptyBody => "upstream_error_body_empty",
-            Self::NonJsonBody { .. } => "upstream_error_body_non_json",
-            Self::UnknownBodyShape { .. } => "upstream_error_body_unknown_shape",
+            Self::Upstream { param, .. } => param.as_ref(),
+            Self::EmptyBody | Self::NonJsonBody { .. } | Self::UnknownBodyShape { .. } => None,
         }
     }
 }

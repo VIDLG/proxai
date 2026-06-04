@@ -31,7 +31,13 @@ pub(crate) fn translate_streaming_response(
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             super::openai_responses::to_anthropic_messages::translate_streaming_response(response)
         }
-        _ => Ok(response),
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
+        | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
+        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(response),
+        (request_protocol, provider_protocol) => Err(unsupported_response_translation(
+            request_protocol,
+            provider_protocol,
+        )),
     }
 }
 
@@ -65,8 +71,25 @@ pub(crate) fn translate_non_streaming_response(
                 response,
             )
         }
-        _ => Ok(response.into_response()),
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
+        | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
+        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => {
+            Ok(response.into_response())
+        }
+        (request_protocol, provider_protocol) => Err(unsupported_response_translation(
+            request_protocol,
+            provider_protocol,
+        )),
     }
+}
+
+fn unsupported_response_translation(
+    request_protocol: RequestProtocol,
+    provider_protocol: ProviderProtocol,
+) -> InternalError {
+    InternalError::InvalidRoute(format!(
+        "{provider_protocol} -> {request_protocol} response translation is not implemented yet"
+    ))
 }
 
 #[cfg(test)]

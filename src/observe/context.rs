@@ -1,12 +1,11 @@
 use std::future::Future;
-use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use getset::CopyGetters;
 use tracing::{Instrument, info_span};
 
-use super::capture::{CaptureController, CaptureSession, UpstreamResponseCaptureWriter};
-use super::diagnostics::DiagnosticsSink;
+use super::capture::{CaptureController, CaptureSession};
+use super::sinks::ObserveSinks;
 use crate::request::RequestId;
 
 #[derive(Clone, CopyGetters)]
@@ -15,9 +14,7 @@ pub(crate) struct ObserveContext {
     pub(super) request_id: RequestId,
     #[getset(get_copy = "pub(crate)")]
     pub(super) started: Instant,
-    pub(super) capture: CaptureSession,
-    pub(super) stream_capture_writer: Arc<Mutex<Option<UpstreamResponseCaptureWriter>>>,
-    pub(super) diagnostics: DiagnosticsSink,
+    pub(super) sinks: ObserveSinks,
     pub(super) span: tracing::Span,
 }
 
@@ -31,9 +28,7 @@ impl ObserveContext {
         Self {
             request_id,
             started,
-            capture,
-            stream_capture_writer: Arc::new(Mutex::new(None)),
-            diagnostics: DiagnosticsSink::new(request_id),
+            sinks: ObserveSinks::new(request_id, capture),
             span,
         }
     }

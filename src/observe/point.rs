@@ -24,12 +24,12 @@ pub(crate) struct InboundRequestPrepared<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct RequestBodySizes {
+pub(crate) struct ProviderRequestBodySizes {
     pub(crate) inbound: usize,
     pub(crate) provider: usize,
 }
 
-impl RequestBodySizes {
+impl ProviderRequestBodySizes {
     pub(crate) fn delta(self) -> i128 {
         self.provider as i128 - self.inbound as i128
     }
@@ -39,10 +39,10 @@ pub(crate) struct RequestFailed<'a> {
     pub(crate) error: &'a Error,
 }
 
-pub(crate) struct ProviderRequestPrepared<'a> {
+pub(crate) struct ProviderProtocolRequestPrepared<'a> {
     pub(crate) method: Method,
     pub(crate) uri: Uri,
-    pub(crate) request_sizes: RequestBodySizes,
+    pub(crate) request_sizes: ProviderRequestBodySizes,
     pub(crate) request_protocol: RequestProtocol,
     pub(crate) provider: String,
     pub(crate) route_name: Option<String>,

@@ -7,6 +7,7 @@ pub(crate) mod logging;
 mod outbound;
 mod point;
 mod provider;
+mod sinks;
 mod upstream;
 
 pub(crate) use capture::CaptureController;
@@ -15,9 +16,9 @@ pub(crate) use context::ObserveContext;
 pub use logging::{DurationThresholds, TOOL_NAME_ALIASES, init as init_logging};
 pub(crate) use point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
-    ProviderHttpRequestPrepared, ProviderRequestPrepared, ProviderStreamChunkObserved,
-    ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestBodySizes,
-    RequestFailed, RequestInfoParseFailure, UpstreamErrorResponseReceived,
+    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderRequestBodySizes,
+    ProviderStreamChunkObserved, ProviderStreamOutcome, ProviderStreamOutcomeObserved,
+    ProviderStreamSnapshot, RequestFailed, RequestInfoParseFailure, UpstreamErrorResponseReceived,
     UpstreamNonStreamingResponseReceived, UpstreamStreamChunkReceived, UpstreamStreamProgress,
     UpstreamStreamingResponseStarted,
 };
