@@ -1,13 +1,23 @@
 use async_stream::try_stream;
-use axum::body::{Body, Bytes};
-use axum::http::{Response, header};
-use futures_util::{Stream, StreamExt};
+use axum::body::Bytes;
+use futures_util::StreamExt;
 
 use crate::error::ErrorResponseFields;
+use crate::http_support::{ByteStream, boxed_stream_error};
 
 pub(crate) use crate::sse::encode_sse_json;
-use crate::sse::{SseEvent, SseEventScanner};
-use std::io;
+use crate::sse::{SseError, SseEvent, SseEventScanner};
+
+pub(crate) type SseTranslationResult<T> = Result<T, SseTranslationError>;
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SseTranslationError {
+    #[error("SSE JSON conversion failed: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    Sse(#[from] SseError),
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SseTranslatorErrorStage {
@@ -25,37 +35,20 @@ impl SseTranslatorErrorStage {
 }
 
 pub(crate) trait SseEventTranslator: Send + 'static {
-    fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>>;
+    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>>;
 
-    fn finish(&mut self) -> io::Result<Vec<Bytes>> {
+    fn finish(&mut self) -> SseTranslationResult<Vec<Bytes>> {
         Ok(Vec::new())
     }
 }
 
-pub(crate) fn translate_sse_response<T>(response: Response<Body>, translator: T) -> Response<Body>
+pub(crate) fn translate_sse_stream<T>(input: ByteStream, mut translator: T) -> ByteStream
 where
     T: SseEventTranslator,
 {
-    let (mut parts, body) = response.into_parts();
-    parts.headers.remove(header::CONTENT_LENGTH);
-    parts.headers.insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
+    let stream = try_stream! {
+        futures_util::pin_mut!(input);
 
-    let stream = translate_sse_body(body, translator);
-    Response::from_parts(parts, Body::from_stream(stream))
-}
-
-fn translate_sse_body<T>(
-    body: Body,
-    mut translator: T,
-) -> impl Stream<Item = io::Result<Bytes>> + Send + 'static
-where
-    T: SseEventTranslator,
-{
-    try_stream! {
-        let mut input = body.into_data_stream();
         let mut scanner = SseEventScanner::default();
 
         while let Some(chunk) = input.next().await {
@@ -105,5 +98,6 @@ where
         for translated in chunks {
             yield translated;
         }
-    }
+    };
+    Box::pin(stream.map(|chunk: serde_json::Result<Bytes>| chunk.map_err(boxed_stream_error)))
 }

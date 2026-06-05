@@ -26,8 +26,9 @@ openai_responses / openai_chat_completions / anthropic_messages
 
 - `src/protocol/mod.rs` 定义 `RequestProtocol` 和 `ProviderProtocol`。
 - `src/ingress/request.rs` 用 `PreparedInboundRequest` 按协议承载已经解析过的入站请求。
-- `src/translation/request.rs` 根据入站协议和 provider 协议构造 `ProviderRequest`。
-- `src/provider/handler.rs` 根据 provider 协议选择上游响应处理器。
+- `src/translation/request.rs` 把已经规范化的入站 payload 翻译成 provider 协议 payload。
+- `src/provider/request.rs` 准备 provider 请求，包括模型改写、projection/summary 提取和 JSON body 序列化。
+- `src/provider/handler.rs` 以及 provider response 模块按 provider 协议选择上游响应处理方式。
 
 这个拆分避免把“客户端发来的协议”和“上游 provider 使用的协议”混成一个概念。例如客户端可以发 `openai_responses`，但路由到 `anthropic_messages` provider 时必须经过显式翻译；如果对应 pair 尚未实现，`translation::translate_request` 会返回明确错误。
 
@@ -38,8 +39,12 @@ openai_responses / openai_chat_completions / anthropic_messages
 - `openai_responses -> openai_responses`
 - `openai_chat_completions -> openai_chat_completions`
 - `anthropic_messages -> anthropic_messages`
+- `openai_responses -> openai_chat_completions`
+- `openai_responses -> anthropic_messages`
+- `openai_chat_completions -> anthropic_messages`
+- `anthropic_messages -> openai_responses`
 
-跨协议转换目前保留为显式未实现路径。文档里描述的协议结构来自 `src/protocol/**/wire` 和各协议 projection；其中 Anthropic Messages 的完整 wire model 已在 `src/protocol/anthropic/messages` 建模，但部分结构仍是为后续翻译和更深观察预留的脚手架。
+其他跨协议转换保持显式未支持，直到逐个实现。文档里描述的协议结构来自 `src/protocol/**` 和各协议 projection；其中 Anthropic Messages 的完整 wire model 已在 `src/protocol/anthropic/messages` 建模，部分结构也用于翻译和观察。
 
 ## Chat Completions choices 与 Responses output items
 
@@ -152,10 +157,11 @@ enum ProviderRequest {
 
 ## SSE 处理
 
-SSE 流式响应分为两层：
+SSE 流式响应分为三层：
 
-- 通用层：`src/provider/stream.rs` 的 `log_upstream_body_stream` 保留上游原始 bytes，统计 chunk/bytes/duration，接入 capture，并调用协议 observer。
-- 协议层：各 provider observer 解析或扫描本协议事件，识别终止事件，产生日志和必要诊断。
+- carrier 层：`http_support::ByteStream` / `ByteStreamError` 承载 boxed byte streams；`http_support::response` 负责重建 `text/event-stream` 响应头和 body。
+- 通用上游层：`src/upstream/streaming.rs` 保留上游原始 bytes，统计 chunk/bytes/duration，接入 capture，并调用协议 observer。
+- 协议层：各 provider observer 或 `src/translation/sse.rs` 解析/翻译本协议事件，识别终止事件，产生日志和必要诊断。
 
 proxai 的默认目标不是重新生成流，而是尽量保留上游原始 SSE bytes 和 `text/event-stream`。只有协议确实需要诊断或错误注入时，observer 才会在 `poll_pending` 中产出自定义 chunk，例如 OpenAI Responses 的工具参数流超时诊断。
 

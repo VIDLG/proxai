@@ -1,18 +1,13 @@
 use axum::body::{Body, to_bytes};
 use axum::http::{Response, header};
-use serde_json::{Value, json};
+use serde_json::json;
 
-use super::{translate_non_streaming_response, translate_streaming_response};
-use crate::http_support::NonStreamingResponse;
+use crate::http_support::into_byte_stream;
 
-async fn read_non_streaming(response: Response<Body>) -> NonStreamingResponse {
-    let (parts, body) = response.into_parts();
-    let body = to_bytes(body, usize::MAX).await.unwrap();
-    NonStreamingResponse::from_parts(parts, body)
-}
+use super::{translate_non_streaming_payload, translate_streaming_stream};
 
-#[tokio::test]
-async fn translates_chat_completion_response_to_responses_shape() {
+#[test]
+fn translates_chat_completion_response_to_responses_shape() {
     let upstream = json!({
         "id": "chatcmpl_123",
         "object": "chat.completion",
@@ -39,15 +34,7 @@ async fn translates_chat_completion_response_to_responses_shape() {
             "completion_tokens_details": {"reasoning_tokens": 2}
         }
     });
-    let mut response = Response::new(Body::from(serde_json::to_vec(&upstream).unwrap()));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("application/json"),
-    );
-
-    let translated = translate_non_streaming_response(read_non_streaming(response).await).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
-    let value: Value = serde_json::from_slice(&body).unwrap();
+    let value = translate_non_streaming_payload(upstream).unwrap();
 
     assert_eq!(value["id"], "resp_chatcmpl_123");
     assert_eq!(value["object"], "response");
@@ -79,8 +66,12 @@ async fn translates_chat_stream_to_responses_sse() {
         header::HeaderValue::from_static("text/event-stream"),
     );
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let text = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(text.contains("event: response.created"));

@@ -2,21 +2,8 @@ use serde_json::json;
 
 use crate::ingress;
 use crate::protocol::ProviderProtocol;
-use crate::provider::ProviderRequestView;
-use crate::request::RequestId;
 
 use super::translate_request;
-
-fn test_obs() -> crate::observe::ObserveContext {
-    let request_id = RequestId::from(1);
-    crate::observe::ObserveContext::new(
-        request_id,
-        std::time::Instant::now(),
-        crate::observe::CaptureController::new(None, crate::config::CaptureConfig::default())
-            .session(request_id),
-        tracing::Span::none(),
-    )
-}
 
 #[test]
 fn translates_openai_responses_inbound_to_chat_provider_request() {
@@ -36,33 +23,21 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let obs = test_obs();
-    let provider_request = translate_request(
-        &inbound,
+    let translated = translate_request(
+        inbound.protocol(),
         ProviderProtocol::OpenaiChatCompletions,
-        "MiniMax-M3",
-        &obs,
+        inbound.normalized_payload(),
     )
-    .expect("translation should produce a Chat Completions provider request");
+    .expect("translation should produce a Chat Completions payload");
 
-    let provider_body: serde_json::Value =
-        serde_json::from_slice(provider_request.body()).expect("provider body must be JSON");
-    assert_eq!(provider_body["model"], "MiniMax-M3");
+    let provider_body = translated;
+    assert_eq!(provider_body["model"], "glm-5.1");
     assert_eq!(provider_body["max_completion_tokens"], 64);
     assert_eq!(provider_body["stream"], true);
     assert_eq!(provider_body["messages"][0]["role"], "system");
     assert_eq!(provider_body["messages"][0]["content"], "Be concise.");
     assert_eq!(provider_body["messages"][1]["role"], "user");
     assert_eq!(provider_body["messages"][1]["content"][0]["text"], "hello");
-    assert_eq!(*provider_request.capture_payload(), provider_body);
-
-    let ProviderRequestView::OpenaiChatCompletions { projection, .. } = provider_request.view()
-    else {
-        panic!("expected Chat Completions log view");
-    };
-    assert_eq!(projection.model.as_deref(), Some("MiniMax-M3"));
-    assert_eq!(projection.max_completion_tokens, Some(64));
-    assert_eq!(projection.stream, Some(true));
 }
 #[test]
 fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
@@ -85,17 +60,14 @@ fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let obs = test_obs();
-    let provider_request = translate_request(
-        &inbound,
+    let translated = translate_request(
+        inbound.protocol(),
         ProviderProtocol::AnthropicMessages,
-        "glm-5.1",
-        &obs,
+        inbound.normalized_payload(),
     )
-    .expect("translation should produce an Anthropic provider request");
+    .expect("translation should produce an Anthropic payload");
 
-    let provider_body: serde_json::Value =
-        serde_json::from_slice(provider_request.body()).expect("provider body must be JSON");
+    let provider_body = translated;
     assert_eq!(provider_body["model"], "glm-5.1");
     assert_eq!(provider_body["max_tokens"], 64);
     assert_eq!(
@@ -111,12 +83,4 @@ fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
             "text": "Reply with the exact text: proxai-translation-live-ok"
         })
     );
-    assert_eq!(*provider_request.capture_payload(), provider_body);
-
-    let ProviderRequestView::AnthropicMessages { projection, .. } = provider_request.view() else {
-        panic!("expected Anthropic log view");
-    };
-    assert_eq!(projection.model, "glm-5.1");
-    assert_eq!(projection.max_tokens, 64);
-    assert_eq!(projection.stream, Some(false));
 }

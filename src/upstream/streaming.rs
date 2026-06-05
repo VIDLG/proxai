@@ -2,14 +2,15 @@ use axum::body::Bytes;
 
 use futures_util::{Future, Stream, StreamExt};
 
-use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use tokio::time::{Instant as TokioInstant, Sleep};
 
-use crate::http_support::{OutboundResponseHead, UpstreamResponseHead};
+use crate::http_support::{
+    ByteStream, ByteStreamError, OutboundResponseHead, UpstreamResponseHead, boxed_stream_error,
+};
 
 use crate::observe::{
     ObserveContext, OutboundResponseHeadPrepared, UpstreamStreamChunkReceived,
@@ -134,7 +135,7 @@ impl<O> Stream for MonitoredUpstreamBodyStream<O>
 where
     O: BodyObserver,
 {
-    type Item = std::io::Result<Bytes>;
+    type Item = Result<Bytes, ByteStreamError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -155,7 +156,7 @@ where
                 this.finished = true;
                 this.body_observer.observe_error(&error);
                 this.emit_outcome();
-                Poll::Ready(Some(Err(std::io::Error::other(error))))
+                Poll::Ready(Some(Err(boxed_stream_error(error))))
             }
             Poll::Ready(None) => {
                 this.finished = true;
@@ -202,10 +203,7 @@ pub(crate) fn prepare_response_stream<O>(
     read_idle_timeout: Duration,
     upstream_response: reqwest::Response,
     body_observer: O,
-) -> (
-    OutboundResponseHead,
-    Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send>>,
-)
+) -> (OutboundResponseHead, ByteStream)
 where
     O: BodyObserver,
 {

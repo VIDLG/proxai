@@ -7,11 +7,12 @@
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::error::{InternalError, Result};
 use crate::protocol::openai::responses::{Reasoning, ReasoningEffort};
+use crate::translation::TranslationResult;
 
 #[derive(Debug, Default, Deserialize)]
 struct ResponsesRequestView {
+    model: String,
     input: Option<Value>,
     instructions: Option<String>,
     max_output_tokens: Option<u32>,
@@ -24,11 +25,7 @@ struct ResponsesRequestView {
     top_p: Option<f32>,
 }
 
-pub(crate) fn translate_request_payload(
-    payload: &Value,
-    request_model: &str,
-    upstream_model: &str,
-) -> Result<Value, InternalError> {
+pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let source = serde_json::from_value::<ResponsesRequestView>(payload.clone())?;
 
     let mut messages = Vec::new();
@@ -49,14 +46,7 @@ pub(crate) fn translate_request_payload(
     }
 
     let mut request = Map::new();
-    request.insert(
-        "model".to_string(),
-        Value::String(if upstream_model != request_model {
-            upstream_model.to_string()
-        } else {
-            request_model.to_string()
-        }),
-    );
+    request.insert("model".to_string(), Value::String(source.model));
     request.insert("messages".to_string(), Value::Array(messages));
 
     if let Some(max_tokens) = source.max_output_tokens {
@@ -93,7 +83,7 @@ pub(crate) fn translate_request_payload(
     Ok(Value::Object(request))
 }
 
-fn translate_input(input: Option<&Value>) -> Result<Vec<Value>, InternalError> {
+fn translate_input(input: Option<&Value>) -> TranslationResult<Vec<Value>> {
     let Some(input) = input else {
         return Ok(Vec::new());
     };
@@ -111,7 +101,7 @@ fn translate_input(input: Option<&Value>) -> Result<Vec<Value>, InternalError> {
     }
 }
 
-fn translate_input_item(item: &Value, messages: &mut Vec<Value>) -> Result<(), InternalError> {
+fn translate_input_item(item: &Value, messages: &mut Vec<Value>) -> TranslationResult<()> {
     let Some(object) = item.as_object() else {
         messages.push(json!({"role": "user", "content": item.to_string()}));
         return Ok(());
@@ -158,7 +148,7 @@ fn translate_input_item(item: &Value, messages: &mut Vec<Value>) -> Result<(), I
 fn translate_message_object(
     object: &Map<String, Value>,
     messages: &mut Vec<Value>,
-) -> Result<(), InternalError> {
+) -> TranslationResult<()> {
     let role = object.get("role").and_then(Value::as_str).unwrap_or("user");
     let chat_role = match role {
         "system" => "system",

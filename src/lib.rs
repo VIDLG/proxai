@@ -155,6 +155,7 @@ impl AppState {
         axum::serve(listener, app)
             .with_graceful_shutdown(shutdown)
             .await
+            .map_err(InternalError::Io)
             .map_err(Into::into)
     }
 }
@@ -204,7 +205,7 @@ async fn proxy_inner(
             &state.routes,
             &state.provider_protocols,
         )?
-        .translate_to_provider()?;
+        .prepare_provider_request()?;
 
     let transport = state.provider(prepared_provider.provider_name())?;
 

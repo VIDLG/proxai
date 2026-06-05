@@ -3,27 +3,29 @@
 //! This is intentionally request-focused. Response translation is not handled here;
 //! the selected provider protocol owns upstream response handling.
 
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderValue, Response, header};
+use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io;
 
-use crate::error::{InternalError, Result};
-use crate::http_support::NonStreamingResponse;
 use crate::protocol::anthropic::messages::{
     ContentBlock, DirectCaller, Message as AnthropicMessage, MessageCreateParamsBase, MessageType,
     Role, StopReason, TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock, Usage,
 };
+use crate::translation::{TranslationError, TranslationResult};
 
 use crate::sse::SseEvent;
-use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
+
+use crate::http_support::ByteStream;
+use crate::translation::sse::{
+    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+};
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 #[derive(Debug, Default, Deserialize)]
 struct ResponseRequestView {
+    model: String,
     input: Option<Value>,
     instructions: Option<String>,
     max_output_tokens: Option<u32>,
@@ -37,11 +39,7 @@ struct ResponseRequestView {
     top_p: Option<f32>,
 }
 
-pub(crate) fn translate_request_payload(
-    payload: &Value,
-    request_model: &str,
-    upstream_model: &str,
-) -> Result<Value, InternalError> {
+pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let source = serde_json::from_value::<ResponseRequestView>(payload.clone())?;
     let input = source.input.as_ref();
     let tools = source.tools.as_ref();
@@ -65,14 +63,7 @@ pub(crate) fn translate_request_payload(
     }
 
     let mut request = Map::new();
-    request.insert(
-        "model".to_string(),
-        Value::String(if upstream_model != request_model {
-            upstream_model.to_string()
-        } else {
-            request_model.to_string()
-        }),
-    );
+    request.insert("model".to_string(), Value::String(source.model));
     request.insert(
         "max_tokens".to_string(),
         json!(source.max_output_tokens.unwrap_or(DEFAULT_MAX_TOKENS)),
@@ -109,28 +100,17 @@ pub(crate) fn translate_request_payload(
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) fn translate_streaming_response(
-    response: Response<Body>,
-) -> Result<Response<Body>, InternalError> {
-    Ok(translate_sse_response(
-        response,
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
+    Ok(translate_sse_stream(
+        input,
         OpenaiToAnthropicStreamTranslator::default(),
     ))
 }
 
-pub(crate) fn translate_non_streaming_response(
-    response: NonStreamingResponse,
-) -> Result<Response<Body>, InternalError> {
-    let value = serde_json::from_slice::<OpenaiResponseBody>(&response.body)?;
+pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
+    let value = serde_json::from_value::<OpenaiResponseBody>(payload)?;
     let translated = translate_response_payload(&value);
-    let status = response.status;
-    let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
-    *response.status_mut() = status;
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    Ok(response)
+    Ok(serde_json::to_value(translated)?)
 }
 
 #[derive(Debug, Default)]
@@ -233,13 +213,12 @@ enum OpenaiStreamOutputItem {
 }
 
 impl SseEventTranslator for OpenaiToAnthropicStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>> {
+    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
         if event.is_done_sentinel() {
             return Ok(Vec::new());
         }
 
-        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)
-            .map_err(io::Error::other)?;
+        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -423,7 +402,11 @@ impl OpenaiToAnthropicStreamTranslator {
         }
     }
 
-    fn ensure_text_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> io::Result<()> {
+    fn ensure_text_block(
+        &mut self,
+        index: u32,
+        chunks: &mut Vec<Bytes>,
+    ) -> SseTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -439,7 +422,11 @@ impl OpenaiToAnthropicStreamTranslator {
         Ok(())
     }
 
-    fn ensure_thinking_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> io::Result<()> {
+    fn ensure_thinking_block(
+        &mut self,
+        index: u32,
+        chunks: &mut Vec<Bytes>,
+    ) -> SseTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -461,7 +448,7 @@ impl OpenaiToAnthropicStreamTranslator {
         item_id: Option<String>,
         name: Option<String>,
         chunks: &mut Vec<Bytes>,
-    ) -> io::Result<()> {
+    ) -> SseTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -486,7 +473,7 @@ impl OpenaiToAnthropicStreamTranslator {
         Ok(())
     }
 
-    fn stop_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> io::Result<()> {
+    fn stop_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> SseTranslationResult<()> {
         if self.stopped_blocks.insert(index) {
             chunks.push(self.anthropic_event(
                 "content_block_stop",
@@ -496,7 +483,11 @@ impl OpenaiToAnthropicStreamTranslator {
         Ok(())
     }
 
-    fn complete(&mut self, stop_reason: StopReason, chunks: &mut Vec<Bytes>) -> io::Result<()> {
+    fn complete(
+        &mut self,
+        stop_reason: StopReason,
+        chunks: &mut Vec<Bytes>,
+    ) -> SseTranslationResult<()> {
         if self.completed {
             return Ok(());
         }
@@ -549,11 +540,11 @@ impl OpenaiToAnthropicStreamTranslator {
         })
     }
 
-    fn anthropic_event<T>(&self, event_type: &str, payload: T) -> io::Result<Bytes>
+    fn anthropic_event<T>(&self, event_type: &str, payload: T) -> SseTranslationResult<Bytes>
     where
         T: Serialize,
     {
-        encode_sse_json(event_type, &payload)
+        Ok(encode_sse_json(event_type, &payload)?)
     }
 }
 
@@ -665,7 +656,7 @@ fn translate_response_payload(response: &OpenaiResponseBody) -> AnthropicMessage
 fn translate_input(
     input: Option<&Value>,
     system_parts: &mut Vec<String>,
-) -> Result<Vec<Value>, InternalError> {
+) -> TranslationResult<Vec<Value>> {
     let Some(input) = input else {
         return Ok(Vec::new());
     };
@@ -679,7 +670,7 @@ fn translate_input(
             }
             Ok(messages)
         }
-        _ => Err(InternalError::InvalidRoute(
+        _ => Err(TranslationError::InvalidPayload(
             "openai_responses -> anthropic_messages translation requires `input` to be a string or array"
                 .to_string(),
         )),
@@ -788,7 +779,7 @@ fn translate_input_item(
     item: &Value,
     system_parts: &mut Vec<String>,
     messages: &mut Vec<Value>,
-) -> Result<(), InternalError> {
+) -> TranslationResult<()> {
     let Some(object) = item.as_object() else {
         messages.push(message("user", Value::String(item.to_string())));
         return Ok(());
@@ -839,7 +830,7 @@ fn translate_message_object(
     object: &Map<String, Value>,
     system_parts: &mut Vec<String>,
     messages: &mut Vec<Value>,
-) -> Result<(), InternalError> {
+) -> TranslationResult<()> {
     let role = object.get("role").and_then(Value::as_str).unwrap_or("user");
     let empty_content = Value::String(String::new());
     let content = object.get("content").unwrap_or(&empty_content);
@@ -860,7 +851,7 @@ fn translate_message_object(
     Ok(())
 }
 
-fn translate_message_content(content: &Value) -> Result<Value, InternalError> {
+fn translate_message_content(content: &Value) -> TranslationResult<Value> {
     match content {
         Value::String(text) => Ok(Value::String(text.clone())),
         Value::Array(parts) => {
@@ -874,7 +865,7 @@ fn translate_message_content(content: &Value) -> Result<Value, InternalError> {
     }
 }
 
-fn translate_content_part(part: &Value) -> Result<Vec<Value>, InternalError> {
+fn translate_content_part(part: &Value) -> TranslationResult<Vec<Value>> {
     let Some(object) = part.as_object() else {
         return Ok(vec![text_block(part.to_string())]);
     };
@@ -915,7 +906,7 @@ fn translate_content_part(part: &Value) -> Result<Vec<Value>, InternalError> {
     }
 }
 
-fn translate_function_call(object: &Map<String, Value>) -> Result<Value, InternalError> {
+fn translate_function_call(object: &Map<String, Value>) -> TranslationResult<Value> {
     let arguments = object
         .get("arguments")
         .and_then(Value::as_str)

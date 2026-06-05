@@ -1,95 +1,68 @@
-use axum::body::Body;
-use axum::http::Response;
+use serde_json::Value;
 
-use crate::error::{InternalError, Result};
-use crate::http_support::NonStreamingResponse;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-pub(crate) fn translate_streaming_response(
+use super::{TranslationError, TranslationResult};
+use crate::http_support::ByteStream;
+
+pub(crate) fn translate_streaming_stream(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
-    response: Response<Body>,
-) -> Result<Response<Body>, InternalError> {
-    if !response.status().is_success() {
-        return Ok(response);
-    }
-
+    input: ByteStream,
+) -> TranslationResult<ByteStream> {
     match (request_protocol, provider_protocol) {
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => {
-            super::openai_chat_completions::to_openai_responses::translate_streaming_response(
-                response,
-            )
+            super::openai_chat_completions::to_openai_responses::translate_streaming_stream(input)
         }
         (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_responses::translate_streaming_response(response)
+            super::anthropic_messages::to_openai_responses::translate_streaming_stream(input)
         }
         (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_chat_completions::translate_streaming_response(
-                response,
-            )
+            super::anthropic_messages::to_openai_chat_completions::translate_streaming_stream(input)
         }
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
-            super::openai_responses::to_anthropic_messages::translate_streaming_response(response)
+            super::openai_responses::to_anthropic_messages::translate_streaming_stream(input)
         }
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
         | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
-        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(response),
-        (request_protocol, provider_protocol) => Err(unsupported_response_translation(
-            request_protocol,
-            provider_protocol,
-        )),
+        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(input),
+        (request_protocol, provider_protocol) => Err(TranslationError::UnsupportedResponsePair {
+            from: provider_protocol,
+            to: request_protocol,
+        }),
     }
 }
 
-pub(crate) fn translate_non_streaming_response(
+pub(crate) fn translate_non_streaming_payload(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
-    response: NonStreamingResponse,
-) -> Result<Response<Body>, InternalError> {
-    if !response.status.is_success() {
-        return Ok(response.into_response());
-    }
-
+    payload: Value,
+) -> TranslationResult<Value> {
     match (request_protocol, provider_protocol) {
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
+        | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
+        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(payload),
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => {
-            super::openai_chat_completions::to_openai_responses::translate_non_streaming_response(
-                response,
+            super::openai_chat_completions::to_openai_responses::translate_non_streaming_payload(
+                payload,
             )
         }
         (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_responses::translate_non_streaming_response(
-                response,
-            )
+            super::anthropic_messages::to_openai_responses::translate_non_streaming_payload(payload)
         }
         (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_chat_completions::translate_non_streaming_response(
-                response,
+            super::anthropic_messages::to_openai_chat_completions::translate_non_streaming_payload(
+                payload,
             )
         }
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
-            super::openai_responses::to_anthropic_messages::translate_non_streaming_response(
-                response,
-            )
+            super::openai_responses::to_anthropic_messages::translate_non_streaming_payload(payload)
         }
-        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
-        | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
-        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => {
-            Ok(response.into_response())
-        }
-        (request_protocol, provider_protocol) => Err(unsupported_response_translation(
-            request_protocol,
-            provider_protocol,
-        )),
+        (request_protocol, provider_protocol) => Err(TranslationError::UnsupportedResponsePair {
+            from: provider_protocol,
+            to: request_protocol,
+        }),
     }
-}
-
-fn unsupported_response_translation(
-    request_protocol: RequestProtocol,
-    provider_protocol: ProviderProtocol,
-) -> InternalError {
-    InternalError::InvalidRoute(format!(
-        "{provider_protocol} -> {request_protocol} response translation is not implemented yet"
-    ))
 }
 
 #[cfg(test)]

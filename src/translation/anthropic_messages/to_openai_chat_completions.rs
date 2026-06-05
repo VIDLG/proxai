@@ -1,46 +1,35 @@
 //! `anthropic_messages -> openai_chat_completions` response translation.
 
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderValue, Response, header};
+use axum::body::Bytes;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::io;
 
-use crate::error::{InternalError, Result};
-use crate::http_support::NonStreamingResponse;
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, Message, MessageStreamEvent, StopReason,
 };
 use crate::provider::anthropic_messages;
 use crate::sse::SseEvent;
-use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
+use crate::translation::TranslationResult;
 
-pub(crate) fn translate_streaming_response(
-    response: Response<Body>,
-) -> Result<Response<Body>, InternalError> {
-    Ok(translate_sse_response(
-        response,
+use crate::http_support::ByteStream;
+use crate::translation::sse::{
+    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+};
+
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
+    Ok(translate_sse_stream(
+        input,
         AnthropicToChatStreamTranslator::default(),
     ))
 }
 
-pub(crate) fn translate_non_streaming_response(
-    response: NonStreamingResponse,
-) -> Result<Response<Body>, InternalError> {
-    let payload = serde_json::from_slice::<Value>(&response.body)?;
+pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
     let message = serde_json::from_value::<Message>(
         anthropic_messages::normalize::normalize_message_payload(payload),
     )?;
     let translated = translate_message(&message);
-    let status = response.status;
-    let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
-    *response.status_mut() = status;
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    Ok(response)
+    Ok(serde_json::to_value(translated)?)
 }
 
 #[derive(Debug, Serialize)]
@@ -172,15 +161,14 @@ enum ChatStreamBlock {
 }
 
 impl SseEventTranslator for AnthropicToChatStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>> {
+    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
         let payload = anthropic_messages::normalize::normalize_stream_event_payload(
             event.payload_with_type()?,
         );
         if !is_anthropic_stream_event(&payload) {
             return Ok(Vec::new());
         }
-        let parsed =
-            serde_json::from_value::<MessageStreamEvent>(payload).map_err(io::Error::other)?;
+        let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -264,7 +252,11 @@ impl SseEventTranslator for AnthropicToChatStreamTranslator {
 }
 
 impl AnthropicToChatStreamTranslator {
-    fn chat_chunk(&self, delta: Value, finish_reason: Option<String>) -> io::Result<Bytes> {
+    fn chat_chunk(
+        &self,
+        delta: Value,
+        finish_reason: Option<String>,
+    ) -> SseTranslationResult<Bytes> {
         let payload = json!({
             "id": if self.id.is_empty() { "chatcmpl_stream" } else { self.id.as_str() },
             "object": "chat.completion.chunk",
@@ -277,7 +269,7 @@ impl AnthropicToChatStreamTranslator {
                 "logprobs": null
             }]
         });
-        encode_sse_json("message", &payload)
+        Ok(encode_sse_json("message", &payload)?)
     }
 }
 

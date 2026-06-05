@@ -1,10 +1,25 @@
+use crate::observe::{CaptureController, ObserveContext};
 use crate::protocol::openai::responses::{
     IncludeEnum, Reasoning, ReasoningEffort, ReasoningSummary, ResponseTextParam, ServiceTier,
     TextResponseFormatConfiguration, ToolChoiceFunction, ToolChoiceParam, Verbosity,
 };
 use crate::provider::openai::responses::ToolCategory;
 
-use serde_json::json;
+use serde_json::{Value, json};
+
+fn body(payload: &Value) -> Vec<u8> {
+    serde_json::to_vec(payload).unwrap()
+}
+
+fn test_obs() -> ObserveContext {
+    let request_id = crate::request::RequestId::from(1);
+    ObserveContext::new(
+        request_id,
+        std::time::Instant::now(),
+        CaptureController::new(None, crate::config::CaptureConfig::default()).session(request_id),
+        tracing::Span::none(),
+    )
+}
 
 #[test]
 fn request_projection_uses_typed_parse_for_standard_response_fields() {
@@ -52,8 +67,7 @@ fn request_projection_uses_typed_parse_for_standard_response_fields() {
         ]
     });
 
-    let projection =
-        super::projection::project_payload(&payload, None).expect("project request payload");
+    let projection = super::projection::project_payload(&payload).expect("project request payload");
 
     assert_eq!(projection.model.as_deref(), Some("gpt-5.5"));
     assert_eq!(
@@ -111,8 +125,7 @@ fn request_projection_accepts_multimodal_message_content_for_hint_extraction() {
         ]
     });
 
-    let projection =
-        super::projection::project_payload(&payload, None).expect("project request payload");
+    let projection = super::projection::project_payload(&payload).expect("project request payload");
     assert_eq!(projection.model.as_deref(), Some("gpt-5.5"));
     assert_eq!(projection.stream, Some(true));
     assert_eq!(projection.parallel_tool_calls, Some(true));
@@ -161,8 +174,7 @@ fn request_projection_accepts_zed_assistant_output_text_history() {
         ]
     });
 
-    let projection =
-        super::projection::project_payload(&payload, None).expect("project request payload");
+    let projection = super::projection::project_payload(&payload).expect("project request payload");
     assert_eq!(projection.model.as_deref(), Some("gpt-5.5"));
     assert_eq!(projection.stream, Some(true));
     assert_eq!(projection.max_output_tokens, Some(32000));
@@ -180,7 +192,8 @@ fn prepare_provider_request_preserves_model_when_route_keeps_it() {
         }]
     });
 
-    let prepared = super::prepare_provider_request(&payload, None, "gpt-5.5", "gpt-5.5").unwrap();
+    let obs = test_obs();
+    let prepared = super::prepare_provider_request(&payload, body(&payload), &obs).unwrap();
 
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap(),
@@ -191,9 +204,9 @@ fn prepare_provider_request_preserves_model_when_route_keeps_it() {
 }
 
 #[test]
-fn prepare_provider_request_rewrites_model_and_builds_summary() {
+fn prepare_provider_request_uses_provider_payload_model_and_builds_summary() {
     let payload = json!({
-        "model": "gpt-5.5",
+        "model": "claude-sonnet",
         "tools": [
             {
                 "type": "function",
@@ -209,15 +222,15 @@ fn prepare_provider_request_rewrites_model_and_builds_summary() {
         }]
     });
 
-    let prepared =
-        super::prepare_provider_request(&payload, None, "gpt-5.5", "claude-sonnet").unwrap();
+    let obs = test_obs();
+    let prepared = super::prepare_provider_request(&payload, body(&payload), &obs).unwrap();
     let rewritten = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
     assert_eq!(
         rewritten.get("model").and_then(serde_json::Value::as_str),
         Some("claude-sonnet")
     );
-    assert_eq!(prepared.projection.model.as_deref(), Some("gpt-5.5"));
+    assert_eq!(prepared.projection.model.as_deref(), Some("claude-sonnet"));
     assert_eq!(prepared.summary.tool_inventory.len(), 1);
     assert_eq!(
         prepared.summary.tool_inventory[0].category,

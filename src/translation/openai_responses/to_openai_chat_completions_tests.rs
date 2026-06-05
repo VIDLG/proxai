@@ -35,11 +35,11 @@ fn translates_responses_request_to_chat_completions_shape() {
         "top_p": 0.9
     });
 
-    let translated = translate_request_payload(&payload, "glm-5.1", "MiniMax-M3").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
     serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
         .expect("translated payload must match Chat Completions request schema");
 
-    assert_eq!(translated["model"], "MiniMax-M3");
+    assert_eq!(translated["model"], "glm-5.1");
     assert_eq!(translated["max_completion_tokens"], 128);
     assert_eq!(translated["parallel_tool_calls"], false);
     assert_eq!(translated["reasoning_effort"], "high");
@@ -68,7 +68,7 @@ fn translates_unknown_responses_input_item_to_placeholder() {
         ]
     });
 
-    let translated = translate_request_payload(&payload, "glm-5.1", "glm-5.1").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
     serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
         .expect("translated payload must match Chat Completions request schema");
 

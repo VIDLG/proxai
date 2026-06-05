@@ -1,45 +1,34 @@
 //! `openai_chat_completions -> openai_responses` response translation.
 
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderValue, Response, header};
+use axum::body::Bytes;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::io;
 
-use crate::error::{InternalError, Result};
-use crate::http_support::NonStreamingResponse;
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
 use crate::sse::SseEvent;
-use crate::translation::sse::{SseEventTranslator, encode_sse_json, translate_sse_response};
+use crate::translation::TranslationResult;
 
-pub(crate) fn translate_streaming_response(
-    response: Response<Body>,
-) -> Result<Response<Body>, InternalError> {
-    Ok(translate_sse_response(
-        response,
+use crate::http_support::ByteStream;
+use crate::translation::sse::{
+    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+};
+
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
+    Ok(translate_sse_stream(
+        input,
         ChatToResponsesStreamTranslator::default(),
     ))
 }
 
-pub(crate) fn translate_non_streaming_response(
-    response: NonStreamingResponse,
-) -> Result<Response<Body>, InternalError> {
-    let chat = serde_json::from_slice::<async_openai::types::chat::CreateChatCompletionResponse>(
-        &response.body,
-    )
-    .map(CreateChatCompletionResponse::from)?;
+pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
+    let chat =
+        serde_json::from_value::<async_openai::types::chat::CreateChatCompletionResponse>(payload)
+            .map(CreateChatCompletionResponse::from)?;
     let translated = translate_chat_response(&chat);
-    let status = response.status;
-    let mut response = Response::new(Body::from(serde_json::to_vec(&translated)?));
-    *response.status_mut() = status;
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    Ok(response)
+    Ok(serde_json::to_value(translated)?)
 }
 
 #[derive(Debug, Serialize)]
@@ -215,7 +204,7 @@ struct StreamToolItem {
 }
 
 impl SseEventTranslator for ChatToResponsesStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> io::Result<Vec<Bytes>> {
+    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
         if event.data.trim() == "[DONE]" {
             return self.finish();
         }
@@ -314,7 +303,7 @@ impl SseEventTranslator for ChatToResponsesStreamTranslator {
         Ok(chunks)
     }
 
-    fn finish(&mut self) -> io::Result<Vec<Bytes>> {
+    fn finish(&mut self) -> SseTranslationResult<Vec<Bytes>> {
         if self.completed {
             return Ok(Vec::new());
         }
@@ -412,7 +401,11 @@ impl ChatToResponsesStreamTranslator {
         })
     }
 
-    fn ensure_text_item(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> io::Result<()> {
+    fn ensure_text_item(
+        &mut self,
+        index: u32,
+        chunks: &mut Vec<Bytes>,
+    ) -> SseTranslationResult<()> {
         if self.text_items.contains_key(&index) {
             return Ok(());
         }
@@ -448,7 +441,7 @@ impl ChatToResponsesStreamTranslator {
         index: u32,
         tool_call: &Value,
         chunks: &mut Vec<Bytes>,
-    ) -> io::Result<()> {
+    ) -> SseTranslationResult<()> {
         if self.tool_items.contains_key(&index) {
             return Ok(());
         }
@@ -491,8 +484,8 @@ impl ChatToResponsesStreamTranslator {
         Ok(())
     }
 
-    fn responses_event(&self, event: &str, payload: Value) -> io::Result<Bytes> {
-        encode_sse_json(event, &payload)
+    fn responses_event(&self, event: &str, payload: Value) -> SseTranslationResult<Bytes> {
+        Ok(encode_sse_json(event, &payload)?)
     }
 }
 

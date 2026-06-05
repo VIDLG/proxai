@@ -1,11 +1,12 @@
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderMap, Response, StatusCode};
+use axum::body::Body;
+use axum::http::{HeaderMap, HeaderValue, Response, StatusCode, header};
 use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use std::time::Duration;
 
 use super::ContentType;
 use super::header::filter_forwardable_response_headers;
+use super::stream::ByteStream;
 
 #[derive(Debug, Clone, CopyGetters, Getters)]
 pub struct OutboundResponseHead {
@@ -29,31 +30,6 @@ impl OutboundResponseHead {
 
     pub(crate) fn into_parts(self) -> (StatusCode, HeaderMap) {
         (self.status, self.headers)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct NonStreamingResponse {
-    pub(crate) status: StatusCode,
-    pub(crate) headers: HeaderMap,
-    pub(crate) body: Bytes,
-}
-
-impl NonStreamingResponse {
-    pub(crate) fn new(status: StatusCode, headers: HeaderMap, body: Bytes) -> Self {
-        Self {
-            status,
-            headers,
-            body,
-        }
-    }
-
-    pub(crate) fn from_parts(parts: axum::http::response::Parts, body: Bytes) -> Self {
-        Self::new(parts.status, parts.headers, body)
-    }
-
-    pub(crate) fn into_response(self) -> Response<Body> {
-        response_with_headers(self.status, self.headers, Body::from(self.body))
     }
 }
 
@@ -127,6 +103,38 @@ pub(crate) fn response_with_headers(
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     response
+}
+
+pub(crate) fn response_from_parts_with_body(
+    mut parts: axum::http::response::Parts,
+    body: Body,
+    content_type: HeaderValue,
+) -> Response<Body> {
+    parts.headers.remove(header::CONTENT_LENGTH);
+    parts.headers.insert(header::CONTENT_TYPE, content_type);
+    Response::from_parts(parts, body)
+}
+
+pub(crate) fn json_response_from_parts(
+    parts: axum::http::response::Parts,
+    body: Vec<u8>,
+) -> Response<Body> {
+    response_from_parts_with_body(
+        parts,
+        Body::from(body),
+        HeaderValue::from_static("application/json"),
+    )
+}
+
+pub(crate) fn sse_response_from_parts(
+    parts: axum::http::response::Parts,
+    stream: ByteStream,
+) -> Response<Body> {
+    response_from_parts_with_body(
+        parts,
+        Body::from_stream(stream),
+        HeaderValue::from_static("text/event-stream"),
+    )
 }
 
 pub(crate) fn headers_are_sse(headers: &HeaderMap) -> bool {

@@ -10,7 +10,7 @@ use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_support::filter_forwardable_request_headers;
 use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
 use crate::protocol::ProviderProtocol;
-use crate::provider::{ProviderRequest, apply_request_auth_headers};
+use crate::provider::{ProviderRequest, anthropic_messages, openai};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProviderTransportError {
@@ -152,6 +152,17 @@ fn provider_request_headers(
     }
     apply_request_auth_headers(protocol, &mut provider_headers, api_key);
     provider_headers
+}
+
+fn apply_request_auth_headers(protocol: ProviderProtocol, headers: &mut HeaderMap, api_key: &str) {
+    match protocol {
+        ProviderProtocol::OpenaiResponses | ProviderProtocol::OpenaiChatCompletions => {
+            openai::apply_request_auth_headers(headers, api_key);
+        }
+        ProviderProtocol::AnthropicMessages => {
+            anthropic_messages::apply_request_auth_headers(headers, api_key);
+        }
+    }
 }
 
 fn upstream_url_for_path(base_url: &Url, path_and_query: &str) -> Result<Url, InternalError> {

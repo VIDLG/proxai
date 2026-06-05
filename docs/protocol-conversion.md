@@ -5,11 +5,21 @@ ProxAI keeps protocol conversion explicit and pair-oriented. This document recor
 ## Boundaries
 
 - `src/protocol/` owns protocol-specific Rust wire models.
-- `src/translation/` owns cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
-- `src/provider/` owns provider transport and provider-local compatibility behavior.
 - `src/ingress/` owns inbound parsing and normalization before translation.
+- `src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
+- `src/provider/request.rs` owns provider request preparation, including model rewrite, projection/summary extraction, and JSON body serialization.
+- `src/provider/transport.rs` owns outbound HTTP transport, auth headers, upstream URL construction, and send.
+- `src/http_support/` owns HTTP carrier helpers such as `ByteStream`, content-type/header helpers, and response reconstruction.
 
 Do not hide general cross-protocol conversion inside a provider subtree. Provider code may normalize provider-local quirks, but protocol-to-protocol shape changes belong in `src/translation/`.
+
+Translation APIs should stay pure at the carrier boundary:
+
+- request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
+- non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
+- streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+
+Do not pass HTTP `Response`, `Body`, provider request structs, or route/model rewrite details into `src/translation/`.
 
 ## Naming
 

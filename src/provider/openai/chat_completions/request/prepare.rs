@@ -14,19 +14,10 @@ pub(crate) struct PreparedProviderRequest {
 
 pub(crate) fn prepare_provider_request(
     payload: &Value,
-    request_model: &str,
-    upstream_model: &str,
+    body: Vec<u8>,
 ) -> Result<PreparedProviderRequest, InternalError> {
-    let mut payload = payload.clone();
-    if upstream_model != request_model
-        && let Some(model) = payload.get_mut("model")
-    {
-        *model = Value::String(upstream_model.to_string());
-    }
-
-    let projection = RequestProjection::from_payload(&payload)?;
+    let projection = RequestProjection::from_payload(payload)?;
     let summary = RequestSummary::from(&projection);
-    let body = serde_json::to_vec(&payload)?;
 
     Ok(PreparedProviderRequest {
         body,

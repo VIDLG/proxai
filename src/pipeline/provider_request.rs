@@ -8,7 +8,7 @@ use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
 use crate::observe::{ProviderProtocolRequestPrepared, ProviderRequestBodySizes};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::provider::{ProviderRequest, ProviderTransport, ProviderTransportError};
+use crate::provider::{self, ProviderRequest, ProviderTransport, ProviderTransportError};
 use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
 use crate::translation::translate_request;
 
@@ -74,7 +74,7 @@ impl PreparedInboundFlow {
 }
 
 impl RoutedInboundFlow {
-    pub(crate) fn translate_to_provider(self) -> Result<PreparedProviderFlow, InternalError> {
+    pub(crate) fn prepare_provider_request(self) -> Result<PreparedProviderFlow, InternalError> {
         let Self {
             method,
             uri,
@@ -94,8 +94,17 @@ impl RoutedInboundFlow {
                 },
         } = self;
 
-        let provider_request =
-            translate_request(&request, provider_protocol, &upstream_model, &obs)?;
+        let translated_payload = translate_request(
+            request.protocol(),
+            provider_protocol,
+            request.normalized_payload(),
+        )?;
+        let provider_request = provider::prepare_request(
+            provider_protocol,
+            translated_payload,
+            &upstream_model,
+            &obs,
+        )?;
 
         obs.observe_provider_request_prepared(ProviderProtocolRequestPrepared {
             method: method.clone(),

@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 
+use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::ContentBlock;
 
 use axum::body::{Body, to_bytes};
@@ -7,7 +8,7 @@ use axum::http::{Response, header};
 
 use super::{
     OpenaiResponseBody, translate_request_payload, translate_response_payload,
-    translate_streaming_response,
+    translate_streaming_stream,
 };
 
 #[test]
@@ -32,9 +33,9 @@ fn translates_text_request_with_instructions_and_function_tool() {
         }]
     });
 
-    let translated = translate_request_payload(&payload, "gpt-5.5", "claude-sonnet").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
 
-    assert_eq!(translated["model"], "claude-sonnet");
+    assert_eq!(translated["model"], "gpt-5.5");
     assert_eq!(translated["max_tokens"], 123);
     assert_eq!(translated["system"], "Be concise.");
     assert_eq!(translated["messages"][0]["role"], "user");
@@ -65,7 +66,7 @@ fn translates_glm_responses_request_with_unknown_input_item() {
         "stream": true
     });
 
-    let translated = translate_request_payload(&payload, "glm-5.1", "glm-5.1").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
 
     assert_eq!(translated["model"], "glm-5.1");
     assert_eq!(translated["max_tokens"], 128);
@@ -93,7 +94,7 @@ fn translates_message_items_and_tool_roundtrip_items() {
         ]
     });
 
-    let translated = translate_request_payload(&payload, "gpt-5.5", "claude-sonnet").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
 
     assert_eq!(translated["max_tokens"], 4096);
     assert_eq!(translated["system"], "Follow policy.");
@@ -125,7 +126,7 @@ fn groups_parallel_tool_calls_and_results_into_adjacent_messages() {
         ]
     });
 
-    let translated = translate_request_payload(&payload, "MiniMax-M3", "MiniMax-M3").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
     let messages = translated["messages"].as_array().unwrap();
 
     assert_eq!(messages.len(), 4);
@@ -159,7 +160,7 @@ fn groups_custom_tool_calls_and_results_into_adjacent_messages() {
         ]
     });
 
-    let translated = translate_request_payload(&payload, "MiniMax-M3", "MiniMax-M3").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
     let messages = translated["messages"].as_array().unwrap();
 
     assert_eq!(messages.len(), 3);
@@ -187,7 +188,7 @@ fn translates_glm_responses_request_to_anthropic_messages_shape() {
         "max_output_tokens": 64
     });
 
-    let translated = translate_request_payload(&payload, "glm-5.1", "glm-5.1").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
 
     assert_eq!(translated["model"], "glm-5.1");
     assert_eq!(translated["max_tokens"], 64);
@@ -287,8 +288,12 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("event: message_start"));

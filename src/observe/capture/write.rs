@@ -7,7 +7,7 @@ use serde_json::Value;
 use tokio::fs;
 use tracing::info;
 
-use crate::error::Result;
+use crate::error::{InternalError, Result};
 use crate::http_support::ContentType;
 use crate::http_support::UpstreamResponseHead;
 use crate::request::RequestId;
@@ -43,8 +43,12 @@ pub(crate) async fn capture_inbound_request(
         "headers": sanitized_headers(request.headers),
         "inbound_request_body_bytes": request.body.len(),
     });
-    fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?).await?;
-    fs::write(&body_path, pretty_json_or_raw(request.body)?).await?;
+    fs::write(&metadata_path, json_bytes(&metadata)?)
+        .await
+        .map_err(InternalError::Io)?;
+    fs::write(&body_path, pretty_json_or_raw(request.body)?)
+        .await
+        .map_err(InternalError::Io)?;
     info!(
         request_id = %request.request_id,
         event = "capture",
@@ -77,8 +81,12 @@ pub(crate) async fn capture_provider_request(
         "provider_request_body_bytes": request.body.len(),
         "normalized": request.normalized_payload.is_some(),
     });
-    fs::write(&metadata_path, serde_json::to_vec_pretty(&metadata)?).await?;
-    fs::write(&body_path, pretty_json_or_raw(request.body)?).await?;
+    fs::write(&metadata_path, json_bytes(&metadata)?)
+        .await
+        .map_err(InternalError::Io)?;
+    fs::write(&body_path, pretty_json_or_raw(request.body)?)
+        .await
+        .map_err(InternalError::Io)?;
     info!(
         request_id = %request.request_id,
         event = "capture",
@@ -111,7 +119,9 @@ pub(crate) async fn capture_upstream_response_headers(
         "ttfb_ms": head.ttfb.as_millis() as u64,
         "headers": sanitized_headers(&head.headers),
     });
-    fs::write(&headers_path, serde_json::to_vec_pretty(&metadata)?).await?;
+    fs::write(&headers_path, json_bytes(&metadata)?)
+        .await
+        .map_err(InternalError::Io)?;
     info!(
         request_id = %request_id,
         event = "capture",
@@ -130,7 +140,9 @@ pub(crate) async fn capture_upstream_response_body(
 ) -> Result<PathBuf> {
     let body_path = destination.upstream_response_body_path(content_type);
     ensure_parent_dir(&body_path).await?;
-    fs::write(&body_path, body).await?;
+    fs::write(&body_path, body)
+        .await
+        .map_err(InternalError::Io)?;
     info!(
         event = "capture",
         kind = "upstream_response_body",
@@ -157,7 +169,9 @@ pub(crate) async fn capture_outbound_response_headers(
         "content_type": content_type,
         "headers": sanitized_headers(headers),
     });
-    fs::write(&headers_path, serde_json::to_vec_pretty(&metadata)?).await?;
+    fs::write(&headers_path, json_bytes(&metadata)?)
+        .await
+        .map_err(InternalError::Io)?;
     info!(
         request_id = %request_id,
         event = "capture",
@@ -213,16 +227,24 @@ impl UpstreamResponseCaptureWriter {
 
 async fn ensure_parent_dir(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).await?;
+        fs::create_dir_all(parent)
+            .await
+            .map_err(InternalError::Io)?;
     }
     Ok(())
 }
 
 fn pretty_json_or_raw(bytes: &[u8]) -> Result<Vec<u8>> {
     if let Ok(value) = serde_json::from_slice::<Value>(bytes) {
-        return Ok(serde_json::to_vec_pretty(&value)?);
+        return json_bytes(&value);
     }
     Ok(bytes.to_vec())
+}
+
+fn json_bytes(value: &Value) -> Result<Vec<u8>> {
+    serde_json::to_vec_pretty(value)
+        .map_err(InternalError::JsonSerialize)
+        .map_err(Into::into)
 }
 
 fn sanitized_headers(headers: &HeaderMap) -> Value {

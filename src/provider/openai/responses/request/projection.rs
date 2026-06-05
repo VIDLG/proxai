@@ -1,29 +1,13 @@
 use serde_json::Value;
 
-use crate::observe::{ObserveContext, RequestInfoParseFailure};
 use crate::protocol::openai_responses::RequestProjection;
 
-pub(crate) fn project_payload(
-    payload: &Value,
-    obs: Option<&ObserveContext>,
-) -> Result<RequestProjection, serde_json::Error> {
+pub(crate) fn project_payload(payload: &Value) -> Result<RequestProjection, serde_json::Error> {
     let adapted = adapt_payload_for_projection(payload);
-    match RequestProjection::from_payload(&adapted) {
-        Ok(request) => Ok(request),
-        Err(error) => {
-            if let Some(obs) = obs {
-                obs.observe_request_info_parse_failure(RequestInfoParseFailure {
-                    normalized_payload: payload,
-                    request_info_parse_payload: &adapted,
-                    error: &error,
-                });
-            }
-            Err(error)
-        }
-    }
+    RequestProjection::from_payload(&adapted)
 }
 
-fn adapt_payload_for_projection(payload: &Value) -> Value {
+pub(super) fn adapt_payload_for_projection(payload: &Value) -> Value {
     let mut payload = payload.clone();
 
     if let Some(text) = payload.get_mut("text").and_then(Value::as_object_mut) {

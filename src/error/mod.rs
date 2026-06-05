@@ -32,23 +32,8 @@ pub enum Error {
     Upstream(#[from] Box<UpstreamError>),
 }
 
-macro_rules! impl_error_from_via {
-    ($source:ty => $via:ty) => {
-        impl From<$source> for Error {
-            fn from(error: $source) -> Self {
-                <$via>::from(error).into()
-            }
-        }
-    };
-}
-
 impl From<UpstreamError> for Error {
     fn from(error: UpstreamError) -> Self {
         Self::Upstream(Box::new(error))
     }
 }
-
-impl_error_from_via!(serde_json::Error => InternalError);
-impl_error_from_via!(std::io::Error => InternalError);
-impl_error_from_via!(url::ParseError => InternalError);
-impl_error_from_via!(axum::Error => RequestError);

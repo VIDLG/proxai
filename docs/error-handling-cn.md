@@ -33,7 +33,7 @@ HTTP text/json response 或 SSE error event bytes
 
 ## 内部错误类型
 
-内部错误类型定义在 `src/error/` 下：
+内部错误类型定义在 `src/error/` 下，另有 translation / SSE / stream 领域错误在各自模块中定义：
 
 - `Error`
 - `RequestError`
@@ -41,8 +41,11 @@ HTTP text/json response 或 SSE error event bytes
 - `InternalError`
 - `UpstreamError`
 - `UpstreamResponseError`
+- `TranslationError`
+- `SseError` / `SseTranslationError`
+- `ByteStreamError`
 
-这些类型描述的是 proxai 内部失败原因，而不是客户端响应格式。
+这些类型描述的是 proxai 内部失败原因，而不是客户端响应格式。错误应按领域分层，不要用宽泛转换把语义错误包装成 `std::io::Error`；`io::Error` 只用于真实 OS / filesystem IO。
 
 例如：
 

@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 use crate::error::{RequestError, Result};
 use crate::protocol::RequestProtocol;
 
@@ -25,12 +27,16 @@ impl PreparedInboundRequest {
         }
     }
 
-    pub(crate) fn body_len(&self) -> usize {
+    pub(crate) fn normalized_payload(&self) -> &Value {
         match self {
-            Self::OpenaiResponses(request) => request.normalized_payload.to_string().len(),
-            Self::OpenaiChatCompletions(request) => request.normalized_payload.to_string().len(),
-            Self::AnthropicMessages(request) => request.normalized_payload.to_string().len(),
+            Self::OpenaiResponses(request) => &request.normalized_payload,
+            Self::OpenaiChatCompletions(request) => &request.normalized_payload,
+            Self::AnthropicMessages(request) => &request.normalized_payload,
         }
+    }
+
+    pub(crate) fn body_len(&self) -> usize {
+        self.normalized_payload().to_string().len()
     }
 }
 

@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::net::SocketAddr;
 
-use crate::error::Result;
+use crate::error::{InternalError, Result};
 use crate::observe::{CaptureController, CaptureOverrides, CaptureQuery, CaptureShowTarget};
 
 pub const MCP_PATH: &str = "/mcp";
@@ -247,7 +247,8 @@ pub async fn serve_http(
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
-        .await?;
+        .await
+        .map_err(InternalError::Io)?;
     Ok(())
 }
 

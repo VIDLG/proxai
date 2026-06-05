@@ -2,26 +2,20 @@
 
 use serde_json::{Map, Number, Value, json};
 
-use crate::error::{InternalError, Result};
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
+use crate::translation::TranslationResult;
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
-pub(crate) fn translate_request_payload(
-    payload: &Value,
-    request_model: &str,
-    upstream_model: &str,
-) -> Result<Value, InternalError> {
+pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let request = serde_json::from_value::<chat::CreateChatCompletionRequest>(payload.clone())?;
-    let translated = translate_request(&request, request_model, upstream_model);
+    let translated = translate_request(&request);
     Ok(serde_json::to_value(translated)?)
 }
 
 fn translate_request(
     request: &chat::CreateChatCompletionRequest,
-    request_model: &str,
-    upstream_model: &str,
 ) -> anthropic::MessageCreateParamsBase {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
@@ -83,11 +77,7 @@ fn translate_request(
             .or(request.max_tokens)
             .unwrap_or(DEFAULT_MAX_TOKENS),
         messages,
-        model: if upstream_model != request_model {
-            upstream_model.to_string()
-        } else {
-            request_model.to_string()
-        },
+        model: request.model.clone(),
         cache_control: None,
         container: None,
         inference_geo: None,

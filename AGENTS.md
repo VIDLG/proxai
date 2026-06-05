@@ -59,7 +59,17 @@ Keep cross-protocol conversion in `src/translation/`:
 
 - `ingress/` owns inbound protocol parsing and normalization.
 - `translation/` owns protocol-to-protocol conversion.
-- `provider/` owns target-provider transport and provider-local request/response behavior.
+- `provider/request` owns provider request preparation, including provider model rewrite, projection/summary extraction, and body serialization.
+- `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
+- `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
+
+Translation should stay pure at the carrier boundary:
+
+- request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
+- non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
+- streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+
+Do not pass HTTP `Response`, `Body`, route/model rewrite details, or provider request structs into `translation/`.
 
 Prefer pair-oriented conversion names such as `openai_responses -> anthropic_messages`. For protocol-specific request/response data, prefer top-level enums keyed by protocol over parallel fields that can drift into impossible states.
 
@@ -68,6 +78,18 @@ Prefer pair-oriented conversion names such as `openai_responses -> anthropic_mes
 Logs should be compact, structured, stable, and useful for real debugging. Do not log request bodies, Authorization headers, API keys, private prompts, or unnecessary private upstream URL details.
 
 Keep `error_responses.format = "text"` as the readable default. Preserve useful headers such as `Retry-After`; avoid overfitting to every upstream JSON shape.
+
+Use domain-specific errors rather than broad catch-all conversions:
+
+- `RequestError` for inbound body/validation failures.
+- `ConfigError` for config loading and config-file reads.
+- `InternalError` for proxy runtime invariants, local filesystem IO, internal HTTP body reads, JSON serialization, and translation boundary errors.
+- `UpstreamError` for upstream send/status/body-read failures.
+- `TranslationError` for protocol payload conversion.
+- `SseError` / `SseTranslationError` for SSE event semantics.
+- `ByteStreamError` for stream carrier errors.
+
+Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
 
 SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`.
 

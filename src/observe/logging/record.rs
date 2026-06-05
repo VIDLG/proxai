@@ -80,7 +80,7 @@ fn render_translation(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
 ) -> String {
-    if request_protocol == provider_protocol.default_request_protocol() {
+    if request_protocol.matches_provider_protocol(provider_protocol) {
         String::new()
     } else {
         format!("{request_protocol}->{provider_protocol}")
@@ -91,7 +91,7 @@ fn render_translation_alias(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
 ) -> String {
-    if request_protocol == provider_protocol.default_request_protocol() {
+    if request_protocol.matches_provider_protocol(provider_protocol) {
         String::new()
     } else {
         format!(

@@ -1,57 +1,59 @@
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, StatusCode};
+use serde_json::json;
 
-use crate::error::InternalError;
-use crate::http_support::NonStreamingResponse;
+use crate::http_support::into_byte_stream;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationError;
 
-use super::{translate_non_streaming_response, translate_streaming_response};
+use super::{translate_non_streaming_payload, translate_streaming_stream};
 
-#[tokio::test]
-async fn skips_translation_for_upstream_error_responses() {
-    let mut response = Response::new(Body::from("upstream failed"));
-    *response.status_mut() = StatusCode::BAD_GATEWAY;
+#[test]
+fn passes_through_self_protocol_non_streaming_payload() {
+    let payload = json!({"error": "upstream failed"});
 
-    let (parts, body) = response.into_parts();
-    let body = to_bytes(body, usize::MAX).await.unwrap();
-    let response = translate_non_streaming_response(
+    let translated = translate_non_streaming_payload(
         RequestProtocol::OpenaiResponses,
-        ProviderProtocol::AnthropicMessages,
-        NonStreamingResponse::from_parts(parts, body),
+        ProviderProtocol::OpenaiResponses,
+        payload.clone(),
     )
     .unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    assert_eq!(&body[..], b"upstream failed");
+    assert_eq!(translated, payload);
 }
 
-#[tokio::test]
-async fn rejects_unsupported_success_non_streaming_response_translation() {
-    let response = Response::new(Body::from("chat response"));
-    let (parts, body) = response.into_parts();
-    let body = to_bytes(body, usize::MAX).await.unwrap();
-
-    let error = translate_non_streaming_response(
+#[test]
+fn rejects_unsupported_success_non_streaming_response_translation() {
+    let error = translate_non_streaming_payload(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
-        NonStreamingResponse::from_parts(parts, body),
+        json!({"object": "chat.completion"}),
     )
     .unwrap_err();
 
-    assert!(matches!(error, InternalError::InvalidRoute(_)));
+    assert!(matches!(
+        error,
+        TranslationError::UnsupportedResponsePair {
+            from: ProviderProtocol::OpenaiResponses,
+            to: RequestProtocol::OpenaiChatCompletions,
+        }
+    ));
 }
 
 #[test]
 fn rejects_unsupported_success_streaming_response_translation() {
-    let response = Response::new(Body::empty());
-
-    let error = translate_streaming_response(
+    let error = match translate_streaming_stream(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
-        response,
-    )
-    .unwrap_err();
+        into_byte_stream(axum::body::Body::empty().into_data_stream()),
+    ) {
+        Ok(_) => panic!("expected unsupported streaming response translation error"),
+        Err(error) => error,
+    };
 
-    assert!(matches!(error, InternalError::InvalidRoute(_)));
+    assert!(matches!(
+        error,
+        TranslationError::UnsupportedResponsePair {
+            from: ProviderProtocol::OpenaiResponses,
+            to: RequestProtocol::OpenaiChatCompletions,
+        }
+    ));
 }

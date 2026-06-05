@@ -47,7 +47,7 @@ fn project_payload_ignores_unknown_input_items() {
         "stream": true
     });
 
-    let projection = project_payload(&payload, None).expect("project request payload");
+    let projection = project_payload(&payload).expect("project request payload");
 
     assert_eq!(projection.model.as_deref(), Some("glm-5.1"));
     assert_eq!(projection.parallel_tool_calls, Some(true));
@@ -80,7 +80,7 @@ fn project_payload_supports_request_summary_extraction() {
         ]
     });
 
-    let projection = project_payload(&payload, None).expect("project request payload");
+    let projection = project_payload(&payload).expect("project request payload");
     let summary = RequestSummary::from(&projection);
 
     assert_eq!(summary.tool_inventory.len(), 2);

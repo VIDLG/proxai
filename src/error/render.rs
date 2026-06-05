@@ -3,7 +3,6 @@ use axum::http::{HeaderMap, HeaderValue, Response, StatusCode, header};
 use delegate::delegate;
 use serde::Serialize;
 use serde_json::Value;
-use std::io;
 
 use crate::config::ErrorResponseFormat;
 use crate::http_support::{is_forwardable_error_response_header, response_with_headers};
@@ -66,7 +65,7 @@ struct ErrorSseEvent {
 }
 
 impl ErrorResponsePayload {
-    fn encode_sse_event(self) -> io::Result<Bytes> {
+    fn encode_sse_event(self) -> serde_json::Result<Bytes> {
         encode_sse_json(
             "error",
             &ErrorSseEvent {
@@ -172,7 +171,7 @@ impl ErrorResponseFields {
 
     delegate! {
         to self.payload {
-            pub(crate) fn encode_sse_event(self) -> io::Result<Bytes>;
+            pub(crate) fn encode_sse_event(self) -> serde_json::Result<Bytes>;
             pub(crate) fn encode_sse_event_or_fallback(self) -> Bytes;
         }
     }

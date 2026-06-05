@@ -13,11 +13,13 @@
 //! Self-to-self protocol paths are intentionally omitted.
 
 pub(crate) mod anthropic_messages;
+pub(crate) mod error;
 pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
 mod request;
 mod response;
 mod sse;
 
+pub(crate) use error::{Result as TranslationResult, TranslationError};
 pub(crate) use request::translate_request;
-pub(crate) use response::{translate_non_streaming_response, translate_streaming_response};
+pub(crate) use response::{translate_non_streaming_payload, translate_streaming_stream};

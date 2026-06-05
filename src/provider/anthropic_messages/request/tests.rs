@@ -1,6 +1,10 @@
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{ToolCategory, prepare_provider_request};
+
+fn body(payload: &Value) -> Vec<u8> {
+    serde_json::to_vec(payload).unwrap()
+}
 
 #[test]
 fn prepare_provider_request_preserves_model_when_route_keeps_it() {
@@ -10,21 +14,21 @@ fn prepare_provider_request_preserves_model_when_route_keeps_it() {
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared = prepare_provider_request(&payload, "claude-request", "claude-request").unwrap();
+    let prepared = prepare_provider_request(&payload, body(&payload)).unwrap();
     let provider_body = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
     assert_eq!(provider_body["model"], "claude-request");
 }
 
 #[test]
-fn prepare_provider_request_rewrites_model() {
+fn prepare_provider_request_uses_provider_payload_model() {
     let payload = json!({
-        "model": "claude-request",
+        "model": "claude-upstream",
         "max_tokens": 256,
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared = prepare_provider_request(&payload, "claude-request", "claude-upstream").unwrap();
+    let prepared = prepare_provider_request(&payload, body(&payload)).unwrap();
     let provider_body = serde_json::from_slice::<serde_json::Value>(&prepared.body).unwrap();
 
     assert_eq!(provider_body["model"], "claude-upstream");
@@ -52,7 +56,7 @@ fn prepare_provider_request_builds_projection_and_summary() {
         "messages": [{"role": "user", "content": "hello"}]
     });
 
-    let prepared = prepare_provider_request(&payload, "claude-request", "claude-request").unwrap();
+    let prepared = prepare_provider_request(&payload, body(&payload)).unwrap();
 
     assert_eq!(prepared.projection.model, "claude-request");
     assert_eq!(prepared.projection.max_tokens, 256);

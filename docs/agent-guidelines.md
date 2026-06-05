@@ -67,10 +67,20 @@ Keep explicit cross-protocol conversion logic in `src/translation/`.
 
 - `ingress/` owns inbound protocol parsing and normalization.
 - `translation/` owns protocol-to-protocol conversion between `request_protocol` and provider `protocol`.
-- `provider/` owns target-provider transport and provider-local `request.rs` / `response.rs` behavior.
+- `provider/request` owns provider request preparation: provider model rewrite, projection/summary extraction, and body serialization.
+- `provider/transport` owns outbound HTTP transport: auth headers, upstream URL construction, and send.
+- `http_support` owns HTTP carrier helpers: boxed byte streams, content-type helpers, response head/body reconstruction, and forwardable header filtering.
 
 Do not bury general protocol translation inside a provider subtree unless it is truly private to that provider implementation.
 Prefer pair-oriented naming such as `openai_responses -> anthropic_messages` over provider-label-oriented naming.
+
+Translation functions should stay pure at the carrier boundary:
+
+- request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
+- non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
+- streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+
+Do not pass HTTP `Response`, `Body`, route/model rewrite details, or provider request structs into `translation/`.
 
 Do not force phase naming into unrelated protocol or error domain types when it harms clarity. Names such as `RequestProtocol`, `UpstreamError`, and `UpstreamResponseHead` can remain protocol/domain-oriented when not expressing chain position.
 
@@ -110,6 +120,18 @@ Do not log request bodies, Authorization headers, API keys, private prompts, or 
 
 For readability, `error_responses.format = "text"` should remain the default.
 
+Use domain-specific errors rather than broad catch-all conversions:
+
+- `RequestError` for inbound body/validation failures.
+- `ConfigError` for config loading and config-file reads.
+- `InternalError` for proxy runtime invariants, local filesystem IO, internal HTTP body reads, JSON serialization, and translation boundary errors.
+- `UpstreamError` for upstream send/status/body-read failures.
+- `TranslationError` for protocol payload conversion.
+- `SseError` / `SseTranslationError` for SSE event semantics.
+- `ByteStreamError` for stream carrier errors.
+
+Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
+
 When normalizing upstream errors:
 
 - text mode should be concise and human-readable
@@ -122,6 +144,7 @@ Do not overfit parsing to every possible upstream JSON shape. Prefer behavior-le
 
 Streaming behavior is user-visible and easy to regress. Be careful with:
 
+- keeping streams as `ByteStream` once they cross the HTTP carrier boundary
 - preserving SSE response body bytes
 - preserving `text/event-stream`
 - detecting terminal events

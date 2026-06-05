@@ -1,19 +1,13 @@
 use serde_json::json;
 
-use crate::http_support::NonStreamingResponse;
+use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::Message;
 use crate::sse::SseEventScanner;
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Response, header};
 
-use super::{translate_message, translate_non_streaming_response, translate_streaming_response};
-
-async fn read_non_streaming(response: Response<Body>) -> NonStreamingResponse {
-    let (parts, body) = response.into_parts();
-    let body = to_bytes(body, usize::MAX).await.unwrap();
-    NonStreamingResponse::from_parts(parts, body)
-}
+use super::{translate_message, translate_non_streaming_payload, translate_streaming_stream};
 
 fn assert_openai_response_stream_events_deserialize(body: &str) {
     let mut scanner = SseEventScanner::default();
@@ -86,12 +80,9 @@ fn translates_anthropic_message_to_openai_responses_shape() {
     assert_eq!(value["output"][1]["arguments"], "{\"id\":\"42\"}");
 }
 
-#[tokio::test]
-async fn translates_provider_message_with_required_nullable_normalization() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(
-            json!({
+#[test]
+fn translates_provider_message_with_required_nullable_normalization() {
+    let provider_payload = json!({
                 "id": "msg_compat",
                 "container": null,
                 "role": "assistant",
@@ -126,14 +117,9 @@ async fn translates_provider_message_with_required_nullable_normalization() {
                     },
                     "service_tier": null
                 }
-            })
-            .to_string(),
-        ))
-        .unwrap();
+    });
 
-    let translated = translate_non_streaming_response(read_non_streaming(response).await).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
-    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let value = translate_non_streaming_payload(provider_payload).unwrap();
     let _: async_openai::types::responses::Response = serde_json::from_value(value.clone())
         .expect("translated compat response should deserialize as OpenAI Responses");
 
@@ -163,8 +149,12 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("event: response.created"));
@@ -196,8 +186,12 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("event: response.created"));
@@ -234,8 +228,12 @@ data: {\"type\":\"message_stop\"}\n\n",
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("event: response.created"));
@@ -266,8 +264,12 @@ data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":
         ))
         .unwrap();
 
-    let translated = translate_streaming_response(response).unwrap();
-    let body = to_bytes(translated.into_body(), usize::MAX).await.unwrap();
+    let translated =
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
+            .unwrap();
+    let body = to_bytes(Body::from_stream(translated), usize::MAX)
+        .await
+        .unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
 
     assert!(body.contains("event: response.created"));

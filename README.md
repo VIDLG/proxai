@@ -9,10 +9,9 @@ configured provider with minimal surprises.
 
 Today, the stable runtime paths support no-conversion forwarding for OpenAI
 Responses, OpenAI Chat Completions, and Anthropic Messages, plus explicit
-OpenAI Chat Completions to Anthropic Messages translation for routed
-Anthropic-compatible providers. The config model is protocol-aware so routing
-and conversion paths can expand explicitly over time without turning ProxAI
-into a generic AI gateway.
+cross-protocol translation for selected protocol pairs. The config model is
+protocol-aware so routing and conversion paths can expand explicitly over time
+without turning ProxAI into a generic AI gateway.
 
 ## Current Status
 
@@ -21,7 +20,10 @@ The current stable forwarding and translation paths are:
 - inbound: `openai_responses` -> outbound: `openai_responses`
 - inbound: `openai_chat_completions` -> outbound: `openai_chat_completions`
 - inbound: `anthropic_messages` -> outbound: `anthropic_messages`
+- inbound: `openai_responses` -> outbound: `openai_chat_completions`
+- inbound: `openai_responses` -> outbound: `anthropic_messages`
 - inbound: `openai_chat_completions` -> outbound: `anthropic_messages`
+- inbound: `anthropic_messages` -> outbound: `openai_responses`
 
 Other cross-protocol translation paths remain intentionally unsupported until
 they are implemented explicitly.
@@ -46,8 +48,10 @@ request to an OpenAI Chat Completions provider unchanged or translates it to
 Anthropic Messages when an explicit route selects an `anthropic_messages`
 provider.
 
-For `/v1/messages` requests, ProxAI performs the same no-conversion forwarding
-for Anthropic Messages, including provider auth and stream observation.
+For `/v1/messages` requests, ProxAI validates the Anthropic Messages request
+shape, applies provider routing/model rewrite, and either forwards the request
+to an Anthropic Messages provider unchanged or translates it to OpenAI
+Responses when an explicit route selects an `openai_responses` provider.
 
 ## Installation and App Directory
 
@@ -117,10 +121,13 @@ In short, the config is organized around:
 - `[logging]`
 - `[error_responses]`
 
-Today, the stable runtime paths are OpenAI Responses no-conversion, OpenAI
-Chat Completions no-conversion, Anthropic Messages no-conversion, and explicit
-OpenAI Chat Completions to Anthropic Messages translation. Named routes can be
-temporarily adjusted with `--route-override ROUTE.FIELD=VALUE` without editing
+Today, the stable runtime paths include no-conversion forwarding for OpenAI
+Responses, OpenAI Chat Completions, and Anthropic Messages, plus explicit
+translations for `openai_responses -> openai_chat_completions`,
+`openai_responses -> anthropic_messages`,
+`openai_chat_completions -> anthropic_messages`, and
+`anthropic_messages -> openai_responses`. Named routes can be temporarily
+adjusted with `--route-override ROUTE.FIELD=VALUE` without editing
 `config.toml`.
 
 A route's `request_protocol` is optional. When omitted, the route can match any

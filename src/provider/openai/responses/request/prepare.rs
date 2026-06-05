@@ -1,10 +1,10 @@
 use serde_json::Value;
 
 use crate::error::{InternalError, Result};
-use crate::observe::ObserveContext;
+use crate::observe::{ObserveContext, RequestInfoParseFailure};
 use crate::protocol::openai_responses::RequestProjection;
 
-use super::projection::project_payload;
+use super::projection::{adapt_payload_for_projection, project_payload};
 use super::summary::RequestSummary;
 
 #[derive(Debug, Clone)]
@@ -16,24 +16,30 @@ pub(crate) struct PreparedProviderRequest {
 
 pub(crate) fn prepare_provider_request(
     payload: &Value,
-    obs: Option<&ObserveContext>,
-    request_model: &str,
-    upstream_model: &str,
+    body: Vec<u8>,
+    obs: &ObserveContext,
 ) -> Result<PreparedProviderRequest, InternalError> {
-    let projection = project_payload(payload, obs).unwrap_or_default();
+    let projection = project_payload_observed(payload, obs);
     let summary = RequestSummary::from(&projection);
-
-    let mut payload = payload.clone();
-    if upstream_model != request_model
-        && let Some(model) = payload.get_mut("model")
-    {
-        *model = Value::String(upstream_model.to_string());
-    }
-    let body = serde_json::to_vec(&payload)?;
 
     Ok(PreparedProviderRequest {
         body,
         projection,
         summary,
     })
+}
+
+fn project_payload_observed(payload: &Value, obs: &ObserveContext) -> RequestProjection {
+    match project_payload(payload) {
+        Ok(projection) => projection,
+        Err(error) => {
+            let adapted = adapt_payload_for_projection(payload);
+            obs.observe_request_info_parse_failure(RequestInfoParseFailure {
+                normalized_payload: payload,
+                request_info_parse_payload: &adapted,
+                error: &error,
+            });
+            RequestProjection::default()
+        }
+    }
 }

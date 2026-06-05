@@ -31,6 +31,12 @@ pub enum ProviderProtocol {
     AnthropicMessages,
 }
 
+impl RequestProtocol {
+    pub fn matches_provider_protocol(self, provider_protocol: ProviderProtocol) -> bool {
+        self == provider_protocol.default_request_protocol()
+    }
+}
+
 impl ProviderProtocol {
     pub fn default_request_protocol(self) -> RequestProtocol {
         match self {

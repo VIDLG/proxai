@@ -5,7 +5,22 @@ use getset::Getters;
 use serde::Serialize;
 use serde_json::Value;
 use sse_core::{SseDecoder, SseEvent as DecodedSseEvent};
-use std::io;
+
+use crate::http_support::{ByteStreamError, boxed_stream_error};
+
+pub(crate) type SseResult<T> = Result<T, SseError>;
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SseError {
+    #[error("SSE decode failed: {0}")]
+    Decode(String),
+
+    #[error("SSE JSON conversion failed: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("SSE payload missing field: {0}")]
+    MissingField(&'static str),
+}
 
 /// A complete raw SSE frame, including its terminating blank line.
 ///
@@ -54,13 +69,15 @@ impl SseFrame {
 }
 
 impl TryFrom<&SseFrame> for Option<SseEvent> {
-    type Error = io::Error;
+    type Error = SseError;
 
-    fn try_from(frame: &SseFrame) -> io::Result<Self> {
+    fn try_from(frame: &SseFrame) -> SseResult<Self> {
         let mut decoder = SseDecoder::new();
         let mut buffer = BytesMut::from(frame.bytes().as_ref());
         while let Some(decoded) = decoder.next(&mut buffer) {
-            let DecodedSseEvent::Message(message) = decoded.map_err(io::Error::other)? else {
+            let DecodedSseEvent::Message(message) =
+                decoded.map_err(|error| SseError::Decode(error.to_string()))?
+            else {
                 continue;
             };
 
@@ -100,8 +117,8 @@ impl SseEvent {
         serde_json::from_str(&self.data).ok()
     }
 
-    pub(crate) fn payload_with_type(&self) -> io::Result<Value> {
-        let mut payload = serde_json::from_str::<Value>(&self.data).map_err(io::Error::other)?;
+    pub(crate) fn payload_with_type(&self) -> SseResult<Value> {
+        let mut payload = serde_json::from_str::<Value>(&self.data)?;
         if !self.is_default_event_type()
             && let Some(object) = payload.as_object_mut()
         {
@@ -149,15 +166,19 @@ impl SseEventScanner {
 /// is yielded once at EOF so callers can preserve truncated upstream output.
 /// This is useful for selective wire-level transforms where decoded event
 /// semantics would lose formatting or unknown SSE fields.
-pub(crate) fn sse_frame_stream(
-    input: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
-) -> impl Stream<Item = io::Result<SseSegment>> + Send {
+pub(crate) fn sse_frame_stream<S, E>(
+    input: S,
+) -> impl Stream<Item = Result<SseSegment, ByteStreamError>> + Send
+where
+    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
+    E: Into<ByteStreamError> + Send + 'static,
+{
     try_stream! {
         let mut input = Box::pin(input);
         let mut buffer = BytesMut::new();
 
         while let Some(chunk) = input.next().await {
-            let chunk = chunk?;
+            let chunk = chunk.map_err(Into::into)?;
             buffer.extend_from_slice(&chunk);
             while let Some(frame_end) = complete_sse_frame_end(&buffer) {
                 yield SseSegment::Frame(SseFrame::new(buffer.split_to(frame_end).freeze()));
@@ -174,16 +195,20 @@ pub(crate) fn sse_frame_stream(
 ///
 /// This is the event-semantic layer above `sse_frame_stream`: complete frames
 /// are decoded into events, while incomplete EOF tails are ignored.
-pub(crate) fn sse_event_stream(
-    input: impl Stream<Item = io::Result<Bytes>> + Send + 'static,
-) -> impl Stream<Item = io::Result<SseEvent>> + Send {
+pub(crate) fn sse_event_stream<S, E>(
+    input: S,
+) -> impl Stream<Item = Result<SseEvent, ByteStreamError>> + Send
+where
+    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
+    E: Into<ByteStreamError> + Send + 'static,
+{
     try_stream! {
         let mut segments = Box::pin(sse_frame_stream(input));
 
         while let Some(segment) = segments.next().await {
             match segment? {
                 SseSegment::Frame(frame) => {
-                    if let Some(event) = Option::<SseEvent>::try_from(&frame)? {
+                    if let Some(event) = Option::<SseEvent>::try_from(&frame).map_err(boxed_stream_error)? {
                         yield event;
                     }
                 }
@@ -193,11 +218,11 @@ pub(crate) fn sse_event_stream(
     }
 }
 
-pub(crate) fn encode_sse_json<T>(event_type: &str, payload: &T) -> io::Result<Bytes>
+pub(crate) fn encode_sse_json<T>(event_type: &str, payload: &T) -> serde_json::Result<Bytes>
 where
     T: Serialize,
 {
-    let data = serde_json::to_string(payload).map_err(io::Error::other)?;
+    let data = serde_json::to_string(payload)?;
     Ok(Bytes::from(format!(
         "event: {event_type}\ndata: {data}\n\n"
     )))

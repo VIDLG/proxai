@@ -38,11 +38,11 @@ fn translates_chat_request_to_anthropic_messages_shape() {
         "top_p": 0.9
     });
 
-    let translated = translate_request_payload(&payload, "glm-5.1", "claude-test").unwrap();
+    let translated = translate_request_payload(&payload).unwrap();
     serde_json::from_value::<MessageCreateParamsBase>(translated.clone())
         .expect("translated payload must match Anthropic Messages request schema");
 
-    assert_eq!(translated["model"], "claude-test");
+    assert_eq!(translated["model"], "glm-5.1");
     assert_eq!(translated["max_tokens"], 128);
     assert_eq!(
         translated["system"],
