@@ -11,7 +11,7 @@ pub(crate) fn forward_non_streaming_response(
     obs: &ObserveContext,
     head: UpstreamResponseHead,
     body: Bytes,
-    transform_body: impl FnOnce(Bytes) -> Bytes,
+    transform_body: Option<impl FnOnce(Bytes) -> Bytes>,
 ) -> Response<Body> {
     obs.observe_upstream_non_streaming_success(UpstreamNonStreamingResponseReceived {
         head: &head,
@@ -23,5 +23,9 @@ pub(crate) fn forward_non_streaming_response(
     });
 
     let (status, headers) = outbound_head.into_parts();
-    response_with_headers(status, headers, Body::from(transform_body(body)))
+    let body = match transform_body {
+        Some(transform_body) => transform_body(body),
+        None => body,
+    };
+    response_with_headers(status, headers, Body::from(body))
 }

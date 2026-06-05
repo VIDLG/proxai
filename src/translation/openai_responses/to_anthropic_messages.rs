@@ -100,11 +100,8 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
-    Ok(translate_sse_stream(
-        input,
-        OpenaiToAnthropicStreamTranslator::default(),
-    ))
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+    translate_sse_stream(input, OpenaiToAnthropicStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {

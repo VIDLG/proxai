@@ -9,4 +9,4 @@ pub use response::{OutboundResponseHead, UpstreamResponseHead};
 pub(crate) use response::{
     json_response_from_parts, response_is_sse, response_with_headers, sse_response_from_parts,
 };
-pub(crate) use stream::{ByteStream, ByteStreamError, boxed_stream_error, into_byte_stream};
+pub(crate) use stream::{ByteStream, ByteStreamError, into_byte_stream};

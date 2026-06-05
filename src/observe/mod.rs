@@ -17,8 +17,7 @@ pub use logging::{DurationThresholds, TOOL_NAME_ALIASES, init as init_logging};
 pub(crate) use point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
     ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderRequestBodySizes,
-    ProviderStreamChunkObserved, ProviderStreamOutcome, ProviderStreamOutcomeObserved,
-    ProviderStreamSnapshot, RequestFailed, RequestInfoParseFailure, UpstreamErrorResponseReceived,
-    UpstreamNonStreamingResponseReceived, UpstreamStreamChunkReceived, UpstreamStreamProgress,
-    UpstreamStreamingResponseStarted,
+    ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestFailed,
+    RequestInfoParseFailure, UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
+    UpstreamStreamChunkReceived, UpstreamStreamProgress, UpstreamStreamingResponseStarted,
 };

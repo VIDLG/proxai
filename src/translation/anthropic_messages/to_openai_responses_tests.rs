@@ -81,9 +81,10 @@ fn translates_anthropic_message_to_openai_responses_shape() {
 }
 
 #[test]
-fn translates_provider_message_with_required_nullable_normalization() {
+fn translates_anthropic_message_payload_to_openai_responses() {
     let provider_payload = json!({
                 "id": "msg_compat",
+                "type": "message",
                 "container": null,
                 "role": "assistant",
                 "model": "glm-5.1",
@@ -150,8 +151,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
-            .unwrap();
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -167,14 +167,14 @@ data: {\"type\":\"message_stop\"}\n\n",
 }
 
 #[tokio::test]
-async fn translates_minimax_thinking_stream_without_signature_to_openai_responses_sse() {
+async fn translates_thinking_stream_to_openai_responses_sse() {
     let response = Response::builder()
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_minimax\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"MiniMax-M2.7-highspeed\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":null}}}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n\
 event: content_block_delta\n\
 data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"plan\"}}\n\n\
 event: content_block_stop\n\
@@ -187,8 +187,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
-            .unwrap();
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -201,7 +200,7 @@ data: {\"type\":\"message_stop\"}\n\n",
     assert!(body.contains("event: response.completed"));
     assert!(
         !body.contains("event: error"),
-        "MiniMax thinking block without signature must not fail translation: {body}"
+        "thinking block stream must not fail translation: {body}"
     );
     assert_openai_response_stream_events_deserialize(&body);
 }
@@ -229,8 +228,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
-            .unwrap();
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -260,13 +258,12 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signat
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"write_file\",\"input\":{}}}\n\n",
+data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"write_file\",\"input\":{}}}\n\n",
         ))
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
-            .unwrap();
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();

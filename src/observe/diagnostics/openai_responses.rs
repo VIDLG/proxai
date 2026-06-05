@@ -12,51 +12,25 @@ use crate::protocol::openai_responses::{Billing, Conversation};
 use crate::provider::openai::responses::{ResponseSummary, ResponsesUpstreamStreamSnapshot};
 use crate::sse::SseEventScanner;
 
-pub(crate) struct OpenaiResponsesStreamDiagnostics {
+pub(crate) fn write_unfinished_tool_diagnostic(
     request_id: RequestId,
-    recent_tail: Vec<u8>,
-}
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+) -> Option<String> {
+    let logs_dir = paths::ensure_app_paths().ok()?.logs_dir;
+    stdfs::create_dir_all(&logs_dir).ok()?;
 
-impl OpenaiResponsesStreamDiagnostics {
-    pub(crate) fn new(request_id: RequestId) -> Self {
-        Self {
-            request_id,
-            recent_tail: Vec::new(),
-        }
-    }
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    let path = logs_dir.join(format!(
+        "unfinished-tool-diagnostic-{timestamp}-{request_id:06}.json"
+    ));
 
-    pub(crate) fn observe_chunk(&mut self, chunk: &[u8]) {
-        const MAX_STREAM_DIAGNOSTIC_TAIL_BYTES: usize = 16 * 1024;
+    let body = UnfinishedToolDiagnosticReport::new(request_id, snapshot, &snapshot.recent_tail);
 
-        self.recent_tail.extend_from_slice(chunk);
-        if self.recent_tail.len() > MAX_STREAM_DIAGNOSTIC_TAIL_BYTES {
-            let overflow = self.recent_tail.len() - MAX_STREAM_DIAGNOSTIC_TAIL_BYTES;
-            self.recent_tail.drain(..overflow);
-        }
-    }
-
-    pub(crate) fn write_unfinished_tool_diagnostic(
-        &self,
-        snapshot: &ResponsesUpstreamStreamSnapshot,
-    ) -> Option<String> {
-        let logs_dir = paths::ensure_app_paths().ok()?.logs_dir;
-        stdfs::create_dir_all(&logs_dir).ok()?;
-
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()?
-            .as_millis();
-        let request_id = self.request_id.as_u64();
-        let path = logs_dir.join(format!(
-            "unfinished-tool-diagnostic-{timestamp}-{request_id:06}.json"
-        ));
-
-        let body =
-            UnfinishedToolDiagnosticReport::new(self.request_id, snapshot, &self.recent_tail);
-
-        stdfs::write(&path, serde_json::to_vec_pretty(&body).ok()?).ok()?;
-        Some(path.display().to_string())
-    }
+    stdfs::write(&path, serde_json::to_vec_pretty(&body).ok()?).ok()?;
+    Some(path.display().to_string())
 }
 
 #[derive(Serialize)]

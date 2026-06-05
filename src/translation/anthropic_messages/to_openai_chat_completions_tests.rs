@@ -15,7 +15,7 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         "model": "glm-5.1",
         "content": [
             {"type": "text", "text": "hello"},
-            {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"query": "proxai"}}
+            {"type": "tool_use", "id": "toolu_1", "caller": {"type": "direct"}, "name": "lookup", "input": {"query": "proxai"}}
         ],
         "stop_reason": "tool_use",
         "stop_sequence": null,
@@ -44,7 +44,9 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         json!({
             "prompt_tokens": 3,
             "completion_tokens": 5,
-            "total_tokens": 8
+            "total_tokens": 8,
+            "prompt_tokens_details": null,
+            "completion_tokens_details": null
         })
     );
 }
@@ -70,8 +72,7 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()))
-            .unwrap();
+        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();

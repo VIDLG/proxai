@@ -34,7 +34,7 @@ pub(crate) struct ResponsesUpstreamState {
     /// diagnostics/logging.
     ///
     /// This is fallback-only state: summaries should still be rebuilt from the
-    /// latest upstream `response.*` snapshot when available. It intentionally lives for the full tracker
+    /// latest upstream `response.*` snapshot when available. It intentionally lives for the full state
     /// lifetime and is not reset by later snapshots, so mid-stream
     /// observations remain available for timeout / unfinished-stream
     /// diagnostics.
@@ -111,5 +111,6 @@ pub(crate) struct ResponsesUpstreamStreamSnapshot {
     pub(crate) head: UpstreamResponseHead,
     pub(crate) metrics: UpstreamStreamMetrics,
     pub(crate) state: ResponsesUpstreamState,
+    pub(crate) recent_tail: Vec<u8>,
     pub(crate) metadata: ResponsesUpstreamMetadata,
 }

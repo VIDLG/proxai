@@ -11,12 +11,5 @@ where
     S: Stream<Item = Result<Bytes, E>> + Send + 'static,
     E: Error + Send + Sync + 'static,
 {
-    Box::pin(stream.map(|chunk| chunk.map_err(boxed_stream_error)))
-}
-
-pub(crate) fn boxed_stream_error<E>(error: E) -> ByteStreamError
-where
-    E: Error + Send + Sync + 'static,
-{
-    Box::new(error)
+    Box::pin(stream.map(|chunk| chunk.map_err(Into::into)))
 }

@@ -90,11 +90,6 @@ pub(crate) struct UpstreamStreamChunkReceived<'a> {
     pub(crate) chunk: &'a [u8],
 }
 
-pub(crate) struct ProviderStreamChunkObserved<'a> {
-    pub(crate) provider_protocol: ProviderProtocol,
-    pub(crate) chunk: &'a [u8],
-}
-
 pub(crate) enum ProviderStreamSnapshot<'a> {
     AnthropicMessages(&'a AnthropicUpstreamResponseSnapshot),
     OpenaiChatCompletions(&'a ChatUpstreamStreamSnapshot),

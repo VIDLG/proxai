@@ -37,7 +37,7 @@ impl InboundHttpFlow {
         }
     }
 
-    pub(crate) async fn prepare_inbound(self) -> Result<PreparedInboundFlow, RequestError> {
+    pub(crate) fn prepare_inbound(self) -> Result<PreparedInboundFlow, RequestError> {
         let Self {
             method,
             uri,

@@ -5,7 +5,9 @@ use getset::{CopyGetters, Getters};
 use crate::protocol::anthropic::messages::{
     Message, MessageDeltaEvent, MessageStreamEvent, ResponseServiceTier, StopReason,
 };
+use crate::sse::SseEvent;
 
+use super::normalize::normalize_stream_event_payload;
 use super::summary::AnthropicResponseSummary;
 
 #[derive(Debug, Clone, Default, Getters, CopyGetters)]
@@ -32,6 +34,20 @@ pub(crate) struct AnthropicResponseState {
 }
 
 impl AnthropicResponseState {
+    pub(crate) fn observe_events(&mut self, events: &[SseEvent]) {
+        for event in events {
+            let Ok(payload) = serde_json::from_str::<serde_json::Value>(&event.data) else {
+                continue;
+            };
+            let Ok(event) = serde_json::from_value::<MessageStreamEvent>(
+                normalize_stream_event_payload(payload),
+            ) else {
+                continue;
+            };
+            self.record_stream_event(&event);
+        }
+    }
+
     pub(crate) fn record_stream_event(&mut self, event: &MessageStreamEvent) {
         self.summary.merge(&AnthropicResponseSummary::from(event));
         match event {
@@ -89,3 +105,7 @@ impl AnthropicUpstreamResponseSnapshot {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod tests;

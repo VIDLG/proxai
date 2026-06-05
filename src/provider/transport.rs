@@ -10,7 +10,7 @@ use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_support::filter_forwardable_request_headers;
 use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
 use crate::protocol::ProviderProtocol;
-use crate::provider::{ProviderRequest, anthropic_messages, openai};
+use crate::provider::{ProviderRequest, ProviderResponseContext, anthropic_messages, openai};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProviderTransportError {
@@ -89,6 +89,14 @@ impl ProviderTransport {
         }
     }
 
+    pub(crate) fn response_context(&self) -> ProviderResponseContext {
+        ProviderResponseContext::new(
+            self.protocol,
+            self.streaming_response_policy(),
+            self.compatibility,
+        )
+    }
+
     pub(crate) fn set_sse_tool_call_timeout(&mut self, timeout: Option<Duration>) {
         self.sse_tool_call_timeout = timeout;
     }
@@ -157,10 +165,10 @@ fn provider_request_headers(
 fn apply_request_auth_headers(protocol: ProviderProtocol, headers: &mut HeaderMap, api_key: &str) {
     match protocol {
         ProviderProtocol::OpenaiResponses | ProviderProtocol::OpenaiChatCompletions => {
-            openai::apply_request_auth_headers(headers, api_key);
+            openai::request::apply_auth_headers(headers, api_key);
         }
         ProviderProtocol::AnthropicMessages => {
-            anthropic_messages::apply_request_auth_headers(headers, api_key);
+            anthropic_messages::request::apply_auth_headers(headers, api_key);
         }
     }
 }

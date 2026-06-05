@@ -7,13 +7,13 @@ use crate::error::UpstreamError;
 use crate::http_support::{ContentType, OutboundResponseHead, UpstreamResponseHead};
 use crate::observe::point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
-    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamChunkObserved,
-    ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
-    RequestInfoParseFailure, UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
+    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamOutcome,
+    ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestInfoParseFailure,
+    UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
     UpstreamResponseHeadReceived, UpstreamStreamChunkReceived, UpstreamStreamProgress,
     UpstreamStreamingResponseStarted,
 };
-use crate::protocol::ProviderProtocol;
+
 use crate::request::RequestId;
 
 #[derive(Clone)]
@@ -89,13 +89,6 @@ impl ObserveSinks {
             point.body,
             point.normalized_payload,
         );
-    }
-
-    pub(super) fn observe_provider_stream_chunk(&self, point: ProviderStreamChunkObserved<'_>) {
-        if matches!(point.provider_protocol, ProviderProtocol::OpenaiResponses) {
-            self.diagnostics
-                .observe_openai_responses_stream_chunk(point.chunk);
-        }
     }
 
     pub(super) fn observe_provider_stream_outcome(

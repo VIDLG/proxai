@@ -62,6 +62,7 @@ pub struct RefusalContent {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::OutputMessageContent))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputMessageContent {
     OutputText(OutputTextContent),
     Refusal(RefusalContent),
@@ -69,6 +70,7 @@ pub enum OutputMessageContent {
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::OutputContent))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputContent {
     OutputText(OutputTextContent),
     Refusal(RefusalContent),

@@ -267,7 +267,7 @@ SSE 错误事件由 `ErrorResponsePayload` 编码：
 
 ```rust
 impl ErrorResponsePayload {
-    fn encode_sse_event(self) -> io::Result<Bytes> { ... }
+    fn encode_sse_event(self) -> serde_json::Result<Bytes> { ... }
 }
 ```
 

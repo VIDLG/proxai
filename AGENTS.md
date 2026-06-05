@@ -91,7 +91,7 @@ Use domain-specific errors rather than broad catch-all conversions:
 
 Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
 
-SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`.
+SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`. Provider streaming internals are documented in `docs/streaming-response-handling-cn.md`.
 
 ## Tests
 

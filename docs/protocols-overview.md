@@ -28,7 +28,7 @@ openai_responses / openai_chat_completions / anthropic_messages
 - `src/ingress/request.rs` 用 `PreparedInboundRequest` 按协议承载已经解析过的入站请求。
 - `src/translation/request.rs` 把已经规范化的入站 payload 翻译成 provider 协议 payload。
 - `src/provider/request.rs` 准备 provider 请求，包括模型改写、projection/summary 提取和 JSON body 序列化。
-- `src/provider/handler.rs` 以及 provider response 模块按 provider 协议选择上游响应处理方式。
+- `src/provider/response.rs` 以及 provider response 模块按 provider 协议选择上游响应处理方式。
 
 这个拆分避免把“客户端发来的协议”和“上游 provider 使用的协议”混成一个概念。例如客户端可以发 `openai_responses`，但路由到 `anthropic_messages` provider 时必须经过显式翻译；如果对应 pair 尚未实现，`translation::translate_request` 会返回明确错误。
 
@@ -160,10 +160,12 @@ enum ProviderRequest {
 SSE 流式响应分为三层：
 
 - carrier 层：`http_support::ByteStream` / `ByteStreamError` 承载 boxed byte streams；`http_support::response` 负责重建 `text/event-stream` 响应头和 body。
-- 通用上游层：`src/upstream/streaming.rs` 保留上游原始 bytes，统计 chunk/bytes/duration，接入 capture，并调用协议 observer。
+- 通用上游层：`src/upstream/streaming.rs` 保留上游原始 bytes，统计 chunk/bytes/duration，接入 capture，并调用协议 `BodyObserver` 生命周期 hook。
 - 协议层：各 provider observer 或 `src/translation/sse.rs` 解析/翻译本协议事件，识别终止事件，产生日志和必要诊断。
 
-proxai 的默认目标不是重新生成流，而是尽量保留上游原始 SSE bytes 和 `text/event-stream`。只有协议确实需要诊断或错误注入时，observer 才会在 `poll_pending` 中产出自定义 chunk，例如 OpenAI Responses 的工具参数流超时诊断。
+proxai 的默认目标不是重新生成流，而是尽量保留上游原始 SSE bytes 和 `text/event-stream`。只有协议确实需要诊断或错误注入时，observer 才会在 `poll_pending_action` 中产出自定义 chunk，例如 OpenAI Responses 的工具参数流超时诊断。
+
+三协议 provider streaming response 的详细处理流程见 `docs/streaming-response-handling-cn.md`。
 
 ## 工具调用的两类来源
 

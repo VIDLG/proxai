@@ -1,12 +1,11 @@
-use crate::config::ProviderCompatibility;
 use crate::error::{Result, UpstreamError, UpstreamResponseError};
 use crate::http_support::UpstreamResponseHead;
 use crate::http_support::response_is_sse;
 use crate::observe::UpstreamErrorResponseReceived;
 
-use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::protocol::RequestProtocol;
 use crate::provider::{
-    ProviderStreamingResponsePolicy, handle_non_streaming_success_response,
+    ProviderResponseContext, handle_non_streaming_success_response,
     handle_streaming_success_response,
 };
 
@@ -19,9 +18,7 @@ use super::provider_response::{
 pub(crate) struct UpstreamHttp {
     pub(super) inbound_protocol: RequestProtocol,
     pub(super) response: reqwest::Response,
-    pub(super) provider_protocol: ProviderProtocol,
-    pub(super) streaming_policy: ProviderStreamingResponsePolicy,
-    pub(super) compatibility: ProviderCompatibility,
+    pub(super) provider_response: ProviderResponseContext,
 }
 
 pub(crate) type UpstreamHttpFlow = ProxyFlow<UpstreamHttp>;
@@ -38,15 +35,13 @@ impl UpstreamHttpFlow {
                 UpstreamHttp {
                     inbound_protocol,
                     response,
-                    provider_protocol,
-                    streaming_policy,
-                    compatibility,
+                    provider_response,
                 },
             ..
         } = self;
 
-        let is_streaming = response_is_sse(&response);
-        let outbound_response = if !response.status().is_success() {
+        let provider_protocol = provider_response.protocol();
+        if !response.status().is_success() {
             let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
             let body = match response.bytes().await {
                 Ok(body) => body,
@@ -72,38 +67,12 @@ impl UpstreamHttpFlow {
                 );
             }
             return Err(error);
-        } else if is_streaming {
-            handle_streaming_success_response(
-                provider_protocol,
-                &obs,
-                streaming_policy,
-                compatibility,
-                response,
-            )
-        } else {
-            let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
-            let body = match response.bytes().await {
-                Ok(body) => body,
-                Err(source) => {
-                    let error = UpstreamError::ResponseBodyRead {
-                        head: head.clone(),
-                        source,
-                    };
-                    obs.observe_upstream_body_read_error(&head, &error);
-                    return Err(error);
-                }
-            };
-            handle_non_streaming_success_response(
-                provider_protocol,
-                &obs,
-                compatibility,
-                head,
-                body,
-            )
-        };
+        }
 
+        let is_streaming = response_is_sse(&response);
         if is_streaming {
-            Ok(ProviderHttpFlow::Streaming(ProviderStreamingHttpFlow {
+            let response = handle_streaming_success_response(provider_response, &obs, response);
+            return Ok(ProviderHttpFlow::Streaming(ProviderStreamingHttpFlow {
                 method,
                 uri,
                 headers,
@@ -112,24 +81,37 @@ impl UpstreamHttpFlow {
                 stage: ProviderStreamingHttp {
                     inbound_protocol,
                     provider_protocol,
-                    response: outbound_response,
+                    response,
                 },
-            }))
-        } else {
-            Ok(ProviderHttpFlow::NonStreaming(
-                ProviderNonStreamingHttpFlow {
-                    method,
-                    uri,
-                    headers,
-                    obs,
-                    error_response_format,
-                    stage: ProviderNonStreamingHttp {
-                        inbound_protocol,
-                        provider_protocol,
-                        response: outbound_response,
-                    },
-                },
-            ))
+            }));
         }
+
+        let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
+        let body = match response.bytes().await {
+            Ok(body) => body,
+            Err(source) => {
+                let error = UpstreamError::ResponseBodyRead {
+                    head: head.clone(),
+                    source,
+                };
+                obs.observe_upstream_body_read_error(&head, &error);
+                return Err(error);
+            }
+        };
+        let response = handle_non_streaming_success_response(provider_response, &obs, head, body);
+        Ok(ProviderHttpFlow::NonStreaming(
+            ProviderNonStreamingHttpFlow {
+                method,
+                uri,
+                headers,
+                obs,
+                error_response_format,
+                stage: ProviderNonStreamingHttp {
+                    inbound_protocol,
+                    provider_protocol,
+                    response,
+                },
+            },
+        ))
     }
 }

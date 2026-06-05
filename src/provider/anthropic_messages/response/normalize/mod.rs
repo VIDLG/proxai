@@ -24,7 +24,7 @@ pub(crate) fn normalize_message_payload(mut payload: Value) -> Value {
     payload
 }
 
-pub(super) fn normalize_message_body_bytes(body: &[u8]) -> serde_json::Result<Bytes> {
+pub(crate) fn normalize_message_body_bytes(body: &[u8]) -> serde_json::Result<Bytes> {
     let payload = serde_json::from_slice::<Value>(body)?;
     if !payload.as_object().is_some_and(is_message_like) {
         return Ok(Bytes::copy_from_slice(body));

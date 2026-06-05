@@ -3,7 +3,7 @@ use axum::body::Bytes;
 use futures_util::StreamExt;
 
 use crate::error::ErrorResponseFields;
-use crate::http_support::{ByteStream, boxed_stream_error};
+use crate::http_support::{ByteStream, into_byte_stream};
 
 pub(crate) use crate::sse::encode_sse_json;
 use crate::sse::{SseError, SseEvent, SseEventScanner};
@@ -99,5 +99,5 @@ where
             yield translated;
         }
     };
-    Box::pin(stream.map(|chunk: serde_json::Result<Bytes>| chunk.map_err(boxed_stream_error)))
+    into_byte_stream(stream.map(|chunk: serde_json::Result<Bytes>| chunk))
 }

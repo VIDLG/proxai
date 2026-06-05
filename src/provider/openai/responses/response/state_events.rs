@@ -1,17 +1,16 @@
 use async_openai::types::responses::ResponseStreamEvent as OpenaiResponseStreamEvent;
+use serde_json::Value;
 
 use crate::protocol::ErrorObject;
 use crate::protocol::openai_responses::{
     ResponseErrorEvent, ResponseProjection, ResponseStreamEvent,
 };
-use crate::sse::{SseEvent, SseEventScanner};
-use serde_json::Value;
+use crate::sse::SseEvent;
 
-use super::ResponsesUpstreamState;
 use super::observed::ObservedUpdate;
-use super::state::ResponseSnapshotKind;
+use super::state::{ResponseSnapshotKind, ResponsesUpstreamState};
 
-enum TrackerEvent {
+enum StateEvent {
     Snapshot {
         kind: ResponseSnapshotKind,
         projection: Box<ResponseProjection>,
@@ -21,7 +20,7 @@ enum TrackerEvent {
     Ignored,
 }
 
-impl From<&ResponseStreamEvent> for TrackerEvent {
+impl From<&ResponseStreamEvent> for StateEvent {
     fn from(event: &ResponseStreamEvent) -> Self {
         match event {
             ResponseStreamEvent::ResponseCreated(event) => Self::Snapshot {
@@ -126,20 +125,10 @@ impl From<&ResponseStreamEvent> for TrackerEvent {
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct ResponsesUpstreamTracker {
-    pub(crate) state: ResponsesUpstreamState,
-    sse_scanner: SseEventScanner,
-}
-
-impl ResponsesUpstreamTracker {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn scan_bytes(&mut self, chunk: &[u8]) {
-        for event in self.sse_scanner.scan(chunk) {
-            if let Some(error) = nested_error_event(&event) {
+impl ResponsesUpstreamState {
+    pub(crate) fn observe_events(&mut self, events: &[SseEvent]) {
+        for event in events {
+            if let Some(error) = nested_error_event(event) {
                 self.record_event(&ResponseStreamEvent::ResponseError(error));
             } else if let Ok(event) = serde_json::from_str::<OpenaiResponseStreamEvent>(&event.data)
             {
@@ -149,17 +138,17 @@ impl ResponsesUpstreamTracker {
     }
 
     fn record_event(&mut self, event: &ResponseStreamEvent) {
-        self.state.record_sequence_number(event.sequence_number());
+        self.record_sequence_number(event.sequence_number());
 
-        match TrackerEvent::from(event) {
-            TrackerEvent::Snapshot { kind, projection } => {
-                self.state.set_snapshot(kind, *projection);
+        match StateEvent::from(event) {
+            StateEvent::Snapshot { kind, projection } => {
+                self.set_snapshot(kind, *projection);
             }
-            TrackerEvent::Observed(update) => {
-                self.state.apply_observed_update(&update);
+            StateEvent::Observed(update) => {
+                self.apply_observed_update(&update);
             }
-            TrackerEvent::ObservedError(error) => self.state.record_observed_error(error),
-            TrackerEvent::Ignored => {}
+            StateEvent::ObservedError(error) => self.record_observed_error(error),
+            StateEvent::Ignored => {}
         }
     }
 }
@@ -174,7 +163,7 @@ fn nested_error_event(event: &SseEvent) -> Option<ResponseErrorEvent> {
     }
 
     // This mirrors the outbound SSE compat path. The upstream's hybrid generic
-    // error shape is not part of our strict Responses serde model, but the tracker
+    // error shape is not part of our strict Responses serde model, but the state
     // still needs to recognize it so diagnostics report the actual upstream error
     // instead of leaving the stream stuck at the last `response.created` snapshot.
     let error = payload.get("error")?.as_object()?;
@@ -196,5 +185,5 @@ fn nested_error_event(event: &SseEvent) -> Option<ResponseErrorEvent> {
 }
 
 #[cfg(test)]
-#[path = "tracker_tests.rs"]
+#[path = "state_events_tests.rs"]
 mod tests;

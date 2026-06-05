@@ -11,17 +11,19 @@ pub(crate) fn translate_streaming_stream(
     input: ByteStream,
 ) -> TranslationResult<ByteStream> {
     match (request_protocol, provider_protocol) {
-        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => {
-            super::openai_chat_completions::to_openai_responses::translate_streaming_stream(input)
-        }
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => Ok(
+            super::openai_chat_completions::to_openai_responses::translate_streaming_stream(input),
+        ),
         (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_responses::translate_streaming_stream(input)
+            Ok(super::anthropic_messages::to_openai_responses::translate_streaming_stream(input))
         }
-        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => {
-            super::anthropic_messages::to_openai_chat_completions::translate_streaming_stream(input)
-        }
+        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => Ok(
+            super::anthropic_messages::to_openai_chat_completions::translate_streaming_stream(
+                input,
+            ),
+        ),
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
-            super::openai_responses::to_anthropic_messages::translate_streaming_stream(input)
+            Ok(super::openai_responses::to_anthropic_messages::translate_streaming_stream(input))
         }
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
         | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)

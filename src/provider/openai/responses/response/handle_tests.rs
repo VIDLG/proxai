@@ -24,7 +24,7 @@ fn test_observer() -> OpenaiResponsesUpstreamBodyObserver {
 fn sse_eof_without_terminal_event_is_incomplete_even_without_pending_tools() {
     let mut observer = test_observer();
 
-    observer.observe_chunk(
+    observer.on_chunk(
         br#"data: {"type":"response.output_text.delta","sequence_number":1,"delta":"ok"}
 
 "#,
@@ -38,7 +38,7 @@ fn sse_eof_without_terminal_event_is_incomplete_even_without_pending_tools() {
 fn sse_eof_after_terminal_event_is_complete() {
     let mut observer = test_observer();
 
-    observer.observe_chunk(
+    observer.on_chunk(
         br#"data: {"type":"response.completed","sequence_number":2}
 
 "#,
@@ -130,7 +130,7 @@ struct ZedResponseError {
 fn tool_argument_delta_without_item_id_marks_stream_error() {
     let mut observer = test_observer();
 
-    observer.observe_chunk(
+    observer.on_chunk(
         br#"data: {"type":"response.function_call_arguments.delta","sequence_number":1,"delta":"{}"}
 
 "#,

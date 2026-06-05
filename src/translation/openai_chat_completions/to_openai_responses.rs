@@ -1,12 +1,16 @@
 //! `openai_chat_completions -> openai_responses` response translation.
 
 use axum::body::Bytes;
-use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
+};
+use crate::protocol::openai_responses::{
+    AssistantRole, CustomToolCall, FunctionToolCall, InputTokenDetails, OutputItem, OutputMessage,
+    OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails, RefusalContent,
+    Response, ResponseUsage, Status,
 };
 use crate::sse::SseEvent;
 use crate::translation::TranslationResult;
@@ -16,11 +20,8 @@ use crate::translation::sse::{
     SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
 };
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
-    Ok(translate_sse_stream(
-        input,
-        ChatToResponsesStreamTranslator::default(),
-    ))
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+    translate_sse_stream(input, ChatToResponsesStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
@@ -31,37 +32,7 @@ pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResu
     Ok(serde_json::to_value(translated)?)
 }
 
-#[derive(Debug, Serialize)]
-struct ResponsesResponse {
-    id: String,
-    object: &'static str,
-    created_at: u64,
-    model: String,
-    output: Vec<Value>,
-    status: &'static str,
-    usage: ResponsesUsage,
-}
-
-#[derive(Debug, Serialize)]
-struct ResponsesUsage {
-    input_tokens: u32,
-    input_tokens_details: ResponsesInputTokenDetails,
-    output_tokens: u32,
-    output_tokens_details: ResponsesOutputTokenDetails,
-    total_tokens: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct ResponsesInputTokenDetails {
-    cached_tokens: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct ResponsesOutputTokenDetails {
-    reasoning_tokens: u32,
-}
-
-fn translate_chat_response(chat: &CreateChatCompletionResponse) -> ResponsesResponse {
+fn translate_chat_response(chat: &CreateChatCompletionResponse) -> Response {
     let mut output = Vec::new();
     for choice in &chat.choices {
         let message = &choice.message;
@@ -81,35 +52,34 @@ fn translate_chat_response(chat: &CreateChatCompletionResponse) -> ResponsesResp
         {
             let mut content = Vec::new();
             if let Some(text) = message.content.as_ref().filter(|value| !value.is_empty()) {
-                content.push(json!({
-                    "type": "output_text",
-                    "text": text,
-                    "annotations": []
+                content.push(OutputMessageContent::OutputText(OutputTextContent {
+                    text: text.clone(),
+                    annotations: Vec::new(),
+                    logprobs: None,
                 }));
             }
             if let Some(refusal) = message.refusal.as_ref().filter(|value| !value.is_empty()) {
-                content.push(json!({
-                    "type": "refusal",
-                    "refusal": refusal
+                content.push(OutputMessageContent::Refusal(RefusalContent {
+                    refusal: refusal.clone(),
                 }));
             }
-            output.push(json!({
-                "type": "message",
-                "id": format!("msg_{}_{}", chat.id, choice.index),
-                "role": "assistant",
-                "status": "completed",
-                "content": content
+            output.push(OutputItem::Message(OutputMessage {
+                id: format!("msg_{}_{}", chat.id, choice.index),
+                role: AssistantRole::Assistant,
+                status: OutputStatus::Completed,
+                content,
+                phase: None,
             }));
         }
     }
 
     if output.is_empty() {
-        output.push(json!({
-            "type": "message",
-            "id": format!("msg_{}", chat.id),
-            "role": "assistant",
-            "status": "completed",
-            "content": []
+        output.push(OutputItem::Message(OutputMessage {
+            id: format!("msg_{}", chat.id),
+            role: AssistantRole::Assistant,
+            status: OutputStatus::Completed,
+            content: Vec::new(),
+            phase: None,
         }));
     }
 
@@ -122,59 +92,86 @@ fn translate_chat_response(chat: &CreateChatCompletionResponse) -> ResponsesResp
         .map(|usage| usage.total_tokens)
         .unwrap_or_else(|| input_tokens.saturating_add(output_tokens));
 
-    ResponsesResponse {
-        id: response_id(&chat.id),
-        object: "response",
+    Response {
+        background: None,
+        billing: None,
+        conversation: None,
         created_at: chat.created as u64,
+        completed_at: None,
+        error: None,
+        id: response_id(&chat.id),
+        incomplete_details: None,
+        instructions: None,
+        max_output_tokens: None,
+        metadata: None,
         model: chat.model.clone(),
+        object: "response".to_string(),
         output,
+        parallel_tool_calls: None,
+        previous_response_id: None,
+        prompt: None,
+        prompt_cache_key: None,
+        prompt_cache_retention: None,
+        reasoning: None,
+        safety_identifier: None,
+        service_tier: None,
         status: response_status(chat),
-        usage: ResponsesUsage {
+        temperature: None,
+        text: None,
+        tool_choice: None,
+        tools: None,
+        top_logprobs: None,
+        top_p: None,
+        truncation: None,
+        usage: Some(ResponseUsage {
             input_tokens,
-            input_tokens_details: ResponsesInputTokenDetails { cached_tokens: 0 },
+            input_tokens_details: InputTokenDetails { cached_tokens: 0 },
             output_tokens,
-            output_tokens_details: ResponsesOutputTokenDetails {
+            output_tokens_details: OutputTokenDetails {
                 reasoning_tokens: usage
                     .and_then(|usage| usage.completion_tokens_details)
                     .and_then(|details| details.reasoning_tokens)
                     .unwrap_or_default(),
             },
             total_tokens,
-        },
+        }),
     }
 }
 
-fn translate_tool_call(tool_call: &ChatCompletionMessageToolCalls) -> Value {
+fn translate_tool_call(tool_call: &ChatCompletionMessageToolCalls) -> OutputItem {
     match tool_call {
-        ChatCompletionMessageToolCalls::Function(call) => json!({
-            "type": "function_call",
-            "id": call.id,
-            "call_id": call.id,
-            "name": call.function.name,
-            "arguments": call.function.arguments,
-            "status": "completed"
-        }),
-        ChatCompletionMessageToolCalls::Custom(call) => json!({
-            "type": "custom_tool_call",
-            "id": call.id,
-            "call_id": call.id,
-            "name": call.custom_tool.name,
-            "input": call.custom_tool.input,
-            "status": "completed"
-        }),
+        ChatCompletionMessageToolCalls::Function(call) => {
+            OutputItem::FunctionCall(FunctionToolCall {
+                id: Some(call.id.clone()),
+                call_id: call.id.clone(),
+                name: call.function.name.clone(),
+                arguments: call.function.arguments.clone(),
+                status: Some(OutputStatus::Completed),
+                namespace: None,
+            })
+        }
+        ChatCompletionMessageToolCalls::Custom(call) => {
+            OutputItem::CustomToolCall(CustomToolCall {
+                id: Some(call.id.clone()),
+                call_id: call.id.clone(),
+                name: call.custom_tool.name.clone(),
+                input: call.custom_tool.input.clone(),
+                namespace: None,
+            })
+        }
     }
 }
 
-fn response_status(chat: &CreateChatCompletionResponse) -> &'static str {
+fn response_status(chat: &CreateChatCompletionResponse) -> Status {
     if chat.choices.iter().any(|choice| {
         matches!(
             choice.finish_reason,
             Some(FinishReason::Length | FinishReason::ContentFilter)
         )
     }) {
-        "incomplete"
+        Status::Incomplete
     } else {
-        "completed"
+        Status::Completed
     }
 }
 

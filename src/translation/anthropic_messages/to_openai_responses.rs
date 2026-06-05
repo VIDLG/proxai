@@ -8,8 +8,11 @@ use std::collections::BTreeMap;
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, Message, MessageStreamEvent, StopReason,
 };
-use crate::protocol::openai_responses::ResponseCreateParams;
-use crate::provider::anthropic_messages;
+use crate::protocol::openai_responses::{
+    AssistantRole, FunctionToolCall, InputTokenDetails, OutputItem, OutputMessage,
+    OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails, ReasoningItem,
+    Response, ResponseCreateParams, ResponseUsage, Status, SummaryPart, SummaryTextContent,
+};
 use crate::sse::SseEvent;
 use crate::translation::TranslationResult;
 
@@ -64,30 +67,14 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
-    Ok(translate_sse_stream(
-        input,
-        AnthropicToOpenaiStreamTranslator::default(),
-    ))
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+    translate_sse_stream(input, AnthropicToOpenaiStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
-    let message = serde_json::from_value::<Message>(
-        anthropic_messages::normalize::normalize_message_payload(payload),
-    )?;
+    let message = serde_json::from_value::<Message>(payload)?;
     let translated = translate_message(&message)?;
     Ok(serde_json::to_value(translated)?)
-}
-
-#[derive(Debug, Serialize)]
-struct OpenaiResponsesResponse {
-    id: String,
-    object: OpenaiResponseObject,
-    created_at: u64,
-    model: String,
-    output: Vec<OpenaiOutputItem>,
-    status: OpenaiResponseStatus,
-    usage: OpenaiUsage,
 }
 
 #[derive(Debug, Default)]
@@ -123,9 +110,7 @@ enum AnthropicStreamBlock {
 
 impl SseEventTranslator for AnthropicToOpenaiStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        let payload = anthropic_messages::normalize::normalize_stream_event_payload(
-            event.payload_with_type()?,
-        );
+        let payload = event.payload_with_type()?;
         if !is_anthropic_stream_event(&payload) {
             return Ok(Vec::new());
         }
@@ -555,187 +540,128 @@ impl AnthropicToOpenaiStreamTranslator {
     }
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum OpenaiResponseObject {
-    Response,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum OpenaiResponseStatus {
-    Completed,
-    InProgress,
-    Incomplete,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenaiUsage {
-    input_tokens: u32,
-    input_tokens_details: OpenaiInputTokenDetails,
-    output_tokens: u32,
-    output_tokens_details: OpenaiOutputTokenDetails,
-    total_tokens: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenaiInputTokenDetails {
-    cached_tokens: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenaiOutputTokenDetails {
-    reasoning_tokens: u32,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum OpenaiOutputItem {
-    #[serde(rename = "message")]
-    Message {
-        id: String,
-        role: OpenaiAssistantRole,
-        status: OpenaiOutputStatus,
-        content: Vec<OpenaiMessageContent>,
-    },
-    #[serde(rename = "reasoning")]
-    Reasoning {
-        id: String,
-        summary: Vec<OpenaiReasoningSummaryPart>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        encrypted_content: Option<String>,
-        status: OpenaiOutputStatus,
-    },
-    #[serde(rename = "function_call")]
-    FunctionCall {
-        id: String,
-        call_id: String,
-        name: String,
-        arguments: String,
-        status: OpenaiOutputStatus,
-    },
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-enum OpenaiAssistantRole {
-    Assistant,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum OpenaiOutputStatus {
-    Completed,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum OpenaiMessageContent {
-    #[serde(rename = "output_text")]
-    OutputText {
-        text: String,
-        annotations: Vec<OpenaiAnnotation>,
-    },
-}
-
-#[derive(Debug, Serialize)]
-struct OpenaiAnnotation;
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum OpenaiReasoningSummaryPart {
-    #[serde(rename = "summary_text")]
-    SummaryText { text: String },
-}
-
-fn translate_message(message: &Message) -> TranslationResult<OpenaiResponsesResponse> {
-    Ok(OpenaiResponsesResponse {
-        id: response_id(&message.id),
-        object: OpenaiResponseObject::Response,
+fn translate_message(message: &Message) -> TranslationResult<Response> {
+    Ok(Response {
+        background: None,
+        billing: None,
+        conversation: None,
         created_at: 0,
+        completed_at: None,
+        error: None,
+        id: response_id(&message.id),
+        incomplete_details: None,
+        instructions: None,
+        max_output_tokens: None,
+        metadata: None,
         model: message.model.clone(),
+        object: "response".to_string(),
         output: translate_output(message)?,
+        parallel_tool_calls: None,
+        previous_response_id: None,
+        prompt: None,
+        prompt_cache_key: None,
+        prompt_cache_retention: None,
+        reasoning: None,
+        safety_identifier: None,
+        service_tier: None,
         status: response_status(message.stop_reason),
-        usage: OpenaiUsage {
+        temperature: None,
+        text: None,
+        tool_choice: None,
+        tools: None,
+        top_logprobs: None,
+        top_p: None,
+        truncation: None,
+        usage: Some(ResponseUsage {
             input_tokens: message.usage.input_tokens,
-            input_tokens_details: OpenaiInputTokenDetails {
+            input_tokens_details: InputTokenDetails {
                 cached_tokens: message.usage.cache_read_input_tokens.unwrap_or_default(),
             },
             output_tokens: message.usage.output_tokens,
-            output_tokens_details: OpenaiOutputTokenDetails {
+            output_tokens_details: OutputTokenDetails {
                 reasoning_tokens: 0,
             },
             total_tokens: message
                 .usage
                 .input_tokens
                 .saturating_add(message.usage.output_tokens),
-        },
+        }),
     })
 }
 
-fn translate_output(message: &Message) -> TranslationResult<Vec<OpenaiOutputItem>> {
+fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
     let mut output = Vec::new();
     let mut text_content = Vec::new();
 
     for block in &message.content {
         match block {
             ContentBlock::Text(block) => {
-                text_content.push(OpenaiMessageContent::OutputText {
+                text_content.push(OutputMessageContent::OutputText(OutputTextContent {
                     text: block.text.clone(),
                     annotations: Vec::new(),
-                });
+                    logprobs: None,
+                }));
             }
-            ContentBlock::Thinking(block) => output.push(OpenaiOutputItem::Reasoning {
-                id: format!("rs_{}", message.id),
-                summary: vec![OpenaiReasoningSummaryPart::SummaryText {
+            ContentBlock::Thinking(block) => output.push(OutputItem::Reasoning(ReasoningItem {
+                id: Some(format!("rs_{}", message.id)),
+                summary: vec![SummaryPart::SummaryText(SummaryTextContent {
                     text: block.thinking.clone(),
-                }],
+                })],
                 encrypted_content: None,
-                status: OpenaiOutputStatus::Completed,
-            }),
-            ContentBlock::RedactedThinking(block) => output.push(OpenaiOutputItem::Reasoning {
-                id: format!("rs_{}", message.id),
-                summary: Vec::new(),
-                encrypted_content: Some(block.data.clone()),
-                status: OpenaiOutputStatus::Completed,
-            }),
-            ContentBlock::ToolUse(block) => output.push(OpenaiOutputItem::FunctionCall {
-                id: block.id.clone(),
-                call_id: block.id.clone(),
-                name: block.name.clone(),
-                arguments: serde_json::to_string(&block.input)?,
-                status: OpenaiOutputStatus::Completed,
-            }),
-            other => text_content.push(OpenaiMessageContent::OutputText {
+                content: None,
+                status: Some(OutputStatus::Completed),
+            })),
+            ContentBlock::RedactedThinking(block) => {
+                output.push(OutputItem::Reasoning(ReasoningItem {
+                    id: Some(format!("rs_{}", message.id)),
+                    summary: Vec::new(),
+                    encrypted_content: Some(block.data.clone()),
+                    content: None,
+                    status: Some(OutputStatus::Completed),
+                }))
+            }
+            ContentBlock::ToolUse(block) => {
+                output.push(OutputItem::FunctionCall(FunctionToolCall {
+                    id: Some(block.id.clone()),
+                    call_id: block.id.clone(),
+                    name: block.name.clone(),
+                    arguments: serde_json::to_string(&block.input)?,
+                    status: Some(OutputStatus::Completed),
+                    namespace: None,
+                }))
+            }
+            other => text_content.push(OutputMessageContent::OutputText(OutputTextContent {
                 text: format!(
                     "[Anthropic content block omitted during OpenAI Responses translation: {}]",
                     block_kind(other)
                 ),
                 annotations: Vec::new(),
-            }),
+                logprobs: None,
+            })),
         }
     }
 
     if !text_content.is_empty() {
         output.insert(
             0,
-            OpenaiOutputItem::Message {
+            OutputItem::Message(OutputMessage {
                 id: format!("msg_{}", message.id),
-                role: OpenaiAssistantRole::Assistant,
-                status: OpenaiOutputStatus::Completed,
+                role: AssistantRole::Assistant,
+                status: OutputStatus::Completed,
                 content: text_content,
-            },
+                phase: None,
+            }),
         );
     }
 
     Ok(output)
 }
 
-fn response_status(stop_reason: Option<StopReason>) -> OpenaiResponseStatus {
+fn response_status(stop_reason: Option<StopReason>) -> Status {
     match stop_reason {
-        Some(StopReason::MaxTokens) => OpenaiResponseStatus::Incomplete,
-        Some(StopReason::PauseTurn) | None => OpenaiResponseStatus::InProgress,
-        _ => OpenaiResponseStatus::Completed,
+        Some(StopReason::MaxTokens) => Status::Incomplete,
+        Some(StopReason::PauseTurn) | None => Status::InProgress,
+        _ => Status::Completed,
     }
 }
 

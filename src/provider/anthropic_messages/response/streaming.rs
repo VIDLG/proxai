@@ -8,13 +8,13 @@ use crate::observe::{
     ObserveContext, ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
 use crate::provider::ProviderStreamingResponsePolicy;
+use crate::sse::SseEventScanner;
 use crate::upstream::{
     BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
 };
 
 use super::normalize;
-use super::state::AnthropicUpstreamResponseSnapshot;
-use super::tracker::AnthropicResponseTracker;
+use super::state::{AnthropicResponseState, AnthropicUpstreamResponseSnapshot};
 
 pub(crate) fn handle_streaming_response(
     obs: &ObserveContext,
@@ -23,7 +23,7 @@ pub(crate) fn handle_streaming_response(
     response: reqwest::Response,
 ) -> Response<Body> {
     let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
-    let body_observer = AnthropicSseObserver::new(AnthropicResponseTracker::new(), (*obs).clone());
+    let body_observer = AnthropicSseObserver::new((*obs).clone());
     let (outbound_head, body_stream) = prepare_response_stream(
         obs,
         &head,
@@ -50,23 +50,18 @@ pub(crate) fn handle_streaming_response(
 
 /// Minimal SSE observer for Anthropic Messages streaming responses.
 pub(super) struct AnthropicSseObserver {
-    tracker: AnthropicResponseTracker,
-    saw_terminal: bool,
+    state: AnthropicResponseState,
     stream_error: Option<UpstreamStreamError>,
-    recent_tail: Vec<u8>,
+    sse_scanner: SseEventScanner,
     obs: crate::observe::ObserveContext,
 }
 
 impl AnthropicSseObserver {
-    pub(super) fn new(
-        tracker: AnthropicResponseTracker,
-        obs: crate::observe::ObserveContext,
-    ) -> Self {
+    pub(super) fn new(obs: crate::observe::ObserveContext) -> Self {
         Self {
-            tracker,
-            saw_terminal: false,
+            state: AnthropicResponseState::default(),
             stream_error: None,
-            recent_tail: Vec::new(),
+            sse_scanner: SseEventScanner::default(),
             obs,
         }
     }
@@ -76,33 +71,28 @@ impl AnthropicSseObserver {
         head: &UpstreamResponseHead,
         stats: UpstreamBodyStreamStats,
     ) -> AnthropicUpstreamResponseSnapshot {
-        AnthropicUpstreamResponseSnapshot::streaming(head, stats, self.tracker.state.clone())
+        AnthropicUpstreamResponseSnapshot::streaming(head, stats, self.state.clone())
     }
 }
 
 impl BodyObserver for AnthropicSseObserver {
-    fn observe_chunk(&mut self, chunk: &[u8]) -> BodyAction {
-        const MAX_TAIL: usize = 16 * 1024;
-        self.recent_tail.extend_from_slice(chunk);
-        if self.recent_tail.len() > MAX_TAIL {
-            self.recent_tail.drain(..self.recent_tail.len() - MAX_TAIL);
-        }
-        self.tracker.scan_bytes(chunk);
-        self.saw_terminal |= self.tracker.state.stream_done();
+    fn on_chunk(&mut self, chunk: &[u8]) -> BodyAction {
+        let events = self.sse_scanner.scan(chunk);
+        self.state.observe_events(&events);
         BodyAction::Continue
     }
 
-    fn observe_error(&mut self, error: &reqwest::Error) {
+    fn on_stream_error(&mut self, error: &reqwest::Error) {
         self.stream_error = Some(UpstreamStreamError::Stream {
             message: error.to_string(),
         });
     }
 
-    fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
+    fn on_stream_finished(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let snapshot = self.stream_snapshot(head, stats);
         let outcome = if let Some(ref error) = self.stream_error {
             ProviderStreamOutcome::Error(error)
-        } else if self.saw_terminal {
+        } else if self.state.stream_done() {
             ProviderStreamOutcome::Completed
         } else {
             ProviderStreamOutcome::Closed

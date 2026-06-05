@@ -5,29 +5,21 @@ use serde::Serialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::paths;
 use crate::provider::openai::responses::ResponsesUpstreamStreamSnapshot;
 use crate::request::RequestId;
 
-use openai_responses::OpenaiResponsesStreamDiagnostics;
-
 #[derive(Clone)]
 pub(super) struct DiagnosticsSink {
     request_id: RequestId,
-    openai_responses_stream: Arc<Mutex<OpenaiResponsesStreamDiagnostics>>,
 }
 
 impl DiagnosticsSink {
     pub(super) fn new(request_id: RequestId) -> Self {
-        Self {
-            request_id,
-            openai_responses_stream: Arc::new(Mutex::new(OpenaiResponsesStreamDiagnostics::new(
-                request_id,
-            ))),
-        }
+        Self { request_id }
     }
 
     pub(super) fn record_request_info_parse_failure(
@@ -44,21 +36,11 @@ impl DiagnosticsSink {
         )
     }
 
-    pub(super) fn observe_openai_responses_stream_chunk(&self, chunk: &[u8]) {
-        self.openai_responses_stream
-            .lock()
-            .expect("openai responses stream diagnostics lock poisoned")
-            .observe_chunk(chunk);
-    }
-
     pub(super) fn record_openai_responses_unfinished_tool_stream(
         &self,
         snapshot: &ResponsesUpstreamStreamSnapshot,
     ) -> Option<String> {
-        self.openai_responses_stream
-            .lock()
-            .expect("openai responses stream diagnostics lock poisoned")
-            .write_unfinished_tool_diagnostic(snapshot)
+        openai_responses::write_unfinished_tool_diagnostic(self.request_id, snapshot)
     }
 }
 

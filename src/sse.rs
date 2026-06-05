@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sse_core::{SseDecoder, SseEvent as DecodedSseEvent};
 
-use crate::http_support::{ByteStreamError, boxed_stream_error};
+use crate::http_support::ByteStreamError;
 
 pub(crate) type SseResult<T> = Result<T, SseError>;
 
@@ -208,7 +208,7 @@ where
         while let Some(segment) = segments.next().await {
             match segment? {
                 SseSegment::Frame(frame) => {
-                    if let Some(event) = Option::<SseEvent>::try_from(&frame).map_err(boxed_stream_error)? {
+                    if let Some(event) = Option::<SseEvent>::try_from(&frame).map_err(ByteStreamError::from)? {
                         yield event;
                     }
                 }

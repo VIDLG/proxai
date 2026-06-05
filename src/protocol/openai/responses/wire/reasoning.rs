@@ -46,6 +46,7 @@ pub struct SummaryTextContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::SummaryPart))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SummaryPart {
     SummaryText(SummaryTextContent),
 }

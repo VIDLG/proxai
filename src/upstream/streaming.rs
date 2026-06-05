@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use tokio::time::{Instant as TokioInstant, Sleep};
 
 use crate::http_support::{
-    ByteStream, ByteStreamError, OutboundResponseHead, UpstreamResponseHead, boxed_stream_error,
+    ByteStream, ByteStreamError, OutboundResponseHead, UpstreamResponseHead,
 };
 
 use crate::observe::{
@@ -27,15 +27,15 @@ pub(crate) enum BodyAction {
 }
 
 pub(crate) trait BodyObserver: Send + Unpin + 'static {
-    fn observe_chunk(&mut self, _chunk: &[u8]) -> BodyAction {
+    fn on_chunk(&mut self, _chunk: &[u8]) -> BodyAction {
         BodyAction::Continue
     }
-    fn observe_error(&mut self, error: &reqwest::Error);
-    fn poll_pending(&mut self, _cx: &mut Context<'_>) -> BodyAction {
+    fn on_stream_error(&mut self, error: &reqwest::Error);
+    fn poll_pending_action(&mut self, _cx: &mut Context<'_>) -> BodyAction {
         BodyAction::Continue
     }
 
-    fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats);
+    fn on_stream_finished(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats);
 }
 
 pub(crate) struct MonitoredUpstreamBodyStream<O>
@@ -84,12 +84,12 @@ where
         self.stats.record_chunk(chunk);
         self.obs
             .observe_upstream_stream_chunk(UpstreamStreamChunkReceived { chunk });
-        self.body_observer.observe_chunk(chunk)
+        self.body_observer.on_chunk(chunk)
     }
 
-    fn emit_outcome(&self) {
+    fn finish_stream_observation(&self) {
         self.body_observer
-            .emit_outcome(&self.upstream_head, self.stats);
+            .on_stream_finished(&self.upstream_head, self.stats);
     }
 
     fn reset_wait_progress(&mut self) {
@@ -148,34 +148,34 @@ where
                 BodyAction::Continue => Poll::Ready(Some(Ok(chunk))),
                 BodyAction::InjectAndClose(chunk) => {
                     this.finished = true;
-                    this.emit_outcome();
+                    this.finish_stream_observation();
                     Poll::Ready(Some(Ok(chunk)))
                 }
             },
             Poll::Ready(Some(Err(error))) => {
                 this.finished = true;
-                this.body_observer.observe_error(&error);
-                this.emit_outcome();
-                Poll::Ready(Some(Err(boxed_stream_error(error))))
+                this.body_observer.on_stream_error(&error);
+                this.finish_stream_observation();
+                Poll::Ready(Some(Err(error.into())))
             }
             Poll::Ready(None) => {
                 this.finished = true;
-                this.emit_outcome();
+                this.finish_stream_observation();
                 Poll::Ready(None)
             }
             Poll::Pending => {
                 let timed_out = this.poll_wait_progress(cx);
                 if timed_out {
                     this.finished = true;
-                    this.emit_outcome();
+                    this.finish_stream_observation();
                     return Poll::Ready(None);
                 }
-                match this.body_observer.poll_pending(cx) {
+                match this.body_observer.poll_pending_action(cx) {
                     BodyAction::Continue => Poll::Pending,
                     BodyAction::InjectAndClose(chunk) => {
                         this.finished = true;
                         this.record_chunk(&chunk);
-                        this.emit_outcome();
+                        this.finish_stream_observation();
                         Poll::Ready(Some(Ok(chunk)))
                     }
                 }
@@ -192,7 +192,7 @@ where
         if self.finished {
             return;
         }
-        self.emit_outcome();
+        self.finish_stream_observation();
     }
 }
 

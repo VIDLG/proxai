@@ -152,6 +152,7 @@ Streaming behavior is user-visible and easy to regress. Be careful with:
 - Unicode chunk scanning without slicing panics
 
 Keep the semantic timeout configurable via `[tool_calls].timeout_secs`.
+For provider streaming response internals, see `docs/streaming-response-handling-cn.md`: provider `streaming.rs` owns `BodyObserver` lifecycle and SSE scanning; protocol `state.rs` / `state_events.rs` owns event-to-state observation.
 
 ## Test Philosophy Details
 

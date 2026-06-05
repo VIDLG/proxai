@@ -13,6 +13,7 @@ use super::{FunctionShellCall, FunctionShellCallOutput, ImageGenToolCall, LocalS
 
 #[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
 #[convert(from(openai::OutputItem))]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputItem {
     Message(OutputMessage),
     FileSearchCall(FileSearchToolCall),

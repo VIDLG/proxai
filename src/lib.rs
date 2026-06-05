@@ -37,13 +37,11 @@ use error::{InternalError, RequestError, Result};
 use observe::ObserveContext;
 pub use observe::TOOL_NAME_ALIASES;
 use pipeline::{InboundHttpFlow, run_provider_flow};
-use protocol::ProviderProtocol;
 use provider::ProviderTransport;
 use routing::{EffectiveDefaultProviderNames, EffectiveRoute};
 
 #[derive(Clone, Getters, CopyGetters)]
 pub struct AppState {
-    provider_protocols: BTreeMap<String, ProviderProtocol>,
     default_provider_names: EffectiveDefaultProviderNames,
     providers: BTreeMap<String, ProviderTransport>,
     routes: Vec<EffectiveRoute>,
@@ -78,7 +76,6 @@ impl AppState {
         let effective_routes = EffectiveRoute::build(&provider_protocols, routes)?;
 
         Ok(Self {
-            provider_protocols,
             default_provider_names: effective_default_provider_names,
             providers: provider_transports,
             routes: effective_routes,
@@ -125,12 +122,6 @@ impl AppState {
 
     pub fn capture_controller(&self) -> CaptureController {
         self.capture.clone()
-    }
-
-    pub(crate) fn provider(&self, name: &str) -> Result<&ProviderTransport> {
-        self.providers
-            .get(name)
-            .ok_or_else(|| InternalError::InvalidProviderResolution(name.to_string()).into())
     }
 
     pub async fn serve(
@@ -198,16 +189,13 @@ async fn proxy_inner(
         state.error_response_format(),
     );
     let prepared_provider = inbound_http
-        .prepare_inbound()
-        .await?
+        .prepare_inbound()?
         .route_to_provider(
             &state.default_provider_names,
             &state.routes,
-            &state.provider_protocols,
+            &state.providers,
         )?
         .prepare_provider_request()?;
 
-    let transport = state.provider(prepared_provider.provider_name())?;
-
-    run_provider_flow(prepared_provider, transport).await
+    run_provider_flow(prepared_provider).await
 }

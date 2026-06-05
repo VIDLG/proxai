@@ -1,11 +1,18 @@
 use bytes::Bytes;
 use serde_json::json;
 
-use super::AnthropicResponseTracker;
+use super::AnthropicResponseState;
+use crate::sse::SseEventScanner;
+
+fn observe_sse_chunk(state: &mut AnthropicResponseState, chunk: &[u8]) {
+    let mut scanner = SseEventScanner::default();
+    let events = scanner.scan(chunk);
+    state.observe_events(&events);
+}
 
 #[test]
-fn tracker_extracts_stream_message_events() {
-    let mut tracker = AnthropicResponseTracker::new();
+fn state_extracts_stream_message_events() {
+    let mut state = AnthropicResponseState::default();
 
     let chunk = Bytes::from(format!(
         "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: {}\n\n",
@@ -57,24 +64,20 @@ fn tracker_extracts_stream_message_events() {
         json!({"type": "message_stop"})
     ));
 
-    tracker.scan_bytes(&chunk);
+    observe_sse_chunk(&mut state, &chunk);
 
-    let state = &tracker.state;
     assert_eq!(state.id().as_deref(), Some("msg_stream"));
     assert_eq!(state.model().as_deref(), Some("claude-test"));
-    assert!(tracker.state.stream_done());
+    assert!(state.stream_done());
     assert_eq!(state.output_tokens(), Some(2));
 
-    assert_eq!(tracker.state.summary.stop_reasons.get("end_turn"), Some(&1));
-    assert_eq!(
-        tracker.state.summary.server_tool_uses.get("web_search"),
-        Some(&1)
-    );
+    assert_eq!(state.summary.stop_reasons.get("end_turn"), Some(&1));
+    assert_eq!(state.summary.server_tool_uses.get("web_search"), Some(&1));
 }
 
 #[test]
-fn tracker_normalizes_provider_stream_event_before_observing() {
-    let mut tracker = AnthropicResponseTracker::new();
+fn state_normalizes_provider_stream_event_before_observing() {
+    let mut state = AnthropicResponseState::default();
 
     let chunk = Bytes::from(format!(
         "data: {}\n\ndata: {}\n\ndata: {}\n\n",
@@ -109,13 +112,9 @@ fn tracker_normalizes_provider_stream_event_before_observing() {
         })
     ));
 
-    tracker.scan_bytes(&chunk);
+    observe_sse_chunk(&mut state, &chunk);
 
-    let state = &tracker.state;
     assert_eq!(state.id().as_deref(), Some("msg_stream"));
-    assert_eq!(tracker.state.summary.tool_uses.get("lookup"), Some(&1));
-    assert_eq!(
-        tracker.state.summary.server_tool_uses.get("web_search"),
-        Some(&1)
-    );
+    assert_eq!(state.summary.tool_uses.get("lookup"), Some(&1));
+    assert_eq!(state.summary.server_tool_uses.get("web_search"), Some(&1));
 }

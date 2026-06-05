@@ -1,7 +1,6 @@
 use super::ObserveContext;
 use crate::observe::point::{
-    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamChunkObserved,
-    ProviderStreamOutcomeObserved,
+    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamOutcomeObserved,
 };
 
 impl ObserveContext {
@@ -20,10 +19,6 @@ impl ObserveContext {
         point: ProviderHttpRequestPrepared<'_>,
     ) {
         self.sinks.observe_provider_http_request_prepared(point);
-    }
-
-    pub(crate) fn observe_provider_stream_chunk(&self, point: ProviderStreamChunkObserved<'_>) {
-        self.sinks.observe_provider_stream_chunk(point);
     }
 
     pub(crate) fn observe_provider_stream_outcome(&self, point: ProviderStreamOutcomeObserved<'_>) {

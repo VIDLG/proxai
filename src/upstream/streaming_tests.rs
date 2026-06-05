@@ -44,22 +44,22 @@ impl Default for TestObserver {
 }
 
 impl BodyObserver for TestObserver {
-    fn observe_chunk(&mut self, _chunk: &[u8]) -> BodyAction {
+    fn on_chunk(&mut self, _chunk: &[u8]) -> BodyAction {
         self.state.lock().unwrap().chunks += 1;
         BodyAction::Continue
     }
 
-    fn observe_error(&mut self, _error: &reqwest::Error) {
+    fn on_stream_error(&mut self, _error: &reqwest::Error) {
         self.state.lock().unwrap().errored = true;
     }
 
-    fn poll_pending(&mut self, _cx: &mut Context<'_>) -> BodyAction {
+    fn poll_pending_action(&mut self, _cx: &mut Context<'_>) -> BodyAction {
         self.inject_on_pending
             .take()
             .map_or(BodyAction::Continue, BodyAction::InjectAndClose)
     }
 
-    fn emit_outcome(&self, _head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
+    fn on_stream_finished(&self, _head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
         let metrics = stats.metrics();
         let mut state = self.state.lock().unwrap();
         state.outcomes += 1;

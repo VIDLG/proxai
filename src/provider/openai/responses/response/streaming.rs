@@ -7,10 +7,9 @@ use std::time::Duration;
 use crate::error::ErrorResponseFields;
 use crate::http_support::{UpstreamResponseHead, response_with_headers};
 use crate::observe::{
-    ObserveContext, ProviderStreamChunkObserved, ProviderStreamOutcome,
-    ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
+    ObserveContext, ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
-use crate::protocol::ProviderProtocol;
+
 use crate::provider::ProviderStreamingResponsePolicy;
 use crate::sse::{SseEventScanner, encode_sse_json};
 use crate::upstream::{
@@ -19,7 +18,7 @@ use crate::upstream::{
 
 use super::sse::is_terminal_event;
 use super::tool_arguments::ToolArgumentStreamState;
-use super::{ResponsesUpstreamMetadata, ResponsesUpstreamStreamSnapshot, ResponsesUpstreamTracker};
+use super::{ResponsesUpstreamMetadata, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot};
 
 const TOOL_ARGUMENT_STALL_MESSAGE: &str = "upstream SSE stalled while streaming tool arguments";
 
@@ -45,7 +44,8 @@ pub(crate) fn handle_streaming_response(
 }
 
 struct OpenaiResponsesUpstreamBodyObserver {
-    upstream_response_tracker: ResponsesUpstreamTracker,
+    state: ResponsesUpstreamState,
+    recent_tail: Vec<u8>,
     saw_terminal_event: bool,
     stream_error: Option<UpstreamStreamError>,
     tool_arguments: ToolArgumentStreamState,
@@ -57,7 +57,8 @@ struct OpenaiResponsesUpstreamBodyObserver {
 impl OpenaiResponsesUpstreamBodyObserver {
     fn new(timeout: Option<Duration>, obs: crate::observe::ObserveContext) -> Self {
         Self {
-            upstream_response_tracker: ResponsesUpstreamTracker::new(),
+            state: ResponsesUpstreamState::default(),
+            recent_tail: Vec::new(),
             saw_terminal_event: false,
             stream_error: None,
             tool_arguments: ToolArgumentStreamState::default(),
@@ -84,21 +85,36 @@ impl OpenaiResponsesUpstreamBodyObserver {
         ResponsesUpstreamStreamSnapshot {
             head: head.clone(),
             metrics: stats.metrics(),
-            state: self.upstream_response_tracker.state.clone(),
+            state: self.state.clone(),
+            recent_tail: self.recent_tail.clone(),
             metadata: ResponsesUpstreamMetadata::from_head(head),
         }
+    }
+    fn emit_stream_outcome<'a>(
+        &self,
+        snapshot: &'a ResponsesUpstreamStreamSnapshot,
+        outcome: ProviderStreamOutcome<'a>,
+    ) {
+        self.obs
+            .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
+                snapshot: ProviderStreamSnapshot::OpenaiResponses(snapshot),
+                outcome,
+            });
     }
 }
 
 impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
-    fn observe_chunk(&mut self, chunk: &[u8]) -> BodyAction {
-        self.obs
-            .observe_provider_stream_chunk(ProviderStreamChunkObserved {
-                provider_protocol: ProviderProtocol::OpenaiResponses,
-                chunk,
-            });
-        self.upstream_response_tracker.scan_bytes(chunk);
-        for event in self.sse_scanner.scan(chunk) {
+    fn on_chunk(&mut self, chunk: &[u8]) -> BodyAction {
+        const MAX_STREAM_DIAGNOSTIC_TAIL_BYTES: usize = 16 * 1024;
+        self.recent_tail.extend_from_slice(chunk);
+        if self.recent_tail.len() > MAX_STREAM_DIAGNOSTIC_TAIL_BYTES {
+            let overflow = self.recent_tail.len() - MAX_STREAM_DIAGNOSTIC_TAIL_BYTES;
+            self.recent_tail.drain(..overflow);
+        }
+
+        let events = self.sse_scanner.scan(chunk);
+        self.state.observe_events(&events);
+        for event in events {
             if is_terminal_event(&event) {
                 self.mark_terminal_event();
                 return BodyAction::Continue;
@@ -108,7 +124,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
                     message: message.clone(),
                 });
                 return BodyAction::InjectAndClose(error_sse_chunk(
-                    self.upstream_response_tracker.state.sequence_number,
+                    self.state.sequence_number,
                     &message,
                 ));
             }
@@ -116,13 +132,13 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
         BodyAction::Continue
     }
 
-    fn observe_error(&mut self, error: &reqwest::Error) {
+    fn on_stream_error(&mut self, error: &reqwest::Error) {
         self.record_stream_error(UpstreamStreamError::Stream {
             message: error.to_string(),
         });
     }
 
-    fn poll_pending(&mut self, cx: &mut Context<'_>) -> BodyAction {
+    fn poll_pending_action(&mut self, cx: &mut Context<'_>) -> BodyAction {
         let Some(timeout_sleep) = self.tool_arguments.timeout_sleep_mut() else {
             return BodyAction::Continue;
         };
@@ -138,41 +154,25 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             ),
         });
         BodyAction::InjectAndClose(error_sse_chunk(
-            self.upstream_response_tracker.state.sequence_number,
+            self.state.sequence_number,
             TOOL_ARGUMENT_STALL_MESSAGE,
         ))
     }
 
-    fn emit_outcome(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
-        let snapshot = Box::new(self.stream_snapshot(head, stats));
+    fn on_stream_finished(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {
+        let snapshot = self.stream_snapshot(head, stats);
 
         if let Some(error) = self.stream_error.clone() {
-            self.obs
-                .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
-                    snapshot: ProviderStreamSnapshot::OpenaiResponses(&snapshot),
-                    outcome: ProviderStreamOutcome::Error(&error),
-                });
+            self.emit_stream_outcome(&snapshot, ProviderStreamOutcome::Error(&error));
         } else if self.saw_terminal_event {
-            self.obs
-                .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
-                    snapshot: ProviderStreamSnapshot::OpenaiResponses(&snapshot),
-                    outcome: ProviderStreamOutcome::Completed,
-                });
+            self.emit_stream_outcome(&snapshot, ProviderStreamOutcome::Completed);
         } else if self.tool_arguments.has_pending_items() {
             let error = UpstreamStreamError::UnfinishedTool {
                 sequence_number: snapshot.state.sequence_number,
             };
-            self.obs
-                .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
-                    snapshot: ProviderStreamSnapshot::OpenaiResponses(&snapshot),
-                    outcome: ProviderStreamOutcome::UnfinishedTool(&error),
-                });
+            self.emit_stream_outcome(&snapshot, ProviderStreamOutcome::UnfinishedTool(&error));
         } else {
-            self.obs
-                .observe_provider_stream_outcome(ProviderStreamOutcomeObserved {
-                    snapshot: ProviderStreamSnapshot::OpenaiResponses(&snapshot),
-                    outcome: ProviderStreamOutcome::Closed,
-                });
+            self.emit_stream_outcome(&snapshot, ProviderStreamOutcome::Closed);
         }
     }
 }

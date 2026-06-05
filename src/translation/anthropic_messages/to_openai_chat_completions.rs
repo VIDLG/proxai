@@ -1,14 +1,17 @@
 //! `anthropic_messages -> openai_chat_completions` response translation.
 
 use axum::body::Bytes;
-use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, Message, MessageStreamEvent, StopReason,
 };
-use crate::provider::anthropic_messages;
+use crate::protocol::openai::chat_completions::{
+    ChatChoice, ChatChoiceLogprobs, ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+    ChatCompletionResponseMessage, CompletionUsage, CreateChatCompletionResponse, FinishReason,
+    FunctionCall, Role,
+};
 use crate::sse::SseEvent;
 use crate::translation::TranslationResult;
 
@@ -17,128 +20,83 @@ use crate::translation::sse::{
     SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
 };
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> TranslationResult<ByteStream> {
-    Ok(translate_sse_stream(
-        input,
-        AnthropicToChatStreamTranslator::default(),
-    ))
+pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+    translate_sse_stream(input, AnthropicToChatStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
-    let message = serde_json::from_value::<Message>(
-        anthropic_messages::normalize::normalize_message_payload(payload),
-    )?;
+    let message = serde_json::from_value::<Message>(payload)?;
     let translated = translate_message(&message);
     Ok(serde_json::to_value(translated)?)
 }
 
-#[derive(Debug, Serialize)]
-struct ChatCompletionResponse {
-    id: String,
-    object: &'static str,
-    created: u64,
-    model: String,
-    choices: Vec<ChatChoice>,
-    usage: ChatUsage,
-}
-
-#[derive(Debug, Serialize)]
-struct ChatChoice {
-    index: u32,
-    message: ChatMessage,
-    finish_reason: Option<String>,
-    logprobs: Option<Value>,
-}
-
-#[derive(Debug, Serialize)]
-struct ChatMessage {
-    role: &'static str,
-    content: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tool_calls: Option<Vec<ChatToolCall>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ChatToolCall {
-    id: String,
-    #[serde(rename = "type")]
-    kind: &'static str,
-    function: ChatFunctionCall,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ChatFunctionCall {
-    name: String,
-    arguments: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ChatUsage {
-    prompt_tokens: u32,
-    completion_tokens: u32,
-    total_tokens: u32,
-}
-
-fn translate_message(message: &Message) -> ChatCompletionResponse {
+fn translate_message(message: &Message) -> CreateChatCompletionResponse {
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
 
     for block in &message.content {
         match block {
             ContentBlock::Text(block) => text_parts.push(block.text.clone()),
-            ContentBlock::ToolUse(block) => tool_calls.push(ChatToolCall {
-                id: block.id.clone(),
-                kind: "function",
-                function: ChatFunctionCall {
-                    name: block.name.clone(),
-                    arguments: serde_json::to_string(&block.input).unwrap_or_default(),
-                },
-            }),
+            ContentBlock::ToolUse(block) => tool_calls.push(
+                ChatCompletionMessageToolCalls::Function(ChatCompletionMessageToolCall {
+                    id: block.id.clone(),
+                    function: FunctionCall {
+                        name: block.name.clone(),
+                        arguments: serde_json::to_string(&block.input).unwrap_or_default(),
+                    },
+                }),
+            ),
             _ => {}
         }
     }
 
     let content = text_parts.join("");
-    ChatCompletionResponse {
+    CreateChatCompletionResponse {
         id: format!("chatcmpl_{}", message.id),
-        object: "chat.completion",
+        object: "chat.completion".to_string(),
         created: 0,
         model: message.model.clone(),
         choices: vec![ChatChoice {
             index: 0,
-            message: ChatMessage {
-                role: "assistant",
+            message: ChatCompletionResponseMessage {
+                role: Role::Assistant,
                 content: if content.is_empty() {
                     None
                 } else {
                     Some(content)
                 },
+                refusal: None,
                 tool_calls: if tool_calls.is_empty() {
                     None
                 } else {
                     Some(tool_calls)
                 },
+                annotations: None,
+                audio: None,
             },
             finish_reason: message.stop_reason.map(chat_finish_reason),
-            logprobs: None,
+            logprobs: None::<ChatChoiceLogprobs>,
         }],
-        usage: ChatUsage {
+        usage: Some(CompletionUsage {
             prompt_tokens: message.usage.input_tokens,
             completion_tokens: message.usage.output_tokens,
             total_tokens: message
                 .usage
                 .input_tokens
                 .saturating_add(message.usage.output_tokens),
-        },
+            prompt_tokens_details: None,
+            completion_tokens_details: None,
+        }),
+        service_tier: None,
     }
 }
 
-fn chat_finish_reason(stop_reason: StopReason) -> String {
+fn chat_finish_reason(stop_reason: StopReason) -> FinishReason {
     match stop_reason {
-        StopReason::EndTurn | StopReason::StopSequence => "stop".to_string(),
-        StopReason::MaxTokens => "length".to_string(),
+        StopReason::EndTurn | StopReason::StopSequence => FinishReason::Stop,
+        StopReason::MaxTokens => FinishReason::Length,
         StopReason::ToolUse | StopReason::PauseTurn | StopReason::Refusal => {
-            "tool_calls".to_string()
+            FinishReason::ToolCalls
         }
     }
 }
@@ -162,9 +120,7 @@ enum ChatStreamBlock {
 
 impl SseEventTranslator for AnthropicToChatStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        let payload = anthropic_messages::normalize::normalize_stream_event_payload(
-            event.payload_with_type()?,
-        );
+        let payload = event.payload_with_type()?;
         if !is_anthropic_stream_event(&payload) {
             return Ok(Vec::new());
         }
@@ -255,7 +211,7 @@ impl AnthropicToChatStreamTranslator {
     fn chat_chunk(
         &self,
         delta: Value,
-        finish_reason: Option<String>,
+        finish_reason: Option<FinishReason>,
     ) -> SseTranslationResult<Bytes> {
         let payload = json!({
             "id": if self.id.is_empty() { "chatcmpl_stream" } else { self.id.as_str() },
