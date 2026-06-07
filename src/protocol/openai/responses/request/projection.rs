@@ -38,7 +38,7 @@ struct ResponseProjectionPayload {
 
 /// Protocol-focused OpenAI Responses request projection.
 ///
-/// Field order follows `async_openai::types::responses::CreateResponse` for the
+/// Field order follows the OpenAI Responses request schema for the
 /// fields we intentionally retain.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RequestProjection {

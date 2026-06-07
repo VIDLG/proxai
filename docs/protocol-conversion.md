@@ -1,5 +1,7 @@
 # Protocol Conversion and Wire-Model Alignment
 
+中文版本：[`protocol-conversion_cn.md`](protocol-conversion_cn.md)
+
 ProxAI keeps protocol conversion explicit and pair-oriented. This document records the rules for maintaining wire models, translation code, and SDK-alignment checks.
 
 ## Boundaries
@@ -47,6 +49,134 @@ Set `request_protocol` only when the same model pattern needs different routing
 for different request endpoints. If a model pattern matches but the explicit
 `request_protocol` differs from the inbound request protocol, ProxAI reports a
 configuration error instead of silently falling through to a default provider.
+
+## Refusal and normal content semantics
+
+`refusal` means model-generated refusal content, not an additional annotation on ordinary assistant text. Keep it separate from normal text when translating between protocols.
+
+The three supported protocols represent this separation differently:
+
+| Protocol | Normal assistant text | Refusal | Can normal text and refusal coexist in one assistant message? |
+| --- | --- | --- | --- |
+| `openai_responses` | `output[].content[]` part with `type: "output_text"` | `output[].content[]` part with `type: "refusal"` | Structurally possible as different content parts, but semantically unusual; preserve order when the target can express parts. |
+| `openai_chat_completions` | `choices[].message.content` or stream `delta.content` | `choices[].message.refusal` or stream `delta.refusal` | Wire fields are both nullable/optional, but a refusal should not duplicate the same text in `content`. Assistant request content parts also document either one or more `text` parts, or exactly one `refusal` part. |
+| `anthropic_messages` | `content[]` `text` blocks | `stop_reason: "refusal"` plus optional `stop_details.explanation`; visible refusal wording may also arrive as `text` blocks | There is no separate refusal content block. A refused message can still contain visible text blocks, so translators must decide whether those text blocks are refusal text or ordinary content from context. |
+
+### OpenAI Responses
+
+Responses keeps message content as typed parts, so normal text and refusal are separate values in the same `content[]` array:
+
+```json
+{
+  "type": "message",
+  "role": "assistant",
+  "status": "completed",
+  "content": [
+    {
+      "type": "output_text",
+      "text": "I can help with safe alternatives.",
+      "annotations": []
+    },
+    {
+      "type": "refusal",
+      "refusal": "I can't provide instructions for that request."
+    }
+  ]
+}
+```
+
+If a target protocol can preserve typed content parts, keep the distinction. If the target is Chat Completions, avoid merging the refusal text into ordinary `message.content` unless there is no target-side refusal field available.
+
+### OpenAI Chat Completions
+
+Chat response messages expose ordinary content and refusal as sibling fields:
+
+```json
+{
+  "role": "assistant",
+  "content": null,
+  "refusal": "I can't provide instructions for that request."
+}
+```
+
+The JSON shape does not make `content` and `refusal` mutually exclusive at the top level, but their meanings are different. Do not emit the same refusal text in both fields:
+
+```json
+{
+  "role": "assistant",
+  "content": "I can't provide instructions for that request.",
+  "refusal": "I can't provide instructions for that request."
+}
+```
+
+Treat that duplicated shape as a compatibility artifact to avoid producing, not as desired output.
+
+Assistant request content parts make the separation more explicit: an array can contain one or more `text` parts, or exactly one `refusal` part. That reinforces the semantic rule that refusal is an alternative content kind, not a decoration on normal text.
+
+Streaming has the same split:
+
+```text
+data: {"choices":[{"index":0,"delta":{"refusal":"I can't help with that."},"finish_reason":null}]}
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: [DONE]
+```
+
+If ordinary `delta.content` has already been forwarded and a later upstream event reveals the turn was a refusal, the stream cannot be retracted. In that case, do not send duplicate refusal text; only use `delta.refusal` when the refusal can be represented before ordinary content has been emitted.
+
+### Anthropic Messages
+
+Anthropic does not have a dedicated refusal content block. A refusal is identified at message level:
+
+```json
+{
+  "id": "msg_01",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "I can't provide instructions for that request."
+    }
+  ],
+  "stop_reason": "refusal",
+  "stop_details": {
+    "category": "safety",
+    "explanation": "The request asks for unsafe instructions."
+  }
+}
+```
+
+For Anthropic -> Chat Completions non-streaming conversion:
+
+- when `stop_reason == "refusal"` and visible text blocks exist, put the flattened visible text in `message.refusal` and leave `message.content` absent/null;
+- when `stop_reason == "refusal"` and no visible text exists, use `stop_details.explanation` as the fallback `message.refusal`;
+- do not map `stop_details.category` because Chat Completions has no equivalent field;
+- map the choice `finish_reason` to `stop`, because a refusal is a terminal assistant turn, not a tool call.
+
+Example target Chat response:
+
+```json
+{
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "refusal": "I can't provide instructions for that request."
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+For Anthropic -> Chat Completions streaming conversion, `message_delta.stop_reason` and `stop_details` arrive after content block deltas. Therefore proxai uses a best-effort rule:
+
+- if no text delta has been emitted, convert `stop_details.explanation` to `delta.refusal`;
+- if text has already been emitted as `delta.content`, do not emit duplicate refusal text;
+- still map the final choice `finish_reason` to `stop`.
+
+This is less strict than buffering the entire stream, but it preserves low-latency streaming and avoids retracting already-forwarded content.
 
 ## SDK alignment
 

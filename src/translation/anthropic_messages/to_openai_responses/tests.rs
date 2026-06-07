@@ -2,6 +2,7 @@ use serde_json::json;
 
 use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::Message;
+use crate::protocol::openai::responses::{Response as OpenaiResponse, ResponseStreamEvent};
 use crate::sse::SseEventScanner;
 
 use axum::body::{Body, to_bytes};
@@ -20,8 +21,7 @@ fn assert_openai_response_stream_events_deserialize(body: &str) {
         let payload = event
             .payload_with_type()
             .expect("translated event payload should be JSON");
-        let _: async_openai::types::responses::ResponseStreamEvent =
-            serde_json::from_value(payload.clone()).unwrap_or_else(|error| {
+        let _: ResponseStreamEvent = serde_json::from_value(payload.clone()).unwrap_or_else(|error| {
                 panic!("translated event should deserialize as OpenAI Responses stream event: {error}; payload={payload}")
             });
     }
@@ -63,8 +63,8 @@ fn translates_anthropic_message_to_openai_responses_shape() {
 
     let translated = translate_message(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
-    let _: async_openai::types::responses::Response = serde_json::from_value(value.clone())
-        .expect("translated response should deserialize as async-openai Responses");
+    let _: OpenaiResponse = serde_json::from_value(value.clone())
+        .expect("translated response should deserialize as OpenAI Responses");
 
     assert_eq!(value["id"], "resp_msg_123");
     assert_eq!(value["object"], "response");
@@ -121,7 +121,7 @@ fn translates_anthropic_message_payload_to_openai_responses() {
     });
 
     let value = translate_non_streaming_payload(provider_payload).unwrap();
-    let _: async_openai::types::responses::Response = serde_json::from_value(value.clone())
+    let _: OpenaiResponse = serde_json::from_value(value.clone())
         .expect("translated compat response should deserialize as OpenAI Responses");
 
     assert_eq!(value["id"], "resp_msg_compat");

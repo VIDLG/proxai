@@ -4,6 +4,7 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 
 use super::{
     blocks::{DocumentBlockParam, ImageBlockParam, TextBlockParam},
@@ -83,6 +84,13 @@ pub struct ContainerUploadBlockParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidConversationSystemBlockParam {
+    pub content: Vec<TextBlockParam>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControlEphemeral>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingBlockParam {
     pub signature: String,
     pub thinking: String,
@@ -126,7 +134,8 @@ pub enum ContentBlock {
 
 /// 🎯 @use: request-side content block union.
 /// Used by: message
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum ContentBlockParam {
     #[serde(rename = "text")]
@@ -163,4 +172,6 @@ pub enum ContentBlockParam {
     ToolSearchToolResult(ToolSearchToolResultBlockParam),
     #[serde(rename = "container_upload")]
     ContainerUpload(ContainerUploadBlockParam),
+    #[serde(rename = "mid_conv_system")]
+    MidConversationSystem(MidConversationSystemBlockParam),
 }

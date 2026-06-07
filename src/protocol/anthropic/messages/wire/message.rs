@@ -14,12 +14,13 @@ use super::{
 };
 
 /// Message.role: `'assistant'`.
-/// MessageParam.role: `'user' | 'assistant'`.
+/// MessageParam.role: `'user' | 'assistant' | 'system'`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     User,
     Assistant,
+    System,
 }
 
 // ── Leaf types ───────────────────────────────────────────────────────────

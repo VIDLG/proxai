@@ -1,8 +1,6 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 use crate::protocol::ErrorObject;
@@ -12,29 +10,23 @@ use super::{
     ToolChoiceParam, Truncation, Verbosity,
 };
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::Instructions))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Instructions {
     Text(String),
     Array(Vec<InputItem>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert, Deserialize)]
-#[convert(from(openai::Billing))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Billing {
     pub payer: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::IncompleteDetails))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IncompleteDetails {
     pub reason: String,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
-)]
-#[convert(from(openai::Status))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Status {
@@ -47,20 +39,17 @@ pub enum Status {
     Incomplete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::InputTokenDetails))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputTokenDetails {
     pub cached_tokens: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::OutputTokenDetails))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputTokenDetails {
     pub reasoning_tokens: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ResponseUsage))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseUsage {
     pub input_tokens: u32,
     pub input_tokens_details: InputTokenDetails,
@@ -71,16 +60,14 @@ pub struct ResponseUsage {
 
 // ── Conversation ─────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, StructuralConvert, Deserialize)]
-#[convert(from(openai::Conversation))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Conversation {
     pub id: String,
 }
 
 // ── Response formatting ─────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ResponseFormatJsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ResponseFormatJsonSchema {
     pub description: Option<String>,
     pub name: String,
@@ -88,10 +75,7 @@ pub struct ResponseFormatJsonSchema {
     pub strict: Option<bool>,
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
-)]
-#[convert(from(openai::TextResponseFormatConfiguration))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TextResponseFormatConfiguration {
@@ -102,15 +86,13 @@ pub enum TextResponseFormatConfiguration {
     JsonSchema(ResponseFormatJsonSchema),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ResponseTextParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ResponseTextParam {
     pub format: TextResponseFormatConfiguration,
     pub verbosity: Option<Verbosity>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::Response))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Response {
     pub background: Option<bool>,
     pub billing: Option<Billing>,

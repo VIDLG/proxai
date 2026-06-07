@@ -1,14 +1,9 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::OutputStatus;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
-)]
-#[convert(from(openai::ReasoningEffort))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningEffort {
@@ -21,8 +16,7 @@ pub enum ReasoningEffort {
     Xhigh,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ReasoningSummary))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ReasoningSummary {
@@ -31,40 +25,34 @@ pub enum ReasoningSummary {
     Detailed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::Reasoning))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Reasoning {
     pub effort: Option<ReasoningEffort>,
     pub summary: Option<ReasoningSummary>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::SummaryTextContent))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SummaryTextContent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::SummaryPart))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SummaryPart {
     SummaryText(SummaryTextContent),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ReasoningTextContent))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningTextContent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ReasoningItemContent))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReasoningItemContent {
     ReasoningText(ReasoningTextContent),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ReasoningItem))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningItem {
     pub id: Option<String>,
     pub summary: Vec<SummaryPart>,

@@ -95,6 +95,7 @@ pub enum WebFetchToolResultErrorCode {
     UnsupportedContentType,
     UrlNotAccessible,
     UrlNotAllowed,
+    UrlNotInPriorContext,
     UrlTooLong,
 }
 

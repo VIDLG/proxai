@@ -15,6 +15,9 @@ pub(crate) enum SseTranslationError {
     #[error("SSE JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("SSE semantic conversion failed: {0}")]
+    Semantic(String),
+
     #[error(transparent)]
     Sse(#[from] SseError),
 }

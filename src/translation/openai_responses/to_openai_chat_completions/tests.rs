@@ -1,5 +1,6 @@
-use async_openai::types::chat::CreateChatCompletionRequest;
 use serde_json::json;
+
+use crate::protocol::openai::chat_completions::CreateChatCompletionRequest;
 
 use super::translate_request_payload;
 

@@ -1,26 +1,21 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use structural_convert::StructuralConvert;
 use strum::Display;
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::Filter))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Filter {
     Comparison(ComparisonFilter),
     Compound(CompoundFilter),
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ComparisonFilter))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComparisonFilter {
     pub r#type: ComparisonType,
     pub key: String,
     pub value: Value,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ComparisonType))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum ComparisonType {
     #[serde(rename = "eq")]
     #[strum(to_string = "eq")]
@@ -48,15 +43,13 @@ pub enum ComparisonType {
     NotIn,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CompoundFilter))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CompoundFilter {
     pub r#type: CompoundType,
     pub filters: Vec<Filter>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::CompoundType))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum CompoundType {

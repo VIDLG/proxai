@@ -1,10 +1,10 @@
-use async_openai::types::{Metadata, chat::CreateChatCompletionRequest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use serde_json::Value;
 
 use super::super::ServiceTier;
+use super::super::wire::CreateChatCompletionRequest;
 use super::{
     ChatCompletionAudio, ChatCompletionStreamOptions, ChatCompletionToolChoiceOption,
     ChatCompletionTools, PredictionContent, ReasoningEffort, ResponseFormat, ResponseModalities,
@@ -13,7 +13,7 @@ use super::{
 
 /// Protocol-focused OpenAI Chat Completions request projection.
 ///
-/// Field order follows `async_openai::types::chat::CreateChatCompletionRequest`
+/// Field order follows the OpenAI Chat Completions request schema
 /// for the fields we intentionally retain.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RequestProjection {
@@ -51,7 +51,7 @@ pub struct RequestProjection {
     pub safety_identifier: Option<String>,
     pub prompt_cache_key: Option<String>,
     // Deprecated upstream: `function_call`, `functions`.
-    pub metadata: Option<Metadata>,
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 impl RequestProjection {

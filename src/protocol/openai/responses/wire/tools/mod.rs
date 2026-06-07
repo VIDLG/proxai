@@ -1,6 +1,4 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 
 mod apply_patch;
 mod code_interpreter;
@@ -47,8 +45,7 @@ pub use self::web_search::*;
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses Tool variant names."
 )]
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::Tool))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Tool {
     Function(FunctionTool),

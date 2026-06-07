@@ -1,5 +1,7 @@
 //! `openai_chat_completions -> openai_responses` response translation.
 
+mod types;
+
 use axum::body::Bytes;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -12,7 +14,7 @@ use crate::protocol::openai_responses::{
     OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails, RefusalContent,
     Response, ResponseUsage, Status,
 };
-use crate::sse::SseEvent;
+use crate::sse::{DONE_SENTINEL_DATA, SseEvent, done_sentinel_bytes};
 use crate::translation::TranslationResult;
 
 use crate::http_support::ByteStream;
@@ -25,9 +27,7 @@ pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
-    let chat =
-        serde_json::from_value::<async_openai::types::chat::CreateChatCompletionResponse>(payload)
-            .map(CreateChatCompletionResponse::from)?;
+    let chat = serde_json::from_value::<CreateChatCompletionResponse>(payload)?;
     let translated = translate_chat_response(&chat);
     Ok(serde_json::to_value(translated)?)
 }
@@ -202,7 +202,7 @@ struct StreamToolItem {
 
 impl SseEventTranslator for ChatToResponsesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        if event.data.trim() == "[DONE]" {
+        if event.data.trim() == DONE_SENTINEL_DATA {
             return self.finish();
         }
         let payload = event.payload_with_type()?;
@@ -344,7 +344,7 @@ impl SseEventTranslator for ChatToResponsesStreamTranslator {
                 "response": self.response_snapshot("completed")
             }),
         )?);
-        chunks.push(Bytes::from_static(b"data: [DONE]\n\n"));
+        chunks.push(done_sentinel_bytes());
         Ok(chunks)
     }
 }
@@ -495,5 +495,4 @@ fn response_id(chat_id: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "to_openai_responses_tests.rs"]
 mod tests;

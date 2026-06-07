@@ -1,5 +1,7 @@
 //! `anthropic_messages -> openai_responses` response translation.
 
+mod types;
+
 use axum::body::Bytes;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -32,6 +34,7 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
             "role": match message.role {
                 crate::protocol::anthropic::messages::Role::Assistant => "assistant",
                 crate::protocol::anthropic::messages::Role::User => "user",
+                crate::protocol::anthropic::messages::Role::System => "system",
             },
             "content": match message.content {
                 crate::protocol::anthropic::messages::MessageParamContent::Text(text) => {
@@ -693,5 +696,4 @@ fn block_kind(block: &ContentBlock) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "to_openai_responses_tests.rs"]
 mod tests;

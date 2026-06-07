@@ -1,13 +1,10 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::{ToolChoiceCustom, ToolChoiceFunction, ToolChoiceMCP};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceAllowedMode))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ToolChoiceAllowedMode {
@@ -15,15 +12,13 @@ pub enum ToolChoiceAllowedMode {
     Required,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceAllowed))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceAllowed {
     pub mode: ToolChoiceAllowedMode,
     pub tools: Vec<Value>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceTypes))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ToolChoiceTypes {
@@ -39,8 +34,7 @@ pub enum ToolChoiceTypes {
     ImageGeneration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceOptions))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum ToolChoiceOptions {
@@ -49,8 +43,7 @@ pub enum ToolChoiceOptions {
     Required,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ToolChoiceParam {
     AllowedTools(ToolChoiceAllowed),

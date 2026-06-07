@@ -5,9 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use strum::Display;
+use strum::{AsRefStr, Display};
 
-use super::super::common::CacheControlEphemeral;
+use super::super::{
+    blocks::{DocumentBlockParam, ImageBlockParam, TextBlockParam},
+    common::CacheControlEphemeral,
+};
+use super::search::SearchResultBlockParam;
 
 // ── Caller identity types ──────────────────────────────────────────────────
 
@@ -113,7 +117,7 @@ pub struct ServerToolUseBlockParam {
 }
 
 /// 🎯 @use: tool-reference param — references a tool defined in an earlier
-/// Used by: content, search
+/// Used by: content, search, self
 /// turn's `tools` array.
 ///
 /// Constructed via `ContentBlockParam::ToolReference(ToolReferenceBlockParam { .. })`.
@@ -125,13 +129,36 @@ pub struct ToolReferenceBlockParam {
     pub cache_control: Option<CacheControlEphemeral>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ToolResultContentParam {
+    Text(String),
+    Blocks(Vec<ToolResultContentBlockParam>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
+#[serde(tag = "type")]
+pub enum ToolResultContentBlockParam {
+    #[serde(rename = "text")]
+    Text(TextBlockParam),
+    #[serde(rename = "image")]
+    Image(ImageBlockParam),
+    #[serde(rename = "search_result")]
+    SearchResult(SearchResultBlockParam),
+    #[serde(rename = "document")]
+    Document(DocumentBlockParam),
+    #[serde(rename = "tool_reference")]
+    ToolReference(ToolReferenceBlockParam),
+}
+
 /// Proxai accepts the `ToolResultBlockParam` content subset here.
 /// @sdk(proxai_internal = "projection")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolResultBlock {
     pub tool_use_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<serde_json::Value>,
+    pub content: Option<ToolResultContentParam>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
 }
@@ -143,7 +170,7 @@ pub struct ToolResultBlock {
 pub struct ToolResultBlockParam {
     pub tool_use_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<serde_json::Value>,
+    pub content: Option<ToolResultContentParam>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

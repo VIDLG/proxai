@@ -1,14 +1,11 @@
-use async_openai::types::chat as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 #[allow(
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ChatCompletionAudioVoice))]
+#[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioVoice {
@@ -22,7 +19,6 @@ pub enum ChatCompletionAudioVoice {
     Onyx,
     Sage,
     Shimmer,
-    #[convert(from(rename = "Other"))]
     Other(String),
 }
 
@@ -30,8 +26,7 @@ pub enum ChatCompletionAudioVoice {
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::ChatCompletionAudioFormat))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ChatCompletionAudioFormat {
@@ -47,8 +42,7 @@ pub enum ChatCompletionAudioFormat {
     dead_code,
     reason = "Retained for full request schema projection coverage."
 )]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ChatCompletionAudio))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionAudio {
     pub voice: ChatCompletionAudioVoice,
     pub format: ChatCompletionAudioFormat,

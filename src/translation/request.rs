@@ -29,8 +29,12 @@ pub(crate) fn translate_request(
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             super::anthropic_messages::to_openai_responses::translate_request_payload(payload)
         }
-        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses)
-        | (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiChatCompletions) => {
+        (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiChatCompletions) => {
+            super::anthropic_messages::to_openai_chat_completions::translate_request_payload(
+                payload,
+            )
+        }
+        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses) => {
             Err(TranslationError::UnsupportedRequestPair {
                 from: request_protocol,
                 to: provider_protocol,

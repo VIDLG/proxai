@@ -1,7 +1,5 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::super::{InputContent, OutputStatus};
@@ -10,8 +8,7 @@ use super::super::{InputContent, OutputStatus};
 // Tool Choice
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ToolChoiceFunction))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceFunction {
     pub name: String,
 }
@@ -20,8 +17,7 @@ pub struct ToolChoiceFunction {
 // Tool Definition
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionTool))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionTool {
     pub name: String,
     pub parameters: Option<Value>,
@@ -30,8 +26,7 @@ pub struct FunctionTool {
     pub defer_loading: Option<bool>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionToolParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionToolParam {
     pub name: String,
     pub description: Option<String>,
@@ -44,8 +39,7 @@ pub struct FunctionToolParam {
 // Shared Function Status
 // ============================================================
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::FunctionCallStatus))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum FunctionCallStatus {
@@ -54,8 +48,7 @@ pub enum FunctionCallStatus {
     Incomplete,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::FunctionCallOutputStatusEnum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum FunctionCallOutputStatusEnum {
@@ -68,8 +61,7 @@ pub enum FunctionCallOutputStatusEnum {
 // Shared Function Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionToolCall))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionToolCall {
     pub arguments: String,
     pub call_id: String,
@@ -79,8 +71,7 @@ pub struct FunctionToolCall {
     pub status: Option<OutputStatus>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionCallOutput))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FunctionCallOutput {
     Text(String),
@@ -91,8 +82,7 @@ pub enum FunctionCallOutput {
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionCallOutputItemParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionCallOutputItemParam {
     pub call_id: String,
     pub output: FunctionCallOutput,
@@ -105,8 +95,7 @@ pub struct FunctionCallOutputItemParam {
 // ============================================================
 
 #[allow(dead_code, reason = "Retained for future item-resource modeling.")]
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionToolCallResource))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionToolCallResource {
     pub arguments: String,
     pub call_id: String,
@@ -117,8 +106,7 @@ pub struct FunctionToolCallResource {
     pub created_by: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionToolCallOutputResource))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionToolCallOutputResource {
     pub call_id: String,
     pub output: FunctionCallOutput,

@@ -1,4 +1,3 @@
-use async_openai::types::responses::ResponseStreamEvent as OpenaiResponseStreamEvent;
 use serde_json::Value;
 
 use crate::protocol::ErrorObject;
@@ -130,8 +129,7 @@ impl ResponsesUpstreamState {
         for event in events {
             if let Some(error) = nested_error_event(event) {
                 self.record_event(&ResponseStreamEvent::ResponseError(error));
-            } else if let Ok(event) = serde_json::from_str::<OpenaiResponseStreamEvent>(&event.data)
-            {
+            } else if let Ok(event) = serde_json::from_str::<ResponseStreamEvent>(&event.data) {
                 self.record_event(&event.into());
             }
         }

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     citations::TextCitation,
-    common::{Container, RefusalStopDetails, ServerToolUsage, StopReason},
+    common::{Container, OutputTokensDetails, RefusalStopDetails, ServerToolUsage, StopReason},
     content::ContentBlock,
     message::Message,
 };
@@ -133,6 +133,8 @@ pub struct MessageDeltaUsage {
     /// @sdk(required_nullable_accepts_missing)
     pub input_tokens: Option<u32>,
     pub output_tokens: u32,
+    /// @sdk(required_nullable_accepts_missing)
+    pub output_tokens_details: Option<OutputTokensDetails>,
     /// @sdk(required_nullable_accepts_missing)
     pub server_tool_use: Option<ServerToolUsage>,
 }

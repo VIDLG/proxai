@@ -1,12 +1,7 @@
-use async_openai::types::chat as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 use strum::Display;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, StructuralConvert, Display, Serialize, Deserialize,
-)]
-#[convert(from(openai::WebSearchContextSize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchContextSize {
@@ -16,16 +11,14 @@ pub enum WebSearchContextSize {
     High,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Serialize, Deserialize)]
-#[convert(from(openai::WebSearchUserLocationType))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum WebSearchUserLocationType {
     Approximate,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::WebSearchLocation))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchLocation {
     pub country: Option<String>,
     pub region: Option<String>,
@@ -33,15 +26,13 @@ pub struct WebSearchLocation {
     pub timezone: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::WebSearchUserLocation))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchUserLocation {
     pub r#type: WebSearchUserLocationType,
     pub approximate: WebSearchLocation,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::WebSearchOptions))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchOptions {
     pub search_context_size: Option<WebSearchContextSize>,
     pub user_location: Option<WebSearchUserLocation>,

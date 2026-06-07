@@ -136,6 +136,11 @@ pub struct ServerToolUsage {
     pub web_search_requests: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OutputTokensDetails {
+    pub thinking_tokens: u32,
+}
+
 /// 🎯 @use: input/output token usage summary — cost tracking and billing info.
 /// Used by: message
 ///
@@ -156,6 +161,8 @@ pub struct Usage {
     pub inference_geo: Option<String>,
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// @sdk(required_nullable_accepts_missing)
+    pub output_tokens_details: Option<OutputTokensDetails>,
     /// @sdk(required_nullable_accepts_missing)
     pub server_tool_use: Option<ServerToolUsage>,
     /// @sdk(required_nullable_accepts_missing)

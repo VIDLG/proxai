@@ -105,6 +105,8 @@ pub struct ToolSearchToolResultErrorParam {
     pub error_code: ToolSearchToolResultErrorCode,
     #[serde(rename = "type")]
     pub type_: ToolSearchToolResultErrorType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

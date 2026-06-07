@@ -4,6 +4,8 @@
 //! contain future or provider-specific items. The generated Chat Completions
 //! payload is validated by the provider request preparation path.
 
+mod types;
+
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
@@ -376,5 +378,4 @@ fn chat_reasoning_effort(effort: ReasoningEffort) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "to_openai_chat_completions_tests.rs"]
 mod tests;

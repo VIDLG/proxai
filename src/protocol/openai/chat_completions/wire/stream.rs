@@ -1,25 +1,20 @@
-use async_openai::types::chat as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 
 use super::{ChatChoiceLogprobs, CompletionUsage, FinishReason, Role, ServiceTier};
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionCallStream))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionCallStream {
     pub name: Option<String>,
     pub arguments: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::FunctionType))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FunctionType {
     Function,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ChatCompletionMessageToolCallChunk))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionMessageToolCallChunk {
     pub index: u32,
     pub id: Option<String>,
@@ -27,8 +22,7 @@ pub struct ChatCompletionMessageToolCallChunk {
     pub function: Option<FunctionCallStream>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ChatCompletionStreamResponseDelta))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionStreamResponseDelta {
     pub content: Option<String>,
     // Deprecated function_call is intentionally not projected.
@@ -37,8 +31,7 @@ pub struct ChatCompletionStreamResponseDelta {
     pub refusal: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::ChatChoiceStream))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatChoiceStream {
     pub index: u32,
     pub delta: ChatCompletionStreamResponseDelta,
@@ -46,8 +39,7 @@ pub struct ChatChoiceStream {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CreateChatCompletionStreamResponse))]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateChatCompletionStreamResponse {
     pub id: String,
     pub choices: Vec<ChatChoiceStream>,

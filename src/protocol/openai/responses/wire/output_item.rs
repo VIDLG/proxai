@@ -1,6 +1,4 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 
 use super::{
     ApplyPatchToolCall, ApplyPatchToolCallOutput, CompactionBody, CustomToolCall,
@@ -11,8 +9,7 @@ use super::{
 use super::{CodeInterpreterToolCall, ComputerToolCall, ComputerToolCallOutputResource};
 use super::{FunctionShellCall, FunctionShellCallOutput, ImageGenToolCall, LocalShellToolCall};
 
-#[derive(Debug, Clone, PartialEq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::OutputItem))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputItem {
     Message(OutputMessage),

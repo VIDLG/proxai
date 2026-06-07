@@ -118,6 +118,18 @@ def serde_wire_diffs(sdk_text, only_marked=False):
     return diffs
 
 
+def _rust_type_is_json_value(type_text):
+    if not type_text:
+        return False
+    return re.search(r"(^|[<,\s:])(?:serde_json::)?Value\b", type_text) is not None
+
+
+def _sdk_type_is_complex_union(type_text):
+    normalized = _normalize_ts_type(type_text)
+    parts = _split_top_level_union(normalized)
+    return len(parts) > 1 and any(part.startswith("Array<") for part in parts)
+
+
 def serde_field_diffs(sdk_text, only_marked=False):
     """Check Rust field serde names and optional/null semantics against SDK shapes."""
     sdk_shapes = sdk_comment_shapes(sdk_text)
@@ -203,6 +215,21 @@ def serde_field_diffs(sdk_text, only_marked=False):
                         f"{item['file']}:{rust_field['line']}",
                         [
                             f"SDK field `{binding['sdk_name']}.{wire_name}` is nullable but required; Rust should not skip `None`"
+                        ],
+                    )
+                )
+            rust_type = rust_field.get("type")
+            if (
+                wire_name not in item_suppressed
+                and _sdk_type_is_complex_union(sdk_field["type"])
+                and _rust_type_is_json_value(rust_type)
+            ):
+                diffs.append(
+                    (
+                        binding["item"],
+                        f"{item['file']}:{rust_field['line']}",
+                        [
+                            f'SDK field `{binding["sdk_name"]}.{wire_name}` is a structured union `{sdk_field["type"]}` but Rust uses `{rust_type}`; model the union explicitly or add `@sdk(field_suppress = "{wire_name}")` if intentionally loose'
                         ],
                     )
                 )

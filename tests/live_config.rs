@@ -84,14 +84,12 @@ async fn live_home_config_starts_proxy_and_serves_responses_request() {
     );
     assert!(!body.trim().is_empty(), "live proxy response body is empty");
 
-    let upstream_response: async_openai::types::responses::Response = serde_json::from_str(&body)
-        .unwrap_or_else(|error| {
-            panic!(
-                "live Responses body must deserialize as async-openai Response: {error}\nbody: {}",
-                body.chars().take(1200).collect::<String>()
-            )
-        });
-    let response = Response::from(upstream_response);
+    let response: Response = serde_json::from_str(&body).unwrap_or_else(|error| {
+        panic!(
+            "live Responses body must deserialize as proxai Response: {error}\nbody: {}",
+            body.chars().take(1200).collect::<String>()
+        )
+    });
     let projection = ResponseProjection::from(&response);
     assert!(!projection.id.is_empty(), "Responses id must be non-empty");
     assert_eq!(
@@ -193,14 +191,12 @@ async fn live_openai_responses_to_anthropic_messages_translation_with_glm() {
     );
     assert!(!body.trim().is_empty(), "translated response body is empty");
 
-    let upstream_response: async_openai::types::responses::Response = serde_json::from_str(&body)
-        .unwrap_or_else(|error| {
-            panic!(
-                "translated live body must deserialize as OpenAI Responses: {error}\nbody: {}",
-                body.chars().take(1200).collect::<String>()
-            )
-        });
-    let response = Response::from(upstream_response);
+    let response: Response = serde_json::from_str(&body).unwrap_or_else(|error| {
+        panic!(
+            "translated live body must deserialize as OpenAI Responses: {error}\nbody: {}",
+            body.chars().take(1200).collect::<String>()
+        )
+    });
     let projection = ResponseProjection::from(&response);
     assert!(!projection.id.is_empty(), "Responses id must be non-empty");
     assert_eq!(projection.object, "response");
@@ -815,14 +811,13 @@ async fn live_openai_chat_completions_roundtrip_with_model(
         body.chars().take(1200).collect::<String>()
     );
 
-    let upstream_response: async_openai::types::chat::CreateChatCompletionResponse =
+    let response: CreateChatCompletionResponse =
         serde_json::from_str(&body).unwrap_or_else(|error| {
             panic!(
-                "live Chat Completions body must deserialize as async-openai response: {error}\nbody: {}",
+                "live Chat Completions body must deserialize as proxai Chat response: {error}\nbody: {}",
                 body.chars().take(1200).collect::<String>()
             )
         });
-    let response = CreateChatCompletionResponse::from(upstream_response);
     let projection = ChatResponseProjection::from(response);
     assert!(
         !projection.id.is_empty(),

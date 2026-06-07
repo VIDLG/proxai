@@ -3,6 +3,8 @@
 //! This is intentionally request-focused. Response translation is not handled here;
 //! the selected provider protocol owns upstream response handling.
 
+mod types;
+
 use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -767,6 +769,7 @@ fn anthropic_usage(usage: Option<&OpenaiResponseUsage>) -> Usage {
         inference_geo: None,
         input_tokens: usage.map(|usage| usage.input_tokens).unwrap_or_default(),
         output_tokens: usage.map(|usage| usage.output_tokens).unwrap_or_default(),
+        output_tokens_details: None,
         server_tool_use: None,
         service_tier: None,
     }
@@ -946,7 +949,7 @@ fn translate_custom_tool_call_output(object: &Map<String, Value>) -> Value {
 fn translate_tool_output(output: Option<&Value>) -> Value {
     match output {
         Some(Value::String(text)) => Value::String(text.clone()),
-        Some(value) => value.clone(),
+        Some(value) => Value::String(value.to_string()),
         None => Value::String(String::new()),
     }
 }
@@ -1128,5 +1131,4 @@ fn call_id(object: &Map<String, Value>) -> String {
 }
 
 #[cfg(test)]
-#[path = "to_anthropic_messages_tests.rs"]
 mod tests;

@@ -1,15 +1,10 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 use strum::Display;
 
 use super::super::{InputContent, OutputStatus};
 use super::MessagePhase;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
-)]
-#[convert(from(openai::InputRole))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Default, Serialize, Deserialize)]
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum InputRole {
@@ -19,10 +14,7 @@ pub enum InputRole {
     Developer,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
-)]
-#[convert(from(openai::MessageType))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Default, Serialize, Deserialize)]
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum MessageType {
@@ -30,10 +22,7 @@ pub enum MessageType {
     Message,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, StructuralConvert, Display, Default, Serialize, Deserialize,
-)]
-#[convert(from(openai::Role))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Default, Serialize, Deserialize)]
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -44,16 +33,14 @@ pub enum Role {
     Developer,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::EasyInputContent))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EasyInputContent {
     Text(String),
     ContentList(Vec<InputContent>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::EasyInputMessage))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EasyInputMessage {
     pub r#type: MessageType,
     pub role: Role,
@@ -61,8 +48,7 @@ pub struct EasyInputMessage {
     pub phase: Option<MessagePhase>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::InputMessage))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputMessage {
     pub content: Vec<InputContent>,
     pub role: InputRole,

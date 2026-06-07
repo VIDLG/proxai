@@ -1,13 +1,10 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 
 // ============================================================
 // Input / Context Item Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CompactionSummaryItemParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompactionSummaryItemParam {
     pub id: Option<String>,
     pub encrypted_content: String,
@@ -17,8 +14,7 @@ pub struct CompactionSummaryItemParam {
 // Output / Resource Shapes
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, StructuralConvert, Serialize, Deserialize)]
-#[convert(from(openai::CompactionBody))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompactionBody {
     pub id: String,
     pub encrypted_content: String,
@@ -29,8 +25,7 @@ pub struct CompactionBody {
 // Request Parameters
 // ============================================================
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, StructuralConvert)]
-#[convert(from(openai::ContextManagementParam))]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ContextManagementParam {
     #[serde(rename = "type")]
     pub type_: String,

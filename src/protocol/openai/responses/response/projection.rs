@@ -15,7 +15,7 @@ use super::super::wire::{
 
 /// Protocol-focused OpenAI Responses response projection.
 ///
-/// Field order follows `async_openai::types::responses::Response` for the
+/// Field order follows the OpenAI Responses response schema for the
 /// fields we intentionally retain.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ResponseProjection {

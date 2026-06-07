@@ -10,7 +10,7 @@ fn body(payload: &Value) -> Vec<u8> {
 }
 
 #[test]
-fn request_projection_uses_async_openai_parse_for_standard_chat_fields() {
+fn request_projection_parses_standard_chat_fields() {
     let payload = json!({
         "model": "gpt-4.1",
         "messages": [

@@ -22,6 +22,13 @@ pub(crate) enum SseError {
     MissingField(&'static str),
 }
 
+pub(crate) const DONE_SENTINEL_DATA: &str = "[DONE]";
+pub(crate) const DONE_SENTINEL_FRAME: &str = "data: [DONE]\n\n";
+
+pub(crate) fn done_sentinel_bytes() -> Bytes {
+    Bytes::from_static(DONE_SENTINEL_FRAME.as_bytes())
+}
+
 /// A complete raw SSE frame, including its terminating blank line.
 ///
 /// Use this for wire-level transforms that must preserve non-target frames as
@@ -103,7 +110,7 @@ impl SseEvent {
     }
 
     pub(crate) fn is_done_sentinel(&self) -> bool {
-        self.is_default_event_type() && self.data == "[DONE]"
+        self.is_default_event_type() && self.data == DONE_SENTINEL_DATA
     }
 
     pub(crate) fn matches_type_or_data(&self, event_type: &str) -> bool {

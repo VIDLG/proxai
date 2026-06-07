@@ -95,7 +95,7 @@ pub enum ImageBlockSource {
 // ── Cross-reference param types ──────────────────────────────────────────
 
 /// 🎯 @use: text content block param.
-/// Used by: content, search, self
+/// Used by: content, search, self, tool_use
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextBlockParam {
     pub text: String,
@@ -106,7 +106,7 @@ pub struct TextBlockParam {
 }
 
 /// 🎯 @use: image content block param.
-/// Used by: content, self
+/// Used by: content, self, tool_use
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageBlockParam {
     pub source: ImageBlockSource,
@@ -151,7 +151,7 @@ pub enum DocumentBlockParamSource {
 }
 
 /// 🎯 @use: document content block param.
-/// Used by: content, web
+/// Used by: content, tool_use, web
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentBlockParam {
     pub source: DocumentBlockParamSource,

@@ -1,10 +1,7 @@
-use async_openai::types::responses as openai;
 use serde::{Deserialize, Serialize};
-use structural_convert::StructuralConvert;
 use strum::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, StructuralConvert, Display)]
-#[convert(from(openai::IncludeEnum))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum IncludeEnum {
@@ -26,8 +23,7 @@ pub enum IncludeEnum {
     MessageOutputTextLogprobs,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, StructuralConvert)]
-#[convert(from(openai::IncludeParam))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IncludeParam {
     #[serde(rename = "web_search_call.action.sources")]
     WebSearchCallActionSources,
@@ -43,20 +39,4 @@ pub enum IncludeParam {
     MessageOutputTextLogprobs,
     #[serde(rename = "reasoning.encrypted_content")]
     ReasoningEncryptedContent,
-}
-
-impl From<IncludeParam> for IncludeEnum {
-    fn from(value: IncludeParam) -> Self {
-        match value {
-            IncludeParam::WebSearchCallActionSources => Self::WebSearchCallActionSources,
-            IncludeParam::CodeInterpreterCallOutputs => Self::CodeInterpreterCallOutputs,
-            IncludeParam::ComputerCallOutputOutputImageUrl => {
-                Self::ComputerCallOutputOutputImageUrl
-            }
-            IncludeParam::FileSearchCallResults => Self::FileSearchCallResults,
-            IncludeParam::MessageInputImageImageUrl => Self::MessageInputImageImageUrl,
-            IncludeParam::MessageOutputTextLogprobs => Self::MessageOutputTextLogprobs,
-            IncludeParam::ReasoningEncryptedContent => Self::ReasoningEncryptedContent,
-        }
-    }
 }

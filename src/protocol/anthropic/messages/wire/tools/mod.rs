@@ -19,6 +19,7 @@ pub use web::*;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use strum::AsRefStr;
 
 use super::citations::CitationsConfigParam;
 use super::common::CacheControlEphemeral;
@@ -177,39 +178,55 @@ pub struct WebToolDef {
 /// schema.
 ///
 /// @sdk(union_variant = "Tool", rust = "Custom")
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ToolUnion {
+    #[strum(serialize = "custom")]
     #[serde(rename = "custom")]
     Custom(Tool),
+    #[strum(serialize = "bash_20250124")]
     #[serde(rename = "bash_20250124")]
     ToolBash20250124(ServerToolDef),
+    #[strum(serialize = "code_execution_20250522")]
     #[serde(rename = "code_execution_20250522")]
     CodeExecutionTool20250522(ServerToolDef),
+    #[strum(serialize = "code_execution_20250825")]
     #[serde(rename = "code_execution_20250825")]
     CodeExecutionTool20250825(ServerToolDef),
+    #[strum(serialize = "code_execution_20260120")]
     #[serde(rename = "code_execution_20260120")]
     CodeExecutionTool20260120(ServerToolDef),
+    #[strum(serialize = "memory_20250818")]
     #[serde(rename = "memory_20250818")]
     MemoryTool20250818(ServerToolDef),
+    #[strum(serialize = "text_editor_20250124")]
     #[serde(rename = "text_editor_20250124")]
     ToolTextEditor20250124(ServerToolDef),
+    #[strum(serialize = "text_editor_20250429")]
     #[serde(rename = "text_editor_20250429")]
     ToolTextEditor20250429(ServerToolDef),
+    #[strum(serialize = "text_editor_20250728")]
     #[serde(rename = "text_editor_20250728")]
     ToolTextEditor20250728(ServerToolDef),
+    #[strum(serialize = "web_search_20250305")]
     #[serde(rename = "web_search_20250305")]
     WebSearchTool20250305(WebToolDef),
+    #[strum(serialize = "web_fetch_20250910")]
     #[serde(rename = "web_fetch_20250910")]
     WebFetchTool20250910(WebToolDef),
+    #[strum(serialize = "web_search_20260209")]
     #[serde(rename = "web_search_20260209")]
     WebSearchTool20260209(WebToolDef),
+    #[strum(serialize = "web_fetch_20260209")]
     #[serde(rename = "web_fetch_20260209")]
     WebFetchTool20260209(WebToolDef),
+    #[strum(serialize = "web_fetch_20260309")]
     #[serde(rename = "web_fetch_20260309")]
     WebFetchTool20260309(WebToolDef),
+    #[strum(serialize = "tool_search_tool_bm25_20251119")]
     #[serde(rename = "tool_search_tool_bm25_20251119")]
     ToolSearchToolBm25_20251119(ServerToolDef),
+    #[strum(serialize = "tool_search_tool_regex_20251119")]
     #[serde(rename = "tool_search_tool_regex_20251119")]
     ToolSearchToolRegex20251119(ServerToolDef),
 }

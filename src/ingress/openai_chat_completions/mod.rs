@@ -1,7 +1,7 @@
-use async_openai::types::chat::CreateChatCompletionRequest;
 use serde_json::Value;
 
 use crate::error::{RequestError, Result};
+use crate::protocol::openai::chat_completions::CreateChatCompletionRequest;
 
 #[derive(Debug)]
 pub(crate) struct PreparedOpenaiChatCompletionsRequest {
