@@ -172,19 +172,24 @@ impl AnthropicToChatStreamTranslator {
         choices: Vec<ChatChoiceStream>,
         usage: Option<CompletionUsage>,
     ) -> SseTranslationResult<Bytes> {
+        let id = self.id.as_deref().ok_or_else(|| {
+            SseTranslationError::Semantic(
+                "Anthropic stream chunk cannot be encoded before message_start initializes the Chat stream id"
+                    .to_string(),
+            )
+        })?;
+        let model = self.model.as_deref().ok_or_else(|| {
+            SseTranslationError::Semantic(
+                "Anthropic stream chunk cannot be encoded before message_start initializes the Chat stream model"
+                    .to_string(),
+            )
+        })?;
+
         let payload = CreateChatCompletionStreamResponse {
-            id: self
-                .id
-                .as_deref()
-                .expect("message_start initializes Chat stream id before chunk encoding")
-                .to_string(),
+            id: id.to_string(),
             choices,
             created: 0,
-            model: self
-                .model
-                .as_deref()
-                .expect("message_start initializes Chat stream model before chunk encoding")
-                .to_string(),
+            model: model.to_string(),
             service_tier: None,
             object: "chat.completion.chunk".to_string(),
             usage,

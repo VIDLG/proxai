@@ -77,8 +77,9 @@ fn user_block_messages(
     }
 
     if chat_messages.is_empty() {
-        chat_messages
-            .push(chat::ChatCompletionRequestUserMessageContent::Text(String::new()).into());
+        chat_messages.push(chat_user_message(
+            chat::ChatCompletionRequestUserMessageContent::Text(String::new()),
+        ));
     }
 
     Ok(chat_messages)
@@ -88,18 +89,19 @@ fn take_pending_user_message(
     pending_user_parts: &mut Vec<chat::ChatCompletionRequestUserMessageContentPart>,
 ) -> Option<chat::ChatCompletionRequestMessage> {
     (!pending_user_parts.is_empty()).then(|| {
-        chat::ChatCompletionRequestUserMessageContent::from(std::mem::take(pending_user_parts))
-            .into()
+        chat_user_message(chat::ChatCompletionRequestUserMessageContent::from(
+            std::mem::take(pending_user_parts),
+        ))
     })
 }
 
-impl From<chat::ChatCompletionRequestUserMessageContent> for chat::ChatCompletionRequestMessage {
-    fn from(content: chat::ChatCompletionRequestUserMessageContent) -> Self {
-        Self::User(chat::ChatCompletionRequestUserMessage {
-            content,
-            name: None,
-        })
-    }
+fn chat_user_message(
+    content: chat::ChatCompletionRequestUserMessageContent,
+) -> chat::ChatCompletionRequestMessage {
+    chat::ChatCompletionRequestMessage::User(chat::ChatCompletionRequestUserMessage {
+        content,
+        name: None,
+    })
 }
 
 impl From<Vec<chat::ChatCompletionRequestUserMessageContentPart>>

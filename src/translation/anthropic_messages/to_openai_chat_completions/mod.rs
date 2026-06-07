@@ -33,4 +33,8 @@ pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResu
 }
 
 #[cfg(test)]
-mod tests;
+mod request_tests;
+#[cfg(test)]
+mod response_tests;
+#[cfg(test)]
+mod streaming_tests;
