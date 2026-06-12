@@ -41,6 +41,13 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
             content
         };
 
+        if content.is_empty() && refusal.is_none() && tool_calls.is_empty() {
+            return Err(TranslationError::InvalidPayload(
+                "Anthropic message response has no Chat-representable content, refusal, or tool_use blocks"
+                    .to_string(),
+            ));
+        }
+
         Ok(Self {
             // Anthropic message ids are not Chat Completion ids; keep the
             // upstream id embedded while presenting an OpenAI-compatible shape.

@@ -1,7 +1,11 @@
-use crate::protocol::anthropic::messages::{MessageDeltaUsage, StopReason, ToolUseBlock, Usage};
+use crate::protocol::anthropic::messages::{
+    MessageDeltaUsage, StopReason, TextBlock, TextDelta, ThinkingBlock, ThinkingDelta,
+    ToolUseBlock, Usage,
+};
 use crate::protocol::openai::chat_completions::{
-    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls, CompletionUsage, FinishReason,
-    FunctionCall, PromptTokensDetails,
+    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+    ChatCompletionStreamResponseDelta, CompletionUsage, FinishReason, FunctionCall,
+    PromptTokensDetails,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -20,6 +24,42 @@ impl TryFrom<&ToolUseBlock> for ChatCompletionMessageToolCalls {
                 arguments: serde_json::to_string(&block.input)?,
             },
         }))
+    }
+}
+
+impl From<TextBlock> for ChatCompletionStreamResponseDelta {
+    fn from(block: TextBlock) -> Self {
+        Self {
+            content: Some(block.text),
+            ..Self::default()
+        }
+    }
+}
+
+impl From<TextDelta> for ChatCompletionStreamResponseDelta {
+    fn from(delta: TextDelta) -> Self {
+        Self {
+            content: Some(delta.text),
+            ..Self::default()
+        }
+    }
+}
+
+impl From<ThinkingBlock> for ChatCompletionStreamResponseDelta {
+    fn from(block: ThinkingBlock) -> Self {
+        Self {
+            reasoning_content: Some(block.thinking),
+            ..Self::default()
+        }
+    }
+}
+
+impl From<ThinkingDelta> for ChatCompletionStreamResponseDelta {
+    fn from(delta: ThinkingDelta) -> Self {
+        Self {
+            reasoning_content: Some(delta.thinking),
+            ..Self::default()
+        }
     }
 }
 

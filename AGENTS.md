@@ -128,4 +128,4 @@ Preferred checks:
 - `just test-e2e` when changing proxy behavior, SSE handling, capture behavior, or request normalization
 - `just probe-model-limits --models gpt-5.4,gpt-5.5,gpt-5.3-codex` when practical upstream Responses API limits must be measured
 
-On Windows, `pixi run cargo test` can fail if `target/debug/proxai.exe` is locked by a running proxy; stop it and retry.
+On Windows, prefer the `just` test recipes over direct `pixi run cargo test` when a local proxy may be running. `just test`, `just test_lib`, and `just test-e2e` set `CARGO_TARGET_DIR=.cargo-target-tests`, which avoids trying to overwrite a locked `target/debug/proxai.exe`. Direct `pixi run cargo test` can fail if `target/debug/proxai.exe` is locked by a running proxy; stop it or use the matching `just` recipe.

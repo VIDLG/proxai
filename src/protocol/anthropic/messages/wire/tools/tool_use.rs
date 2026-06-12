@@ -138,17 +138,12 @@ pub enum ToolResultContentParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolResultContentBlockParam {
-    #[serde(rename = "text")]
     Text(TextBlockParam),
-    #[serde(rename = "image")]
     Image(ImageBlockParam),
-    #[serde(rename = "search_result")]
     SearchResult(SearchResultBlockParam),
-    #[serde(rename = "document")]
     Document(DocumentBlockParam),
-    #[serde(rename = "tool_reference")]
     ToolReference(ToolReferenceBlockParam),
 }
 

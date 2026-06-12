@@ -16,6 +16,13 @@ impl TryFrom<anthropic::MessageCreateParamsBase> for chat::CreateChatCompletionR
     type Error = TranslationError;
 
     fn try_from(request: anthropic::MessageCreateParamsBase) -> TranslationResult<Self> {
+        if request.messages.is_empty() {
+            return Err(TranslationError::InvalidPayload(
+                "Anthropic Messages request must contain at least one user or assistant message to translate to Chat Completions"
+                    .to_string(),
+            ));
+        }
+
         let mut messages = Vec::new();
 
         if let Some(system) = request.system {

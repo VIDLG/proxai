@@ -82,17 +82,12 @@ pub struct CitationSearchResultLocationParam {
 /// 🎯 @use: request-side citation variant — exactly one location type is active.
 /// Used by: blocks, request
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum TextCitationParam {
-    #[serde(rename = "char_location")]
     CharLocation(CitationCharLocationParam),
-    #[serde(rename = "page_location")]
     PageLocation(CitationPageLocationParam),
-    #[serde(rename = "content_block_location")]
     ContentBlockLocation(CitationContentBlockLocationParam),
-    #[serde(rename = "web_search_result_location")]
     WebSearchResultLocation(CitationWebSearchResultLocationParam),
-    #[serde(rename = "search_result_location")]
     SearchResultLocation(CitationSearchResultLocationParam),
 }
 
@@ -159,16 +154,11 @@ pub struct CitationsSearchResultLocation {
 /// 🎯 @use: response-side citation variant — exactly one location type is active.
 /// Used by: content, stream
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum TextCitation {
-    #[serde(rename = "char_location")]
     CharLocation(CitationCharLocation),
-    #[serde(rename = "page_location")]
     PageLocation(CitationPageLocation),
-    #[serde(rename = "content_block_location")]
     ContentBlockLocation(CitationContentBlockLocation),
-    #[serde(rename = "web_search_result_location")]
     WebSearchResultLocation(CitationsWebSearchResultLocation),
-    #[serde(rename = "search_result_location")]
     SearchResultLocation(CitationsSearchResultLocation),
 }

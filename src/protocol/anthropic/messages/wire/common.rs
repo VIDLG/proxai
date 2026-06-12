@@ -149,7 +149,7 @@ pub struct OutputTokensDetails {
 ///
 /// Use for cost tracking, billing, and debugging prompt size.
 ///
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
     /// @sdk(required_nullable_accepts_missing)
     pub cache_creation: Option<CacheCreation>,

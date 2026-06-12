@@ -25,6 +25,11 @@ pub(crate) fn translate_streaming_stream(
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             Ok(super::openai_responses::to_anthropic_messages::translate_streaming_stream(input))
         }
+        (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiChatCompletions) => Ok(
+            super::openai_chat_completions::to_anthropic_messages::translate_streaming_stream(
+                input,
+            ),
+        ),
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
         | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
         | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(input),
@@ -59,6 +64,11 @@ pub(crate) fn translate_non_streaming_payload(
         }
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             super::openai_responses::to_anthropic_messages::translate_non_streaming_payload(payload)
+        }
+        (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiChatCompletions) => {
+            super::openai_chat_completions::to_anthropic_messages::translate_non_streaming_payload(
+                payload,
+            )
         }
         (request_protocol, provider_protocol) => Err(TranslationError::UnsupportedResponsePair {
             from: provider_protocol,

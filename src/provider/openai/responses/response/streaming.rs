@@ -203,7 +203,7 @@ fn error_sse_chunk(sequence_number: Option<u64>, message: &str) -> Bytes {
         },
     )
     .unwrap_or_else(|_| {
-        ErrorResponseFields::sse_translation(message).encode_sse_event_or_fallback()
+        ErrorResponseFields::stream_translation(message).encode_sse_event_or_fallback()
     })
 }
 

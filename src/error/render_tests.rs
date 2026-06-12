@@ -7,7 +7,7 @@ use crate::error::UpstreamResponseError;
 
 #[test]
 fn generic_sse_error_matches_zed_responses_nested_error_shape() {
-    let frame = ErrorResponseFields::sse_translation("translation failed")
+    let frame = ErrorResponseFields::stream_translation("translation failed")
         .encode_sse_event()
         .unwrap();
     let data = sse_data(&frame);
@@ -50,7 +50,7 @@ fn upstream_error_payload_preserves_code_and_param() {
 
 #[test]
 fn generic_sse_error_matches_zed_chat_completions_error_shape() {
-    let frame = ErrorResponseFields::sse_translation("translation failed")
+    let frame = ErrorResponseFields::stream_translation("translation failed")
         .encode_sse_event()
         .unwrap();
     let data = sse_data(&frame);

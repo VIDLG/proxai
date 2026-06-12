@@ -37,7 +37,7 @@ enum ErrorResponseType {
     UpstreamErrorBodyEmpty,
     UpstreamErrorBodyNonJson,
     UpstreamErrorBodyUnknownShape,
-    SseTranslationError,
+    StreamTranslationError,
 }
 
 #[derive(Serialize)]
@@ -161,11 +161,11 @@ impl ErrorResponseFields {
         )
     }
 
-    pub(crate) fn sse_translation(message: impl Into<String>) -> Self {
+    pub(crate) fn stream_translation(message: impl Into<String>) -> Self {
         Self::new(
             StatusCode::BAD_GATEWAY,
             message,
-            ErrorResponseType::SseTranslationError,
+            ErrorResponseType::StreamTranslationError,
         )
     }
 

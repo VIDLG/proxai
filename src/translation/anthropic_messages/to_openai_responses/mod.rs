@@ -19,8 +19,9 @@ use crate::sse::SseEvent;
 use crate::translation::TranslationResult;
 
 use crate::http_support::ByteStream;
-use crate::translation::sse::{
-    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+use crate::translation::streaming::{
+    StreamTranslationError, StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
+    translate_sse_stream,
 };
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
@@ -111,12 +112,10 @@ enum AnthropicStreamBlock {
     Other,
 }
 
-impl SseEventTranslator for AnthropicToOpenaiStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
+impl StreamingEventTranslator for AnthropicToOpenaiStreamTranslator {
+    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let payload = event.payload_with_type()?;
-        if !is_anthropic_stream_event(&payload) {
-            return Ok(Vec::new());
-        }
+        ensure_anthropic_stream_event(&payload)?;
         let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
         let mut chunks = Vec::new();
 
@@ -400,19 +399,24 @@ impl SseEventTranslator for AnthropicToOpenaiStreamTranslator {
     }
 }
 
-fn is_anthropic_stream_event(payload: &Value) -> bool {
-    matches!(
-        payload.get("type").and_then(Value::as_str),
+fn ensure_anthropic_stream_event(payload: &Value) -> StreamTranslationResult<()> {
+    match payload.get("type").and_then(Value::as_str) {
         Some(
             "ping"
-                | "message_start"
-                | "content_block_start"
-                | "content_block_delta"
-                | "content_block_stop"
-                | "message_delta"
-                | "message_stop"
-        )
-    )
+            | "message_start"
+            | "content_block_start"
+            | "content_block_delta"
+            | "content_block_stop"
+            | "message_delta"
+            | "message_stop",
+        ) => Ok(()),
+        Some(event_type) => Err(StreamTranslationError::Semantic(format!(
+            "Anthropic stream emitted unsupported event type `{event_type}`"
+        ))),
+        None => Err(StreamTranslationError::Semantic(
+            "Anthropic stream event is missing `type`".to_string(),
+        )),
+    }
 }
 
 impl AnthropicToOpenaiStreamTranslator {
@@ -431,7 +435,7 @@ impl AnthropicToOpenaiStreamTranslator {
         &mut self,
         index: u32,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -483,7 +487,7 @@ impl AnthropicToOpenaiStreamTranslator {
         item_id: Option<String>,
         name: Option<String>,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -535,7 +539,7 @@ impl AnthropicToOpenaiStreamTranslator {
         })
     }
 
-    fn openai_event<T>(&self, event_type: &str, payload: T) -> SseTranslationResult<Bytes>
+    fn openai_event<T>(&self, event_type: &str, payload: T) -> StreamTranslationResult<Bytes>
     where
         T: Serialize,
     {

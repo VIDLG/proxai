@@ -14,12 +14,15 @@
 //! events as connection heartbeats.
 
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 
 use super::{
     citations::TextCitation,
-    common::{Container, OutputTokensDetails, RefusalStopDetails, ServerToolUsage, StopReason},
+    common::{
+        Container, OutputTokensDetails, RefusalStopDetails, ServerToolUsage, StopReason, Usage,
+    },
     content::ContentBlock,
-    message::Message,
+    message::{Message, MessageType, Role},
 };
 
 /// Text chunk emitted while streaming a `text` content block.
@@ -57,17 +60,12 @@ pub struct SignatureDelta {
 /// `content_block_stop` for the same content block index.
 /// @sdk(shape = "RawContentBlockDelta")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockDelta {
-    #[serde(rename = "text_delta")]
     TextDelta(TextDelta),
-    #[serde(rename = "input_json_delta")]
     InputJsonDelta(InputJsonDelta),
-    #[serde(rename = "citations_delta")]
     CitationsDelta(CitationsDelta),
-    #[serde(rename = "thinking_delta")]
     ThinkingDelta(ThinkingDelta),
-    #[serde(rename = "signature_delta")]
     SignatureDelta(SignatureDelta),
 }
 
@@ -157,6 +155,25 @@ pub struct MessageStartEvent {
     pub message: Message,
 }
 
+impl MessageStartEvent {
+    pub fn new_empty_message(id: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            message: Message {
+                id: id.into(),
+                container: None,
+                content: Vec::new(),
+                model: model.into(),
+                role: Role::Assistant,
+                type_: MessageType::Message,
+                stop_details: None,
+                stop_reason: None,
+                stop_sequence: None,
+                usage: Usage::default(),
+            },
+        }
+    }
+}
+
 /// Final semantic SSE event for a streamed response.
 /// Flow: marks that no further Anthropic Messages stream events are expected.
 /// @sdk(shape = "RawMessageStopEvent")
@@ -169,21 +186,15 @@ pub struct MessageStopEvent;
 /// @sdk(shape = "RawMessageStreamEvent")
 /// Note: SDK stream parsers may handle ping out of band. We include it
 /// explicitly here because proxai models the raw SSE payload shape.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum MessageStreamEvent {
-    #[serde(rename = "ping")]
     Ping(PingEvent),
-    #[serde(rename = "message_start")]
     MessageStart(MessageStartEvent),
-    #[serde(rename = "message_delta")]
     MessageDelta(MessageDeltaEvent),
-    #[serde(rename = "message_stop")]
     MessageStop(MessageStopEvent),
-    #[serde(rename = "content_block_start")]
     ContentBlockStart(ContentBlockStartEvent),
-    #[serde(rename = "content_block_delta")]
     ContentBlockDelta(ContentBlockDeltaEvent),
-    #[serde(rename = "content_block_stop")]
     ContentBlockStop(ContentBlockStopEvent),
 }

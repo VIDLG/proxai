@@ -14,12 +14,13 @@ use crate::protocol::openai_responses::{
     OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails, RefusalContent,
     Response, ResponseUsage, Status,
 };
-use crate::sse::{DONE_SENTINEL_DATA, SseEvent, done_sentinel_bytes};
+use crate::sse::{SseEvent, done_sentinel_bytes};
 use crate::translation::TranslationResult;
 
 use crate::http_support::ByteStream;
-use crate::translation::sse::{
-    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+use crate::translation::streaming::{
+    SseStreamEnd, StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
+    translate_sse_stream,
 };
 
 pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
@@ -200,11 +201,8 @@ struct StreamToolItem {
     arguments: String,
 }
 
-impl SseEventTranslator for ChatToResponsesStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        if event.data.trim() == DONE_SENTINEL_DATA {
-            return self.finish();
-        }
+impl StreamingEventTranslator for ChatToResponsesStreamTranslator {
+    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let payload = event.payload_with_type()?;
         let mut chunks = Vec::new();
 
@@ -300,7 +298,7 @@ impl SseEventTranslator for ChatToResponsesStreamTranslator {
         Ok(chunks)
     }
 
-    fn finish(&mut self) -> SseTranslationResult<Vec<Bytes>> {
+    fn finish_stream(&mut self, _end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
         if self.completed {
             return Ok(Vec::new());
         }
@@ -402,7 +400,7 @@ impl ChatToResponsesStreamTranslator {
         &mut self,
         index: u32,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.text_items.contains_key(&index) {
             return Ok(());
         }
@@ -438,7 +436,7 @@ impl ChatToResponsesStreamTranslator {
         index: u32,
         tool_call: &Value,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.tool_items.contains_key(&index) {
             return Ok(());
         }
@@ -481,7 +479,7 @@ impl ChatToResponsesStreamTranslator {
         Ok(())
     }
 
-    fn responses_event(&self, event: &str, payload: Value) -> SseTranslationResult<Bytes> {
+    fn responses_event(&self, event: &str, payload: Value) -> StreamTranslationResult<Bytes> {
         Ok(encode_sse_json(event, &payload)?)
     }
 }

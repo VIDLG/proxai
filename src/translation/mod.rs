@@ -18,7 +18,7 @@ pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
 mod request;
 mod response;
-mod sse;
+mod streaming;
 
 pub(crate) use error::{Result as TranslationResult, TranslationError};
 pub(crate) use request::translate_request;

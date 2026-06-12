@@ -84,11 +84,9 @@ pub struct UrlPdfSource {
 
 /// ImageBlockParam.source: `Base64ImageSource | URLImageSource`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ImageBlockSource {
-    #[serde(rename = "base64")]
     Base64(Base64ImageSource),
-    #[serde(rename = "url")]
     Url(UrlImageSource),
 }
 
@@ -115,11 +113,9 @@ pub struct ImageBlockParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockSourceContent {
-    #[serde(rename = "text")]
     Text(TextBlockParam),
-    #[serde(rename = "image")]
     Image(ImageBlockParam),
 }
 

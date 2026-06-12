@@ -258,6 +258,28 @@ async fn maps_repeated_cited_text_to_later_occurrences_in_order() {
 }
 
 #[tokio::test]
+async fn rejects_anthropic_response_without_chat_representable_content() {
+    let upstream = json!({
+        "id": "msg_empty",
+        "type": "message",
+        "role": "assistant",
+        "model": "glm-5.1",
+        "content": [{"type": "thinking", "thinking": "hidden", "signature": "sig"}],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "container": null,
+        "usage": {"input_tokens": 3, "output_tokens": 4}
+    });
+
+    let error = translate_non_streaming_payload(upstream)
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("no Chat-representable content"));
+}
+
+#[tokio::test]
 async fn translates_anthropic_cache_read_usage_to_chat_prompt_details() {
     let upstream = json!({
         "id": "msg_cached",

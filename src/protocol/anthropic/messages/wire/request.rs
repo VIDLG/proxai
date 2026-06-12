@@ -44,13 +44,10 @@ pub struct ThinkingConfigAdaptive {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThinkingConfigParam {
-    #[serde(rename = "enabled")]
     Enabled(ThinkingConfigEnabled),
-    #[serde(rename = "disabled")]
     Disabled(ThinkingConfigDisabled),
-    #[serde(rename = "adaptive")]
     Adaptive(ThinkingConfigAdaptive),
 }
 
@@ -74,9 +71,8 @@ pub enum OutputEffort {
 
 /// OutputConfig.format wrapper for `JSONOutputFormat`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputFormat {
-    #[serde(rename = "json_schema")]
     JsonSchema(JsonOutputFormat),
 }
 
@@ -160,15 +156,11 @@ pub struct ToolChoiceTool {
 pub struct ToolChoiceNone;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolChoice {
-    #[serde(rename = "auto")]
     Auto(ToolChoiceAuto),
-    #[serde(rename = "any")]
     Any(ToolChoiceAny),
-    #[serde(rename = "tool")]
     Tool(ToolChoiceTool),
-    #[serde(rename = "none")]
     None(ToolChoiceNone),
 }
 

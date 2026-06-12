@@ -104,31 +104,19 @@ pub struct RedactedThinkingBlockParam {
 /// 🎯 @use: response-side content block union.
 /// Used by: message, stream
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlock {
-    #[serde(rename = "text")]
     Text(TextBlock),
-    #[serde(rename = "thinking")]
     Thinking(ThinkingBlock),
-    #[serde(rename = "redacted_thinking")]
     RedactedThinking(RedactedThinkingBlock),
-    #[serde(rename = "tool_use")]
     ToolUse(ToolUseBlock),
-    #[serde(rename = "server_tool_use")]
     ServerToolUse(ServerToolUseBlock),
-    #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult(WebSearchToolResultBlock),
-    #[serde(rename = "web_fetch_tool_result")]
     WebFetchToolResult(WebFetchToolResultBlock),
-    #[serde(rename = "code_execution_tool_result")]
     CodeExecutionToolResult(CodeExecutionToolResultBlock),
-    #[serde(rename = "bash_code_execution_tool_result")]
     BashCodeExecutionToolResult(BashCodeExecutionToolResultBlock),
-    #[serde(rename = "text_editor_code_execution_tool_result")]
     TextEditorCodeExecutionToolResult(TextEditorCodeExecutionToolResultBlock),
-    #[serde(rename = "tool_search_tool_result")]
     ToolSearchToolResult(ToolSearchToolResultBlock),
-    #[serde(rename = "container_upload")]
     ContainerUpload(ContainerUploadBlock),
 }
 
@@ -136,42 +124,24 @@ pub enum ContentBlock {
 /// Used by: message
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockParam {
-    #[serde(rename = "text")]
     Text(TextBlockParam),
-    #[serde(rename = "image")]
     Image(ImageBlockParam),
-    #[serde(rename = "document")]
     Document(DocumentBlockParam),
-    #[serde(rename = "search_result")]
     SearchResult(SearchResultBlockParam),
-    #[serde(rename = "thinking")]
     Thinking(ThinkingBlockParam),
-    #[serde(rename = "redacted_thinking")]
     RedactedThinking(RedactedThinkingBlockParam),
-    #[serde(rename = "tool_use")]
     ToolUse(ToolUseBlockParam),
-    #[serde(rename = "tool_result")]
     ToolResult(ToolResultBlockParam),
-    #[serde(rename = "tool_reference")]
     ToolReference(ToolReferenceBlockParam),
-    #[serde(rename = "server_tool_use")]
     ServerToolUse(ServerToolUseBlockParam),
-    #[serde(rename = "web_search_tool_result")]
     WebSearchToolResult(WebSearchToolResultBlockParam),
-    #[serde(rename = "web_fetch_tool_result")]
     WebFetchToolResult(WebFetchToolResultBlockParam),
-    #[serde(rename = "code_execution_tool_result")]
     CodeExecutionToolResult(CodeExecutionToolResultBlockParam),
-    #[serde(rename = "bash_code_execution_tool_result")]
     BashCodeExecutionToolResult(BashCodeExecutionToolResultBlockParam),
-    #[serde(rename = "text_editor_code_execution_tool_result")]
     TextEditorCodeExecutionToolResult(TextEditorCodeExecutionToolResultBlockParam),
-    #[serde(rename = "tool_search_tool_result")]
     ToolSearchToolResult(ToolSearchToolResultBlockParam),
-    #[serde(rename = "container_upload")]
     ContainerUpload(ContainerUploadBlockParam),
-    #[serde(rename = "mid_conv_system")]
     MidConversationSystem(MidConversationSystemBlockParam),
 }

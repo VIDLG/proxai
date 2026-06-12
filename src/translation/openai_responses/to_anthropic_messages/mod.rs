@@ -19,8 +19,8 @@ use crate::translation::{TranslationError, TranslationResult};
 use crate::sse::SseEvent;
 
 use crate::http_support::ByteStream;
-use crate::translation::sse::{
-    SseEventTranslator, SseTranslationResult, encode_sse_json, translate_sse_stream,
+use crate::translation::streaming::{
+    StreamTranslationResult, StreamingEventTranslator, encode_sse_json, translate_sse_stream,
 };
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
@@ -183,8 +183,6 @@ enum OpenaiStreamEvent {
     },
     #[serde(rename = "response.error")]
     ResponseError,
-    #[serde(other)]
-    Other,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,16 +205,10 @@ enum OpenaiStreamOutputItem {
     },
     #[serde(rename = "reasoning")]
     Reasoning { id: Option<String> },
-    #[serde(other)]
-    Unknown,
 }
 
-impl SseEventTranslator for OpenaiToAnthropicStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        if event.is_done_sentinel() {
-            return Ok(Vec::new());
-        }
-
+impl StreamingEventTranslator for OpenaiToAnthropicStreamTranslator {
+    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)?;
         let mut chunks = Vec::new();
 
@@ -294,7 +286,6 @@ impl SseEventTranslator for OpenaiToAnthropicStreamTranslator {
                         let _ = (id, name);
                         OpenaiStreamBlock::ToolUse
                     }
-                    OpenaiStreamOutputItem::Unknown => return Ok(chunks),
                 };
                 self.blocks.insert(output_index, block);
             }
@@ -380,7 +371,6 @@ impl SseEventTranslator for OpenaiToAnthropicStreamTranslator {
             OpenaiStreamEvent::ResponseError => {
                 self.complete(StopReason::Refusal, &mut chunks)?;
             }
-            OpenaiStreamEvent::Other => {}
         }
 
         Ok(chunks)
@@ -405,7 +395,7 @@ impl OpenaiToAnthropicStreamTranslator {
         &mut self,
         index: u32,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -425,7 +415,7 @@ impl OpenaiToAnthropicStreamTranslator {
         &mut self,
         index: u32,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -447,7 +437,7 @@ impl OpenaiToAnthropicStreamTranslator {
         item_id: Option<String>,
         name: Option<String>,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
         }
@@ -472,7 +462,7 @@ impl OpenaiToAnthropicStreamTranslator {
         Ok(())
     }
 
-    fn stop_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> SseTranslationResult<()> {
+    fn stop_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> StreamTranslationResult<()> {
         if self.stopped_blocks.insert(index) {
             chunks.push(self.anthropic_event(
                 "content_block_stop",
@@ -486,7 +476,7 @@ impl OpenaiToAnthropicStreamTranslator {
         &mut self,
         stop_reason: StopReason,
         chunks: &mut Vec<Bytes>,
-    ) -> SseTranslationResult<()> {
+    ) -> StreamTranslationResult<()> {
         if self.completed {
             return Ok(());
         }
@@ -539,7 +529,7 @@ impl OpenaiToAnthropicStreamTranslator {
         })
     }
 
-    fn anthropic_event<T>(&self, event_type: &str, payload: T) -> SseTranslationResult<Bytes>
+    fn anthropic_event<T>(&self, event_type: &str, payload: T) -> StreamTranslationResult<Bytes>
     where
         T: Serialize,
     {

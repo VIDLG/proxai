@@ -51,6 +51,17 @@ pub struct InputSchema {
     pub extra: Value,
 }
 
+impl Default for InputSchema {
+    fn default() -> Self {
+        Self {
+            type_: "object".to_string(),
+            properties: Some(serde_json::json!({})),
+            required: Some(Vec::new()),
+            extra: serde_json::json!({}),
+        }
+    }
+}
+
 /// A user-defined ("custom") function the model can call. Define the schema and description
 /// to tell the model when and how to invoke the tool.
 ///

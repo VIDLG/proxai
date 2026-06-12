@@ -1,10 +1,11 @@
 use axum::body::Bytes;
+use delegate::delegate;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, InputJsonDelta, MessageDelta, MessageStartEvent,
-    MessageStreamEvent, StopReason, TextDelta, ToolUseBlock,
+    MessageStreamEvent, StopReason, ToolUseBlock,
 };
 use crate::protocol::openai::chat_completions::{
     ChatChoiceStream, ChatCompletionMessageToolCallChunk, ChatCompletionStreamResponseDelta,
@@ -12,190 +13,580 @@ use crate::protocol::openai::chat_completions::{
     FunctionType, Role,
 };
 use crate::sse::{SseEvent, done_sentinel_bytes};
-use crate::translation::sse::{
-    SseEventTranslator, SseTranslationError, SseTranslationResult, encode_sse_json,
+use crate::translation::streaming::{
+    RepresentableOutputTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
+    StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
 };
 
 #[derive(Debug, Default)]
 pub(super) struct AnthropicToChatStreamTranslator {
-    id: Option<String>,
-    model: Option<String>,
-    tool_call_indexes: BTreeMap<u32, u32>,
-    next_tool_call_index: u32,
-    emitted_text: bool,
+    identity: Option<StreamIdentity>,
+    lifecycle: AnthropicStreamLifecycle,
 }
 
-impl SseEventTranslator for AnthropicToChatStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> SseTranslationResult<Vec<Bytes>> {
-        let payload = event.payload_with_type()?;
-        if !is_anthropic_stream_event(&payload) {
-            return Ok(Vec::new());
+#[derive(Debug, Default)]
+struct AnthropicToChatStreamingState {
+    output: RepresentableOutputTracker,
+    blocks: BTreeMap<u32, AnthropicStreamBlock>,
+    next_tool_call_index: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AnthropicStreamBlock {
+    Text,
+    ToolUse { chat_tool_index: u32 },
+    Thinking,
+    Ignored,
+}
+
+impl AnthropicToChatStreamingState {
+    delegate! {
+        to self.output {
+            fn mark_text(&mut self);
+            fn mark_refusal(&mut self);
+            fn mark_tool_use(&mut self);
+            fn mark_reasoning(&mut self);
+            fn emitted_text(&self) -> bool;
+            fn emitted_any(&self) -> bool;
         }
+    }
+
+    fn register_tool_use_block(&mut self, block_index: u32) -> StreamTranslationResult<u32> {
+        let tool_call_index = self.next_tool_call_index();
+        self.register_block(
+            block_index,
+            AnthropicStreamBlock::ToolUse {
+                chat_tool_index: tool_call_index,
+            },
+        )?;
+        self.mark_tool_use();
+        Ok(tool_call_index)
+    }
+
+    fn next_tool_call_index(&mut self) -> u32 {
+        let index = self.next_tool_call_index;
+        self.next_tool_call_index = self.next_tool_call_index.saturating_add(1);
+        index
+    }
+
+    fn register_text_block(&mut self, block_index: u32) -> StreamTranslationResult<()> {
+        self.register_block(block_index, AnthropicStreamBlock::Text)
+    }
+
+    fn register_thinking_block(&mut self, block_index: u32) -> StreamTranslationResult<()> {
+        self.register_block(block_index, AnthropicStreamBlock::Thinking)
+    }
+
+    fn register_ignored_block(&mut self, block_index: u32) -> StreamTranslationResult<()> {
+        self.register_block(block_index, AnthropicStreamBlock::Ignored)
+    }
+
+    fn register_block(
+        &mut self,
+        block_index: u32,
+        block: AnthropicStreamBlock,
+    ) -> StreamTranslationResult<()> {
+        if self.blocks.insert(block_index, block).is_some() {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted duplicate content_block_start index {block_index}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn require_block(
+        &self,
+        block_index: u32,
+        expected: AnthropicStreamBlock,
+        delta_name: &'static str,
+    ) -> StreamTranslationResult<()> {
+        let Some(actual) = self.blocks.get(&block_index).copied() else {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted {delta_name} for unopened content block index {block_index}"
+            )));
+        };
+        if actual != expected {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted {delta_name} for incompatible content block index {block_index}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn require_reasoning_signature_block(&self, block_index: u32) -> StreamTranslationResult<()> {
+        let Some(actual) = self.blocks.get(&block_index).copied() else {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted signature_delta for unopened content block index {block_index}"
+            )));
+        };
+        if !matches!(
+            actual,
+            AnthropicStreamBlock::Thinking | AnthropicStreamBlock::Ignored
+        ) {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted signature_delta for incompatible content block index {block_index}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn get_tool_call_index(&self, block_index: u32) -> StreamTranslationResult<u32> {
+        match self.blocks.get(&block_index).copied() {
+            Some(AnthropicStreamBlock::ToolUse { chat_tool_index }) => Ok(chat_tool_index),
+            Some(
+                AnthropicStreamBlock::Text
+                | AnthropicStreamBlock::Thinking
+                | AnthropicStreamBlock::Ignored,
+            ) => Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted input_json_delta for incompatible content block index {block_index}"
+            ))),
+            None => Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted input_json_delta for unopened content block index {block_index}"
+            ))),
+        }
+    }
+
+    fn stop_block(&mut self, block_index: u32) -> StreamTranslationResult<()> {
+        self.blocks.remove(&block_index).ok_or_else(|| {
+            StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted content_block_stop for unopened content block index {block_index}"
+            ))
+        })?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+enum ChatStreamOutput {
+    Chunk(CreateChatCompletionStreamResponse),
+    DoneSentinel,
+}
+
+impl ChatStreamOutput {
+    fn encode(self) -> StreamTranslationResult<Bytes> {
+        match self {
+            Self::Chunk(payload) => Ok(encode_sse_json("message", &payload)?),
+            Self::DoneSentinel => Ok(done_sentinel_bytes()),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+enum AnthropicStreamLifecycle {
+    #[default]
+    WaitingForMessageStart,
+    Streaming(AnthropicToChatStreamingState),
+    ReceivedTerminalDelta,
+    Stopped,
+}
+
+impl AnthropicStreamLifecycle {
+    fn ensure_event_allowed(&self, event: &MessageStreamEvent) -> StreamTranslationResult<()> {
+        if matches!(event, MessageStreamEvent::Ping(_)) {
+            return Ok(());
+        }
+
+        match self {
+            Self::WaitingForMessageStart => {
+                if matches!(event, MessageStreamEvent::MessageStart(_)) {
+                    Ok(())
+                } else {
+                    Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted semantic event before message_start".to_string(),
+                    ))
+                }
+            }
+            Self::Streaming(_) => {
+                if matches!(event, MessageStreamEvent::MessageStop(_)) {
+                    Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted message_stop before terminal message_delta"
+                            .to_string(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Self::ReceivedTerminalDelta => {
+                if matches!(event, MessageStreamEvent::MessageStop(_)) {
+                    Ok(())
+                } else {
+                    Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted semantic event after terminal message_delta before message_stop"
+                            .to_string(),
+                    ))
+                }
+            }
+            Self::Stopped => Err(StreamTranslationError::Semantic(
+                "Anthropic stream emitted semantic event after message_stop".to_string(),
+            )),
+        }
+    }
+
+    fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
+        let end_label = match end {
+            SseStreamEnd::DoneSentinel => "[DONE]",
+            SseStreamEnd::Eof => "EOF",
+        };
+
+        let message = match self {
+            Self::Stopped => "Anthropic stream end was reported after message_stop".to_string(),
+            Self::WaitingForMessageStart => {
+                format!("Anthropic stream reached {end_label} before message_start")
+            }
+            Self::ReceivedTerminalDelta => {
+                format!(
+                    "Anthropic stream reached {end_label} after terminal message_delta but before message_stop"
+                )
+            }
+            Self::Streaming(state) if state.emitted_any() => {
+                format!("Anthropic stream reached {end_label} before terminal message_delta")
+            }
+            Self::Streaming(_) => "Anthropic stream completed without Chat-representable content, thinking, refusal, or tool_use blocks"
+                .to_string(),
+        };
+        StreamTranslationError::Semantic(message)
+    }
+}
+
+impl StreamingEventTranslator for AnthropicToChatStreamTranslator {
+    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
+        let payload = event.payload_with_type()?;
+        ensure_anthropic_stream_event(&payload)?;
         let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
+        self.lifecycle.ensure_event_allowed(&parsed)?;
         let mut chunks = Vec::new();
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
+                if self.identity.is_some() {
+                    return Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted duplicate message_start".to_string(),
+                    ));
+                }
+                self.lifecycle =
+                    AnthropicStreamLifecycle::Streaming(AnthropicToChatStreamingState::default());
                 let delta: ChatCompletionStreamResponseDelta = (&event).into();
-                self.id = Some(format!("chatcmpl_{}", event.message.id));
-                self.model = Some(event.message.model);
-                chunks.push(self.encode_chat_content_chunk(delta, None)?);
+                let identity = StreamIdentity::new(
+                    format!("chatcmpl_{}", event.message.id),
+                    event.message.model,
+                );
+                chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(&identity, delta)));
+                self.identity = Some(identity);
             }
             MessageStreamEvent::Ping(_) => {}
-            _ if self.id.is_none() => {
-                return Err(SseTranslationError::Semantic(
-                    "Anthropic stream emitted semantic event before message_start".to_string(),
-                ));
-            }
+
             MessageStreamEvent::ContentBlockStart(event) => {
                 let index = event.index;
                 match event.content_block {
-                    ContentBlock::Text(block) if !block.text.is_empty() => {
-                        self.emitted_text = true;
-                        chunks.push(self.encode_chat_content_chunk(
-                            TextDelta { text: block.text }.into(),
-                            None,
-                        )?);
+                    ContentBlock::Text(block) => {
+                        self.streaming_state_mut()?.register_text_block(index)?;
+                        if !block.text.is_empty() {
+                            self.streaming_state_mut()?.mark_text();
+                            let identity = self.chat_stream_identity()?;
+                            chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                                identity,
+                                block.into(),
+                            )));
+                        }
                     }
                     ContentBlock::ToolUse(block) => {
-                        let tool_call_index = self.register_tool_call_index(index);
-                        chunks.push(
-                            self.encode_chat_content_chunk(
-                                ToolStartDelta {
-                                    index: tool_call_index,
-                                    block,
-                                }
-                                .into(),
-                                None,
-                            )?,
-                        );
+                        let tool_call_index = {
+                            let state = self.streaming_state_mut()?;
+                            state.register_tool_use_block(index)?
+                        };
+                        let identity = self.chat_stream_identity()?;
+                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            identity,
+                            ToolStartDelta {
+                                index: tool_call_index,
+                                block,
+                            }
+                            .into(),
+                        )));
                     }
-                    _ => {}
+
+                    ContentBlock::Thinking(block) => {
+                        self.streaming_state_mut()?.register_thinking_block(index)?;
+                        if !block.thinking.is_empty() {
+                            self.streaming_state_mut()?.mark_reasoning();
+                            let identity = self.chat_stream_identity()?;
+                            chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                                identity,
+                                block.into(),
+                            )));
+                        }
+                    }
+                    ContentBlock::RedactedThinking(_) => {
+                        self.streaming_state_mut()?.register_ignored_block(index)?;
+                    }
+
+                    ContentBlock::ServerToolUse(_)
+                    | ContentBlock::WebSearchToolResult(_)
+                    | ContentBlock::WebFetchToolResult(_)
+                    | ContentBlock::CodeExecutionToolResult(_)
+                    | ContentBlock::BashCodeExecutionToolResult(_)
+                    | ContentBlock::TextEditorCodeExecutionToolResult(_)
+                    | ContentBlock::ToolSearchToolResult(_)
+                    | ContentBlock::ContainerUpload(_) => {
+                        return Err(StreamTranslationError::Semantic(
+                            "Anthropic stream emitted content_block_start that Chat Completions cannot represent"
+                                .to_string(),
+                        ));
+                    }
                 }
             }
             MessageStreamEvent::ContentBlockDelta(event) => match event.delta {
                 ContentBlockDelta::TextDelta(delta) => {
+                    self.streaming_state()?.require_block(
+                        event.index,
+                        AnthropicStreamBlock::Text,
+                        "text_delta",
+                    )?;
                     if !delta.text.is_empty() {
-                        self.emitted_text = true;
+                        self.streaming_state_mut()?.mark_text();
+                        let identity = self.chat_stream_identity()?;
+                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            identity,
+                            delta.into(),
+                        )));
                     }
-                    chunks.push(self.encode_chat_content_chunk(delta.into(), None)?);
                 }
                 ContentBlockDelta::InputJsonDelta(delta) => {
-                    if let Some(tool_call_index) = self.tool_call_index(event.index) {
-                        chunks.push(
-                            self.encode_chat_content_chunk(
-                                ToolArgumentsDelta {
-                                    index: tool_call_index,
-                                    delta,
-                                }
-                                .into(),
-                                None,
-                            )?,
-                        );
+                    let tool_call_index =
+                        self.streaming_state()?.get_tool_call_index(event.index)?;
+
+                    let identity = self.chat_stream_identity()?;
+                    chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                        identity,
+                        ToolArgumentsDelta {
+                            index: tool_call_index,
+                            delta,
+                        }
+                        .into(),
+                    )));
+                }
+
+                ContentBlockDelta::ThinkingDelta(delta) => {
+                    self.streaming_state()?.require_block(
+                        event.index,
+                        AnthropicStreamBlock::Thinking,
+                        "thinking_delta",
+                    )?;
+                    if !delta.thinking.is_empty() {
+                        self.streaming_state_mut()?.mark_reasoning();
+                        let identity = self.chat_stream_identity()?;
+                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            identity,
+                            delta.into(),
+                        )));
                     }
                 }
-                _ => {}
+                ContentBlockDelta::SignatureDelta(_) => {
+                    self.streaming_state()?
+                        .require_reasoning_signature_block(event.index)?;
+                }
+
+                ContentBlockDelta::CitationsDelta(_) => {
+                    return Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted content_block_delta that Chat Completions cannot represent"
+                            .to_string(),
+                    ));
+                }
             },
             MessageStreamEvent::MessageDelta(event) => {
-                if let Some(stop_reason) = event.delta.stop_reason {
-                    let delta: ChatCompletionStreamResponseDelta = MessageDeltaWithTextState {
-                        delta: event.delta,
-                        emitted_text: self.emitted_text,
-                    }
-                    .into();
+                let Some(stop_reason) = event.delta.stop_reason else {
+                    return Err(StreamTranslationError::Semantic(
+                        "Anthropic stream emitted message_delta without stop_reason".to_string(),
+                    ));
+                };
 
-                    if delta.refusal.is_some() {
-                        chunks.push(self.encode_chat_content_chunk(delta, None)?);
-                        chunks.push(self.encode_chat_content_chunk(
-                            ChatCompletionStreamResponseDelta::default(),
-                            Some(stop_reason.into()),
-                        )?);
-                    } else {
-                        chunks
-                            .push(self.encode_chat_content_chunk(delta, Some(stop_reason.into()))?);
-                    }
+                let (emitted_text, emitted_representable_content) = {
+                    let state = self.streaming_state()?;
+                    (state.emitted_text(), state.emitted_any())
+                };
+                let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
+                let identity = self.chat_stream_identity()?.clone();
+                let finish_reason = stop_reason.into();
 
-                    // Chat streaming usage is a response-level update. Keep it
-                    // in a separate `choices: []` chunk, matching OpenAI's
-                    // `stream_options.include_usage` shape, instead of merging it
-                    // into a content or terminal choice chunk.
-                    chunks
-                        .push(self.encode_chat_stream_chunk(Vec::new(), Some(event.usage.into()))?);
+                match terminal_delta {
+                    ChatTerminalDelta::Refusal(refusal) => {
+                        self.streaming_state_mut()?.mark_refusal();
+                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            &identity,
+                            ChatCompletionStreamResponseDelta {
+                                refusal: Some(refusal),
+                                ..Default::default()
+                            },
+                        )));
+                        chunks.push(ChatStreamOutput::Chunk(chat_finish_chunk(
+                            &identity,
+                            finish_reason,
+                        )));
+                    }
+                    ChatTerminalDelta::Empty => {
+                        if !emitted_representable_content {
+                            return Err(StreamTranslationError::Semantic(
+                                "Anthropic stream completed without Chat-representable content, thinking, refusal, or tool_use blocks"
+                                    .to_string(),
+                            ));
+                        }
+                        chunks.push(ChatStreamOutput::Chunk(chat_finish_chunk(
+                            &identity,
+                            finish_reason,
+                        )));
+                    }
                 }
+
+                // Chat streaming usage is a response-level update. Keep it
+                // in a separate `choices: []` chunk, matching OpenAI's
+                // `stream_options.include_usage` shape, instead of merging it
+                // into a content or terminal choice chunk.
+                chunks.push(ChatStreamOutput::Chunk(chat_usage_chunk(
+                    &identity,
+                    event.usage.into(),
+                )));
+
+                self.lifecycle = AnthropicStreamLifecycle::ReceivedTerminalDelta;
             }
             MessageStreamEvent::MessageStop(_) => {
-                chunks.push(done_sentinel_bytes());
+                self.lifecycle = AnthropicStreamLifecycle::Stopped;
+                chunks.push(ChatStreamOutput::DoneSentinel);
             }
             MessageStreamEvent::ContentBlockStop(event) => {
-                self.clear_tool_call_index(event.index);
+                self.streaming_state_mut()?.stop_block(event.index)?;
             }
         }
 
-        Ok(chunks)
+        chunks
+            .into_iter()
+            .map(ChatStreamOutput::encode)
+            .collect::<StreamTranslationResult<Vec<_>>>()
+    }
+
+    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
+        if matches!(self.lifecycle, AnthropicStreamLifecycle::Stopped) {
+            return Ok(Vec::new());
+        }
+
+        Err(self.lifecycle.unexpected_stream_end_error(end))
     }
 }
 
 impl AnthropicToChatStreamTranslator {
-    fn register_tool_call_index(&mut self, block_index: u32) -> u32 {
-        let tool_call_index = self.next_tool_call_index;
-        self.next_tool_call_index = self.next_tool_call_index.saturating_add(1);
-        self.tool_call_indexes.insert(block_index, tool_call_index);
-        tool_call_index
+    fn streaming_state(&self) -> StreamTranslationResult<&AnthropicToChatStreamingState> {
+        match &self.lifecycle {
+            AnthropicStreamLifecycle::Streaming(state) => Ok(state),
+            _ => Err(StreamTranslationError::Semantic(
+                "Anthropic stream active content event occurred outside streaming state"
+                    .to_string(),
+            )),
+        }
     }
 
-    fn tool_call_index(&self, block_index: u32) -> Option<u32> {
-        self.tool_call_indexes.get(&block_index).copied()
+    fn streaming_state_mut(
+        &mut self,
+    ) -> StreamTranslationResult<&mut AnthropicToChatStreamingState> {
+        match &mut self.lifecycle {
+            AnthropicStreamLifecycle::Streaming(state) => Ok(state),
+            _ => Err(StreamTranslationError::Semantic(
+                "Anthropic stream active content event occurred outside streaming state"
+                    .to_string(),
+            )),
+        }
     }
 
-    fn clear_tool_call_index(&mut self, block_index: u32) {
-        self.tool_call_indexes.remove(&block_index);
-    }
-
-    fn encode_chat_content_chunk(
-        &self,
-        delta: ChatCompletionStreamResponseDelta,
-        finish_reason: Option<FinishReason>,
-    ) -> SseTranslationResult<Bytes> {
-        self.encode_chat_stream_chunk(
-            vec![ChatChoiceStream {
-                index: 0,
-                delta,
-                finish_reason,
-                logprobs: None,
-            }],
-            None,
-        )
-    }
-
-    fn encode_chat_stream_chunk(
-        &self,
-        choices: Vec<ChatChoiceStream>,
-        usage: Option<CompletionUsage>,
-    ) -> SseTranslationResult<Bytes> {
-        let id = self.id.as_deref().ok_or_else(|| {
-            SseTranslationError::Semantic(
-                "Anthropic stream chunk cannot be encoded before message_start initializes the Chat stream id"
+    fn chat_stream_identity(&self) -> StreamTranslationResult<&StreamIdentity> {
+        self.identity.as_ref().ok_or_else(|| {
+            StreamTranslationError::Semantic(
+                "Anthropic stream chunk cannot be encoded before message_start initializes the Chat stream identity"
                     .to_string(),
             )
-        })?;
-        let model = self.model.as_deref().ok_or_else(|| {
-            SseTranslationError::Semantic(
-                "Anthropic stream chunk cannot be encoded before message_start initializes the Chat stream model"
-                    .to_string(),
-            )
-        })?;
-
-        let payload = CreateChatCompletionStreamResponse {
-            id: id.to_string(),
-            choices,
-            created: 0,
-            model: model.to_string(),
-            service_tier: None,
-            object: "chat.completion.chunk".to_string(),
-            usage,
-        };
-        Ok(encode_sse_json("message", &payload)?)
+        })
     }
+}
+
+fn chat_delta_chunk(
+    identity: &StreamIdentity,
+    delta: ChatCompletionStreamResponseDelta,
+) -> CreateChatCompletionStreamResponse {
+    chat_content_chunk(identity, delta, None)
+}
+
+fn chat_finish_chunk(
+    identity: &StreamIdentity,
+    finish_reason: FinishReason,
+) -> CreateChatCompletionStreamResponse {
+    chat_content_chunk(
+        identity,
+        ChatCompletionStreamResponseDelta::default(),
+        Some(finish_reason),
+    )
+}
+
+fn chat_content_chunk(
+    identity: &StreamIdentity,
+    delta: ChatCompletionStreamResponseDelta,
+    finish_reason: Option<FinishReason>,
+) -> CreateChatCompletionStreamResponse {
+    CreateChatCompletionStreamResponse {
+        id: identity.id().to_string(),
+        choices: vec![ChatChoiceStream {
+            index: 0,
+            delta,
+            finish_reason,
+            logprobs: None,
+        }],
+        created: 0,
+        model: identity.model().to_string(),
+        service_tier: None,
+        object: "chat.completion.chunk".to_string(),
+        usage: None,
+    }
+}
+
+fn chat_usage_chunk(
+    identity: &StreamIdentity,
+    usage: CompletionUsage,
+) -> CreateChatCompletionStreamResponse {
+    CreateChatCompletionStreamResponse {
+        id: identity.id().to_string(),
+        choices: Vec::new(),
+        created: 0,
+        model: identity.model().to_string(),
+        service_tier: None,
+        object: "chat.completion.chunk".to_string(),
+        usage: Some(usage),
+    }
+}
+
+enum ChatTerminalDelta {
+    Refusal(String),
+    Empty,
+}
+
+fn chat_terminal_delta(delta: MessageDelta, emitted_text: bool) -> ChatTerminalDelta {
+    // MessageDelta.stop_reason is converted by the caller into Chat's
+    // choice-level `finish_reason`; Chat stream deltas have no field for
+    // Anthropic `container` or `stop_sequence`.
+    //
+    // Non-streaming refusal conversion can move final text into
+    // `message.refusal` and leave `message.content` empty. Streaming cannot
+    // retract text deltas that were already sent without buffering the whole
+    // response, so only emit `delta.refusal` when no text content has been
+    // streamed yet.
+    if emitted_text || !matches!(delta.stop_reason, Some(StopReason::Refusal)) {
+        return ChatTerminalDelta::Empty;
+    }
+
+    let Some(stop_details) = delta.stop_details else {
+        return ChatTerminalDelta::Empty;
+    };
+
+    let Some(explanation) = stop_details.explanation else {
+        return ChatTerminalDelta::Empty;
+    };
+
+    ChatTerminalDelta::Refusal(explanation)
 }
 
 struct ToolStartDelta {
@@ -217,48 +608,7 @@ impl From<&MessageStartEvent> for ChatCompletionStreamResponseDelta {
             tool_calls: None,
             role: Some(Role::Assistant),
             refusal: None,
-        }
-    }
-}
-
-impl From<TextDelta> for ChatCompletionStreamResponseDelta {
-    fn from(delta: TextDelta) -> Self {
-        Self {
-            content: Some(delta.text),
-            tool_calls: None,
-            role: None,
-            refusal: None,
-        }
-    }
-}
-
-struct MessageDeltaWithTextState {
-    delta: MessageDelta,
-    emitted_text: bool,
-}
-
-impl From<MessageDeltaWithTextState> for ChatCompletionStreamResponseDelta {
-    fn from(value: MessageDeltaWithTextState) -> Self {
-        let delta = value.delta;
-        // MessageDelta.stop_reason is converted by the caller into Chat's
-        // choice-level `finish_reason`; Chat stream deltas have no field for
-        // Anthropic `container` or `stop_sequence`.
-        //
-        // Non-streaming refusal conversion can move final text into
-        // `message.refusal` and leave `message.content` empty. Streaming cannot
-        // retract text deltas that were already sent without buffering the whole
-        // response, so only emit `delta.refusal` when no text content has been
-        // streamed yet.
-        let refusal =
-            if !value.emitted_text && matches!(delta.stop_reason, Some(StopReason::Refusal)) {
-                delta.stop_details.and_then(|details| details.explanation)
-            } else {
-                None
-            };
-
-        Self {
-            refusal,
-            ..Self::default()
+            reasoning_content: None,
         }
     }
 }
@@ -281,6 +631,7 @@ impl From<ToolStartDelta> for ChatCompletionStreamResponseDelta {
             }]),
             role: None,
             refusal: None,
+            reasoning_content: None,
         }
     }
 }
@@ -300,21 +651,27 @@ impl From<ToolArgumentsDelta> for ChatCompletionStreamResponseDelta {
             }]),
             role: None,
             refusal: None,
+            reasoning_content: None,
         }
     }
 }
 
-fn is_anthropic_stream_event(payload: &Value) -> bool {
-    matches!(
-        payload.get("type").and_then(Value::as_str),
+fn ensure_anthropic_stream_event(payload: &Value) -> StreamTranslationResult<()> {
+    match payload.get("type").and_then(Value::as_str) {
         Some(
             "ping"
-                | "message_start"
-                | "content_block_start"
-                | "content_block_delta"
-                | "content_block_stop"
-                | "message_delta"
-                | "message_stop"
-        )
-    )
+            | "message_start"
+            | "content_block_start"
+            | "content_block_delta"
+            | "content_block_stop"
+            | "message_delta"
+            | "message_stop",
+        ) => Ok(()),
+        Some(event_type) => Err(StreamTranslationError::Semantic(format!(
+            "Anthropic stream emitted unsupported event type `{event_type}`"
+        ))),
+        None => Err(StreamTranslationError::Semantic(
+            "Anthropic stream event is missing `type`".to_string(),
+        )),
+    }
 }

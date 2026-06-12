@@ -14,7 +14,7 @@ use crate::protocol::openai::chat_completions::{
     CreateChatCompletionRequest, CreateChatCompletionResponse,
 };
 use crate::translation::TranslationResult;
-use crate::translation::sse::translate_sse_stream;
+use crate::translation::streaming::translate_sse_stream;
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let request = serde_json::from_value::<MessageCreateParamsBase>(payload.clone())?;

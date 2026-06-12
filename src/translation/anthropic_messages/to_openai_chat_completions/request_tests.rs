@@ -189,6 +189,32 @@ fn rejects_anthropic_assistant_text_after_tool_use_for_chat_completion() {
 }
 
 #[test]
+fn rejects_empty_anthropic_user_content_for_chat_completion() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 128,
+        "messages": [{"role": "user", "content": ""}]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("user message without content"));
+}
+
+#[test]
+fn rejects_empty_anthropic_assistant_content_for_chat_completion() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 128,
+        "messages": [{"role": "assistant", "content": []}]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("assistant message without content or tool_use"));
+}
+
+#[test]
 fn translates_anthropic_output_effort_to_chat_reasoning_effort() {
     let payload = json!({
         "model": "claude-sonnet-4-5",
@@ -337,5 +363,5 @@ fn rejects_anthropic_request_without_messages_for_chat_completion() {
     });
 
     let error = translate_request_payload(&payload).unwrap_err().to_string();
-    assert!(error.contains("must contain at least one message"));
+    assert!(error.contains("at least one user or assistant message"));
 }
