@@ -1,0 +1,105 @@
+---
+title: Error Responses
+description: Client-facing error payload, type enum, HTTP status semantics, and preserved headers
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { JsonExample } from '@components/JsonExample.jsx';
+
+# Error Responses
+
+Single reference for what clients see when ProxAI fails: payload fields, allowed `type` values, HTTP status semantics, and preserved upstream headers. For the internal projection pipeline, see [Error Handling Internals](/en/error-handling-internals).
+
+## JSON shape
+
+```json
+{
+  "error": {
+    "message": "quota exhausted",
+    "type": "upstream_error",
+    "code": "rate_limit_exceeded",
+    "param": "input",
+    "status": 429
+  }
+}
+```
+
+Rendered interactively:
+
+<JsonExample data={{
+  error: {
+    message: 'quota exhausted',
+    type: 'upstream_error',
+    code: 'rate_limit_exceeded',
+    param: 'input',
+    status: 429,
+  },
+}} />
+
+## Payload fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `message` | string | Human-readable error message |
+| `type` | enum | Client-facing error classification, snake_case |
+| `code` | string? | Upstream OpenAI-style error code, only when upstream provides one |
+| `param` | value? | Upstream OpenAI-style error param, only when upstream provides one |
+| `status` | u16 | Numeric status carried inside the JSON/SSE payload |
+
+<ProxaiCallout type="note" title="status is a payload field">
+  `status` is the wire payload's numeric status code. It is especially important for SSE error events because HTTP status can no longer be changed after streaming has started.
+</ProxaiCallout>
+
+## Allowed `type` values
+
+```text
+invalid_request_error
+internal_error
+upstream_request_error
+upstream_error
+upstream_response_body_read_error
+upstream_error_body_empty
+upstream_error_body_non_json
+upstream_error_body_unknown_shape
+sse_translation_error
+```
+
+ProxAI does not expose its internal typed error taxonomy verbatim. Each `type` above is a stable client-facing classification.
+
+## Response formats
+
+The `[error_responses]` config selects how this payload is rendered:
+
+```toml
+[error_responses]
+format = "text"   # or "json"
+```
+
+- `text`: only `payload.message` is returned, as `text/plain`. Default for Zed readability.
+- `json`: the full wrapped JSON above is returned.
+
+## HTTP status semantics
+
+| Status | Meaning |
+|---|---|
+| `400` | Inbound request was invalid for the detected protocol (`invalid_request_error`) |
+| `500` | ProxAI runtime invariant, local IO, serialization, or internal body read failed (`internal_error`) |
+| `502` / `503` / `504` | Upstream send/status/body-read failure (`upstream_*`) |
+| Upstream status | For upstream non-2xx responses, ProxAI maps the upstream status into its client-facing status while keeping the upstream numeric status inside the payload |
+
+For streaming responses, the HTTP status has already started (usually `200`) when the error occurs, so the error arrives as an SSE event carrying the numeric `status` field.
+
+## Preserved upstream headers
+
+For upstream non-2xx responses, ProxAI preserves useful diagnostic headers when the upstream actually provides them:
+
+- `Retry-After`
+- upstream request id headers
+- rate-limit headers
+
+It does not fabricate these headers. Response `Content-Type` is decided by the outbound protocol, not passed through from the upstream — see [Contract C13](/en/reference/behavior-contracts#response-reconstruction). Upstream headers are filtered before forwarding — see [Contract C14](/en/reference/behavior-contracts#response-reconstruction).
+
+## Related references
+
+- [Configuration Example](/en/reference/configuration-example)
+- [CLI](/en/reference/cli)

@@ -1,0 +1,144 @@
+---
+title: Documentation
+description: ProxAI English documentation
+---
+
+import { FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# ProxAI Documentation
+
+ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It normalizes a few upstream-breaking request shapes, routes to explicit providers, and translates across supported protocols when configured.
+
+<ProxaiCallout type="tip" title="Focused by design">
+  ProxAI is intentionally small: local compatibility, explicit protocol routing, compact diagnostics, and minimal surprises.
+</ProxaiCallout>
+
+## Using ProxAI
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Quick start',
+      href: '/en/quick-start',
+      icon: 'rocket',
+      description: 'Run ProxAI locally, find the app directory, edit config.toml, and connect a client.',
+    },
+    {
+      title: 'Configuration',
+      href: '/en/configuration',
+      icon: 'config',
+      description: 'Server listeners, routing, providers, capture, logging, and error response behavior.',
+    },
+    {
+      title: 'Routing and providers',
+      href: '/en/routing-and-providers',
+      icon: 'route',
+      description: 'How routes select providers and how provider protocol controls outbound wire behavior.',
+    },
+    {
+      title: 'Observability',
+      href: '/en/observability',
+      icon: 'terminal',
+      description: 'Logs, captures, request hints, and privacy boundaries for local debugging.',
+    },
+    {
+      title: 'Troubleshooting',
+      href: '/en/troubleshooting',
+      icon: 'alert',
+      description: 'Common symptoms, likely causes, and next checks across requests, providers, and streaming.',
+    },
+  ]}
+/>
+
+## Protocol Guide
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Protocol overview',
+      href: '/en/protocols-overview',
+      icon: 'protocol',
+      description: 'How ProxAI separates pipeline phases from wire protocols and which conversion paths are supported.',
+    },
+    {
+      title: 'Streaming behavior',
+      href: '/en/streaming-behavior',
+      icon: 'rocket',
+      description: 'What to expect from streamed responses, terminal events, and stalled tool-call timeouts.',
+    },
+  ]}
+/>
+
+## Developer Guide
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Architecture',
+      href: '/en/architecture',
+      icon: 'architecture',
+      description: 'Request lifecycle, module boundaries, pipeline phases, and how protocol translation fits into the proxy.',
+    },
+    {
+      title: 'Protocol conversion',
+      href: '/en/protocol-conversion',
+      icon: 'flow',
+      description: 'Pair-oriented conversion rules, wire-model alignment, and SDK comparison expectations.',
+    },
+    {
+      title: 'Streaming internals',
+      href: '/en/streaming-internals',
+      icon: 'terminal',
+      description: 'Carrier, BodyObserver, SSE scanner, and protocol state machines.',
+    },
+    {
+      title: 'Error handling internals',
+      href: '/en/error-handling-internals',
+      icon: 'alert',
+      description: 'Typed errors, ErrorResponseSpec, fields, payload, and HTTP/SSE rendering.',
+    },
+  ]}
+/>
+
+## Reference
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Configuration example',
+      href: '/en/reference/configuration-example',
+      icon: 'config',
+      description: 'Full reference of the generated config.example.toml.',
+    },
+    {
+      title: 'CLI',
+      href: '/en/reference/cli',
+      icon: 'terminal',
+      description: 'Runtime flags, route overrides, capture subcommands, and default endpoints.',
+    },
+    {
+      title: 'Defaults and limits',
+      href: '/en/reference/defaults-and-limits',
+      icon: 'gauge',
+      description: 'Default endpoints, timeouts, concurrency, body size, and capture defaults.',
+    },
+    {
+      title: 'Protocols',
+      href: '/en/reference/protocols',
+      icon: 'protocol',
+      description: 'Protocol values, request paths, accepted locations, and supported conversion pairs.',
+    },
+    {
+      title: 'Error responses',
+      href: '/en/reference/error-responses',
+      icon: 'alert',
+      description: 'Client-facing payload, type enum, HTTP status semantics, and preserved headers.',
+    },
+    {
+      title: 'Behavior contracts',
+      href: '/en/reference/behavior-contracts',
+      icon: 'security',
+      description: 'Stable promises ProxAI commits to across versions.',
+    },
+  ]}
+/>

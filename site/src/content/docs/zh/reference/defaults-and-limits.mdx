@@ -1,0 +1,68 @@
+---
+title: 默认值与限制
+description: 默认端点、超时、并发、请求体大小与 capture 默认值
+---
+
+# 默认值与限制
+
+ProxAI 最常用默认值与运行时限制的速查表。取值反映生成的 `config.example.toml`。权威带注释全文见 [配置示例](/zh/reference/configuration-example)；本页是精选摘要，不是完整镜像。
+
+## 端点
+
+| 设置 | 默认值 |
+|---|---|
+| Proxy 监听地址 | `http://127.0.0.1:18080` |
+| MCP endpoint | `http://127.0.0.1:18081/mcp` |
+
+## 请求接入
+
+| 设置 | 默认值 |
+|---|---|
+| `max_request_body_bytes` | `52428800`（50 MiB） |
+| `max_concurrent_requests` | `64` |
+
+## 超时
+
+| 设置 | 默认值 | 含义 |
+|---|---|---|
+| `read_idle_timeout_secs` | `120` | 等待上游 bytes 时的 idle-read timeout（不是整条请求的总时长上限）。见 [契约 C22](/zh/reference/behavior-contracts#流式)。 |
+| `[tool_calls].timeout_secs` | `120` | 不完整 streamed 工具调用参数的语义超时（必须 > 0）。见 [契约 C4](/zh/reference/behavior-contracts#配置与启动)。 |
+
+## Capture 默认值
+
+所有 capture phase 默认均为 `false`。ProxAI 启动时会创建 app dir 下的 `captures/` 目录；phase 开关只控制是否往里写 artifact。
+
+| Phase | 默认值 |
+|---|---|
+| `inbound_request_enabled` | `false` |
+| `provider_request_enabled` | `false` |
+| `upstream_response_enabled` | `false` |
+| `outbound_response_enabled` | `false` |
+
+## 日志默认值
+
+| 设置 | 默认值 |
+|---|---|
+| `level` | `info` |
+| `output_format` | `human` |
+| `use_color` | `true` |
+| `warn_ms` | `5000` |
+| `error_ms` | `15000` |
+
+## 错误响应默认值
+
+| 设置 | 默认值 |
+|---|---|
+| `[error_responses].format` | `text` |
+
+## 应用目录
+
+| 平台 | 默认位置 |
+|---|---|
+| Windows | `%USERPROFILE%\\.proxai\\` |
+| Linux/macOS | `~/.proxai/` |
+
+## 相关参考
+
+- [配置示例](/zh/reference/configuration-example)
+- [CLI](/zh/reference/cli)

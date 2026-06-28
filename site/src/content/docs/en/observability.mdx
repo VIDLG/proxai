@@ -1,0 +1,76 @@
+---
+title: Observability
+description: Logs, captures, request hints, and privacy boundaries in ProxAI
+---
+
+import { PipelineStrip, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Observability
+
+ProxAI keeps diagnostics compact and phase-oriented. The goal is to debug local proxy/provider problems without leaking private prompts, API keys, or unnecessary upstream details.
+
+## Capture phases
+
+Capture artifacts are named after where the data sits in the proxy pipeline:
+
+<PipelineStrip
+  steps={[
+    { title: 'inbound_request', description: 'The original local client request received by ProxAI.' },
+    { title: 'provider_request', description: 'The request after routing, translation, model rewrite, and provider serialization.' },
+    { title: 'upstream_response', description: 'The status, headers, and raw upstream response bytes returned by the provider.' },
+    { title: 'outbound_response', description: 'The final response returned to the local client.' },
+  ]}
+/>
+
+## Capture controls
+
+The capture directory is fixed under the app directory. The config only controls whether each phase is written:
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+You can also use CLI commands for local debugging:
+
+```sh
+proxai capture status
+proxai capture enable provider-request
+proxai capture disable provider-request
+```
+
+<ProxaiCallout type="caution" title="Captures can contain private data">
+  Captures may include prompts, tool arguments, model outputs, and upstream payloads. Keep them local and sanitize any fixture before committing it.
+</ProxaiCallout>
+
+## Logging expectations
+
+Logs should be:
+
+- compact
+- structured
+- stable enough for real debugging
+- privacy-preserving by default
+
+These rules implement [Behavior Contract C23–C25](/en/reference/behavior-contracts#privacy).
+
+Logs should not include:
+
+- request bodies
+- `Authorization` headers
+- API keys
+- private prompts
+- unnecessary private upstream URL details
+
+## Request hints
+
+Request hints are small protocol-aware summaries used for diagnostics. They should help identify common routing/proxy issues without logging full payloads.
+
+## Related docs
+
+- [Architecture](/en/architecture)
+- [Troubleshooting](/en/troubleshooting)
+- [Streaming behavior](/en/streaming-behavior)

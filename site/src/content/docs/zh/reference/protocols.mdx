@@ -1,0 +1,80 @@
+---
+title: 协议
+description: 协议取值、请求 path、可用位置与支持的转换对
+---
+
+import { ProtocolCompare, ProtocolMatrix, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 协议
+
+ProxAI 协议取值的统一参考：是什么、用在哪里、支持哪些转换对。Provider 名字只是用户标签，protocol 取值才是语义标识。
+
+## 取值与请求 path
+
+| 协议取值 | Wire 协议 | 请求 path |
+|---|---|---|
+| `openai_responses` | OpenAI Responses API | `/v1/responses` |
+| `openai_chat_completions` | OpenAI Chat Completions API | `/v1/chat/completions` |
+| `anthropic_messages` | Anthropic Messages API | `/v1/messages` |
+
+<ProxaiCallout type="note" title="检测而非声明">
+  入站协议由请求 path 检测，客户端不会把 `request_protocol` 作为字段发送。
+</ProxaiCallout>
+
+## 各取值的可用位置
+
+<ProtocolCompare
+  columns={['配置 / phase 位置', '接受的取值', '说明']}
+  rows={[
+    ['`routing.default_provider_names.<key>`', '三个协议取值之一', 'key 是入站请求协议，value 是 provider 名称。'],
+    ['`[[routing.routes]].request_protocol`', '可选，三个取值之一', '可选入站协议保护条件；省略表示匹配任意入站协议。'],
+    ['`[providers.<name>].protocol`', '三个协议取值之一', '决定出站 wire 格式并选择转换 pair。'],
+    ['`inbound_request.protocol`', '由请求 path 检测', '由 ingress 设置，不直接配置。'],
+    ['`provider_request.protocol`', '等于选中 provider 的 protocol', 'routing 选定 provider 后设置。'],
+    ['`upstream_response.protocol`', '等于 provider protocol', '由 provider 实现决定。'],
+    ['`outbound_response.protocol`', '等于入站请求协议', 'translation 还原成客户端协议。'],
+  ]}
+/>
+
+## 支持的转换对
+
+<ProtocolMatrix
+  labels={{ inbound: '入站协议', provider: 'Provider 协议', status: '状态' }}
+  rows={[
+    { inbound: 'openai_responses', provider: 'openai_responses', status: '透传' },
+    { inbound: 'openai_chat_completions', provider: 'openai_chat_completions', status: '透传' },
+    { inbound: 'anthropic_messages', provider: 'anthropic_messages', status: '透传' },
+    { inbound: 'openai_responses', provider: 'openai_chat_completions', status: '显式转换' },
+    { inbound: 'openai_responses', provider: 'anthropic_messages', status: '显式转换' },
+    { inbound: 'openai_chat_completions', provider: 'anthropic_messages', status: '显式转换' },
+    { inbound: 'anthropic_messages', provider: 'openai_responses', status: '显式转换' },
+  ]}
+/>
+
+其他所有协议对都会显式失败。刻意未支持的典型 pair：
+
+- `anthropic_messages` → `openai_chat_completions`
+- `openai_chat_completions` → `openai_responses`
+
+每新增一个 pair 都要补齐 runtime 路由、请求/响应转换、流式转换和聚焦测试。路由规则实现了 [行为契约 C7–C10](/zh/reference/behavior-contracts#路由与转换)。
+
+## 模块命名约定
+
+```text
+src/translation/<inbound_protocol>/to_<provider_protocol>/
+```
+
+示例：
+
+```text
+src/translation/openai_responses/to_anthropic_messages/
+src/translation/anthropic_messages/to_openai_responses/
+src/translation/openai_chat_completions/to_anthropic_messages/
+```
+
+转换设计规则见 [协议转换](/zh/protocol-conversion)。
+
+## 相关参考
+
+- [配置示例](/zh/reference/configuration-example)
+- [默认值与限制](/zh/reference/defaults-and-limits)

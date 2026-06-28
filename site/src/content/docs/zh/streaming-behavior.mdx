@@ -1,0 +1,97 @@
+---
+title: 流式行为
+description: 流式响应的预期行为、terminal event、工具调用超时与常见症状
+---
+
+import { EventTimeline, FeatureGrid, ProxaiCallout, TroubleshootingGrid } from '@components/ProxaiDocs.jsx';
+
+# 流式行为
+
+当客户端向 ProxAI 请求流式响应时，ProxAI 会保留上游 Server-Sent Events (SSE) 字节流，同时观察协议事件。从使用者视角看，三件事最重要：流最终会结束、错误以可读形态到达、卡住的 tool call 不会让客户端永远等待。
+
+<ProxaiCallout type="note" title="你不需要学 ProxAI 内部实现">
+  本页描述的是可观察的流式行为。内部流式架构请看 [流式内部实现](/zh/streaming-internals)。
+</ProxaiCallout>
+
+## 健康的流是什么样
+
+每个 provider 协议都有自己的 terminal event。只有收到预期的 terminal event，ProxAI 才认为这条流完整。这实现了 [行为契约 C19](/zh/reference/behavior-contracts#流式)。
+
+### OpenAI Responses
+
+<EventTimeline
+  events={[
+    { name: 'response.created', description: '流开始。' },
+    { name: 'response.output_item.added', description: '新的 output item 开始（message、reasoning、function_call 等）。' },
+    { name: 'response.output_text.delta / response.function_call_arguments.delta', description: '文本或工具调用参数增量 bytes。' },
+    { name: 'response.output_item.done', description: 'output item 完成。' },
+    { name: 'response.completed', description: 'terminal event，流完整结束。' },
+  ]}
+/>
+
+### OpenAI Chat Completions
+
+<EventTimeline
+  events={[
+    { name: 'chat.completion.chunk', description: 'content、tool calls 和 finish_reason 的增量 chunk。' },
+    { name: '[DONE]', description: '终止 sentinel；没有它的 EOF 会被视为不完整。' },
+  ]}
+/>
+
+### Anthropic Messages
+
+<EventTimeline
+  events={[
+    { name: 'message_start', description: '流开始。' },
+    { name: 'content_block_start / content_block_delta / content_block_stop', description: '一个 content block（text、thinking、tool_use 等）按增量产生。' },
+    { name: 'message_delta', description: '携带 stop_reason、stop_sequence、usage 等 message-level delta。' },
+    { name: 'message_stop', description: 'terminal event，流完整结束。' },
+  ]}
+/>
+
+## 卡住的工具调用
+
+如果上游开始流式发送 function/tool arguments 但一直没有完成，ProxAI 可以用协议形态的错误关闭流，而不是让客户端一直挂起。它由以下配置控制：
+
+```toml
+[tool_calls]
+timeout_secs = 120
+```
+
+这是语义超时，不是整条请求的总时长上限。它只在工具调用参数流已经开始后才生效。这实现了 [行为契约 C20](/zh/reference/behavior-contracts#流式)。
+
+## 常见症状
+
+<TroubleshootingGrid
+  labels={{ causes: '可能原因', next: '下一步检查' }}
+  items={[
+    {
+      symptom: '工具调用时流卡住',
+      icon: 'timer',
+      causes: ['上游开始发送 tool arguments，但没有发送匹配的 done event。', '原始 HTTP stream 还开着，但 provider 语义层已经 stalled。'],
+      next: ['调低或调整 `[tool_calls].timeout_secs`。', '针对单次请求开启 `upstream_response` capture。', '查看诊断中的 recent SSE tail。'],
+    },
+    {
+      symptom: '流关闭但没有最终答案',
+      icon: 'alert',
+      causes: ['缺少 `[DONE]`、`response.completed` 或 `message_stop` 等 terminal event。', '上游连接在协议状态完成前关闭。'],
+      next: ['查看 stream outcome 日志。', '对照该协议预期的 terminal event。', '捕获 upstream response bytes。'],
+    },
+    {
+      symptom: 'Unicode 文本看起来损坏',
+      icon: 'zap',
+      causes: ['把不完整的 byte chunk 当成完整 UTF-8 文本解释。', '某个工具把原始 bytes 当字符串切片。'],
+      next: ['只在完整 SSE event data 上解码。', '保持 byte-oriented scanning。', '避免对任意 chunk 做字符串切片。'],
+    },
+  ]}
+/>
+
+## 相关文档
+
+<FeatureGrid
+  items={[
+    { title: '配置说明', href: '/zh/configuration', icon: 'config', description: '调整 `[tool_calls].timeout_secs` 等运行时设置。' },
+    { title: '观测与诊断', href: '/zh/observability', icon: 'terminal', description: '安全调试流式失败的 capture 和日志边界。' },
+    { title: '常见排障', href: '/zh/troubleshooting', icon: 'alert', description: '覆盖请求、路由和流式失败的更全症状卡片。' },
+  ]}
+/>

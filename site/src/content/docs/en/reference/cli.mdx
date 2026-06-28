@@ -1,0 +1,76 @@
+---
+title: CLI
+description: ProxAI runtime flags, route overrides, capture subcommands, and default endpoints
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# CLI
+
+ProxAI keeps CLI flags intentionally small. They are for temporary overrides such as local testing or one-off route changes. Long-lived behavior belongs in `config.toml`.
+
+## Executable
+
+```sh
+proxai.exe
+```
+
+## Runtime flags
+
+```sh
+proxai \
+  --config <path> \
+  --upstream <url> \
+  --api-key <key> \
+  --port <port> \
+  --log-level <level> \
+  --log-format <human|json> \
+  --route-override ROUTE.FIELD=VALUE
+```
+
+| Flag | Purpose |
+|---|---|
+| `--config` | Path to a config file (defaults to app dir `config.toml`) |
+| `--upstream` | Temporarily override the `openai_responses` default provider's upstream URL for this run |
+| `--api-key` | Temporarily override the `openai_responses` default provider's API key for this run |
+| `--port` | Override the local proxy listen port |
+| `--log-level` | Override log level |
+| `--log-format` | Override log output format (`human` or `json`) |
+| `--route-override` | Temporarily override a named `[[routing.routes]]` field |
+
+## Route overrides
+
+`--route-override` can be repeated. Supported override fields are `request_protocol`, `match_kind`, `model_pattern`, `provider`, and `upstream_model`. Use an empty value to clear optional fields.
+
+```sh
+proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview \
+       --route-override minimax_m3_chat.upstream_model=MiniMax-M3
+```
+
+<ProxaiCallout type="caution" title="Do not put real keys in shell history">
+  Prefer editing the local `config.toml`. Only pass `--api-key` for ephemeral debugging and clear the shell history afterwards.
+</ProxaiCallout>
+
+## Capture subcommand
+
+```sh
+proxai capture status
+proxai capture enable  [inbound-request|provider-request|upstream-response|outbound-response]
+proxai capture disable [inbound-request|provider-request|upstream-response|outbound-response]
+```
+
+These persist local capture defaults. For one-shot debugging you can also use single-run flags:
+
+```sh
+proxai --capture-inbound-request
+proxai --capture-provider-request
+proxai --capture-upstream-response
+proxai --capture-outbound-response
+```
+
+For what each capture phase means, see [Observability](/en/observability). For default endpoints and other runtime limits, see [Defaults and Limits](/en/reference/defaults-and-limits). MCP is a local-only control surface — see [Behavior Contract C5 and C6](/en/reference/behavior-contracts#listener-separation).
+
+## Related references
+
+- [Configuration Example](/en/reference/configuration-example)
+- [Error Responses](/en/reference/error-responses)

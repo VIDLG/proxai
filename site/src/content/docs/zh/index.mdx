@@ -1,0 +1,144 @@
+---
+title: 文档
+description: ProxAI 中文文档
+---
+
+import { FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# ProxAI 文档
+
+ProxAI 是一个本地 OpenAI 兼容代理：修复部分上游不兼容的请求形态，按显式配置路由到 provider，并在已支持的协议对之间做转换。
+
+<ProxaiCallout type="tip" title="保持聚焦">
+  ProxAI 的边界是本地兼容、显式协议路由、紧凑诊断和尽量少的意外；不是通用多租户 AI 网关。
+</ProxaiCallout>
+
+## 使用 ProxAI
+
+<FeatureGrid
+  items={[
+    {
+      title: '快速开始',
+      href: '/zh/quick-start',
+      icon: 'rocket',
+      description: '本地运行 ProxAI，找到应用目录，编辑 config.toml，并让客户端接入。',
+    },
+    {
+      title: '配置说明',
+      href: '/zh/configuration',
+      icon: 'config',
+      description: 'server、routing、providers、capture、logging 与错误响应配置。',
+    },
+    {
+      title: '路由与 Provider',
+      href: '/zh/routing-and-providers',
+      icon: 'route',
+      description: 'route 如何选择 provider，以及 provider protocol 如何决定出站 wire 行为。',
+    },
+    {
+      title: '观测与诊断',
+      href: '/zh/observability',
+      icon: 'terminal',
+      description: '日志、capture、请求摘要，以及本地调试时的隐私边界。',
+    },
+    {
+      title: '常见排障',
+      href: '/zh/troubleshooting',
+      icon: 'alert',
+      description: '请求、provider、流式等常见症状、可能原因与下一步检查。',
+    },
+  ]}
+/>
+
+## 协议指南
+
+<FeatureGrid
+  items={[
+    {
+      title: '协议总览',
+      href: '/zh/protocols-overview',
+      icon: 'protocol',
+      description: 'ProxAI 如何区分 pipeline phase 与 wire protocol，以及当前支持哪些转换路径。',
+    },
+    {
+      title: '流式行为',
+      href: '/zh/streaming-behavior',
+      icon: 'rocket',
+      description: '流式响应的预期行为、terminal event 与卡住的工具调用超时。',
+    },
+  ]}
+/>
+
+## 开发者指南
+
+<FeatureGrid
+  items={[
+    {
+      title: '架构',
+      href: '/zh/architecture',
+      icon: 'architecture',
+      description: '请求生命周期、模块边界、pipeline 阶段，以及协议转换如何接入代理链路。',
+    },
+    {
+      title: '协议转换',
+      href: '/zh/protocol-conversion',
+      icon: 'flow',
+      description: '面向协议 pair 的转换规则、wire model 对齐和 SDK 比对要求。',
+    },
+    {
+      title: '流式内部实现',
+      href: '/zh/streaming-internals',
+      icon: 'terminal',
+      description: 'carrier、BodyObserver、SSE scanner 与协议状态机。',
+    },
+    {
+      title: '错误处理内部实现',
+      href: '/zh/error-handling-internals',
+      icon: 'alert',
+      description: '强类型错误、ErrorResponseSpec、fields、payload 与 HTTP/SSE 渲染。',
+    },
+  ]}
+/>
+
+## 参考
+
+<FeatureGrid
+  items={[
+    {
+      title: '配置示例',
+      href: '/zh/reference/configuration-example',
+      icon: 'config',
+      description: '生成的 config.example.toml 完整参考。',
+    },
+    {
+      title: 'CLI',
+      href: '/zh/reference/cli',
+      icon: 'terminal',
+      description: '运行 flag、route override、capture 子命令和默认端点。',
+    },
+    {
+      title: '默认值与限制',
+      href: '/zh/reference/defaults-and-limits',
+      icon: 'gauge',
+      description: '默认端点、超时、并发、请求体大小和 capture 默认值。',
+    },
+    {
+      title: '协议',
+      href: '/zh/reference/protocols',
+      icon: 'protocol',
+      description: '协议取值、请求 path、可用位置与支持的转换对。',
+    },
+    {
+      title: '错误响应',
+      href: '/zh/reference/error-responses',
+      icon: 'alert',
+      description: '客户端 payload、type 枚举、HTTP status 语义与保留 headers。',
+    },
+    {
+      title: '行为契约',
+      href: '/zh/reference/behavior-contracts',
+      icon: 'security',
+      description: 'ProxAI 跨版本承诺的稳定行为。',
+    },
+  ]}
+/>

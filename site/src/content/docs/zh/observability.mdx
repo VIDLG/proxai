@@ -1,0 +1,76 @@
+---
+title: 观测与诊断
+description: ProxAI 的日志、capture、请求摘要与隐私边界
+---
+
+import { PipelineStrip, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 观测与诊断
+
+ProxAI 的诊断能力围绕 phase 组织，并保持紧凑。目标是在不泄露私有 prompt、API key 或不必要上游细节的前提下，定位本地代理和 provider 问题。
+
+## Capture 阶段
+
+Capture artifact 按数据在代理 pipeline 里的位置命名：
+
+<PipelineStrip
+  steps={[
+    { title: 'inbound_request', description: 'ProxAI 收到的原始本地客户端请求。' },
+    { title: 'provider_request', description: '经过路由、翻译、模型改写和 provider 序列化后的请求。' },
+    { title: 'upstream_response', description: 'Provider 返回的状态码、headers 和原始上游响应 bytes。' },
+    { title: 'outbound_response', description: '最终返回给本地客户端的响应。' },
+  ]}
+/>
+
+## Capture 控制
+
+Capture 目录固定在 app directory 下。配置只控制各 phase 是否写入：
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+本地调试时也可以用 CLI 命令：
+
+```sh
+proxai capture status
+proxai capture enable provider-request
+proxai capture disable provider-request
+```
+
+<ProxaiCallout type="caution" title="Capture 可能包含私有数据">
+  Capture 可能包含 prompt、工具调用参数、模型输出和上游 payload。请只保存在本地；提交 fixture 前必须裁剪和脱敏。
+</ProxaiCallout>
+
+## 日志期望
+
+日志应该：
+
+- 紧凑
+- 结构化
+- 对真实调试稳定可用
+- 默认保护隐私
+
+这些规则实现了 [行为契约 C23–C25](/zh/reference/behavior-contracts#隐私)。
+
+日志不应该包含：
+
+- 请求 body
+- `Authorization` header
+- API key
+- 私有 prompt
+- 不必要的私有上游 URL 细节
+
+## 请求摘要
+
+Request hints 是面向协议的小型诊断摘要，用来识别常见路由/代理问题，而不是记录完整 payload。
+
+## 相关文档
+
+- [架构](/zh/architecture)
+- [常见排障](/zh/troubleshooting)
+- [流式行为](/zh/streaming-behavior)

@@ -1,0 +1,22 @@
+---
+title: 配置示例
+description: 生成的 config.example.toml 完整参考
+---
+
+import { Code } from '@astrojs/starlight/components';
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import configExample from '../../../../../../config.example.toml?raw';
+
+# 配置示例
+
+这是被跟踪的 `config.example.toml` 完整参考。ProxAI 首次运行时会把该文件写到应用目录，然后从本地 `config.toml` 加载真实运行时配置。
+
+<ProxaiCallout type="caution" title="不要提交密钥">
+  把 `config.example.toml` 当模板。真实的 `api_key` 只放在本地、不进入 git 的 `config.toml` 里。
+</ProxaiCallout>
+
+> 下面的内容直接从仓库根的 `config.example.toml` 注入（单一来源），因此注释保留英文，避免翻译造成漂移。
+
+<Code code={configExample} lang="toml" title="config.example.toml" />
+
+字段逐项说明见 [配置说明](/zh/configuration)。

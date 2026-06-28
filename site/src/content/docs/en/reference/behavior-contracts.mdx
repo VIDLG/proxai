@@ -1,0 +1,81 @@
+---
+title: Behavior Contracts
+description: Stable promises ProxAI commits to across versions
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Behavior Contracts
+
+These are promises ProxAI commits to. Breaking any of them is a breaking change that requires a major version bump and a migration note (see [C30](#versioning)). They are more stable than field names or config defaults.
+
+<ProxaiCallout type="note" title="Why a separate page">
+  Field references describe "what a setting is". Behavior contracts describe "how the system must behave". Contracts are referenced from the pages that implement them.
+</ProxaiCallout>
+
+## Configuration and startup
+
+- **C1.** `config.toml` with missing required fields always fails to start. ProxAI never boots into a partially-valid runtime state using implicit defaults.
+- **C2.** First run always generates `config.example.toml` in the app directory as a local reference.
+- **C3.** The tracked `config.example.toml` in the repository is the canonical example. ProxAI never overwrites it at runtime.
+- **C4.** `[tool_calls].timeout_secs` must be greater than zero, otherwise ProxAI fails to start.
+
+## Listener separation
+
+- **C5.** The MCP listener always binds to a local address (`127.0.0.1` by default) and is never exposed to external networks by ProxAI itself.
+- **C6.** MCP is a control surface only. Model requests flow through the Proxy listener, never through MCP.
+
+## Routing and conversion
+
+- **C7.** Default providers are used only when no explicit route matches. A matching route always wins over defaults.
+- **C8.** Unimplemented conversion pairs always fail explicitly. ProxAI never silently falls through to a default provider when a route matches but the protocol pair is unsupported.
+- **C9.** Provider `protocol` is the semantic identifier. Provider names are user labels and never change wire behavior.
+- **C10.** If a route sets `request_protocol` and the model matches but the inbound protocol differs, ProxAI returns a configuration error instead of routing anyway.
+
+## Provider authentication
+
+- **C11.** Provider `api_key` is always sent upstream. For OpenAI providers (`openai_responses`, `openai_chat_completions`) it is sent as `Authorization: Bearer <key>` and any client-supplied `Authorization` header is ignored.
+- **C12.** For Anthropic Messages providers, the key is sent as `x-api-key`.
+
+## Response reconstruction
+
+- **C13.** Response `Content-Type` is decided by the outbound protocol, not passed through from the upstream.
+- **C14.** Upstream headers are filtered before forwarding. The forwardable set is explicitly controlled by ProxAI, never a verbatim copy of all upstream headers.
+
+## Errors
+
+- **C15.** For non-2xx upstream responses, ProxAI preserves useful diagnostic headers when the upstream actually provides them: `Retry-After`, upstream request id, rate-limit headers. It never fabricates these headers.
+- **C16.** Client-facing errors always include a numeric `status` field inside the payload. This is essential for SSE error events where HTTP status can no longer be changed.
+- **C17.** ProxAI never exposes its internal typed error taxonomy verbatim. Client-facing `type` values are a fixed stable enum, extended only additively.
+- **C18.** ProxAI never fabricates upstream `code` or `param` values. They are only present when the upstream actually provided them.
+
+## Streaming
+
+- **C19.** SSE streams are always observed for terminal events. A stream is considered complete only when the expected terminal event arrives (`response.completed`, `[DONE]`, or `message_stop`).
+- **C20.** Stalled tool-call argument streams always close within `[tool_calls].timeout_secs`. ProxAI never lets a client hang indefinitely after tool-call arguments have started.
+- **C21.** SSE bytes and `text/event-stream` content type are preserved through translation.
+- **C22.** `read_idle_timeout_secs` is an idle-read timeout, not a total request duration cap. It only fires when no new upstream bytes arrive within the configured window.
+
+## Privacy
+
+- **C23.** ProxAI never logs request bodies, `Authorization` headers, API keys, or private prompts.
+- **C24.** Capture artifacts are local files under the app directory only. They are never transmitted by ProxAI itself.
+- **C25.** Capture paths are fixed and not configurable, to avoid accidental writes to arbitrary locations.
+
+## Translation purity
+
+- **C26.** Translation stays pure at the HTTP carrier boundary. It accepts protocol values and payload/stream carriers, not HTTP `Response`/`Body`, route details, model rewrite details, or provider-private structs.
+- **C27.** ProxAI never round-trips raw provider structures across a translation pair. Each direction is independently translated into the target protocol's types.
+- **C28.** Provider-local normalization belongs in `provider/`. General cross-protocol shape changes belong in `translation/`. Provider code must not hide protocol-to-protocol conversion.
+
+## Versioning
+
+- **C29.** Client-facing `type` values are extended additively. Existing values are never renamed or removed without a major version bump.
+- **C30.** Breaking any contract in this page (C1–C30) is a breaking change that requires a major version bump and a migration note.
+
+## Related references
+
+- [Configuration Example](/en/reference/configuration-example)
+- [Defaults and Limits](/en/reference/defaults-and-limits)
+- [Error Responses](/en/reference/error-responses)
+- [Protocols](/en/reference/protocols)

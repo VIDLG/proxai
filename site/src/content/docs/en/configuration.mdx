@@ -1,0 +1,180 @@
+---
+title: Configuration
+description: ProxAI runtime configuration reference
+---
+
+import { ConfigMap, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Configuration
+
+Runtime configuration centers on `config.toml`. The generated `config.example.toml` is the local reference/example, while `config.toml` itself is intentionally git-ignored. These behaviors implement [Behavior Contract C1–C4](/en/reference/behavior-contracts#configuration-and-startup).
+
+<ProxaiCallout type="tip" title="Config is the source of truth">
+  Keep long-lived runtime behavior in `config.toml`. CLI flags are for temporary overrides such as local testing or one-off route changes. For a full reference of the generated example, see [Configuration Example](/en/reference/configuration-example).
+</ProxaiCallout>
+
+## Configuration map
+
+<ConfigMap
+  groups={[
+    {
+      title: 'Local listeners',
+      icon: 'terminal',
+      description: 'HTTP addresses for the proxy and MCP control surface.',
+      keys: ['[server]', '[mcp]'],
+    },
+    {
+      title: 'Routing',
+      icon: 'route',
+      description: 'Default providers and explicit model/protocol routes.',
+      keys: ['[routing.default_provider_names]', '[[routing.routes]]'],
+    },
+    {
+      title: 'Providers',
+      icon: 'protocol',
+      description: 'Upstream endpoints, provider protocols, API keys, and compatibility mode.',
+      keys: ['[providers.<name>]'],
+    },
+    {
+      title: 'Streaming safety',
+      icon: 'timer',
+      description: 'Timeouts for incomplete streamed tool-call arguments and idle upstream reads.',
+      keys: ['[tool_calls]', 'read_idle_timeout_secs'],
+    },
+    {
+      title: 'Diagnostics',
+      icon: 'gauge',
+      description: 'Capture switches, log format, and duration coloring thresholds.',
+      keys: ['[capture]', '[logging]', '[logging.duration_thresholds]'],
+    },
+    {
+      title: 'Client-facing errors',
+      icon: 'alert',
+      description: 'Readable text errors for Zed or JSON errors for OpenAI-compatible clients.',
+      keys: ['[error_responses]'],
+    },
+  ]}
+/>
+
+## App directory
+
+Generated runtime files live under the user app directory:
+
+| Platform | Path |
+|---|---|
+| Windows | `%USERPROFILE%\\.proxai\\` |
+| Linux/macOS | `~/.proxai/` |
+
+Important entries:
+
+| Path | Purpose |
+|---|---|
+| `config.toml` | Runtime configuration, intentionally git-ignored |
+| `config.example.toml` | Generated local example/reference |
+| `logs/` | Runtime log output |
+| `captures/` | Optional per-phase capture artifacts |
+
+## `[server]`
+
+Controls the local proxy listener and request admission limits.
+
+| Field | Meaning |
+|---|---|
+| `host` | Local bind host |
+| `port` | Local proxy port |
+| `max_request_body_bytes` | Maximum inbound request body accepted by ProxAI |
+| `max_concurrent_requests` | Maximum concurrently handled local proxy requests |
+
+## `[mcp]`
+
+Controls the local MCP control/API listener.
+
+| Field | Meaning |
+|---|---|
+| `host` | Local MCP bind host |
+| `port` | Local MCP port |
+
+Default MCP endpoint:
+
+```text
+http://127.0.0.1:18081/mcp
+```
+
+## `[routing.default_provider_names]`
+
+Declares fallback providers per inbound request protocol. Defaults are used only when no explicit route matches.
+
+Current keys:
+
+- `openai_responses`
+- `openai_chat_completions`
+- `anthropic_messages`
+
+For route semantics and examples, see [Routing and Providers](/en/routing-and-providers).
+
+## `[[routing.routes]]`
+
+Routes are filters over inbound requests.
+
+| Field | Meaning |
+|---|---|
+| `name` | Optional stable identifier for CLI overrides |
+| `request_protocol` | Optional inbound protocol guard |
+| `match_kind` | Optional `exact`, `glob`, `regex`, or `auto` |
+| `model_pattern` | Logical model selector |
+| `provider` | Provider name selected when this route matches |
+| `upstream_model` | Optional upstream model mapping |
+
+## `[providers.<name>]`
+
+Each provider describes how ProxAI talks to one concrete upstream.
+
+| Field | Meaning |
+|---|---|
+| `protocol` | Outbound wire protocol: `openai_responses`, `openai_chat_completions`, or `anthropic_messages` |
+| `base_url` | Upstream provider base URL |
+| `api_key` | Provider API key used by ProxAI |
+| `compatibility` | Optional compatibility mode, e.g. `strict` or `anthropic_compatible` |
+| `read_idle_timeout_secs` | Idle-read timeout while waiting for upstream response bytes |
+
+<ProxaiCallout type="caution" title="Never commit secrets">
+  `api_key` values belong in local `config.toml`, not in tracked examples, logs, docs, or fixtures.
+</ProxaiCallout>
+
+## `[tool_calls]`
+
+| Field | Meaning |
+|---|---|
+| `timeout_secs` | Semantic timeout for incomplete streamed tool-call arguments |
+
+This is separate from `read_idle_timeout_secs`: the latter watches raw upstream bytes, while `tool_calls.timeout_secs` watches semantic tool-call completion.
+
+## `[capture]`
+
+Capture phase switches:
+
+| Field | Captures |
+|---|---|
+| `inbound_request_enabled` | Client request as ProxAI received it |
+| `provider_request_enabled` | Request after routing, translation, model rewrite, and provider serialization |
+| `upstream_response_enabled` | Upstream response headers and raw bytes |
+| `outbound_response_enabled` | Final response returned to the client |
+
+Capture paths are fixed under the app directory. For privacy rules and CLI commands, see [Observability](/en/observability).
+
+## `[logging]` and `[logging.duration_thresholds]`
+
+| Field | Meaning |
+|---|---|
+| `output_format` | `human` for interactive debugging or `json` for machine consumption |
+| `use_color` | Enable/disable colored human logs |
+| `warn_ms` / `error_ms` | Human log duration coloring thresholds |
+
+## `[error_responses]`
+
+| Value | Meaning |
+|---|---|
+| `text` | Concise Zed-readable error bodies |
+| `json` | OpenAI-style JSON error bodies for non-Zed clients |
+
+For upstream status handling and preserved headers, see [Troubleshooting](/en/troubleshooting).

@@ -1,0 +1,79 @@
+---
+title: Protocols
+description: Protocol values, request paths, accepted locations, and supported conversion pairs
+---
+
+import { ProtocolCompare, ProtocolMatrix, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Protocols
+
+Single reference for ProxAI protocol values: what they are, where they are accepted, and which conversion pairs are supported. Provider names are user labels; protocol values are the semantic identifiers.
+
+## Values and request paths
+
+| Protocol value | Wire protocol | Request path |
+|---|---|---|
+| `openai_responses` | OpenAI Responses API | `/v1/responses` |
+| `openai_chat_completions` | OpenAI Chat Completions API | `/v1/chat/completions` |
+| `anthropic_messages` | Anthropic Messages API | `/v1/messages` |
+
+<ProxaiCallout type="note" title="Detected, not declared">
+  The inbound protocol is detected from the request path. Clients do not send `request_protocol` as a field.
+</ProxaiCallout>
+
+## Where each value is accepted
+
+<ProtocolCompare
+  columns={['Config / phase location', 'Accepted values', 'Notes']}
+  rows={[
+    ['`routing.default_provider_names.<key>`', 'one of the three protocol values', 'Key is the inbound request protocol; value is a provider name.'],
+    ['`[[routing.routes]].request_protocol`', 'optional, one of the three', 'Optional inbound protocol guard; omitted means match any inbound protocol.'],
+    ['`[providers.<name>].protocol`', 'one of the three protocol values', 'Controls outbound wire format and selects the translation pair.'],
+    ['`inbound_request.protocol`', 'detected from request path', 'Set by ingress, not configured directly.'],
+    ['`provider_request.protocol`', 'equals selected provider protocol', 'Set after routing selects a provider.'],
+    ['`upstream_response.protocol`', 'equals provider protocol', 'Determined by the provider implementation.'],
+    ['`outbound_response.protocol`', 'equals inbound request protocol', 'Translation restores the client-facing protocol.'],
+  ]}
+/>
+
+## Supported conversion pairs
+
+<ProtocolMatrix
+  rows={[
+    { inbound: 'openai_responses', provider: 'openai_responses', status: 'Pass-through' },
+    { inbound: 'openai_chat_completions', provider: 'openai_chat_completions', status: 'Pass-through' },
+    { inbound: 'anthropic_messages', provider: 'anthropic_messages', status: 'Pass-through' },
+    { inbound: 'openai_responses', provider: 'openai_chat_completions', status: 'Explicit conversion' },
+    { inbound: 'openai_responses', provider: 'anthropic_messages', status: 'Explicit conversion' },
+    { inbound: 'openai_chat_completions', provider: 'anthropic_messages', status: 'Explicit conversion' },
+    { inbound: 'anthropic_messages', provider: 'openai_responses', status: 'Explicit conversion' },
+  ]}
+/>
+
+All other pairs fail explicitly. Notable intentionally unsupported pairs:
+
+- `anthropic_messages` → `openai_chat_completions`
+- `openai_chat_completions` → `openai_responses`
+
+Each new pair must add runtime routing, request/response conversion, streaming conversion, and focused tests. The routing rules implement [Behavior Contract C7–C10](/en/reference/behavior-contracts#routing-and-conversion).
+
+## Module naming convention
+
+```text
+src/translation/<inbound_protocol>/to_<provider_protocol>/
+```
+
+Examples:
+
+```text
+src/translation/openai_responses/to_anthropic_messages/
+src/translation/anthropic_messages/to_openai_responses/
+src/translation/openai_chat_completions/to_anthropic_messages/
+```
+
+For the conversion design rules, see [Protocol Conversion](/en/protocol-conversion).
+
+## Related references
+
+- [Configuration Example](/en/reference/configuration-example)
+- [Defaults and Limits](/en/reference/defaults-and-limits)

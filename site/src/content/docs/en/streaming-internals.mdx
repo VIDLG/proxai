@@ -1,0 +1,119 @@
+---
+title: Streaming Internals
+description: Internal streaming architecture — carrier, BodyObserver, SSE scanner, and protocol state machines
+robots: noindex
+---
+
+import { EventTimeline, FeatureGrid, PipelineStrip, ProxaiCallout, TroubleshootingGrid } from '@components/ProxaiDocs.jsx';
+
+# Streaming Internals
+
+ProxAI treats streaming as a byte-carrier problem plus protocol-specific event observation. The upstream SSE bytes are preserved, while provider observers scan events, maintain state, and emit compact diagnostics.
+
+<ProxaiCallout type="tip" title="Carrier first, semantics second">
+  The stream carrier owns bytes, idle timeout, and lifecycle hooks. Protocol observers own event semantics such as terminal events, tool-call completion, and stream outcome diagnostics.
+</ProxaiCallout>
+
+## Layering
+
+<PipelineStrip
+  steps={[
+    { title: 'pipeline/upstream_response.rs', description: 'Detects successful SSE responses and dispatches to provider streaming handling.' },
+    { title: 'provider/<protocol>/response/streaming.rs', description: 'Constructs the protocol-specific BodyObserver and returns an outbound streaming body.' },
+    { title: 'upstream/streaming.rs', description: 'Wraps reqwest bytes_stream, records metrics, invokes observer hooks, and enforces idle timeout.' },
+  ]}
+/>
+
+`translation/` does not perform provider-local stream observation. Provider streaming observation stays inside `provider/`; cross-protocol stream translation stays in `translation/streaming`.
+
+## BodyObserver lifecycle
+
+```rust
+pub(crate) trait BodyObserver: Send + Unpin + 'static {
+    fn on_chunk(&mut self, _chunk: &[u8]) -> BodyAction;
+    fn on_stream_error(&mut self, error: &reqwest::Error);
+    fn poll_pending_action(&mut self, _cx: &mut Context<'_>) -> BodyAction;
+    fn on_stream_finished(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats);
+}
+```
+
+<PipelineStrip
+  steps={[
+    { title: 'Pull bytes', description: 'Read the next chunk from reqwest response bytes_stream().' },
+    { title: 'Record carrier metrics', description: 'Update common upstream stream byte/chunk stats.' },
+    { title: 'Scan SSE events', description: 'Use SseEventScanner once per chunk inside the provider observer.' },
+    { title: 'Update protocol state', description: 'Feed parsed events into the provider state machine.' },
+    { title: 'Maybe intervene', description: 'Most chunks continue unchanged; rare semantic failures inject an SSE error and close.' },
+    { title: 'Finish snapshot', description: 'On EOF/error/timeout/drop, emit a compact stream outcome snapshot.' },
+  ]}
+/>
+
+## Common provider observer shape
+
+The three provider protocols now follow the same structure:
+
+| File | Responsibility |
+|---|---|
+| `streaming.rs` | Carrier hook implementation and lifecycle checks |
+| `state.rs` | Protocol event state and summary/outcome projection |
+| `SseEventScanner` | Chunk-to-event scanning, held by the observer |
+
+## Protocol event timelines
+
+### OpenAI Responses
+
+<EventTimeline
+  events={[
+    { name: 'response.created', description: 'Start of a Responses stream and initial response metadata.' },
+    { name: 'response.output_item.added', description: 'A new output item such as message, reasoning, function_call, or MCP item.' },
+    { name: 'response.output_text.delta / response.function_call_arguments.delta', description: 'Incremental text or tool-call argument bytes.' },
+    { name: 'response.output_text.done / response.function_call_arguments.done', description: 'Semantic completion of a content part or tool-call arguments.' },
+    { name: 'response.output_item.done', description: 'Output item is complete.' },
+    { name: 'response.completed', description: 'Terminal event for a complete stream.' },
+  ]}
+/>
+
+OpenAI Responses has extra tool-call semantics. If tool-call arguments start but never finish, ProxAI can inject a Responses-style SSE error event and close the stream.
+
+### OpenAI Chat Completions
+
+<EventTimeline
+  events={[
+    { name: 'chat.completion.chunk', description: 'Delta chunk containing role/content/tool_calls/finish_reason updates.' },
+    { name: '[DONE]', description: 'Terminal sentinel. EOF without this sentinel is treated as a closed/incomplete stream.' },
+  ]}
+/>
+
+### Anthropic Messages
+
+<EventTimeline
+  events={[
+    { name: 'message_start', description: 'Starts an Anthropic message stream.' },
+    { name: 'content_block_start', description: 'Starts a text, thinking, tool_use, or other content block.' },
+    { name: 'content_block_delta', description: 'Incremental content for the current block.' },
+    { name: 'content_block_stop', description: 'Completes a content block.' },
+    { name: 'message_delta', description: 'Carries stop_reason, stop_sequence, usage, and other message-level deltas.' },
+    { name: 'message_stop', description: 'Terminal event for a complete Anthropic stream.' },
+  ]}
+/>
+
+## BodyAction
+
+```rust
+pub(crate) enum BodyAction {
+    Continue,
+    InjectAndClose(Bytes),
+}
+```
+
+Most observers return `Continue`. `InjectAndClose` is reserved for cases where ProxAI can produce a better client-facing stream failure than silently hanging or closing without context.
+
+## Related docs
+
+<FeatureGrid
+  items={[
+    { title: 'Architecture', href: '/en/architecture', icon: 'architecture', description: 'Where streaming fits in the typed proxy pipeline.' },
+    { title: 'Protocol conversion', href: '/en/protocol-conversion', icon: 'flow', description: 'How streaming conversion stays pure at the carrier boundary.' },
+    { title: 'Streaming behavior', href: '/en/streaming-behavior', icon: 'rocket', description: 'User-facing streaming behavior and terminal-event expectations.' },
+  ]}
+/>

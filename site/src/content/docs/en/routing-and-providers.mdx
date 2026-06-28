@@ -1,0 +1,78 @@
+---
+title: Routing and Providers
+description: How ProxAI chooses providers and separates request protocols from provider protocols
+---
+
+import { ProxaiCallout, ProtocolMatrix } from '@components/ProxaiDocs.jsx';
+
+# Routing and Providers
+
+Routing answers one question: **which configured provider should handle this inbound request?** Provider configuration answers another: **which wire protocol and upstream endpoint does that provider use?**
+
+<ProxaiCallout type="note" title="Names are labels">
+  Provider names are user labels. The semantic protocol is the provider's `protocol` field, not the provider name.
+</ProxaiCallout>
+
+## Request protocol vs provider protocol
+
+- `request_protocol` is an optional route filter based on the inbound endpoint ProxAI detected.
+- Provider `protocol` controls the outbound wire format sent upstream.
+- If a route omits `request_protocol`, it can match the actual inbound protocol detected from the request path.
+- If a route sets `request_protocol` and the model matches but the inbound protocol differs, ProxAI returns a configuration error instead of silently falling through.
+
+## Supported protocol values
+
+<ProtocolMatrix
+  labels={{ inbound: 'Protocol value', provider: 'Used by', status: 'Meaning' }}
+  rows={[
+    { inbound: 'openai_responses', provider: 'Requests and providers', status: 'OpenAI Responses API' },
+    { inbound: 'openai_chat_completions', provider: 'Requests and providers', status: 'OpenAI Chat Completions API' },
+    { inbound: 'anthropic_messages', provider: 'Requests and providers', status: 'Anthropic Messages API' },
+  ]}
+/>
+
+## Route matching model
+
+A route usually contains:
+
+```toml
+[[routing.routes]]
+name = "minimax_m3_chat"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+Important fields:
+
+| Field | Role |
+|---|---|
+| `name` | Stable identifier for CLI overrides |
+| `request_protocol` | Optional endpoint/protocol guard |
+| `match_kind` | `exact`, `glob`, `regex`, or `auto` |
+| `model_pattern` | Logical model selector |
+| `provider` | Provider name selected when this route matches |
+| `upstream_model` | Optional model rewrite before sending upstream |
+
+## Provider definition
+
+A provider describes a concrete upstream:
+
+```toml
+[providers.minimax]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+read_idle_timeout_secs = 60
+```
+
+Provider `protocol` controls whether request translation is needed. For example, an inbound `openai_chat_completions` request routed to an `anthropic_messages` provider requires the `openai_chat_completions -> anthropic_messages` conversion pair. Provider `api_key` is always sent upstream (`Authorization: Bearer` for OpenAI providers, `x-api-key` for Anthropic providers) and overrides any client-supplied auth header — see [Behavior Contract C11 and C12](/en/reference/behavior-contracts#provider-authentication).
+
+## Related docs
+
+- [Configuration](/en/configuration)
+- [Protocol overview](/en/protocols-overview)
+- [Protocol conversion](/en/protocol-conversion)

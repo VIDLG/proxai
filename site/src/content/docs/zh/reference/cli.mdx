@@ -1,0 +1,76 @@
+---
+title: CLI
+description: ProxAI 运行 flag、route override、capture 子命令与默认端点
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# CLI
+
+ProxAI 的 CLI flag 刻意保持精简。它们用于临时覆盖，例如本地测试或一次性的 route 调整。长期行为应放在 `config.toml`。
+
+## 可执行文件
+
+```sh
+proxai.exe
+```
+
+## 运行 flag
+
+```sh
+proxai \
+  --config <path> \
+  --upstream <url> \
+  --api-key <key> \
+  --port <port> \
+  --log-level <level> \
+  --log-format <human|json> \
+  --route-override ROUTE.FIELD=VALUE
+```
+
+| Flag | 用途 |
+|---|---|
+| `--config` | 指定 config 文件路径（默认为 app dir 下的 `config.toml`） |
+| `--upstream` | 临时覆盖本次运行中 `openai_responses` 默认 provider 的上游 URL |
+| `--api-key` | 临时覆盖本次运行中 `openai_responses` 默认 provider 的 API key |
+| `--port` | 覆盖本地代理监听端口 |
+| `--log-level` | 覆盖日志级别 |
+| `--log-format` | 覆盖日志输出格式（`human` 或 `json`） |
+| `--route-override` | 临时覆盖某个具名 `[[routing.routes]]` 字段 |
+
+## Route override
+
+`--route-override` 可以重复使用。支持覆盖的字段包括 `request_protocol`、`match_kind`、`model_pattern`、`provider` 和 `upstream_model`。对可选字段传空值可以清空。
+
+```sh
+proxai --route-override minimax_m3_chat.model_pattern=MiniMax-M3-preview \
+       --route-override minimax_m3_chat.upstream_model=MiniMax-M3
+```
+
+<ProxaiCallout type="caution" title="不要把真实 key 留在 shell history">
+  优先编辑本地 `config.toml`。仅在临时调试时使用 `--api-key`，并事后清理 shell history。
+</ProxaiCallout>
+
+## capture 子命令
+
+```sh
+proxai capture status
+proxai capture enable  [inbound-request|provider-request|upstream-response|outbound-response]
+proxai capture disable [inbound-request|provider-request|upstream-response|outbound-response]
+```
+
+这些会持久化本地 capture 默认值。一次性调试也可以使用单次运行 flag：
+
+```sh
+proxai --capture-inbound-request
+proxai --capture-provider-request
+proxai --capture-upstream-response
+proxai --capture-outbound-response
+```
+
+每个 capture phase 的含义见 [观测与诊断](/zh/observability)。默认端点和其他运行时限制见 [默认值与限制](/zh/reference/defaults-and-limits)。MCP 仅是本地控制面，见 [行为契约 C5 和 C6](/zh/reference/behavior-contracts#监听分离)。
+
+## 相关参考
+
+- [配置示例](/zh/reference/configuration-example)
+- [错误响应](/zh/reference/error-responses)

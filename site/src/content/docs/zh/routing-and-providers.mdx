@@ -1,0 +1,78 @@
+---
+title: 路由与 Provider
+description: ProxAI 如何选择 provider，以及如何区分请求协议与 provider 协议
+---
+
+import { ProxaiCallout, ProtocolMatrix } from '@components/ProxaiDocs.jsx';
+
+# 路由与 Provider
+
+路由回答的是：**这个入站请求应该交给哪个已配置 provider？** Provider 配置回答的是：**这个 provider 使用什么 wire protocol 和哪个上游 endpoint？**
+
+<ProxaiCallout type="note" title="名称只是标签">
+  Provider 名称只是用户标签。真正表达语义协议的是 provider 的 `protocol` 字段，而不是 provider 名字。
+</ProxaiCallout>
+
+## 请求协议 vs provider 协议
+
+- `request_protocol` 是可选 route 过滤条件，基于 ProxAI 从入站 endpoint 检测出的协议。
+- Provider `protocol` 控制发给上游时使用的 wire format。
+- 如果 route 省略 `request_protocol`，它可以匹配从请求 path 检测出的任意入站协议。
+- 如果 route 设置了 `request_protocol`，并且模型命中但入站协议不同，ProxAI 会返回配置错误，而不是静默落到默认 provider。
+
+## 支持的协议值
+
+<ProtocolMatrix
+  labels={{ inbound: '协议值', provider: '使用位置', status: '含义' }}
+  rows={[
+    { inbound: 'openai_responses', provider: '请求与 provider', status: 'OpenAI Responses API' },
+    { inbound: 'openai_chat_completions', provider: '请求与 provider', status: 'OpenAI Chat Completions API' },
+    { inbound: 'anthropic_messages', provider: '请求与 provider', status: 'Anthropic Messages API' },
+  ]}
+/>
+
+## Route 匹配模型
+
+一条 route 通常类似：
+
+```toml
+[[routing.routes]]
+name = "minimax_m3_chat"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+关键字段：
+
+| 字段 | 作用 |
+|---|---|
+| `name` | CLI override 使用的稳定标识 |
+| `request_protocol` | 可选 endpoint/protocol 保护条件 |
+| `match_kind` | `exact`、`glob`、`regex` 或 `auto` |
+| `model_pattern` | 逻辑模型选择器 |
+| `provider` | route 命中时选择的 provider 名称 |
+| `upstream_model` | 发往上游前可选模型改写 |
+
+## Provider 定义
+
+Provider 描述一个具体上游：
+
+```toml
+[providers.minimax]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+read_idle_timeout_secs = 60
+```
+
+Provider `protocol` 决定是否需要请求转换。例如，一个入站 `openai_chat_completions` 请求如果被路由到 `anthropic_messages` provider，就需要 `openai_chat_completions -> anthropic_messages` 转换路径。Provider `api_key` 一定会发给上游（OpenAI provider 用 `Authorization: Bearer`，Anthropic provider 用 `x-api-key`），并覆盖客户端传入的认证 header，见 [行为契约 C11 和 C12](/zh/reference/behavior-contracts#provider-认证)。
+
+## 相关文档
+
+- [配置说明](/zh/configuration)
+- [协议总览](/zh/protocols-overview)
+- [协议转换](/zh/protocol-conversion)

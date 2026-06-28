@@ -1,0 +1,64 @@
+---
+title: 快速开始
+description: 本地运行 ProxAI 并让客户端接入代理
+---
+
+import { PipelineStrip, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 快速开始
+
+本文说明如何在本地跑起 ProxAI，并完成客户端接入前最小必要配置。
+
+<PipelineStrip
+  steps={[
+    { title: '安装或构建 ProxAI', description: '使用 release 可执行文件，或在本地构建 Rust 项目。' },
+    { title: '生成应用配置', description: '先运行一次 ProxAI，让应用目录和示例配置生成出来。' },
+    { title: '编辑 config.toml', description: '配置 provider base URL、API key、协议与默认路由。' },
+    { title: '让客户端指向 ProxAI', description: '把客户端 base URL 改成本地代理，而不是直接连上游。' },
+  ]}
+/>
+
+## 本地端点
+
+默认运行时端点：
+
+| 端点 | 默认 URL | 用途 |
+|---|---|---|
+| Proxy | `http://127.0.0.1:18080` | OpenAI 兼容与 Anthropic 风格请求代理 |
+| MCP | `http://127.0.0.1:18081/mcp` | 本地 MCP 控制面 |
+
+## 应用目录
+
+运行时文件会生成在用户应用目录：
+
+| 平台 | 路径 |
+|---|---|
+| Windows | `%USERPROFILE%\\.proxai\\` |
+| Linux/macOS | `~/.proxai/` |
+
+重要文件和目录：
+
+- `config.toml` —— 本地运行时配置，刻意不进入 git
+- `config.example.toml` —— 生成的示例/参考配置
+- `logs/` —— 运行日志
+- `captures/` —— 可选的分阶段请求/响应捕获
+
+<ProxaiCallout type="caution" title="密钥只放本地">
+  不要提交 `config.toml`、API key、日志、captures 或包含私有 prompt 的复现 fixture。仓库里只保留脱敏示例。
+</ProxaiCallout>
+
+## 客户端配置
+
+客户端 base URL 指向本地代理：
+
+```text
+http://127.0.0.1:18080
+```
+
+如果客户端 UI 强制要求填写 API key，通常可以填一个 dummy key。对于 OpenAI 兼容 provider，ProxAI 会使用 `config.toml` 里的 provider key，而不是转发客户端原始 `Authorization` header。
+
+## 下一步
+
+- [配置说明](/zh/configuration)
+- [路由与 Provider](/zh/routing-and-providers)
+- [架构](/zh/architecture)

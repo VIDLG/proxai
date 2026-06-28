@@ -1,0 +1,30 @@
+---
+const fallback = '/en/';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content={`0; url=${fallback}`} />
+    <title>ProxAI Docs</title>
+    <script is:inline>
+      const languages = navigator.languages || [navigator.language || 'en'];
+      const target = languages.some((lang) => lang.toLowerCase().startsWith('zh'))
+        ? '/zh/'
+        : '/en/';
+      location.replace(target);
+    </script>
+  </head>
+  <body>
+    <main>
+      <p>
+        Redirecting to documentation…
+        <a href="/en/">English</a>
+        ·
+        <a href="/zh/">中文</a>
+      </p>
+    </main>
+  </body>
+</html>

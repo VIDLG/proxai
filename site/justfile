@@ -1,0 +1,22 @@
+set shell := ["sh", "-cu"]
+
+pixi := "env -u '!::' pixi"
+
+install:
+    {{ pixi }} run -- pnpm install
+
+dev:
+    {{ pixi }} run -- pnpm run dev
+
+build:
+    {{ pixi }} run -- pnpm run build
+
+check:
+    {{ pixi }} run -- pnpm run build
+    python ../tools/check_docs_i18n.py
+
+start:
+    {{ pixi }} run -- pnpm run start
+
+clean:
+    rm -rf .astro dist .next out node_modules

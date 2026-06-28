@@ -1,0 +1,81 @@
+---
+title: 行为契约
+description: ProxAI 跨版本承诺的稳定行为
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 行为契约
+
+这些是 ProxAI 承诺的行为。破坏其中任何一条都是破坏性变更，需要提升主版本号并附迁移说明（见 [C30](#版本演进)）。它们比字段名或配置默认值更稳定。
+
+<ProxaiCallout type="note" title="为什么单独成页">
+  字段参考描述“设置是什么”，行为契约描述“系统必须怎么行为”。契约会被实现它们的页面反向引用。
+</ProxaiCallout>
+
+## 配置与启动
+
+- **C1.** `config.toml` 缺失必填字段一定启动失败。ProxAI 永远不会用隐式默认启动到部分有效的运行时状态。
+- **C2.** 首次运行一定在 app 目录生成 `config.example.toml` 作为本地参考。
+- **C3.** 仓库中被跟踪的 `config.example.toml` 是权威示例。ProxAI 运行时从不覆盖它。
+- **C4.** `[tool_calls].timeout_secs` 必须大于 0，否则 ProxAI 启动失败。
+
+## 监听分离
+
+- **C5.** MCP listener 始终绑定本地地址（默认 `127.0.0.1`），ProxAI 自身永远不会把它暴露到外网。
+- **C6.** MCP 只是控制面。模型请求走 Proxy listener，永远不走 MCP。
+
+## 路由与转换
+
+- **C7.** 只有在没有显式 route 命中时才使用默认 provider。命中的 route 永远优先于默认。
+- **C8.** 未实现的转换对一定显式失败。当 route 命中但协议对不支持时，ProxAI 永远不会静默 fallthrough 到默认 provider。
+- **C9.** Provider `protocol` 是语义标识。Provider 名字只是用户标签，永远不会改变 wire 行为。
+- **C10.** 如果 route 设置了 `request_protocol`，并且模型命中但入站协议不同，ProxAI 会返回配置错误，而不是继续路由。
+
+## Provider 认证
+
+- **C11.** Provider `api_key` 一定会发给上游。对 OpenAI provider（`openai_responses`、`openai_chat_completions`），以 `Authorization: Bearer <key>` 发送，并忽略客户端传入的任何 `Authorization` header。
+- **C12.** 对 Anthropic Messages provider，key 以 `x-api-key` 发送。
+
+## 响应重建
+
+- **C13.** 响应 `Content-Type` 由 outbound 协议决定，不透传上游的。
+- **C14.** Upstream headers 在转发前会经过过滤。可转发的集合由 ProxAI 显式控制，永远不会原样复制全部上游 headers。
+
+## 错误
+
+- **C15.** 对非 2xx 上游响应，ProxAI 在上游确实提供时保留有用的诊断 headers：`Retry-After`、上游 request id、rate-limit headers。永远不会伪造这些 headers。
+- **C16.** 面向客户端的错误一定在 payload 内包含数字 `status` 字段。这对 SSE error event 尤其重要，因为流式开始后无法再修改 HTTP status。
+- **C17.** ProxAI 永远不会原样暴露内部强类型 error taxonomy。面向客户端的 `type` 取值是固定的稳定枚举，且仅以加法扩展。
+- **C18.** ProxAI 永远不会伪造上游 `code` 或 `param` 取值。只有上游确实提供时才保留。
+
+## 流式
+
+- **C19.** SSE 流一定被检测 terminal event。只有收到预期 terminal event（`response.completed`、`[DONE]` 或 `message_stop`）才认为流完整。
+- **C20.** 卡住的 tool-call argument 流一定在 `[tool_calls].timeout_secs` 内关闭。ProxAI 永远不会让客户端在工具调用参数开始后无限挂起。
+- **C21.** SSE bytes 和 `text/event-stream` content type 在翻译过程中被保留。
+- **C22.** `read_idle_timeout_secs` 是 idle-read 超时，不是整条请求的总时长上限。它只在配置窗口内没有新上游 bytes 到达时触发。
+
+## 隐私
+
+- **C23.** ProxAI 永远不日志请求 body、`Authorization` header、API key 或私有 prompt。
+- **C24.** Capture artifact 仅是 app 目录下的本地文件，永远不会被 ProxAI 自身传输。
+- **C25.** Capture 路径固定，不可配置，避免误写到任意位置。
+
+## 转换纯度
+
+- **C26.** 转换在 HTTP 载体边界保持纯函数。它接收 protocol 值和 payload/stream carrier，不接收 HTTP `Response`/`Body`、路由细节、模型重写细节或 provider 私有结构。
+- **C27.** ProxAI 永远不在转换 pair 之间原样 round-trip 上游结构。每个方向独立翻译成目标协议的类型。
+- **C28.** Provider-local normalization 属于 `provider/`。通用跨协议 shape 改写属于 `translation/`。Provider 代码不得隐藏协议到协议的转换。
+
+## 版本演进
+
+- **C29.** 面向客户端的 `type` 取值仅以加法扩展。已有取值永远不会被重命名或删除，除非主版本号升级。
+- **C30.** 破坏本页任何契约（C1–C30）都是破坏性变更，需要主版本号升级并附迁移说明。
+
+## 相关参考
+
+- [配置示例](/zh/reference/configuration-example)
+- [默认值与限制](/zh/reference/defaults-and-limits)
+- [错误响应](/zh/reference/error-responses)
+- [协议](/zh/reference/protocols)

@@ -1,0 +1,105 @@
+---
+title: 错误响应
+description: 面向客户端的错误 payload、type 枚举、HTTP status 语义与保留的 headers
+---
+
+import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { JsonExample } from '@components/JsonExample.jsx';
+
+# 错误响应
+
+ProxAI 失败时客户端能看到的统一参考：payload 字段、允许的 `type` 取值、HTTP status 语义和保留的 upstream headers。内部投影链路见 [错误处理内部实现](/zh/error-handling-internals)。
+
+## JSON 形态
+
+```json
+{
+  "error": {
+    "message": "quota exhausted",
+    "type": "upstream_error",
+    "code": "rate_limit_exceeded",
+    "param": "input",
+    "status": 429
+  }
+}
+```
+
+可交互展示：
+
+<JsonExample data={{
+  error: {
+    message: 'quota exhausted',
+    type: 'upstream_error',
+    code: 'rate_limit_exceeded',
+    param: 'input',
+    status: 429,
+  },
+}} />
+
+## Payload 字段
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `message` | string | 人类可读的错误信息 |
+| `type` | enum | 面向客户端的错误分类，snake_case |
+| `code` | string? | 上游 OpenAI 风格错误 code，仅在上游提供时保留 |
+| `param` | value? | 上游 OpenAI 风格错误 param，仅在上游提供时保留 |
+| `status` | u16 | JSON/SSE payload 内携带的数字状态码 |
+
+<ProxaiCallout type="note" title="status 是 payload 字段">
+  `status` 是 wire payload 内的数字状态码。SSE error event 中尤其重要，因为流式开始后无法再修改 HTTP status。
+</ProxaiCallout>
+
+## 允许的 `type` 取值
+
+```text
+invalid_request_error
+internal_error
+upstream_request_error
+upstream_error
+upstream_response_body_read_error
+upstream_error_body_empty
+upstream_error_body_non_json
+upstream_error_body_unknown_shape
+sse_translation_error
+```
+
+ProxAI 不会把内部强类型 error taxonomy 原样暴露。上面这些 `type` 是稳定的客户端分类。
+
+## 响应格式
+
+`[error_responses]` 配置决定 payload 如何渲染：
+
+```toml
+[error_responses]
+format = "text"   # 或 "json"
+```
+
+- `text`：只返回 `payload.message`，`text/plain`，适合 Zed 阅读，默认值。
+- `json`：返回完整的上述 JSON 包装。
+
+## HTTP status 语义
+
+| Status | 含义 |
+|---|---|
+| `400` | 入站请求对检测出的协议无效（`invalid_request_error`） |
+| `500` | ProxAI 运行时不变量、本地 IO、序列化或内部 body 读取失败（`internal_error`） |
+| `502` / `503` / `504` | 上游发送/状态/body 读取失败（`upstream_*`） |
+| 上游 status | 对上游非 2xx 响应，ProxAI 把上游 status 映射为客户端可见 status，并在 payload 中保留上游数字 status |
+
+流式响应的错误通常发生在 HTTP status 已经开始（一般是 `200`）之后，因此错误以 SSE event 形式送达，event 内携带数字 `status` 字段。
+
+## 保留的 upstream headers
+
+对上游非 2xx 响应，ProxAI 在上游确实提供时会保留有用的诊断 headers：
+
+- `Retry-After`
+- 上游 request id headers
+- rate-limit headers
+
+不会伪造这些 headers。响应 `Content-Type` 由 outbound 协议决定，不透传上游的，见 [契约 C13](/zh/reference/behavior-contracts#响应重建)。Upstream headers 在转发前会经过过滤，见 [契约 C14](/zh/reference/behavior-contracts#响应重建)。
+
+## 相关参考
+
+- [配置示例](/zh/reference/configuration-example)
+- [CLI](/zh/reference/cli)
