@@ -42,7 +42,7 @@ fn prepare_provider_request_builds_projection_and_summary() {
         "max_tokens": 256,
         "stream": true,
         "service_tier": "standard_only",
-        "thinking": {"type": "enabled", "budget_tokens": 1024},
+        "thinking": {"type": "adaptive", "display": "summarized"},
         "tool_choice": {"type": "tool", "name": "lookup"},
         "tools": [
             {

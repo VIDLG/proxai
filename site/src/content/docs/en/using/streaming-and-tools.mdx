@@ -1,0 +1,70 @@
+---
+title: Streaming and Tools
+description: User-facing guide to streaming terminal events, tool-call argument stalls, semantic timeouts, idle-read timeouts, and safe captures
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Streaming and Tools
+
+Use this page when streaming works for plain text but fails, stalls, or returns unexpected events when tools are involved.
+
+<ProxaiCallout type="note" title="There are two timeout layers">
+  `read_idle_timeout_secs` watches upstream bytes. `[tool_calls].timeout_secs` watches semantic completion of streamed tool-call arguments. They solve different problems.
+</ProxaiCallout>
+
+## Terminal signals
+
+<ReferenceTable
+  columns={['Inbound protocol', 'Expected terminal signal']}
+  rows={[
+    ['`openai_responses`', '`response.completed` or compatible terminal Responses event'],
+    ['`openai_chat_completions`', '`data: [DONE]`'],
+    ['`anthropic_messages`', '`message_stop`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Diagnose a stalled tool stream
+
+<PipelineStrip
+  steps={[
+    { title: 'Confirm bytes are arriving', description: 'If no bytes arrive, check provider connectivity and read_idle_timeout_secs.' },
+    { title: 'Check whether tool arguments started', description: 'If argument chunks began but never completed, this is a semantic tool-call stall.' },
+    { title: 'Check tool_calls timeout', description: 'Tune [tool_calls].timeout_secs for incomplete streamed tool arguments.' },
+    { title: 'Capture narrowly', description: 'Use provider_request or upstream_response only for one sanitized repro.' },
+    { title: 'Compare terminal events', description: 'Verify the provider emitted the terminal event expected by its protocol.' },
+  ]}
+/>
+
+## Timeout map
+
+<ReferenceTable
+  columns={['Setting', 'Layer', 'Meaning']}
+  rows={[
+    ['`[providers.<name>].read_idle_timeout_secs`', 'Transport carrier', 'Maximum idle gap while waiting for upstream bytes.'],
+    ['`[tool_calls].timeout_secs`', 'Protocol semantics', 'Maximum wait for incomplete streamed tool-call arguments after they start.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Safe capture choice
+
+<ReferenceTable
+  columns={['Question', 'Capture phase']}
+  rows={[
+    ['Did ProxAI send the expected tool schema upstream?', '`provider_request`'],
+    ['Did the provider emit tool-call argument chunks?', '`upstream_response`'],
+    ['Did the client receive the expected translated chunks?', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Always disable capture after one reproduction. See [Capture Phases](/en/reference/capture-phases).
+
+## Related docs
+
+- [Streaming Behavior](/en/protocol/streaming-behavior)
+- [Debugging Workflow](/en/using/debugging-workflow)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)
+- [Compatibility Matrix](/en/reference/compatibility-matrix)

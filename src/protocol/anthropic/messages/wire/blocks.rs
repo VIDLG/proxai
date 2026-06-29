@@ -6,6 +6,7 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, Display};
 
 use super::{
     citations::{CitationsConfig, CitationsConfigParam, TextCitationParam},
@@ -28,28 +29,34 @@ pub enum DocumentBlockType {
 }
 
 /// Media type enum used by `Base64ImageSource.media_type`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum ImageMediaType {
+    #[strum(serialize = "image/jpeg")]
     #[serde(rename = "image/jpeg")]
     Jpeg,
+    #[strum(serialize = "image/png")]
     #[serde(rename = "image/png")]
     Png,
+    #[strum(serialize = "image/gif")]
     #[serde(rename = "image/gif")]
     Gif,
+    #[strum(serialize = "image/webp")]
     #[serde(rename = "image/webp")]
     Webp,
 }
 
 /// Media type enum used by `Base64PDFSource.media_type`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum PdfMediaType {
+    #[strum(serialize = "application/pdf")]
     #[serde(rename = "application/pdf")]
     ApplicationPdf,
 }
 
 /// Media type enum used by `PlainTextSource.media_type`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum PlainTextMediaType {
+    #[strum(serialize = "text/plain")]
     #[serde(rename = "text/plain")]
     TextPlain,
 }

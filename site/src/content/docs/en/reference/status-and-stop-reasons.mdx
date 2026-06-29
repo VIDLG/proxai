@@ -1,0 +1,84 @@
+---
+title: Status and Stop Reasons
+description: Reference for terminal status, stop reasons, finish reasons, and streaming completion signals
+---
+
+import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Status and Stop Reasons
+
+Different protocols use different names for “the model stopped producing output”. ProxAI treats these as related protocol concepts, not interchangeable raw fields.
+
+<ProxaiCallout type="note" title="One response does not mean one stop reason shape">
+  Non-streaming Anthropic Messages returns one final `message` object. That object normally includes stop-related fields, but wire types still model them as nullable/missing-compatible because SDK schemas and intermediate upstreams may omit nullable fields.
+</ProxaiCallout>
+
+## Terminal concepts
+
+<ReferenceTable
+  columns={['Protocol', 'Terminal fields or events', 'Meaning']}
+  rows={[
+    ['OpenAI Responses', '`status`, output items, `response.completed`', 'The response envelope and typed events describe completion.'],
+    ['OpenAI Chat Completions', '`choices[].finish_reason`, `[DONE]`', 'Each choice has a finish reason; the stream ends with `[DONE]`.'],
+    ['Anthropic Messages', '`stop_reason`, `stop_sequence`, `message_stop`', 'The final message carries stop metadata; streaming ends with `message_stop`.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Reason map
+
+<ReasonMap
+  groups={[
+    {
+      title: 'Anthropic Messages stop_reason',
+      items: [
+        { value: 'end_turn', mapsTo: 'stop', note: 'The assistant naturally finished its turn.' },
+        { value: 'max_tokens', mapsTo: 'length', note: 'Generation stopped because the token budget was reached.' },
+        { value: 'stop_sequence', mapsTo: 'stop', note: 'A configured stop sequence was generated. `stop_sequence` may identify the matched sequence.' },
+        { value: 'tool_use', mapsTo: 'tool_calls', note: 'The assistant produced a tool-use request and expects the client/tool loop to continue.' },
+        { value: 'pause_turn', mapsTo: 'stop or protocol-specific continuation', note: 'Provider asks the client to continue later; conversion must be careful not to pretend it is a normal final answer.' },
+        { value: 'refusal', mapsTo: 'content_filter or refusal metadata', note: 'Provider refused the request. Preserve refusal semantics where the target protocol can represent them.' },
+      ],
+    },
+    {
+      title: 'OpenAI Chat Completions finish_reason',
+      items: [
+        { value: 'stop', mapsTo: 'end_turn / stop_sequence', note: 'The model stopped normally or hit an explicit stop condition.' },
+        { value: 'length', mapsTo: 'max_tokens', note: 'The model stopped because the token budget was exhausted.' },
+        { value: 'tool_calls', mapsTo: 'tool_use', note: 'The assistant emitted tool calls.' },
+        { value: 'content_filter', mapsTo: 'refusal / filtered status', note: 'The provider stopped output for safety or policy reasons.' },
+      ],
+    },
+  ]}
+/>
+
+## Why nullable fields exist
+
+Wire structs often use nullable/missing-compatible shapes even when provider documentation says a field is required. This is deliberate:
+
+<ReferenceTable
+  columns={['Case', 'Why ProxAI accepts it']}
+  rows={[
+    ['SDK schemas mark required-nullable fields', 'Some SDK-generated types allow the field to be omitted while still treating null as valid.'],
+    ['Upstream compatibility layers omit null fields', 'OpenAI-compatible or Anthropic-compatible proxies may drop fields whose value is null.'],
+    ['Streaming accumulation is partial before terminal event', 'Before the terminal event, stop information may not be known yet.'],
+    ['Error or interrupted responses are not normal final messages', 'A failed upstream response should be handled as an error, not forced into a fake stop reason.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+From a logical non-streaming success path, a final Anthropic `message` should include stop information. The parser still accepts missing/null values so ProxAI can produce a clear translation or upstream error instead of crashing on an overly strict model.
+
+## Contract
+
+- ProxAI observes streaming terminal events; it does not treat arbitrary byte-stream closure as semantic completion.
+- ProxAI does not fabricate provider-specific reason details such as upstream `code`, `param`, or matched stop sequences.
+- Cross-protocol mappings should preserve behavior first, exact field spelling second.
+- Tool-call terminal states must remain distinct from natural text completion.
+
+## Related docs
+
+- [Streaming Behavior](/en/protocol/streaming-behavior)
+- [Anthropic Messages](/en/protocol/anthropic-messages)
+- [OpenAI Chat Completions](/en/protocol/openai-chat-completions)
+- [Behavior Contracts](/en/reference/behavior-contracts#streaming)

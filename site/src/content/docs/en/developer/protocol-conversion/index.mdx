@@ -1,0 +1,193 @@
+---
+title: Protocol Conversion
+description: Developer-oriented overview of protocol conversion boundaries, naming, routing, and topic map.
+robots: noindex
+---
+
+import { ConversionPath, FeatureGrid, ProtocolCompare, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { JsonExample } from '@components/JsonExample.jsx';
+
+# Protocol Conversion and Wire-Model Alignment
+
+中文版本：[协议转换与 Wire Model 对齐](/zh/developer/protocol-conversion)
+
+ProxAI keeps protocol conversion explicit and pair-oriented. The conversion rules are split into focused developer topics so each page answers one maintenance question.
+
+> This is the developer entry point for `src/translation/`. If you are looking for user-facing protocol behavior, start with [Protocol Guide](/en/protocol).
+
+## Boundaries
+
+- `src/protocol/` owns protocol-specific Rust wire models.
+- `src/ingress/` owns inbound parsing and normalization before translation.
+- `src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
+- `src/provider/request.rs` owns provider request preparation, including model rewrite, projection/summary extraction, and JSON body serialization.
+- `src/provider/transport.rs` owns outbound HTTP transport, auth headers, upstream URL construction, and send.
+- `src/http_support/` owns HTTP carrier helpers such as `ByteStream`, content-type/header helpers, and response reconstruction.
+
+Do not hide general cross-protocol conversion inside a provider subtree. Provider code may normalize provider-local quirks, but protocol-to-protocol shape changes belong in `src/translation/`.
+
+Translation APIs should stay pure at the carrier boundary:
+
+- request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
+- non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
+- streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+
+Do not pass HTTP `Response`, `Body`, provider request structs, or route/model rewrite details into `src/translation/`. This is the carrier-boundary purity required by [Behavior Contract C26](/en/reference/behavior-contracts#translation-purity).
+
+
+## Naming
+
+Use protocol names for wire behavior:
+
+- `openai_responses`
+- `openai_chat_completions`
+- `anthropic_messages`
+
+Use pair-oriented conversion module names, for example:
+
+- `openai_responses -> anthropic_messages`
+- `anthropic_messages -> openai_responses`
+
+Provider names are user labels and should not be treated as semantic protocol identifiers.
+
+
+## Two-layer translation model
+
+<ConversionPath
+  from={{ title: 'Client protocol', description: 'openai_responses / openai_chat_completions / anthropic_messages' }}
+  via={[
+    { title: 'Request translation', description: 'ingress -> translation/request -> provider/request' },
+    { title: 'Provider', description: 'provider protocol + model rewrite + auth + transport' },
+    { title: 'Response translation', description: 'upstream -> translation/response | translation/streaming' },
+  ]}
+  to={{ title: 'Client protocol', description: 'outbound_response rebuilt via http_support' }}
+/>
+
+Each direction is independently translated. ProxAI never round-trips raw provider structures; Anthropic `ToolUseBlock` becomes Responses `FunctionCall`, Anthropic `ThinkingBlock` becomes Responses `ReasoningItem`, and provider-specific metadata such as `signature` or `tool_use_id` is transformed in the process. This implements [Behavior Contract C27](/en/reference/behavior-contracts#translation-purity).
+
+
+## Routing is not conversion
+
+A route may specify `request_protocol`. If omitted, the route can match any inbound request protocol detected from the actual request path. Provider `protocol` controls the outbound wire format, so route protocol filtering and protocol conversion are separate decisions.
+
+Set `request_protocol` only when the same model pattern needs different routing
+for different request endpoints. If a model pattern matches but the explicit
+`request_protocol` differs from the inbound request protocol, ProxAI reports a
+configuration error instead of silently falling through to a default provider.
+
+
+## Responses ↔ Anthropic translation architecture
+
+ProxAI sits between the client and the upstream provider, performing two-layer
+translation on every request/response cycle:
+
+<FlowDiagram
+  height={260}
+  nodes={[
+    { id: 'client', position: { x: 0, y: 80 }, data: { label: 'Client\nZed / SDK' }, type: 'default' },
+    { id: 'proxai', position: { x: 260, y: 80 }, data: { label: 'ProxAI\ntranslation layer' }, type: 'default' },
+    { id: 'upstream', position: { x: 560, y: 80 }, data: { label: 'Anthropic-compatible\nupstream' }, type: 'default' },
+  ]}
+  edges={[
+    { id: 'client-proxai', source: 'client', target: 'proxai', label: 'openai_responses / chat / anthropic_messages', animated: true },
+    { id: 'proxai-upstream', source: 'proxai', target: 'upstream', label: 'anthropic_messages', animated: true },
+  ]}
+/>
+
+This means the proxy never passes through raw provider structures. Each
+direction is independently translated:
+
+- **Request** (client → Anthropic): client's Responses or Chat payload is
+  translated into an Anthropic Messages request.
+- **Response** (Anthropic → client): Anthropic's message response is translated
+  back into a Responses or Chat payload the client understands.
+
+### InputItem: EasyMessage vs Item
+
+Responses `input` accepts `Vec<InputItem>`, where each item can be one of:
+
+<ProtocolCompare
+  columns={['Variant', 'Purpose', 'When used']}
+  rows={[
+    ['EasyInputMessage', 'Simple `role + content` message', 'Client composing new user/developer messages'],
+    ['Item', 'Typed output items (function_call, reasoning, etc.)', 'Multi-turn: client echoing back response items from a previous turn'],
+    ['ItemReference', 'Reference to a previously returned item by id', 'Multi-turn: referencing items without repeating full content'],
+  ]}
+/>
+
+**ProxAI's Anthropic translation only produces `EasyInputMessage`.** This is
+because Anthropic's `MessageParam` has a simple `role + content` structure with
+no concept of echoing back response items. The `Item` variant exists for native
+Responses clients that preserve the full response structure across turns.
+
+Example of `Item` usage (native Responses multi-turn, not translated from Anthropic):
+
+<JsonExample data={{
+  input: [
+    { type: 'message', role: 'user', content: 'search' },
+    { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'fc_1', output: 'result' },
+  ],
+}} />
+
+### Why two-layer translation matters
+
+Response items from Anthropic (`ToolUseBlock`, `ThinkingBlock`, etc.) are
+translated into Responses output items (`FunctionCall`, `ReasoningItem`, etc.)
+when sent back to the client. The original Anthropic-specific metadata
+(`tool_use_id`, `signature`, etc.) is transformed in the process, so the client
+cannot round-trip Anthropic structures verbatim. This is by design — ProxAI
+guarantees correct translation in both directions, and the client works with
+the target protocol's types.
+
+### Reasoning request controls
+
+OpenAI Responses and Anthropic-compatible Messages split reasoning controls
+differently:
+
+- Responses `reasoning.effort` maps to Anthropic `output_config.effort` for
+  supported effort values (`low`, `medium`, `high`, `xhigh`). This is the
+  preferred Anthropic-side effort field.
+- Responses `reasoning.summary` (`auto`, `concise`, `detailed`) only maps
+  lossily to Anthropic `thinking.display: "summarized"`; Anthropic has no
+  equivalent summary granularity.
+- Responses `reasoning.summary` without an effort maps to Anthropic
+  `thinking: {"type":"adaptive", "display":"summarized"}`.
+- Responses `reasoning.effort` plus `reasoning.summary` maps to
+  `output_config.effort` plus adaptive `thinking.display`; ProxAI does not
+  invent a legacy `thinking.budget_tokens` value.
+- Responses `reasoning.effort: "none" | "minimal"` maps to Anthropic
+  `thinking: {"type":"disabled"}` because `output_config.effort` has no
+  disabled/minimal value.
+- Anthropic -> Responses and Anthropic -> Chat request translation accept the
+  manual `thinking.type: "enabled"` / `budget_tokens` mode only as a legacy
+  compatibility fallback. If `output_config.effort` is absent, ProxAI maps the
+  budget lossily to an effort enum and logs a warning; if `output_config.effort`
+  is present, it wins and the legacy budget is ignored with a warning.
+- Anthropic `thinking.display: "summarized"` maps to Responses
+  `reasoning.summary: "auto"`; `display: "omitted"` does not request a
+  Responses summary.
+
+
+## Conversion topics
+
+<FeatureGrid
+  items={[
+    { title: 'Message placement', icon: 'route', href: '/en/developer/protocol-conversion/message-placement', description: 'System/developer instructions, user content, tool calls, tool results, choices, and stream terminators.' },
+    { title: 'Refusal and status mapping', icon: 'alert', href: '/en/developer/protocol-conversion/refusal-and-status', description: 'How refusal content and terminal state map between Anthropic, Responses, and Chat.' },
+    { title: 'Anthropic Messages to Responses', icon: 'flow', href: '/en/developer/protocol-conversion/anthropic-messages-to-openai-responses', description: 'Content blocks, tool_use, thinking, stop reasons, and stream events into Responses output items.' },
+    { title: 'Chat to Anthropic Messages', icon: 'flow', href: '/en/developer/protocol-conversion/openai-chat-completions-to-anthropic-messages', description: 'Messages, tools, streaming chunks, finish reasons, and lossy identity behavior for Chat clients.' },
+    { title: 'Responses to Anthropic Messages', icon: 'flow', href: '/en/developer/protocol-conversion/openai-responses-to-anthropic-messages', description: 'Request, response, streaming, tool, reasoning, and stop conversion for the highest-value pair.' },
+    { title: 'SDK alignment and compatibility', icon: 'check', href: '/en/developer/protocol-conversion/sdk-alignment', description: 'Required-nullable fields, TypeScript SDK comparison, and measured compatibility repairs.' },
+    { title: 'Streaming identifiers', icon: 'flow', href: '/en/developer/protocol-conversion/streaming-identifiers', description: 'Per-stream index, item_id, event granularity, snapshot-bound state, and parallel assembly.' },
+  ]}
+/>
+
+## Documentation expectations
+
+When protocol conversion or wire-model alignment rules change:
+
+1. Update this document.
+2. Update the relevant protocol document under `site/src/content/docs/en/` and `site/src/content/docs/zh/` if behavior changes for users or examples.
+3. Update `README.md` and `README_CN.md` when the change affects user-facing development workflow or configuration.

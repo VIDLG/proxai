@@ -1,0 +1,71 @@
+---
+title: 文档维护
+description: ProxAI 文档结构、双语页面、MDX 组件和验证规则的维护者指南
+robots: noindex
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 文档维护
+
+本页定义 ProxAI 文档应如何演进。它面向维护者，并补充 `AGENTS.md`。
+
+<ProxaiCallout type="caution" title="文档跟随代码">
+  文档跟随代码和已验证行为；代码不跟随愿景式文档。当文档和实现不一致时，先检查实现、测试和配置默认值，再有意识地更新文档或代码。
+</ProxaiCallout>
+
+## 分区职责
+
+<ReferenceTable
+  columns={['分区', '负责', '不应负责']}
+  rows={[
+    ['`using/`', '运行、配置、路由、观测、排障的任务式说明。', '源码级实现细节或完整字段查表。'],
+    ['`protocol/`', '线协议行为、请求路径、协议概念、流式预期和交互示例。', '内部 Rust 模块归属，除非有助于理解上下文。'],
+    ['`developer/`', '实现边界、模块地图、转换内部、流式内部和贡献流程。', '普通用户入门或面向搜索的产品介绍。'],
+    ['`reference/`', '稳定查表值、默认值、精确字段、行为契约、术语表和表格。', '逐步教程或推测性未来功能。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 页面规则
+
+<ContractCards
+  contracts={[
+    { id: 'D1', title: '英文和中文页面保持成对', body: '每个 `en/` 页面都应在 `zh/` 下有相同相对路径。结构应保持一致，文案不必逐字翻译。' },
+    { id: 'D2', title: '开发者页面 noindex', body: '`developer/` 下页面应包含 `robots: noindex`，让普通搜索流量优先进入用户文档。' },
+    { id: 'D3', title: 'Reference 保持稳定', body: 'Reference 页面优先使用精确值、紧凑表格和行为契约，而不是叙事教程。' },
+    { id: 'D4', title: '扫描型内容使用组件', body: '卡片、查表、时间线、模块地图和协议矩阵优先用 MDX 组件，而不是原始 Markdown 表格。' },
+    { id: 'D5', title: '避免旧 slug', body: '不要重新引入旧的根级页面。当前公开文档位于 `using/`、`protocol/`、`developer/` 和 `reference/` 下。' },
+    { id: 'D6', title: '私有数据不进仓库', body: '不要提交 captures、logs、prompts、API keys、Authorization headers 或私有上游 payload。' },
+  ]}
+/>
+
+## 改行为时检查哪些文档
+
+<ReferenceTable
+  columns={['变更', '需要检查的文档']}
+  rows={[
+    ['运行时配置字段', '`using/configuration`、`reference/configuration`、`reference/defaults-and-limits`、`config.example.toml`、README 文件。'],
+    ['协议转换行为', '`protocol/`、`developer/protocol-conversion`、`reference/protocols`、`reference/status-and-stop-reasons`。'],
+    ['流式行为', '`protocol/streaming-behavior`、`developer/streaming-internals`、`reference/behavior-contracts`。'],
+    ['错误响应行为', '`using/troubleshooting`、`reference/error-responses`、`developer/error-handling-internals`、行为契约。'],
+    ['发布/部署文档', '`using/install-and-upgrade`、`site/README.md`，站点发布变化时也检查 Netlify 配置。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 验证
+
+发布文档前运行站点检查：
+
+```sh
+just site check
+```
+
+该命令会构建 Starlight 站点，并检查双语页面成对、sidebar slug、内部链接、锚点、旧路径、Markdown 表格残留、developer `noindex`、hub 覆盖和标题质量。
+
+## 相关文档
+
+- [贡献检查清单](/zh/developer/contributor-checklist)
+- [架构](/zh/developer/architecture)
+- [行为契约](/zh/reference/behavior-contracts)

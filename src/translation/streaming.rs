@@ -150,15 +150,34 @@ impl StreamIdentity {
     }
 }
 
+/// Tracks which kinds of representable content the stream has actually
+/// emitted into the target protocol so far.
+///
+/// `mark_*` is called at the moment a block's representable payload is first
+/// guaranteed to be non-empty (for example when `content_block_start`
+/// arrives with mandatory `id` + `name`, or when the first non-empty text
+/// delta is appended). The flags then feed two decisions:
+///
+/// - `emitted_any()` rejects empty streams when the terminal event arrives
+///   ("stream completed without representable content"), and is also used by
+///   `unexpected_stream_end_error` to tailor error messages.
+/// - `emitted_text()` lets Chat streaming decide whether a terminal refusal
+///   can still be emitted (a refusal cannot retract text that was already
+///   sent as content).
+///
+/// "Content" here means target-protocol representable output. A block that
+/// the target protocol cannot express (e.g. redacted thinking when the
+/// target is Chat Completions) is simply never marked, so an otherwise empty
+/// stream still surfaces as empty.
 #[derive(Debug, Default)]
-pub(crate) struct RepresentableOutputTracker {
+pub(crate) struct EmittedContentTracker {
     emitted_text: bool,
     emitted_refusal: bool,
     emitted_tool_use: bool,
     emitted_reasoning: bool,
 }
 
-impl RepresentableOutputTracker {
+impl EmittedContentTracker {
     pub(crate) fn mark_text(&mut self) {
         self.emitted_text = true;
     }

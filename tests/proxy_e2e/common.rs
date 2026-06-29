@@ -240,8 +240,16 @@ pub(super) async fn spawn_anthropic_messages_sse_upstream() -> SocketAddr {
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":\"standard\"}}}\n\n",
             )),
             Ok(Bytes::from_static(
+                b"event: content_block_start\n\
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\",\"citations\":null}}\n\n",
+            )),
+            Ok(Bytes::from_static(
                 b"event: content_block_delta\n\
 data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n",
+            )),
+            Ok(Bytes::from_static(
+                b"event: content_block_stop\n\
+data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
             )),
             Ok(Bytes::from_static(
                 b"event: message_delta\n\

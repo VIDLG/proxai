@@ -1,0 +1,212 @@
+---
+title: 配置说明
+description: 面向任务的 ProxAI 运行时配置指南，覆盖 provider、路由、流式安全、capture、日志和错误
+---
+
+import { ConfigMap, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 配置说明
+
+运行时配置以 `config.toml` 为中心。常见配置任务看本页；完整生成版 `config.example.toml` 看 [配置参考](/zh/reference/configuration)，精确默认值看 [默认值与限制](/zh/reference/defaults-and-limits)。
+
+<ProxaiCallout type="tip" title="配置是事实来源">
+  长期运行时行为放在 `config.toml`。CLI flags 只用于本地测试或一次性 route 调整。
+</ProxaiCallout>
+
+## 配置地图
+
+<ConfigMap
+  groups={[
+    { title: '本地监听', icon: 'terminal', description: 'Proxy 和 MCP 控制面的 HTTP 地址。', keys: ['[server]', '[mcp]'] },
+    { title: '路由', icon: 'route', description: '默认 providers 和显式 model/protocol routes。', keys: ['[routing.default_provider_names]', '[[routing.routes]]'] },
+    { title: 'Providers', icon: 'protocol', description: '上游 endpoint、provider protocol、API key 和兼容模式。', keys: ['[providers.<name>]'] },
+    { title: '流式安全', icon: 'timer', description: '未完成 streamed tool-call arguments 和上游 idle read 的超时。', keys: ['[tool_calls]', 'read_idle_timeout_secs'] },
+    { title: '诊断', icon: 'gauge', description: 'Capture 开关、日志格式和耗时颜色阈值。', keys: ['[capture]', '[logging]', '[logging.duration_thresholds]'] },
+    { title: '客户端错误', icon: 'alert', description: '适合 Zed 阅读的 text errors，或给 OpenAI 兼容客户端的 JSON errors。', keys: ['[error_responses]'] },
+  ]}
+/>
+
+## 找到 app 目录
+
+运行时文件会生成在用户 app 目录：
+
+<ReferenceTable
+  columns={['平台', '路径']}
+  rows={[
+    ['Windows', '%USERPROFILE%\\.proxai\\'],
+    ['Linux/macOS', '~/.proxai/'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+重要条目：
+
+<ReferenceTable
+  columns={['路径', '用途']}
+  rows={[
+    ['config.toml', '运行时配置，刻意不进入 git'],
+    ['config.example.toml', '生成的本地示例/参考'],
+    ['logs/', '运行日志输出'],
+    ['captures/', '可选的 per-phase capture artifacts'],
+  ]}
+/>
+
+仓库和 app 目录边界见 [环境与文件](/zh/reference/environment-and-files)。
+
+## 最小本地配置
+
+一个最小可用配置需要本地 listener、默认 provider 映射，以及至少一个 provider。
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 18080
+
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+anthropic_messages = "anthropic"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+
+[providers.anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "..."
+```
+
+<ProxaiCallout type="caution" title="不要提交密钥">
+  `api_key` 只应出现在本地 `config.toml`，不要放进 tracked examples、logs、docs、captures 或 fixtures。
+</ProxaiCallout>
+
+## 添加 provider
+
+每个 provider 描述一个具体上游。本页只保留快速形态；provider 命名、认证头、defaults 和 route 示例见 [Provider 设置](/zh/using/provider-setup)。
+
+```toml
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+Provider 名称只是标签。Provider `protocol` 控制出站 wire 行为。Provider name 和 provider protocol 的区别见 [术语表](/zh/reference/glossary)。
+
+## 设置默认 providers
+
+`[routing.default_provider_names]` 为每个入站 request protocol 声明 fallback provider。只有没有显式 route 命中时才使用 defaults。
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai_chat"
+anthropic_messages = "anthropic"
+```
+
+支持的 key 是 [协议](/zh/reference/protocols) 中的 protocol values：
+
+- `openai_responses`
+- `openai_chat_completions`
+- `anthropic_messages`
+
+## 添加显式 route
+
+当某个模型 pattern 需要指定 provider、可选入站协议 guard 或上游模型改写时，使用显式 route。
+
+```toml
+[[routing.routes]]
+name = "m3_chat"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+<ReferenceTable
+  columns={['字段', '作用']}
+  rows={[
+    ['name', 'CLI override 使用的可选稳定标识'],
+    ['request_protocol', '可选入站协议 guard'],
+    ['match_kind', '可选 `exact`、`glob`、`regex` 或 `auto`'],
+    ['model_pattern', '逻辑模型选择器'],
+    ['provider', 'route 命中时选择的 provider 名称'],
+    ['upstream_model', '可选上游模型映射'],
+  ]}
+/>
+
+精确匹配结果见 [路由匹配](/zh/reference/route-matching)。
+
+## 调整流式超时
+
+这里有两个不同的超时概念：
+
+<ReferenceTable
+  columns={['配置', '层级', '用途']}
+  rows={[
+    ['[tool_calls].timeout_secs', '协议语义', '未完成 streamed tool-call arguments 的语义超时'],
+    ['[providers.<name>].read_idle_timeout_secs', '传输 carrier', '等待上游 response bytes 时的 idle-read timeout'],
+  ]}
+/>
+
+不要混淆它们：`read_idle_timeout_secs` 看原始上游 bytes，`tool_calls.timeout_secs` 看语义 tool-call completion。
+
+## 启用 captures
+
+Capture phase 开关在 `[capture]` 下：
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+<PipelineStrip
+  steps={[
+    { title: '选择最窄 phase', description: '用能回答问题的 phase。' },
+    { title: '短时间启用', description: '通过配置或 `proxai capture enable ...` 打开一个调试窗口。' },
+    { title: '复现一次', description: '发送一个脱敏请求。' },
+    { title: '关闭 capture', description: 'Captures 可能包含 prompt、tool arguments、模型输出和上游 payload。' },
+  ]}
+/>
+
+Capture 路径固定在 app 目录下。Phase 含义和隐私风险见 [Capture Phases](/zh/reference/capture-phases)。
+
+## 配置日志
+
+`[logging]` 控制输出格式和颜色行为。`[logging.duration_thresholds]` 控制 human logs 的耗时颜色。
+
+<ReferenceTable
+  columns={['字段', '含义']}
+  rows={[
+    ['output_format', '`human` 适合交互调试，`json` 适合机器消费'],
+    ['use_color', '启用或禁用 colored human logs'],
+    ['warn_ms / error_ms', 'Human log duration coloring thresholds'],
+  ]}
+/>
+
+日志应保持紧凑，不应包含 request bodies、API keys、Authorization headers 或 private prompts。
+
+## 选择错误响应格式
+
+`[error_responses]` 决定客户端错误如何渲染。
+
+<ReferenceTable
+  columns={['取值', '含义']}
+  rows={[
+    ['text', '紧凑、适合 Zed 阅读的错误 body；默认值'],
+    ['json', '给非 Zed 客户端使用的 OpenAI 风格 JSON error body'],
+  ]}
+/>
+
+```toml
+[error_responses]
+format = "text" # 或 "json"
+```
+
+上游 status 处理和保留 headers 见 [错误响应](/zh/reference/error-responses)。

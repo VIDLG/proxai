@@ -1,0 +1,109 @@
+---
+title: 快速开始
+description: 本地运行 ProxAI、生成配置、配置一个 provider、连接客户端并验证代理
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 快速开始
+
+本文带你从 fresh checkout 或 release binary 开始，跑起本地代理，并配置一个上游 provider。
+
+<PipelineStrip
+  steps={[
+    { title: '安装或构建 ProxAI', description: '使用 release 可执行文件，或在本地构建 Rust 项目。' },
+    { title: '先运行一次', description: '生成 app 目录和本地配置文件。' },
+    { title: '配置一个 provider', description: '设置 provider protocol、base_url、api_key 和默认路由。' },
+    { title: '连接客户端', description: '把客户端 base URL 指向本地代理，并发送一个小请求。' },
+  ]}
+/>
+
+## 本地端点
+
+<ReferenceTable
+  columns={['端点', '默认 URL', '用途']}
+  rows={[
+    ['Proxy', '`http://127.0.0.1:18080`', 'OpenAI 兼容与 Anthropic 风格请求代理'],
+    ['MCP', '`http://127.0.0.1:18081/mcp`', '本地 MCP 控制面'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+有些客户端需要不带 `/v1` 的 base URL，有些需要完整 endpoint path。按客户端约定填写即可；ProxAI 实际服务 `/v1/responses`、`/v1/chat/completions` 和 `/v1/messages`。
+
+## App 目录
+
+运行时文件会生成在用户 app 目录：
+
+<ReferenceTable
+  columns={['平台', '路径']}
+  rows={[
+    ['Windows', '`%USERPROFILE%\\.proxai\\`'],
+    ['Linux/macOS', '`~/.proxai/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+重要文件和目录：
+
+- `config.toml` —— 本地运行时配置，刻意不进入 git
+- `config.example.toml` —— 生成的示例/参考配置
+- `logs/` —— 运行日志
+- `captures/` —— 可选的分阶段请求/响应捕获
+
+<ProxaiCallout type="caution" title="密钥只放本地">
+  不要提交 `config.toml`、API key、日志、captures 或包含私有 prompt 的复现 fixture。仓库里只保留脱敏示例。
+</ProxaiCallout>
+
+## 最小 provider 配置
+
+先配置一个 provider，并为你要使用的入站协议设置默认路由：
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+如果上游使用 Anthropic Messages，把 provider `protocol` 设为 `"anthropic_messages"`，并填写对应 provider base URL/key。支持的协议取值见 [协议](/zh/reference/protocols)。
+
+## 连接客户端
+
+客户端 base URL 指向本地代理：
+
+```text
+http://127.0.0.1:18080
+```
+
+如果客户端 UI 强制要求填写 API key，通常可以填一个 dummy key。对于 OpenAI 兼容 provider，ProxAI 会使用 `config.toml` 里的 provider key，而不是转发客户端原始 `Authorization` header。
+
+## 验证是否成功
+
+<ReferenceTable
+  columns={['检查项', '预期结果']}
+  rows={[
+    ['Proxy 启动', '没有配置加载错误；默认监听 `127.0.0.1:18080`'],
+    ['客户端请求到达 ProxAI', '日志显示紧凑 request summary，不包含私有 body 内容'],
+    ['Provider 被选中', 'Route/default provider 解析到配置好的 provider 名称'],
+    ['上游返回响应', '客户端收到协议兼容响应，或紧凑的 upstream error'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+如果检查失败，去 [常见排障](/zh/using/troubleshooting)，并为一次脱敏请求 capture 最窄的有用 phase。
+
+## 下一步
+
+<FeatureGrid
+  items={[
+    { title: '配置说明', href: '/zh/using/configuration', icon: 'config', description: 'Provider、route、capture、logging 和 errors 的任务化配置指南。' },
+    { title: 'Recipes', href: '/zh/using/recipes', icon: 'zap', description: '常见设置和调试路径。' },
+    { title: '路由与 Provider', href: '/zh/using/routing-and-providers', icon: 'route', description: 'provider 如何被选中，协议如何映射到 wire 行为。' },
+    { title: '常见排障', href: '/zh/using/troubleshooting', icon: 'alert', description: '包含有用 capture phase 和下一步检查的症状卡片。' },
+  ]}
+/>

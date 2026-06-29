@@ -1,0 +1,51 @@
+---
+title: Anthropic Interaction Example
+description: A compact multi-turn Anthropic Messages flow with local tools, server tools, and SSE events
+---
+
+import { EventTimeline, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Anthropic Interaction Example
+
+Back to [Anthropic Messages](/en/protocol/anthropic-messages).
+
+This page mirrors the detailed Chinese interaction example in a compact English form. It is a protocol illustration, not a replayable upstream fixture.
+
+## Scenario
+
+The user asks whether Beijing is suitable for running today. The client exposes a local `get_weather` tool, while the upstream may use an Anthropic server-side `web_search` tool.
+
+<EventTimeline events={[
+  { name: 'client request', description: 'Client sends `messages`, local `get_weather`, server `web_search`, and `stream: true`.' },
+  { name: 'provider pass-through', description: 'ProxAI forwards the Anthropic Messages request to the configured upstream.' },
+  { name: 'first SSE turn', description: 'Upstream emits server-tool use/result blocks and a local `tool_use(get_weather)` block.' },
+  { name: 'local tool runtime', description: 'Client runs `get_weather` using the accumulated `input_json_delta` fragments.' },
+  { name: 'second request', description: 'Client sends the previous assistant `tool_use` plus a user-side `tool_result`.' },
+  { name: 'final SSE answer', description: 'Upstream emits text deltas and ends with `message_delta(stop_reason=end_turn)` plus `message_stop`.' },
+]} />
+
+## ID relationships
+
+<ReferenceTable
+  columns={['ID', 'Source', 'How it is used later']}
+  rows={[
+    ['srvu_01', '`server_tool_use`', 'Executed by the upstream service; the client does not send a matching tool result.'],
+    ['srvr_01', '`web_search_tool_result`', 'Identifies the server-tool result block itself.'],
+    ['toolu_01', '`tool_use(get_weather)`', 'Client executes the local tool and sends `tool_result.tool_use_id = toolu_01` in the next request.'],
+  ]}
+/>
+
+## Stream assembly rule
+
+Anthropic streaming joins content deltas by `content_block` index:
+
+```text
+content_blocks[index] = started block
+partial_tool_inputs[index] += input_json_delta.partial_json
+```
+
+When `content_block_stop(index=2)` arrives, the client can parse the accumulated partial JSON and use the same block's `ToolUseBlock.id` as the local tool call id.
+
+<ProxaiCallout type="note" title="ProxAI behavior">
+  For `anthropic_messages -> anthropic_messages`, ProxAI preserves raw SSE bytes. `AnthropicSseObserver` scans events for compact completed/closed/error diagnostics; provider-local compatibility normalization stays in the provider layer.
+</ProxaiCallout>

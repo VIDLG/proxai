@@ -1,0 +1,37 @@
+---
+title: Responses Interaction Example
+description: A compact multi-turn OpenAI Responses flow with function tools, hosted tools, and SSE events
+---
+
+import { EventTimeline, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Responses Interaction Example
+
+Back to [OpenAI Responses](/en/protocol/openai-responses).
+
+This compact example mirrors the detailed Chinese walkthrough. It shows why Responses is item-oriented: hosted tools, function calls, and assistant messages all appear as output items.
+
+<EventTimeline events={[
+  { name: 'client request', description: 'Client sends `input`, a `function` tool, a hosted `web_search` tool, and `stream: true`.' },
+  { name: 'response.created', description: 'The stream starts a response resource with `status: in_progress`.' },
+  { name: 'hosted tool events', description: '`response.web_search_call.*` events report hosted tool lifecycle by `item_id` and `output_index`.' },
+  { name: 'function_call item', description: '`response.output_item.added` creates a function call item; argument deltas join by `item_id`.' },
+  { name: 'function_call_output', description: 'The next request sends the local tool result using the function call `call_id`.' },
+  { name: 'final message item', description: 'The final turn emits a message item, text deltas, `output_text.done`, and `response.completed`.' },
+]} />
+
+## Join keys
+
+<ReferenceTable
+  columns={['Entity', 'Stable key', 'Notes']}
+  rows={[
+    ['response', '`response.id`', 'Can connect follow-up calls via `previous_response_id`.'],
+    ['output item', '`item_id` plus `output_index`', '`item_id` is the primary join key for deltas.'],
+    ['function result', '`call_id`', 'The client returns tool output with `function_call_output.call_id`.'],
+    ['content part', '`item_id + content_index`', 'Text deltas and done events target one content part.'],
+  ]}
+/>
+
+<ProxaiCallout type="note" title="ProxAI behavior">
+  For `openai_responses -> openai_responses`, ProxAI preserves SSE bytes while the Responses observer watches terminal events and streamed tool-call arguments for compact diagnostics.
+</ProxaiCallout>

@@ -1,0 +1,75 @@
+---
+title: Lossiness and Fidelity
+description: Understand pass-through, supported conversion, lossy mappings, and how to choose a higher-fidelity protocol path
+---
+
+import { ProxaiCallout, ReferenceTable, ReasonMap } from '@components/ProxaiDocs.jsx';
+
+# Lossiness and Fidelity
+
+A supported conversion pair does not mean every provider-specific or protocol-specific field is perfectly symmetric. ProxAI preserves behavior first and raw field spelling second.
+
+<ProxaiCallout type="tip" title="Prefer pass-through when exact shape matters">
+  If your client depends on exact provider or protocol fields, use the same inbound and provider protocol where possible. Cross-protocol conversion is for compatibility, not lossless archival.
+</ProxaiCallout>
+
+## Terms
+
+<ReferenceTable
+  columns={['Term', 'Meaning']}
+  rows={[
+    ['Pass-through', 'Inbound and provider protocol are the same. ProxAI still handles routing, auth, transport, errors, and observation.'],
+    ['Supported conversion', 'ProxAI has an explicit protocol pair implementation for request/response/streaming behavior.'],
+    ['Lossy mapping', 'The target protocol cannot express some source detail exactly, so ProxAI preserves the closest behavior.'],
+    ['Unsupported pair', 'No conversion implementation exists; ProxAI fails explicitly.'],
+  ]}
+/>
+
+## Common lossy areas
+
+<ReasonMap
+  layout="single"
+  labels={{ mapsTo: 'affects' }}
+  groups={[
+    {
+      title: 'Where fidelity can be lost',
+      items: [
+        { value: 'Output item identity', mapsTo: 'multi-turn references', note: 'Responses has stable output items and item references; other protocols may only expose message blocks.' },
+        { value: 'Tool-call streaming', mapsTo: 'incremental assembly', note: 'Different protocols identify tool calls by index, id, content block index, or item id.' },
+        { value: 'Reasoning controls', mapsTo: 'effort and summary', note: 'Reasoning effort and summary controls are not symmetric across providers.' },
+        { value: 'Stop and finish reasons', mapsTo: 'terminal state', note: '`stop_reason`, `finish_reason`, and response status are related but not identical.' },
+        { value: 'Hosted tools', mapsTo: 'provider capabilities', note: 'A target provider may not support the hosted tool model used by the source protocol.' },
+        { value: 'Provider metadata', mapsTo: 'privacy and portability', note: 'Provider-specific signatures or ids should be transformed or omitted, not leaked as generic output.' },
+      ],
+    },
+  ]}
+/>
+
+## Choosing for fidelity
+
+<ReferenceTable
+  columns={['Need', 'Prefer']}
+  rows={[
+    ['Exact output item ids and native Responses multi-turn behavior', '`openai_responses` inbound to `openai_responses` provider when available.'],
+    ['Older clients that require `choices[]`', '`openai_chat_completions` inbound and compatible provider protocol.'],
+    ['Anthropic-native content block behavior', '`anthropic_messages` inbound and `anthropic_messages` provider.'],
+    ['Local client compatibility over exact upstream shape', 'A supported conversion pair with clear expectations.'],
+    ['Debugging conversion behavior', 'Enable the narrowest capture phase and compare provider_request / outbound_response.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Contract
+
+- Unsupported pairs fail explicitly.
+- Cross-protocol conversion must not silently leak raw provider structures.
+- Streaming conversion must preserve terminal semantics.
+- Tool-call completion must remain distinct from natural text completion.
+- Error and refusal semantics should be preserved where the target protocol can represent them.
+
+## Related docs
+
+- [Choosing a Protocol](/en/protocol/choosing-a-protocol)
+- [Protocols Reference](/en/reference/protocols)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)
+- [Protocol Conversion](/en/developer/protocol-conversion)

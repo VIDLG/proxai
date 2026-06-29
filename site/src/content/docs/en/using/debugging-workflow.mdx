@@ -1,0 +1,67 @@
+---
+title: Debugging Workflow
+description: A safe step-by-step workflow for diagnosing client errors, provider failures, routing issues, translation bugs, and stalled streams
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Debugging Workflow
+
+Use this workflow when a client request fails, routes to the wrong provider, returns an unexpected shape, or stalls while streaming.
+
+<ProxaiCallout type="caution" title="Capture narrowly">
+  Captures can contain prompts, tool arguments, outputs, and upstream payloads. Enable the narrowest phase, reproduce once, then disable capture.
+</ProxaiCallout>
+
+## Workflow
+
+<PipelineStrip
+  steps={[
+    { title: 'Read the client error', description: 'Keep the HTTP status, payload type, and whether this happened before or during streaming.' },
+    { title: 'Classify the layer', description: 'Separate client request, routing, provider auth, upstream status, translation, and streaming semantics.' },
+    { title: 'Check logs', description: 'Use structured logs and request hints before enabling captures.' },
+    { title: 'Capture one phase', description: 'Pick the narrowest capture phase that answers the question.' },
+    { title: 'Compare expected vs actual', description: 'Compare inbound request, provider request, upstream response, or outbound response.' },
+    { title: 'Disable and sanitize', description: 'Turn capture off and sanitize artifacts before sharing anything.' },
+  ]}
+/>
+
+## Layer map
+
+<ReferenceTable
+  columns={['Symptom', 'Likely layer', 'Useful phase']}
+  rows={[
+    ['Client request rejected immediately', 'Inbound request validation', '`inbound_request`'],
+    ['Wrong provider selected', 'Routing / config', '`inbound_request` and logs'],
+    ['401 / 403 from upstream', 'Provider auth', '`provider_request` plus upstream status'],
+    ['Provider returns unexpected JSON', 'Upstream response shape', '`upstream_response`'],
+    ['Client receives wrong protocol shape', 'Translation / outbound reconstruction', '`outbound_response`'],
+    ['Stream stalls after tool arguments', 'Streaming semantics', 'stream logs and tool-call timeout'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Capture commands
+
+```sh
+proxai capture enable provider-request
+# reproduce once
+proxai capture disable provider-request
+```
+
+See [Capture Phases](/en/reference/capture-phases) for phase names and privacy risk.
+
+## Before filing an issue
+
+- Include the ProxAI version and OS.
+- Include the inbound endpoint and model name.
+- Include the selected provider protocol, not the provider API key.
+- Prefer sanitized captures or minimal synthetic payloads.
+- Never include `Authorization`, `api_key`, private prompts, private outputs, or full upstream URLs containing secrets.
+
+## Related docs
+
+- [Troubleshooting](/en/using/troubleshooting)
+- [Observability](/en/using/observability)
+- [Error Responses](/en/reference/error-responses)
+- [Streaming Behavior](/en/protocol/streaming-behavior)

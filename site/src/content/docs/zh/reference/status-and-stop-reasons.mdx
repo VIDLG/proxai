@@ -1,0 +1,85 @@
+---
+title: 状态与停止原因
+description: 终止状态、stop reason、finish reason 和流式完成信号参考
+---
+
+import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 状态与停止原因
+
+不同协议用不同名称表达“模型停止继续输出”。ProxAI 把这些视为相关的协议概念，而不是可以直接互换的原始字段。
+
+<ProxaiCallout type="note" title="一个响应不等于一种 stop 字段形态">
+  非流式 Anthropic Messages 会返回一个最终 `message` 对象。这个对象通常包含 stop 相关字段，但 wire type 仍然用 nullable / accepts-missing 形态建模，因为 SDK schema 和中间兼容层可能省略 nullable 字段。
+</ProxaiCallout>
+
+## 终止概念
+
+<ReferenceTable
+  columns={['协议', '终止字段或事件', '含义']}
+  rows={[
+    ['OpenAI Responses', '`status`、output items、`response.completed`', 'response envelope 和 typed events 共同描述完成。'],
+    ['OpenAI Chat Completions', '`choices[].finish_reason`、`[DONE]`', '每个 choice 有 finish reason；stream 用 `[DONE]` 结束。'],
+    ['Anthropic Messages', '`stop_reason`、`stop_sequence`、`message_stop`', '最终 message 携带 stop 元数据；stream 用 `message_stop` 结束。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 原因映射
+
+<ReasonMap
+  labels={{ mapsTo: '映射到' }}
+  groups={[
+    {
+      title: 'Anthropic Messages stop_reason',
+      items: [
+        { value: 'end_turn', mapsTo: 'stop', note: 'assistant 自然结束当前轮次。' },
+        { value: 'max_tokens', mapsTo: 'length', note: '因为 token 预算耗尽而停止生成。' },
+        { value: 'stop_sequence', mapsTo: 'stop', note: '命中了配置的 stop sequence。`stop_sequence` 可能标识匹配到的序列。' },
+        { value: 'tool_use', mapsTo: 'tool_calls', note: 'assistant 生成了工具调用请求，期望客户端/工具循环继续。' },
+        { value: 'pause_turn', mapsTo: 'stop 或协议特定续接状态', note: 'Provider 要求客户端稍后继续；转换时不能伪装成普通最终回答。' },
+        { value: 'refusal', mapsTo: 'content_filter 或 refusal 元数据', note: 'Provider 拒绝了请求。目标协议能表达时应保留 refusal 语义。' },
+      ],
+    },
+    {
+      title: 'OpenAI Chat Completions finish_reason',
+      items: [
+        { value: 'stop', mapsTo: 'end_turn / stop_sequence', note: '模型正常停止或命中显式停止条件。' },
+        { value: 'length', mapsTo: 'max_tokens', note: '模型因为 token 预算耗尽而停止。' },
+        { value: 'tool_calls', mapsTo: 'tool_use', note: 'assistant 输出了工具调用。' },
+        { value: 'content_filter', mapsTo: 'refusal / filtered status', note: 'Provider 因安全或策略原因停止输出。' },
+      ],
+    },
+  ]}
+/>
+
+## 为什么字段是 nullable
+
+即使 provider 文档说某字段必填，wire struct 也经常使用 nullable / accepts-missing 形态。这是有意的：
+
+<ReferenceTable
+  columns={['情况', '为什么 ProxAI 接受']}
+  rows={[
+    ['SDK schema 标记 required-nullable 字段', '有些 SDK 生成类型允许字段缺失，同时也认为 null 有效。'],
+    ['上游兼容层省略 null 字段', 'OpenAI-compatible 或 Anthropic-compatible 代理可能丢弃值为 null 的字段。'],
+    ['流式累积在终止事件前是不完整的', '在终止事件之前，stop 信息可能尚不可知。'],
+    ['错误或中断响应不是正常最终 message', '上游失败应作为错误处理，而不是强行构造假的 stop reason。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+从逻辑上的非流式成功路径看，最终 Anthropic `message` 应该包含 stop 信息。解析器仍接受缺失/null，是为了让 ProxAI 产生清晰的转换错误或上游错误，而不是因为过严模型直接崩溃。
+
+## 契约
+
+- ProxAI 会观察流式终止事件；不会把任意字节流关闭当成语义完成。
+- ProxAI 不会伪造 provider 特有的原因细节，例如上游 `code`、`param` 或匹配到的 stop sequence。
+- 跨协议映射优先保留行为，其次才是字段名称。
+- 工具调用终止状态必须和自然文本完成保持区分。
+
+## 相关文档
+
+- [流式行为](/zh/protocol/streaming-behavior)
+- [Anthropic Messages](/zh/protocol/anthropic-messages)
+- [OpenAI Chat Completions](/zh/protocol/openai-chat-completions)
+- [行为契约](/zh/reference/behavior-contracts#流式)

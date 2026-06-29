@@ -1,0 +1,280 @@
+---
+title: OpenAI Chat Completions 协议
+description: OpenAI Chat Completions 协议详解——choice/message 中心、tool_calls[].index 定位、fire-and-forget chunk
+---
+
+import { FeatureGrid, ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Chat Completions 协议
+
+<ProtocolQuickFacts
+  protocol="openai_chat_completions"
+  requestPath="/v1/chat/completions"
+  codeAreas={[
+    'src/protocol/openai/chat_completions/wire',
+    'src/protocol/openai/chat_completions/request',
+    'src/protocol/openai/chat_completions/response',
+    'src/provider/openai/chat_completions',
+  ]}
+  convertsTo={['anthropic_messages']}
+/>
+
+## 请求模型
+
+Chat Completions 的核心请求是一个有序 `messages` 列表加一组生成参数。proxai 的轻量投影是 `RequestProjection`：
+
+```rust
+struct RequestProjection {
+    model: Option<String>,
+    stream: Option<bool>,
+    stream_options: Option<ChatCompletionStreamOptions>,
+    tools: Option<Vec<ChatCompletionTools>>,
+    tool_choice: Option<ChatCompletionToolChoiceOption>,
+    parallel_tool_calls: Option<bool>,
+    response_format: Option<ResponseFormat>,
+    reasoning_effort: Option<ReasoningEffort>,
+    max_completion_tokens: Option<u32>,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    ...
+}
+```
+
+和 Responses projection 一样，Chat projection 刻意不保留完整 `messages`，避免日志和路由提示依赖私有 prompt 内容。完整转发 body 仍来自 normalized payload。
+
+请求消息由 `ChatCompletionRequestMessage` 表示：
+
+```rust
+enum ChatCompletionRequestMessage {
+    Developer(ChatCompletionRequestDeveloperMessage),
+    System(ChatCompletionRequestSystemMessage),
+    User(ChatCompletionRequestUserMessage),
+    Assistant(ChatCompletionRequestAssistantMessage),
+    Tool(ChatCompletionRequestToolMessage),
+    Function(ChatCompletionRequestFunctionMessage),
+}
+```
+
+不同角色允许的内容不同：
+
+- `system` / `developer`：文本或 text part。
+- `user`：文本、图片、音频、文件等 content part。
+- `assistant`：文本、拒绝内容、音频引用、`tool_calls`。
+- `tool`：工具结果，通过 `tool_call_id` 关联。
+- `function`：旧版函数消息，保留兼容但不是新路径重点。
+
+## 非流式响应
+
+非流式响应是 `CreateChatCompletionResponse`：
+
+```rust
+struct CreateChatCompletionResponse {
+    id: String,
+    choices: Vec<ChatChoice>,
+    created: u32,
+    model: String,
+    object: String,
+    usage: Option<CompletionUsage>,
+    service_tier: Option<ServiceTier>,
+}
+```
+
+每个 `ChatChoice` 包含一个 assistant message：
+
+```rust
+struct ChatChoice {
+    index: u32,
+    message: ChatCompletionResponseMessage,
+    finish_reason: Option<FinishReason>,
+    logprobs: Option<ChatChoiceLogprobs>,
+}
+```
+
+`finish_reason` 支持：
+
+- `stop`
+- `length`
+- `tool_calls`
+- `content_filter`
+- `function_call`
+
+当模型需要调用工具时，通常 `finish_reason = tool_calls`，并在 message 内返回 `tool_calls`。
+
+## 用户端工具调用
+
+Chat Completions 的主要工具模型是用户端工具调用：客户端声明工具，模型返回调用请求，客户端执行后把结果作为下一轮 `tool` message 传回。
+
+工具定义：
+
+```rust
+enum ChatCompletionTools {
+    Function(ChatCompletionTool),
+    Custom(CustomToolChatCompletions),
+}
+
+struct FunctionObject {
+    name: String,
+    description: Option<String>,
+    parameters: Option<Value>,
+    strict: Option<bool>,
+}
+```
+
+工具选择：
+
+```rust
+enum ChatCompletionToolChoiceOption {
+    AllowedTools(ChatCompletionAllowedToolsChoice),
+    Function(ChatCompletionNamedToolChoice),
+    Custom(ChatCompletionNamedToolChoiceCustom),
+    Mode(ToolChoiceOptions),
+}
+```
+
+模型返回的工具调用：
+
+```rust
+enum ChatCompletionMessageToolCalls {
+    Function(ChatCompletionMessageToolCall),
+    Custom(ChatCompletionMessageCustomToolCall),
+}
+
+struct ChatCompletionMessageToolCall {
+    id: String,
+    function: FunctionCall,
+}
+
+struct FunctionCall {
+    name: String,
+    arguments: String,
+}
+```
+
+客户端执行后用 `tool` message 回填：
+
+```rust
+struct ChatCompletionRequestToolMessage {
+    content: ChatCompletionRequestToolMessageContent,
+    tool_call_id: String,
+}
+```
+
+关联字段是 `tool_call_id`，它必须对应模型返回的 `ChatCompletionMessageToolCall.id`。
+
+## 服务端工具调用
+
+Chat Completions 的 proxai wire model 没有像 Responses 那样的 hosted tool item 生命周期，也没有 Anthropic 那样的 `server_tool_use` block。
+
+当前结构里和服务端能力更接近的是请求级选项，例如 `web_search_options`、`response_format`、`audio`、`service_tier` 等。它们影响上游服务行为，但不会在 Chat Completions 协议中形成独立的 server-tool-use/result block。
+
+因此在 proxai 内部，Chat Completions 路径的工具重点是：
+
+- `tools`：客户端可执行工具定义。
+- `tool_choice`：模型是否/如何选择工具。
+- assistant `tool_calls`：模型请求客户端执行工具。
+- 后续 `tool` messages：客户端回传工具结果。
+
+## SSE 流式
+
+Chat Completions 流式响应是一串 `CreateChatCompletionStreamResponse` chunk：
+
+```rust
+struct CreateChatCompletionStreamResponse {
+    id: String,
+    choices: Vec<ChatChoiceStream>,
+    created: u32,
+    model: String,
+    object: String,
+    usage: Option<CompletionUsage>,
+    service_tier: Option<ServiceTier>,
+}
+```
+
+每个 choice 的增量在 `delta` 里：
+
+```rust
+struct ChatCompletionStreamResponseDelta {
+    content: Option<String>,
+    tool_calls: Option<Vec<ChatCompletionMessageToolCallChunk>>,
+    role: Option<Role>,
+    refusal: Option<String>,
+}
+```
+
+工具调用参数也是增量字符串：
+
+```rust
+struct ChatCompletionMessageToolCallChunk {
+    index: u32,
+    id: Option<String>,
+    type: Option<FunctionType>,
+    function: Option<FunctionCallStream>,
+}
+
+struct FunctionCallStream {
+    name: Option<String>,
+    arguments: Option<String>,
+}
+```
+
+客户端需要按 `choice.index` 和 `tool_call_chunk.index` 聚合工具参数，直到该 choice 出现 `finish_reason = tool_calls` 或其他终止原因。
+
+### choices、并行与串行
+
+Chat Completions 的顶层输出单元是 `choices[]`。每个 choice 是同一请求的一条候选回答；当请求参数 `n > 1` 时，上游可以并行返回多个候选回答。绝大多数 agent 场景中 `n` 默认为 `1`，所以通常只有 `choices[0]`。
+
+流式响应里，同一个 `choice.index` 的 delta 按到达顺序串行拼接：
+
+```text
+choice[0]: delta "Hel" -> delta "lo" -> finish_reason "stop"
+choice[1]: delta "Hi"  -> delta " there" -> finish_reason "stop"
+```
+
+不同 choice 的 chunk 可以交错到达，但 `choice.index` 是稳定聚合 key：
+
+```json
+{"choices":[{"index":0,"delta":{"content":"Hel"}}]}
+{"choices":[{"index":1,"delta":{"content":"Hi"}}]}
+{"choices":[{"index":0,"delta":{"content":"lo"}}]}
+```
+
+工具调用是 choice 内部的下一层并列单元。一个 choice 可以同时返回多个 tool calls：
+
+```text
+choice[0]
+└─ tool_calls[0] read_file(src/main.rs)
+└─ tool_calls[1] read_file(Cargo.toml)
+```
+
+因此 stream 聚合需要两级 key：
+
+```text
+choice.index
+choice.index + tool_call.index
+```
+
+`tool_call.id` 通常会在工具调用开始时出现，但后续 arguments delta 不保证每次携带 id，所以 proxai observer 不只依赖 id 去重。
+
+proxai 的 Chat Completions provider 使用通用 stream mechanics 保留 SSE bytes，并由 Chat observer 解析 `chat.completion.chunk`，用于 usage、finish reason 和日志摘要。它不像 Responses observer 那样注入工具参数超时诊断。
+
+关于 Chat Completions 与其他协议在流式标识模型（`tool_calls[].index` 与 `item_id` 的区别）、事件粒度（event-oriented 与 snapshot-bound）、以及跨协议翻译时如何生成缺失的整数 tool-call index，详见 [协议转换](protocol-conversion) 的 `## Streaming identifier model and parallel assembly` 章节。
+
+## 完整交互示例
+
+完整的多轮 SSE 示例已经拆到独立页面，避免协议概览页过长。
+
+<FeatureGrid
+  items={[
+    { title: 'Chat Completions 完整交互示例', icon: 'flow', href: '/zh/protocol/openai-chat-completions/interaction-example', description: '用 function tool、tool message 和两轮 SSE 展示 Chat 的 choice/message 交互。' },
+  ]}
+/>
+
+## proxai 当前处理方式
+
+`openai_chat_completions -> openai_chat_completions` 是已接入路径：
+
+1. ingress 用 `async-openai` typed parse 校验请求并提取 model。
+2. request preparation 替换上游 model 等转发字段。
+3. provider 转发到 `/v1/chat/completions`。
+4. 非流式响应解析摘要。
+5. SSE 响应保持透传，同时观察 chunk、usage 和 finish reason。

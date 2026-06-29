@@ -1,0 +1,70 @@
+---
+title: Configuration Reference
+description: Single-source config.example.toml reference and links to field explanations and defaults
+---
+
+import { Code } from '@astrojs/starlight/components';
+import { FeatureGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+import configExample from '../../../../../../config.example.toml?raw';
+
+# Configuration Reference
+
+This page is the **single-source configuration reference** for the tracked `config.example.toml`. ProxAI writes this file into the app directory on first run, then loads your local `config.toml` for actual runtime settings.
+
+<ProxaiCallout type="caution" title="Never commit secrets">
+  Treat `config.example.toml` as a template. Put real `api_key` values only in your local git-ignored `config.toml`.
+</ProxaiCallout>
+
+## What belongs where
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Configuration guide',
+      href: '/en/using/configuration',
+      icon: 'config',
+      description: 'Field-by-field explanations and how the major config sections work together.',
+    },
+    {
+      title: 'Defaults and limits',
+      href: '/en/reference/defaults-and-limits',
+      icon: 'gauge',
+      description: 'Curated quick lookup for default endpoints, timeouts, limits, and capture defaults.',
+    },
+  ]}
+/>
+
+## Section map
+
+<ReferenceTable
+  columns={['Section', 'Owns', 'Task docs']}
+  rows={[
+    ['`[server]`', 'Local proxy listener, request size, and concurrency limits.', '[Configuration](/en/using/configuration#minimal-local-config)'],
+    ['`[mcp]`', 'Local MCP control/API listener. MCP is a control surface, not a model path.', '[Configuration](/en/using/configuration#configuration-map)'],
+    ['`[routing.default_provider_names]`', 'Fallback provider names per inbound request protocol.', '[Routing and Providers](/en/using/routing-and-providers)'],
+    ['`[[routing.routes]]`', 'Explicit model/protocol routes and optional upstream model rewrite.', '[Route Matching](/en/reference/route-matching)'],
+    ['`[providers.<name>]`', 'Named upstream provider protocol, base URL, API key, compatibility, and idle timeout.', '[Provider Setup](/en/using/provider-setup)'],
+    ['`[tool_calls]`', 'Semantic timeout for incomplete streamed tool-call arguments.', '[Streaming Behavior](/en/protocol/streaming-behavior)'],
+    ['`[logging]`', 'Log level, output format, and color behavior.', '[Observability](/en/using/observability)'],
+    ['`[logging.duration_thresholds]`', 'Human-log duration coloring thresholds.', '[Observability](/en/using/observability)'],
+    ['`[error_responses]`', 'Client-facing error format: text or JSON.', '[Error Responses](/en/reference/error-responses)'],
+    ['`[capture]`', 'Local per-phase capture switches.', '[Capture Phases](/en/reference/capture-phases)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Runtime ownership
+
+<ReferenceTable
+  columns={['Artifact', 'Role']}
+  rows={[
+    ['`config.example.toml`', 'Tracked example and docs source. Keep concise and secret-free.'],
+    ['`config.toml`', 'Local runtime configuration. Intentionally git-ignored.'],
+    ['`src/config.rs`', 'Typed schema, parsing, validation, and defaults.'],
+    ['`site/src/content/docs/*/reference/configuration.mdx`', 'Reference page that embeds the tracked example and maps its sections.'],
+  ]}
+/>
+
+## `config.example.toml`
+
+<Code code={configExample} lang="toml" title="config.example.toml" />

@@ -1,4 +1,4 @@
-use crate::protocol::anthropic::messages::ThinkingConfigParam;
+use crate::protocol::anthropic::messages::{OutputEffort, ThinkingConfigParam};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::ProviderRequestView;
 use crate::request::RequestId;
@@ -160,9 +160,16 @@ impl From<&ProviderRequestView<'_>> for ProviderRequestCommonFields {
             } => Self {
                 model: projection.model.clone(),
                 reasoning_effort: projection
-                    .thinking
+                    .output_config
                     .as_ref()
-                    .map(render_anthropic_thinking_common_field)
+                    .and_then(|config| config.effort)
+                    .map(render_anthropic_output_effort_common_field)
+                    .or_else(|| {
+                        projection
+                            .thinking
+                            .as_ref()
+                            .map(render_anthropic_thinking_common_field)
+                    })
                     .unwrap_or_default(),
                 stream: projection.stream,
                 max_output_tokens: Some(projection.max_tokens),
@@ -171,9 +178,20 @@ impl From<&ProviderRequestView<'_>> for ProviderRequestCommonFields {
     }
 }
 
+fn render_anthropic_output_effort_common_field(effort: OutputEffort) -> String {
+    match effort {
+        OutputEffort::Low => "low",
+        OutputEffort::Medium => "medium",
+        OutputEffort::High => "high",
+        OutputEffort::Xhigh => "xhigh",
+        OutputEffort::Max => "max",
+    }
+    .to_string()
+}
+
 fn render_anthropic_thinking_common_field(thinking: &ThinkingConfigParam) -> String {
     match thinking {
-        ThinkingConfigParam::Enabled(value) => value.budget_tokens.to_string(),
+        ThinkingConfigParam::Enabled(_) => "legacy_enabled".to_string(),
         ThinkingConfigParam::Adaptive(_) => "adaptive".to_string(),
         ThinkingConfigParam::Disabled(_) => "disabled".to_string(),
     }

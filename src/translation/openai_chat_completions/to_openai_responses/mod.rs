@@ -24,7 +24,7 @@ use crate::translation::streaming::{
 };
 
 pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
-    translate_sse_stream(input, ChatToResponsesStreamTranslator::default())
+    translate_sse_stream(input, ResponsesStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
@@ -177,7 +177,7 @@ fn response_status(chat: &CreateChatCompletionResponse) -> Status {
 }
 
 #[derive(Debug, Default)]
-struct ChatToResponsesStreamTranslator {
+struct ResponsesStreamTranslator {
     sequence_number: u64,
     response_id: Option<String>,
     model: Option<String>,
@@ -201,7 +201,7 @@ struct StreamToolItem {
     arguments: String,
 }
 
-impl StreamingEventTranslator for ChatToResponsesStreamTranslator {
+impl StreamingEventTranslator for ResponsesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let payload = event.payload_with_type()?;
         let mut chunks = Vec::new();
@@ -347,7 +347,7 @@ impl StreamingEventTranslator for ChatToResponsesStreamTranslator {
     }
 }
 
-impl ChatToResponsesStreamTranslator {
+impl ResponsesStreamTranslator {
     fn next_sequence_number(&mut self) -> u64 {
         let sequence_number = self.sequence_number;
         self.sequence_number += 1;

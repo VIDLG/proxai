@@ -2,10 +2,12 @@
 
 mod documents;
 mod messages;
+mod reasoning;
 mod tools;
 mod types;
 
 use self::messages::AnthropicMessages;
+use self::reasoning::{output_config, thinking_config};
 use self::tools::translate_tool_choice;
 use self::types::{chat_max_tokens, json_number_from_f32, stop_sequences};
 use crate::protocol::anthropic::messages as anthropic;
@@ -39,20 +41,13 @@ impl TryFrom<&chat::CreateChatCompletionRequest> for anthropic::MessageCreatePar
             container: None,
             inference_geo: None,
             metadata: None,
-            output_config: request.reasoning_effort.and_then(|effort| {
-                Option::<anthropic::OutputEffort>::from(effort).map(|effort| {
-                    anthropic::OutputConfig {
-                        effort: Some(effort),
-                        format: None,
-                    }
-                })
-            }),
+            output_config: output_config(request.reasoning_effort),
             service_tier: None,
             stop_sequences: stop_sequences(request.stop.as_ref()),
             stream: request.stream,
             system: anthropic_messages.system,
             temperature: request.temperature.and_then(json_number_from_f32),
-            thinking: request.reasoning_effort.and_then(Into::into),
+            thinking: request.reasoning_effort.and_then(thinking_config),
             tool_choice: request
                 .tool_choice
                 .as_ref()

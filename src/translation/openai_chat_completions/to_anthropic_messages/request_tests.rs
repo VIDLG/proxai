@@ -434,10 +434,7 @@ fn translates_chat_reasoning_effort_to_anthropic_output_config() {
     let translated = translate_request_payload(&payload).unwrap();
 
     assert_eq!(translated["output_config"], json!({"effort": "high"}));
-    assert_eq!(
-        translated["thinking"],
-        json!({"type": "enabled", "budget_tokens": 8192})
-    );
+    assert!(translated.get("thinking").is_none());
 }
 
 #[test]

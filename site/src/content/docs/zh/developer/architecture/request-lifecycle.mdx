@@ -1,0 +1,77 @@
+---
+title: 请求生命周期
+description: 从入站 HTTP 请求到出站响应的源码级请求生命周期
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { PipelineStageCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+export const lifecycleNodes = [
+  { id: 'client', position: { x: 0, y: 80 }, data: { label: 'Client request' } },
+  { id: 'ingress', position: { x: 220, y: 0 }, data: { label: 'ingress\nparse + normalize' } },
+  { id: 'routing', position: { x: 440, y: 0 }, data: { label: 'routing\nprovider selection' } },
+  { id: 'providerRequest', position: { x: 660, y: 0 }, data: { label: 'provider_request\ntranslate + serialize' } },
+  { id: 'transport', position: { x: 880, y: 80 }, data: { label: 'transport\nsend upstream' } },
+  { id: 'upstream', position: { x: 660, y: 180 }, data: { label: 'upstream_response\nbody or stream' } },
+  { id: 'outbound', position: { x: 440, y: 180 }, data: { label: 'outbound_response\ntranslate back' } },
+  { id: 'http', position: { x: 220, y: 180 }, data: { label: 'http_support\nrebuild HTTP' } },
+  { id: 'response', position: { x: 0, y: 180 }, data: { label: 'Client response' } },
+];
+
+export const lifecycleEdges = [
+  { id: 'e1', source: 'client', target: 'ingress', animated: true },
+  { id: 'e2', source: 'ingress', target: 'routing', animated: true },
+  { id: 'e3', source: 'routing', target: 'providerRequest', animated: true },
+  { id: 'e4', source: 'providerRequest', target: 'transport', animated: true },
+  { id: 'e5', source: 'transport', target: 'upstream', animated: true },
+  { id: 'e6', source: 'upstream', target: 'outbound', animated: true },
+  { id: 'e7', source: 'outbound', target: 'http', animated: true },
+  { id: 'e8', source: 'http', target: 'response', animated: true },
+];
+
+# 请求生命周期
+
+本页描述源码级请求路径。用户可见行为属于[使用 ProxAI](/zh/using)，协议行为属于[协议指南](/zh/protocol)。
+
+<ProxaiCallout type="note" title="跟着数据阶段走">
+  理解代码最简单的方式，是跟踪数据当前属于哪个阶段：`inbound_request`、`provider_request`、`upstream_response` 或 `outbound_response`。
+</ProxaiCallout>
+
+## 流程
+
+<FlowDiagram nodes={lifecycleNodes} edges={lifecycleEdges} height={380} client:only="react" />
+
+## 阶段
+
+<PipelineStageCards
+  labels={{ modules: '模块', responsibility: '职责' }}
+  stages={[
+    { name: 'inbound_request', modules: ['src/ingress/', 'src/pipeline/inbound.rs'], responsibility: '检测请求路径，读取 body，解析协议 payload，并规范化入站请求元数据。' },
+    { name: 'routing', codeName: false, modules: ['src/routing/', 'src/config.rs'], responsibility: '解析显式路由或协议感知默认 provider；执行 request_protocol guard。' },
+    { name: 'provider_request', modules: ['src/provider/*/request', 'src/translation/'], responsibility: '协议不同时转换 payload，重写 provider model，并序列化上游请求。' },
+    { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: '构造上游 URL，附加 provider-owned 认证头，并通过 HTTP 发送。' },
+    { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: '读取状态、headers、非流式 body 或流式 byte carrier。' },
+    { name: 'outbound_response', modules: ['src/translation/', 'src/http_support/'], responsibility: '把 provider response 转回入站协议，并重建客户端 HTTP response。' },
+  ]}
+/>
+
+## 重要不变量
+
+<ReferenceTable
+  columns={['不变量', '原因']}
+  rows={[
+    ['Translation 不拥有 HTTP `Response`', 'translation layer 应该在 carrier 边界保持纯粹。'],
+    ['Provider 认证来自 provider config', '客户端传入的 Authorization 不控制上游 provider 认证。'],
+    ['路由匹配错误必须显式', '协议 guard mismatch 不应该落回另一个 provider。'],
+    ['流式完成是语义事件', '完成需要协议终止事件，而不是仅仅 socket 关闭。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 相关文档
+
+- [架构](/zh/developer/architecture)
+- [协议转换](/zh/developer/protocol-conversion)
+- [捕获阶段](/zh/reference/capture-phases)
+- [行为契约](/zh/reference/behavior-contracts)

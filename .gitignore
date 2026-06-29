@@ -19,3 +19,14 @@ llm/
 .zed/
 target/
 Cargo.lock
+
+# Node.js / site
+site/node_modules/
+site/.next/
+site/out/
+site/.astro/
+site/dist/
+site/.netlify/
+site/.turbo/
+site/.pnpm-store/
+site/pnpm-lock.yaml

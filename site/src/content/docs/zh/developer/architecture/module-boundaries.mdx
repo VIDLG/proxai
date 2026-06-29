@@ -1,0 +1,71 @@
+---
+title: 模块边界
+description: 解析、路由、转换、provider 行为、HTTP carrier 与观测分别放在哪里的维护者指南
+robots: noindex
+---
+
+import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 模块边界
+
+本页是维护者判断代码归属的地图。拿不准时，保持协议转换显式，并避免把 provider-specific 行为混入通用 translation。
+
+<ProxaiCallout type="caution" title="不要混淆协议和 provider 边界">
+  Provider 名称是用户标签。协议名称描述 wire 行为。Provider 模块可以适配本地 provider 怪癖，但通用协议到协议的 shape 改写应放在 `src/translation/`。
+</ProxaiCallout>
+
+## 归属地图
+
+<ModuleGrid
+  modules={[
+    { name: 'src/ingress/', icon: 'route', description: '从 HTTP path 检测入站协议，解析入站 body，并在 routing 前规范化 request carrier。' },
+    { name: 'src/protocol/', icon: 'protocol', description: 'Wire structs、enums 和协议专属 event payload。不做 provider routing 决策。' },
+    { name: 'src/routing/', icon: 'route', description: '匹配 request_protocol 和 model_pattern，选择 provider，并执行协议 guard 错误。' },
+    { name: 'src/translation/', icon: 'flow', description: '协议 pair 之间的纯 request/response/stream 转换。' },
+    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation：模型改写、provider compatibility projection、序列化。' },
+    { name: 'src/provider/*/transport', icon: 'terminal', description: '上游 URL 构造、provider-owned auth headers、HTTP send。' },
+    { name: 'src/upstream/', icon: 'timer', description: '读取 provider status、headers、非流式 body 和流式 byte carrier。' },
+    { name: 'src/http_support/', icon: 'architecture', description: 'HTTP response reconstruction、content-type helpers、header filtering、byte stream carriers。' },
+    { name: 'src/error/', icon: 'alert', description: 'Domain error taxonomy 和紧凑的客户端错误投影。' },
+    { name: 'src/observe/', icon: 'gauge', description: '结构化日志、capture phases、hints 和隐私安全诊断。' },
+  ]}
+/>
+
+## 边界判断
+
+<ReferenceTable
+  columns={['问题', '放在']}
+  rows={[
+    ['是否解析客户端请求 path 或 body？', '`src/ingress/`'],
+    ['是否定义协议 JSON wire shape？', '`src/protocol/`'],
+    ['是否按协议/模型选择 provider？', '`src/routing/` 或 pipeline routing step'],
+    ['是否把一种协议 payload 转成另一种协议 payload？', '`src/translation/`'],
+    ['是否改写 provider model 或 provider-local request 字段？', '`src/provider/*/request`'],
+    ['是否添加 provider 认证头或构造上游 URL？', '`src/provider/*/transport`'],
+    ['是否过滤 headers 或重建 HTTP response？', '`src/http_support/`'],
+    ['是否渲染客户端错误？', '`src/error/`'],
+    ['是否写日志或 capture artifacts？', '`src/observe/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 反模式
+
+<ReferenceTable
+  columns={['避免', '原因']}
+  rows={[
+    ['把 HTTP `Response` 传进 `src/translation/`', 'Translation 应在 carrier 边界保持纯粹。'],
+    ['在 translation 中添加 provider auth 逻辑', 'Auth 是 provider transport 行为，不是协议转换。'],
+    ['把 provider 名称当协议值使用', 'Provider 名称是任意用户标签。'],
+    ['协议 guard mismatch 后静默 fallback', '匹配 route 但 `request_protocol` 不一致是配置错误。'],
+    ['为了方便记录 request body', 'Prompt、工具参数和输出都是私有数据。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 相关文档
+
+- [请求生命周期](/zh/developer/architecture/request-lifecycle)
+- [协议转换](/zh/developer/protocol-conversion)
+- [行为契约](/zh/reference/behavior-contracts)
+- [捕获阶段](/zh/reference/capture-phases)

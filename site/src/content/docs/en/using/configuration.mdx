@@ -1,0 +1,212 @@
+---
+title: Configuration
+description: Task-oriented ProxAI runtime configuration guide for providers, routing, streaming safety, captures, logging, and errors
+---
+
+import { ConfigMap, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Configuration
+
+Runtime configuration centers on `config.toml`. Use this page for common configuration tasks; use [Configuration Reference](/en/reference/configuration) for the complete generated `config.example.toml` and [Defaults and Limits](/en/reference/defaults-and-limits) for exact default values.
+
+<ProxaiCallout type="tip" title="Config is the source of truth">
+  Keep long-lived runtime behavior in `config.toml`. CLI flags are temporary overrides for local testing or one-off route changes.
+</ProxaiCallout>
+
+## Configuration map
+
+<ConfigMap
+  groups={[
+    { title: 'Local listeners', icon: 'terminal', description: 'HTTP addresses for the proxy and MCP control surface.', keys: ['[server]', '[mcp]'] },
+    { title: 'Routing', icon: 'route', description: 'Default providers and explicit model/protocol routes.', keys: ['[routing.default_provider_names]', '[[routing.routes]]'] },
+    { title: 'Providers', icon: 'protocol', description: 'Upstream endpoints, provider protocols, API keys, and compatibility mode.', keys: ['[providers.<name>]'] },
+    { title: 'Streaming safety', icon: 'timer', description: 'Timeouts for incomplete streamed tool-call arguments and idle upstream reads.', keys: ['[tool_calls]', 'read_idle_timeout_secs'] },
+    { title: 'Diagnostics', icon: 'gauge', description: 'Capture switches, log format, and duration coloring thresholds.', keys: ['[capture]', '[logging]', '[logging.duration_thresholds]'] },
+    { title: 'Client-facing errors', icon: 'alert', description: 'Readable text errors for Zed or JSON errors for OpenAI-compatible clients.', keys: ['[error_responses]'] },
+  ]}
+/>
+
+## Find the app directory
+
+Generated runtime files live under the user app directory:
+
+<ReferenceTable
+  columns={['Platform', 'Path']}
+  rows={[
+    ['Windows', '%USERPROFILE%\\.proxai\\'],
+    ['Linux/macOS', '~/.proxai/'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Important entries:
+
+<ReferenceTable
+  columns={['Path', 'Purpose']}
+  rows={[
+    ['config.toml', 'Runtime configuration, intentionally git-ignored'],
+    ['config.example.toml', 'Generated local example/reference'],
+    ['logs/', 'Runtime log output'],
+    ['captures/', 'Optional per-phase capture artifacts'],
+  ]}
+/>
+
+For repository and app-directory boundaries, see [Environment and Files](/en/reference/environment-and-files).
+
+## Minimal local config
+
+A minimal useful setup needs a local listener, default provider mapping, and at least one provider.
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 18080
+
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+anthropic_messages = "anthropic"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+
+[providers.anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "..."
+```
+
+<ProxaiCallout type="caution" title="Never commit secrets">
+  `api_key` values belong in local `config.toml`, not in tracked examples, logs, docs, captures, or fixtures.
+</ProxaiCallout>
+
+## Add a provider
+
+Each provider describes one concrete upstream. This page keeps only the quick shape; use [Provider Setup](/en/using/provider-setup) for provider naming, auth headers, defaults, and route examples.
+
+```toml
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+Provider names are labels. Provider `protocol` controls outbound wire behavior. See [Glossary](/en/reference/glossary) for the distinction between provider name and provider protocol.
+
+## Set default providers
+
+`[routing.default_provider_names]` declares fallback providers per inbound request protocol. Defaults are used only when no explicit route matches.
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai_chat"
+anthropic_messages = "anthropic"
+```
+
+Supported keys are the protocol values from [Protocols](/en/reference/protocols):
+
+- `openai_responses`
+- `openai_chat_completions`
+- `anthropic_messages`
+
+## Add an explicit route
+
+Use an explicit route when a model pattern needs a specific provider, optional inbound protocol guard, or upstream model rewrite.
+
+```toml
+[[routing.routes]]
+name = "m3_chat"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+<ReferenceTable
+  columns={['Field', 'Role']}
+  rows={[
+    ['name', 'Optional stable identifier for CLI overrides'],
+    ['request_protocol', 'Optional inbound protocol guard'],
+    ['match_kind', 'Optional `exact`, `glob`, `regex`, or `auto`'],
+    ['model_pattern', 'Logical model selector'],
+    ['provider', 'Provider name selected when this route matches'],
+    ['upstream_model', 'Optional upstream model mapping'],
+  ]}
+/>
+
+For exact matching outcomes, see [Route Matching](/en/reference/route-matching).
+
+## Tune streaming timeouts
+
+There are two different timeout concepts:
+
+<ReferenceTable
+  columns={['Setting', 'Layer', 'Purpose']}
+  rows={[
+    ['[tool_calls].timeout_secs', 'Protocol semantics', 'Timeout for incomplete streamed tool-call arguments'],
+    ['[providers.<name>].read_idle_timeout_secs', 'Transport carrier', 'Idle-read timeout while waiting for upstream response bytes'],
+  ]}
+/>
+
+Keep them separate: `read_idle_timeout_secs` watches raw upstream bytes, while `tool_calls.timeout_secs` watches semantic tool-call completion.
+
+## Enable captures
+
+Capture phase switches live under `[capture]`:
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+<PipelineStrip
+  steps={[
+    { title: 'Pick the narrowest phase', description: 'Use the phase that answers your question.' },
+    { title: 'Enable it briefly', description: 'Use config or `proxai capture enable ...` for one debugging window.' },
+    { title: 'Reproduce once', description: 'Send one sanitized request.' },
+    { title: 'Disable capture', description: 'Captures can contain prompts, tool arguments, model outputs, and upstream payloads.' },
+  ]}
+/>
+
+Capture paths are fixed under the app directory. For phase meanings and privacy risk, see [Capture Phases](/en/reference/capture-phases).
+
+## Configure logging
+
+`[logging]` controls output format and color behavior. `[logging.duration_thresholds]` controls human-log duration coloring.
+
+<ReferenceTable
+  columns={['Field', 'Meaning']}
+  rows={[
+    ['output_format', '`human` for interactive debugging or `json` for machine consumption'],
+    ['use_color', 'Enable or disable colored human logs'],
+    ['warn_ms / error_ms', 'Human log duration coloring thresholds'],
+  ]}
+/>
+
+Logs should stay compact and should not include request bodies, API keys, Authorization headers, or private prompts.
+
+## Choose error response format
+
+`[error_responses]` selects how client-facing errors are rendered.
+
+<ReferenceTable
+  columns={['Value', 'Meaning']}
+  rows={[
+    ['text', 'Concise Zed-readable error bodies; default'],
+    ['json', 'OpenAI-style JSON error bodies for non-Zed clients'],
+  ]}
+/>
+
+```toml
+[error_responses]
+format = "text" # or "json"
+```
+
+For upstream status handling and preserved headers, see [Error Responses](/en/reference/error-responses).

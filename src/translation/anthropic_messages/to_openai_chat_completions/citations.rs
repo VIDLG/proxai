@@ -32,12 +32,9 @@ fn citation_annotation(
     // the cited text, but not an output-text offset. Search forward from the
     // previous matched citation so repeated cited text maps to later occurrences
     // in citation order instead of always selecting the first match.
-    let Some(matched_byte_offset) = block.text[*search_start_byte..]
+    let matched_byte_offset = block.text[*search_start_byte..]
         .find(&citation.cited_text)
-        .map(|relative_offset| *search_start_byte + relative_offset)
-    else {
-        return None;
-    };
+        .map(|relative_offset| *search_start_byte + relative_offset)?;
     *search_start_byte = matched_byte_offset.saturating_add(citation.cited_text.len());
 
     let text_offset = block.text[..matched_byte_offset].chars().count();

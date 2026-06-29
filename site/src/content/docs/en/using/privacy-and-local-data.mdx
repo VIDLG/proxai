@@ -1,0 +1,84 @@
+---
+title: Privacy and Local Data
+description: Understand what ProxAI stores locally, what it should avoid logging, and how to share debugging evidence safely
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Privacy and Local Data
+
+ProxAI is a local compatibility proxy. That makes it useful for debugging, but it also means local files can contain provider configuration, request metadata, captured payloads, and diagnostics.
+
+<ProxaiCallout type="caution" title="Treat captures as sensitive">
+  Captures can contain prompts, tool arguments, provider output, file snippets, model names, and request timing. Do not commit or share them without review and redaction.
+</ProxaiCallout>
+
+## Local artifacts
+
+<ReferenceTable
+  columns={['Artifact', 'Privacy expectation', 'Commit?']}
+  rows={[
+    ['`config.toml`', 'Local runtime config; may contain provider URLs, API key references, route choices, or local-only settings.', 'No'],
+    ['`config.example.toml`', 'Tracked example and documentation source; must stay sanitized and generic.', 'Yes'],
+    ['`captures/`', 'Request/response phase payloads for debugging; can contain private prompts and tool data.', 'No'],
+    ['`logs/`', 'Local diagnostics; should stay compact and body-safe, but still may reveal operational context.', 'No'],
+    ['Generated site output', 'Static docs build artifacts.', 'No unless intentionally configured otherwise'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Privacy contracts
+
+<ContractCards
+  layout="single"
+  contracts={[
+    { id: 'P1', title: 'Do not log secrets', body: 'Request bodies, `Authorization` headers, API keys, and private prompts should not appear in default logs.' },
+    { id: 'P2', title: 'Capture narrowly', body: 'Enable the smallest useful phase: `inbound_request`, `provider_request`, `upstream_response`, or `outbound_response`.' },
+    { id: 'P3', title: 'Docs follow verified behavior', body: 'If privacy behavior is uncertain, inspect implementation and tests before documenting or sharing assumptions.' },
+    { id: 'P4', title: 'Share sanitized evidence', body: 'Prefer symptoms, status codes, phase names, error types, redacted headers, and trimmed payload structure over full private captures.' },
+  ]}
+/>
+
+## Safe sharing workflow
+
+<TaskSteps
+  steps={[
+    {
+      title: 'Classify the symptom first',
+      goal: 'Avoid capturing more data than needed.',
+      do: ['Identify whether the issue is startup config, route matching, provider transport, protocol conversion, streaming, or client rendering.', 'Use compact logs before enabling payload capture.'],
+      verify: 'You know which phase is most likely to explain the issue.',
+      docs: [{ label: 'Troubleshooting', href: '/en/using/troubleshooting' }, { label: 'Error Responses', href: '/en/reference/error-responses' }],
+    },
+    {
+      title: 'Capture one phase',
+      goal: 'Limit the private data surface.',
+      do: ['Enable one capture phase only.', 'Prefer the phase closest to the suspected boundary.', 'Reproduce once with the smallest prompt/tool input possible.'],
+      verify: 'The capture answers the question without needing the full request lifecycle.',
+      docs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }, { label: 'Observability', href: '/en/using/observability' }],
+    },
+    {
+      title: 'Redact before sharing',
+      goal: 'Preserve useful structure while removing private content.',
+      do: ['Remove API keys, Authorization headers, private prompts, file contents, personal data, and proprietary tool arguments.', 'Keep protocol values, phase names, status codes, error types, and minimal structural snippets.'],
+      verify: 'A maintainer can understand the boundary failure without seeing private data.',
+      docs: [{ label: 'Behavior Contracts', href: '/en/reference/behavior-contracts' }, { label: 'Environment and Files', href: '/en/reference/environment-and-files' }],
+    },
+  ]}
+/>
+
+## What is safe to include in reports
+
+<ReferenceTable
+  columns={['Usually useful', 'Avoid or redact']}
+  rows={[
+    ['ProxAI version, OS, command shape without secrets', 'API keys, bearer tokens, full environment dumps'],
+    ['Inbound protocol and request path', 'Full prompts or private file snippets'],
+    ['Provider protocol and route name/pattern when sanitized', 'Private provider account details or internal URLs'],
+    ['Error type, HTTP status, preserved safe headers such as `Retry-After`', 'Full upstream error bodies if they contain prompts or account data'],
+    ['Minimal JSON shape with placeholder values', 'Complete captures unless explicitly reviewed and sanitized'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+For exact local paths and ignored artifacts, see [Environment and Files](/en/reference/environment-and-files). For phase names, see [Capture Phases](/en/reference/capture-phases).

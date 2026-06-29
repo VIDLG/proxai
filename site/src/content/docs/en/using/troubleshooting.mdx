@@ -1,0 +1,170 @@
+---
+title: Troubleshooting
+description: Symptom-oriented ProxAI troubleshooting across request shape, routing, providers, streaming, runtime files, and error rendering
+---
+
+import { FeatureGrid, ProxaiCallout, TroubleshootingGrid } from '@components/ProxaiDocs.jsx';
+
+# Troubleshooting
+
+Start from the symptom the client sees, then inspect the narrowest useful layer. Each card gives likely causes, first checks, a useful capture phase, and the docs that own the deeper explanation.
+
+<ProxaiCallout type="tip" title="Capture before guessing">
+  Most symptoms are easiest to diagnose with one sanitized capture. Enable the narrowest useful phase for a single request, then disable it again. See [Capture Phases](/en/reference/capture-phases).
+</ProxaiCallout>
+
+## Request shape and routing
+
+<TroubleshootingGrid
+  items={[
+    {
+      symptom: 'Client sees 404 or unsupported path',
+      icon: 'alert',
+      layer: 'Ingress',
+      capture: 'inbound_request',
+      causes: ['The client is not using a supported endpoint.', 'The client base URL includes an extra `/v1` or misses the expected route suffix.'],
+      next: ['Use `/v1/responses`, `/v1/chat/completions`, or `/v1/messages`.', 'Check whether the client wants base URL with or without `/v1`.', 'Confirm the local proxy is listening on the configured port.'],
+      docs: [{ label: 'Protocols', href: '/en/reference/protocols' }, { label: 'Defaults', href: '/en/reference/defaults-and-limits' }],
+    },
+    {
+      symptom: 'Client sees 400 invalid_request_error',
+      icon: 'alert',
+      layer: 'Ingress validation',
+      capture: 'inbound_request',
+      causes: ['Inbound request body is not valid for the detected protocol.', 'The client sent an unsupported shape for the selected endpoint.'],
+      next: ['Check the request path.', 'Capture one sanitized inbound request.', 'Compare payload shape with the protocol guide.'],
+      docs: [{ label: 'Protocol guide', href: '/en/protocol' }, { label: 'Error responses', href: '/en/reference/error-responses' }],
+    },
+    {
+      symptom: 'Wrong provider is selected',
+      icon: 'route',
+      layer: 'Routing',
+      capture: 'provider_request',
+      causes: ['Route order or model pattern matched an unexpected route.', '`request_protocol` guard was omitted or mismatched your intent.', 'Default provider fallback handled the request.'],
+      next: ['Review `[[routing.routes]]`.', 'Check `routing.default_provider_names`.', 'Compare actual inbound protocol with any explicit `request_protocol` guard.'],
+      docs: [{ label: 'Route matching', href: '/en/reference/route-matching' }, { label: 'Routing', href: '/en/using/routing-and-providers' }],
+    },
+    {
+      symptom: 'Protocol mismatch configuration error',
+      icon: 'protocol',
+      layer: 'Routing / conversion',
+      capture: 'provider_request',
+      causes: ['A route model matched, but explicit `request_protocol` differed from the detected inbound protocol.', 'The selected provider protocol requires an unsupported conversion pair.'],
+      next: ['Set `request_protocol` only for endpoint-specific routing.', 'Check supported conversion pairs.', 'Inspect the provider protocol for the selected provider.'],
+      docs: [{ label: 'Route matching', href: '/en/reference/route-matching' }, { label: 'Protocols', href: '/en/reference/protocols' }],
+    },
+  ]}
+/>
+
+## Provider and upstream
+
+<TroubleshootingGrid
+  items={[
+    {
+      symptom: 'Client sees 401 / 403 upstream',
+      icon: 'key',
+      layer: 'Provider authentication',
+      capture: 'provider_request',
+      causes: ['Provider `api_key` is missing, wrong, expired, or scoped incorrectly.', 'The upstream rejects the provider auth header ProxAI sends.'],
+      next: ['Check local `[providers.<name>].api_key`.', 'Confirm provider protocol determines auth header shape.', 'Avoid passing real keys through client UI when provider config should own auth.'],
+      docs: [{ label: 'Configuration', href: '/en/using/configuration' }, { label: 'Contracts', href: '/en/reference/behavior-contracts#provider-authentication' }],
+    },
+    {
+      symptom: 'Client sees 429 upstream',
+      icon: 'timer',
+      layer: 'Upstream status',
+      capture: 'upstream_response',
+      causes: ['Upstream rate limit or quota exhausted.', 'Concurrency is too high for the selected provider.'],
+      next: ['Inspect preserved `Retry-After` and rate-limit headers.', 'Check provider quota.', 'Lower `[server].max_concurrent_requests` if useful.'],
+      docs: [{ label: 'Defaults', href: '/en/reference/defaults-and-limits' }, { label: 'Error responses', href: '/en/reference/error-responses' }],
+    },
+    {
+      symptom: 'Client sees 502 / 503 / 504 upstream_error',
+      icon: 'terminal',
+      layer: 'Upstream transport / status',
+      capture: 'upstream_response',
+      causes: ['Provider returned a non-2xx status.', 'Upstream error body was empty, non-JSON, or an unknown shape.', 'Network or idle-read timeout occurred.'],
+      next: ['Check provider `base_url`.', 'Capture upstream response for one request.', 'Confirm the upstream endpoint is reachable and protocol-compatible.'],
+      docs: [{ label: 'Configuration', href: '/en/using/configuration' }, { label: 'Error responses', href: '/en/reference/error-responses' }],
+    },
+  ]}
+/>
+
+## Streaming
+
+<TroubleshootingGrid
+  items={[
+    {
+      symptom: 'Stream starts but never completes',
+      icon: 'timer',
+      layer: 'Streaming semantics',
+      capture: 'upstream_response',
+      causes: ['The provider did not send the protocol terminal event.', 'The upstream connection is still open but semantically stalled.'],
+      next: ['Compare against expected terminal events.', 'Check stream outcome logs.', 'Capture upstream SSE tail.'],
+      docs: [{ label: 'Streaming behavior', href: '/en/protocol/streaming-behavior' }, { label: 'Streaming internals', href: '/en/developer/streaming-internals' }],
+    },
+    {
+      symptom: 'Tool-call arguments stall',
+      icon: 'timer',
+      layer: 'Streaming tool-call semantics',
+      capture: 'upstream_response',
+      causes: ['Upstream started tool arguments but did not emit the matching done event.', 'Semantic tool-call timeout is too high for the client experience you want.'],
+      next: ['Tune `[tool_calls].timeout_secs`.', 'Check provider event sequence.', 'Capture the upstream SSE tail.'],
+      docs: [{ label: 'Streaming behavior', href: '/en/protocol/streaming-behavior' }, { label: 'Defaults', href: '/en/reference/defaults-and-limits' }],
+    },
+    {
+      symptom: 'Client receives malformed streaming event',
+      icon: 'alert',
+      layer: 'Translation / response reconstruction',
+      capture: 'outbound_response',
+      causes: ['Provider stream shape does not match the selected provider protocol.', 'Streaming translation encountered an unsupported semantic event.'],
+      next: ['Check inbound protocol vs provider protocol.', 'Compare supported conversion pairs.', 'Capture outbound response bytes for one sanitized request.'],
+      docs: [{ label: 'Protocols', href: '/en/reference/protocols' }, { label: 'Protocol conversion', href: '/en/developer/protocol-conversion' }],
+    },
+  ]}
+/>
+
+## Configuration, files, and error rendering
+
+<TroubleshootingGrid
+  items={[
+    {
+      symptom: 'ProxAI fails to start',
+      icon: 'config',
+      layer: 'Configuration loading',
+      capture: 'none',
+      causes: ['`config.toml` is missing required sections.', 'Provider entry is missing a required field.', 'A route references an unknown provider.'],
+      next: ['Compare against generated `config.example.toml`.', 'Check local app directory.', 'Review route/provider names for typos.'],
+      docs: [{ label: 'Configuration', href: '/en/using/configuration' }, { label: 'Environment', href: '/en/reference/environment-and-files' }],
+    },
+    {
+      symptom: 'Captures are not written',
+      icon: 'file',
+      layer: 'Local filesystem / capture config',
+      capture: 'none',
+      causes: ['The phase switch is disabled.', 'You enabled a different phase than the one you are inspecting.', 'The app directory is not the one you expected.'],
+      next: ['Run `proxai capture status`.', 'Check `[capture]` switches.', 'Confirm app directory location.'],
+      docs: [{ label: 'Capture phases', href: '/en/reference/capture-phases' }, { label: 'Environment', href: '/en/reference/environment-and-files' }],
+    },
+    {
+      symptom: 'Client expected JSON but got text',
+      icon: 'alert',
+      layer: 'Error rendering',
+      capture: 'outbound_response',
+      causes: ['`[error_responses].format` is set to `text`, which is the readable default.', 'Client expects OpenAI-style JSON error payloads.'],
+      next: ['Set `[error_responses].format = "json"` if the client requires JSON.', 'Check outbound response content type.'],
+      docs: [{ label: 'Error responses', href: '/en/reference/error-responses' }, { label: 'Configuration', href: '/en/using/configuration#choose-error-response-format' }],
+    },
+  ]}
+/>
+
+## Related docs
+
+<FeatureGrid
+  items={[
+    { title: 'Configuration', href: '/en/using/configuration', icon: 'config', description: 'Runtime tasks for server, routing, providers, capture, logging, and errors.' },
+    { title: 'Route Matching', href: '/en/reference/route-matching', icon: 'route', description: 'Exact route outcomes and protocol guard behavior.' },
+    { title: 'Capture Phases', href: '/en/reference/capture-phases', icon: 'security', description: 'Phase boundaries and privacy risk.' },
+    { title: 'Streaming Behavior', href: '/en/protocol/streaming-behavior', icon: 'rocket', description: 'Expected streamed responses and terminal events.' },
+  ]}
+/>

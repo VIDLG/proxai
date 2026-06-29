@@ -1,0 +1,112 @@
+---
+title: 观测与诊断
+description: 面向任务的 ProxAI 安全日志、capture、request hints 与隐私保护诊断指南
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 观测与诊断
+
+使用 observability 时，一次只回答一个调试问题，同时避免泄露 private prompts、API keys 或不必要的上游细节。
+
+<ProxaiCallout type="tip" title="从最窄范围开始">
+  先看紧凑日志。如果日志不够，再为一次脱敏请求 capture 最窄的 phase，调试完立即关闭。
+</ProxaiCallout>
+
+## 安全阅读日志
+
+日志应该保持紧凑、结构化，并默认保护隐私。它们可以帮助识别 routing decision、provider selection、upstream status、stream outcome 和 request hints，而不保存完整 payload。
+
+日志不应该包含：
+
+- 请求 body
+- `Authorization` header
+- API key
+- private prompts
+- 不必要的私有上游 URL 细节
+
+这些规则实现了 [行为契约 C23–C25](/zh/reference/behavior-contracts#隐私)。
+
+## Capture 一次请求
+
+<PipelineStrip
+  steps={[
+    { title: '选择问题', description: '你要看的是 client input、provider request、upstream response，还是最终 outbound response？' },
+    { title: '选择 phase', description: '用能回答问题的最窄 capture phase。' },
+    { title: '短时间启用', description: '用 `proxai capture enable ...` 或 `[capture]` switches 打开一个调试窗口。' },
+    { title: '复现一次', description: '发送一个最小脱敏请求。' },
+    { title: '关闭并脱敏', description: 'Captures 留在本地；要变成 fixture 前必须脱敏。' },
+  ]}
+/>
+
+CLI 示例：
+
+```sh
+proxai capture status
+proxai capture enable provider-request
+# 复现一次
+proxai capture disable provider-request
+```
+
+## 选择 phase
+
+<ReferenceTable
+  columns={['问题', 'Phase']}
+  rows={[
+    ['本地客户端到底发了什么？', '`inbound_request`'],
+    ['ProxAI 准备了哪个 provider payload？', '`provider_request`'],
+    ['上游返回了什么 status、headers 或 bytes？', '`upstream_response`'],
+    ['ProxAI 最终返回给客户端什么？', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Capture 目录固定在 app 目录下。配置只控制各 phase 是否写入：
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+精确 phase 边界和隐私风险见 [Capture Phases](/zh/reference/capture-phases)。
+
+## 脱敏 capture
+
+分享或提交任何 capture 派生产物之前：
+
+- 移除 API keys 和 Authorization headers
+- 移除 private prompts、files、tool arguments 和模型输出
+- 裁剪无关 request/response 数据
+- 用脱敏占位符替换 private upstream URLs
+- 只保留能复现行为的最小 payload
+
+<ProxaiCallout type="caution" title="Capture 可能包含私有数据">
+  Capture 可能包含 prompt、tool arguments、模型输出和上游 payload。除非经过明确裁剪和脱敏，否则只应保留在本地。
+</ProxaiCallout>
+
+## 理解 request hints
+
+Request hints 是面向协议的小型诊断摘要，用来识别常见 routing/proxy 问题，而不是记录完整 payload。
+
+常见 hints：
+
+<ReferenceTable
+  columns={['Hint 类型', '用途']}
+  rows={[
+    ['检测出的 request protocol', '确认 path-based ingress 行为'],
+    ['Model 和 route summary', '在不记录 prompts 的情况下检查 provider selection'],
+    ['Streaming outcome', '理解 terminal events 是否出现'],
+    ['Upstream status summary', '区分 provider failure 和本地 translation failure'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 相关文档
+
+- [常见排障](/zh/using/troubleshooting)
+- [Capture Phases](/zh/reference/capture-phases)
+- [环境与文件](/zh/reference/environment-and-files)
+- [流式行为](/zh/protocol/streaming-behavior)

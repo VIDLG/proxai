@@ -1,0 +1,51 @@
+---
+title: 兼容性矩阵
+description: 协议 pair、请求转换、响应转换、流式、工具、reasoning 和已知有损点查表
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 兼容性矩阵
+
+本页是协议 pair 行为的稳定查表页。选择建议看[如何选择协议](/zh/protocol/choosing-a-protocol)，语义解释看[信息损失与保真度](/zh/protocol/lossiness-and-fidelity)。
+
+<ProxaiCallout type="note" title="支持不等于无损">
+  支持某个 pair 表示存在显式转换行为。目标协议无法表达源协议细节时，仍可能有损。
+</ProxaiCallout>
+
+## Pair 矩阵
+
+<ReferenceTable
+  columns={['入站', 'Provider', '请求', '响应', '流式', '工具', 'Reasoning', '说明']}
+  rows={[
+    ['`openai_responses`', '`openai_responses`', '透传', '透传', '透传 SSE 语义', '原生', 'provider 支持时原生', 'Responses 客户端最高保真路径。'],
+    ['`openai_responses`', '`openai_chat_completions`', '支持', '支持', '实现范围内支持', 'tool item identity 有损', '有损', '仅当 provider 只支持 Chat 时使用。'],
+    ['`openai_responses`', '`anthropic_messages`', '支持', '支持', '支持', '通过标识符转换支持', 'summary 粒度有损', '高价值兼容路径；见转换指南。'],
+    ['`openai_chat_completions`', '`openai_responses`', '不支持', '不支持', '不支持', '不支持', '不支持', '实现前应显式失败。'],
+    ['`openai_chat_completions`', '`openai_chat_completions`', '透传', '透传', '透传 `[DONE]` 语义', '原生 Chat tool calls', '受 Chat shape 限制', 'Chat 客户端最高保真路径。'],
+    ['`openai_chat_completions`', '`anthropic_messages`', '支持', '支持', '支持', '通过 `tool_calls[].index` 映射支持', '有损', '适合 Chat-only 客户端的兼容路径。'],
+    ['`anthropic_messages`', '`openai_responses`', '支持', '支持', '实现范围内支持', '通过 content-block 转换支持', 'provider-specific thinking metadata 有损', 'Anthropic 客户端访问 Responses provider 时使用。'],
+    ['`anthropic_messages`', '`openai_chat_completions`', '不支持', '不支持', '不支持', '不支持', '不支持', '实现前应显式失败。'],
+    ['`anthropic_messages`', '`anthropic_messages`', '透传', '透传', '透传 `message_stop` 语义', '原生 Anthropic tools', 'provider 支持时原生', 'Anthropic 客户端最高保真路径。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 图例
+
+<ReferenceTable
+  columns={['值', '含义']}
+  rows={[
+    ['透传', '入站协议和 provider 协议相同。ProxAI 仍负责路由、认证、错误和观测。'],
+    ['支持', '这个轴向存在显式转换行为。'],
+    ['不支持', '该 pair 应显式失败，而不是 fallback。'],
+    ['有损', '尽量保留行为，但精确字段身份或粒度可能不同。'],
+  ]}
+/>
+
+## 相关文档
+
+- [协议](/zh/reference/protocols)
+- [路由匹配](/zh/reference/route-matching)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)
+- [Responses 到 Anthropic Messages](/zh/developer/protocol-conversion/openai-responses-to-anthropic-messages)

@@ -1,0 +1,51 @@
+---
+title: Compatibility Matrix
+description: Lookup matrix for protocol pairs, request conversion, response conversion, streaming, tools, reasoning, and known lossiness
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Compatibility Matrix
+
+This page is the stable lookup table for protocol-pair behavior. Use [Choosing a Protocol](/en/protocol/choosing-a-protocol) for guidance and [Lossiness and Fidelity](/en/protocol/lossiness-and-fidelity) for interpretation.
+
+<ProxaiCallout type="note" title="Supported does not mean lossless">
+  A supported pair has explicit conversion behavior. It can still be lossy where the target protocol cannot express a source-protocol detail.
+</ProxaiCallout>
+
+## Pair matrix
+
+<ReferenceTable
+  columns={['Inbound', 'Provider', 'Request', 'Response', 'Streaming', 'Tools', 'Reasoning', 'Notes']}
+  rows={[
+    ['`openai_responses`', '`openai_responses`', 'pass-through', 'pass-through', 'pass-through SSE semantics', 'native', 'native where provider supports it', 'Highest fidelity for Responses clients.'],
+    ['`openai_responses`', '`openai_chat_completions`', 'supported', 'supported', 'supported where implemented', 'lossy around tool item identity', 'lossy', 'Use only when provider is Chat-only.'],
+    ['`openai_responses`', '`anthropic_messages`', 'supported', 'supported', 'supported', 'supported with identifier translation', 'lossy around summary granularity', 'High-value compatibility path; see conversion guide.'],
+    ['`openai_chat_completions`', '`openai_responses`', 'unsupported', 'unsupported', 'unsupported', 'unsupported', 'unsupported', 'Fail explicitly until implemented.'],
+    ['`openai_chat_completions`', '`openai_chat_completions`', 'pass-through', 'pass-through', 'pass-through `[DONE]` semantics', 'native Chat tool calls', 'limited by Chat shape', 'Highest fidelity for Chat clients.'],
+    ['`openai_chat_completions`', '`anthropic_messages`', 'supported', 'supported', 'supported', 'supported with `tool_calls[].index` mapping', 'lossy', 'Good compatibility path for Chat-only clients.'],
+    ['`anthropic_messages`', '`openai_responses`', 'supported', 'supported', 'supported where implemented', 'supported with content-block translation', 'lossy around provider-specific thinking metadata', 'Use when Anthropic client targets Responses provider.'],
+    ['`anthropic_messages`', '`openai_chat_completions`', 'unsupported', 'unsupported', 'unsupported', 'unsupported', 'unsupported', 'Fail explicitly until implemented.'],
+    ['`anthropic_messages`', '`anthropic_messages`', 'pass-through', 'pass-through', 'pass-through `message_stop` semantics', 'native Anthropic tools', 'native where provider supports it', 'Highest fidelity for Anthropic clients.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Legend
+
+<ReferenceTable
+  columns={['Value', 'Meaning']}
+  rows={[
+    ['pass-through', 'Inbound and provider protocols are the same. ProxAI still owns routing, auth, errors, and observation.'],
+    ['supported', 'There is explicit conversion behavior for this axis.'],
+    ['unsupported', 'The pair should fail explicitly instead of falling through.'],
+    ['lossy', 'Behavior is preserved as closely as possible, but exact field identity or granularity may differ.'],
+  ]}
+/>
+
+## Related docs
+
+- [Protocols](/en/reference/protocols)
+- [Route Matching](/en/reference/route-matching)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)
+- [Responses to Anthropic Messages](/en/developer/protocol-conversion/openai-responses-to-anthropic-messages)

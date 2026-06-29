@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Concise guidance for AI agents working in this repository. Detailed lower-frequency notes live in `docs/agent-guidelines.md`.
+Concise guidance for AI agents working in this repository. Detailed lower-frequency notes live in the site docs under `site/src/content/docs/{en,zh}/`.
 
 ## Project Intent
 
@@ -91,7 +91,7 @@ Use domain-specific errors rather than broad catch-all conversions:
 
 Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
 
-SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`. Provider streaming internals are documented in `docs/streaming-response-handling-cn.md`.
+SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`. Provider streaming internals are documented in `site/src/content/docs/zh/developer/streaming-internals.mdx`; user-facing streaming behavior is in `site/src/content/docs/zh/protocol/streaming-behavior.mdx`.
 
 ## Tests
 
@@ -114,6 +114,8 @@ mod tests;
 ## Documentation / Privacy
 
 When changing user-facing behavior, update both `README.md` and `README_CN.md`. If release packaging changes, also update `.github/workflows/release.yml` and matching README release-build references.
+
+Documentation follows code and verified behavior; code does not follow aspirational docs. When docs and implementation disagree, inspect the implementation, tests, and config defaults first, then update docs or code deliberately rather than treating the docs as the source of truth.
 
 Keep local/private artifacts uncommitted: `config.toml`, `captures/`, `logs/`, full private captures, and local repro fixtures containing private prompts. Committed fixtures must be trimmed and sanitized.
 

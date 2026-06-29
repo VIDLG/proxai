@@ -1,0 +1,72 @@
+---
+title: 配置参考
+description: config.example.toml 单一来源参考，以及字段说明和默认值速查入口
+---
+
+import { Code } from '@astrojs/starlight/components';
+import { FeatureGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+import configExample from '../../../../../../config.example.toml?raw';
+
+# 配置参考
+
+本页是被跟踪的 `config.example.toml` 的**单一来源配置参考**。ProxAI 首次运行时会把该文件写到应用目录，然后从本地 `config.toml` 加载真实运行时配置。
+
+<ProxaiCallout type="caution" title="不要提交密钥">
+  把 `config.example.toml` 当模板。真实的 `api_key` 只放在本地、不进入 git 的 `config.toml` 里。
+</ProxaiCallout>
+
+## 各页面分工
+
+<FeatureGrid
+  items={[
+    {
+      title: '配置说明',
+      href: '/zh/using/configuration',
+      icon: 'config',
+      description: '逐字段解释，以及主要配置 section 如何组合工作。',
+    },
+    {
+      title: '默认值与限制',
+      href: '/zh/reference/defaults-and-limits',
+      icon: 'gauge',
+      description: '默认端点、超时、限制和 capture 默认值的精选速查。',
+    },
+  ]}
+/>
+
+## Section 地图
+
+<ReferenceTable
+  columns={['Section', '负责', '任务文档']}
+  rows={[
+    ['`[server]`', '本地 proxy listener、请求体大小和并发限制。', '[配置说明](/zh/using/configuration#最小本地配置)'],
+    ['`[mcp]`', '本地 MCP control/API listener。MCP 是控制面，不是模型路径。', '[配置说明](/zh/using/configuration#配置地图)'],
+    ['`[routing.default_provider_names]`', '每个入站请求协议的 fallback provider 名称。', '[路由与 Provider](/zh/using/routing-and-providers)'],
+    ['`[[routing.routes]]`', '显式模型/协议路由和可选 upstream model rewrite。', '[路由匹配](/zh/reference/route-matching)'],
+    ['`[providers.<name>]`', '命名上游 provider 的协议、base URL、API key、compatibility 和 idle timeout。', '[Provider 设置](/zh/using/provider-setup)'],
+    ['`[tool_calls]`', '不完整流式工具调用参数的语义超时。', '[流式行为](/zh/protocol/streaming-behavior)'],
+    ['`[logging]`', '日志 level、输出格式和颜色行为。', '[观测与诊断](/zh/using/observability)'],
+    ['`[logging.duration_thresholds]`', 'Human log duration coloring thresholds。', '[观测与诊断](/zh/using/observability)'],
+    ['`[error_responses]`', '客户端错误格式：text 或 JSON。', '[错误响应](/zh/reference/error-responses)'],
+    ['`[capture]`', '本地按 phase 的 capture 开关。', '[捕获阶段](/zh/reference/capture-phases)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 运行时归属
+
+<ReferenceTable
+  columns={['产物', '角色']}
+  rows={[
+    ['`config.example.toml`', '仓库追踪的示例和文档来源。保持简洁且不含 secret。'],
+    ['`config.toml`', '本地运行时配置。有意 git-ignored。'],
+    ['`src/config.rs`', 'Typed schema、解析、校验和默认值。'],
+    ['`site/src/content/docs/*/reference/configuration.mdx`', '嵌入仓库示例并映射 sections 的 reference 页面。'],
+  ]}
+/>
+
+## `config.example.toml`
+
+> 下面的内容直接从仓库根的 `config.example.toml` 注入，因此注释保留英文，避免翻译造成漂移。
+
+<Code code={configExample} lang="toml" title="config.example.toml" />

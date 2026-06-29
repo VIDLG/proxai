@@ -1,0 +1,46 @@
+---
+title: OpenAI Chat Completions
+description: OpenAI Chat Completions protocol model in ProxAI
+---
+
+import { ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Chat Completions
+
+ProxAI uses the protocol name `openai_chat_completions` for the OpenAI Chat Completions API.
+
+<ProtocolQuickFacts
+  protocol="openai_chat_completions"
+  requestPath="/v1/chat/completions"
+  codeAreas={[
+    'src/protocol/openai/chat_completions/wire',
+    'src/protocol/openai/chat_completions/request',
+    'src/protocol/openai/chat_completions/response',
+    'src/provider/openai/chat_completions',
+  ]}
+  convertsTo={['anthropic_messages']}
+/>
+
+## Model
+
+Chat Completions is choice/message oriented:
+
+```text
+response
+└─ choices[]
+   └─ message or delta
+      ├─ content
+      └─ tool_calls[]
+```
+
+Tool calls are identified by their `tool_calls[].index` during streaming, which differs from Responses output item identifiers.
+
+## Request handling
+
+Ingress validates the chat request shape, extracts routing fields such as `model` and `stream`, and forwards or translates the payload depending on the selected provider protocol.
+
+## Streaming
+
+Chat streaming chunks are comparatively loose: each chunk carries a delta for a choice and may contain partial content or partial tool-call arguments.
+
+For cross-protocol identifier rules, see [Protocol Conversion](/en/developer/protocol-conversion).

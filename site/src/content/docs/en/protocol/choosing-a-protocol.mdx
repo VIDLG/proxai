@@ -1,0 +1,95 @@
+---
+title: Choosing a Protocol
+description: How to choose inbound and provider protocols for ProxAI routes
+---
+
+import { ConversionPath, FeatureGrid, ProxaiCallout, ProtocolConversionMatrix, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Choosing a Protocol
+
+ProxAI has two protocol decisions:
+
+- **Inbound protocol** — what the local client sends, detected from the request path.
+- **Provider protocol** — what ProxAI sends upstream, configured on the selected provider.
+
+They can be the same for pass-through, or different when ProxAI performs a supported conversion.
+
+## Decision path
+
+<ConversionPath
+  from={{ title: 'Client request path', description: '/v1/responses, /v1/chat/completions, or /v1/messages' }}
+  via={[
+    { title: 'Route selection', description: 'default provider or explicit route by request_protocol + model' },
+    { title: 'Provider protocol', description: 'provider.protocol controls outbound wire behavior' },
+  ]}
+  to={{ title: 'Upstream request', description: 'serialized in the selected provider protocol' }}
+/>
+
+## Start with the client
+
+<ReferenceTable
+  columns={['Client speaks', 'Use inbound protocol', 'Typical reason']}
+  rows={[
+    ['OpenAI Responses', '`openai_responses`', 'Itemized output, modern Responses semantics, hosted-tool style payloads.'],
+    ['OpenAI Chat Completions', '`openai_chat_completions`', 'Older SDKs, clients that expect `choices[]`, or Chat Completions-only integrations.'],
+    ['Anthropic Messages', '`anthropic_messages`', 'Clients that already emit Anthropic-style message payloads.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Then choose the provider protocol
+
+<ReferenceTable
+  columns={['Provider expects', 'Set provider.protocol', 'Notes']}
+  rows={[
+    ['OpenAI Responses', '`openai_responses`', 'Best fit for OpenAI-compatible Responses upstreams.'],
+    ['OpenAI Chat Completions', '`openai_chat_completions`', 'Best fit for Chat Completions-only upstreams.'],
+    ['Anthropic Messages', '`anthropic_messages`', 'Best fit for Anthropic-compatible `/v1/messages` upstreams.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Provider names are labels. They do not imply protocol semantics. The provider `protocol` field is the semantic value.
+
+## Supported pairs
+
+<ProtocolConversionMatrix />
+
+Unsupported pairs fail explicitly. ProxAI should not silently fall through to another provider if a route matched but the protocol pair is not implemented.
+
+## Common choices
+
+<FeatureGrid
+  items={[
+    { title: 'Same protocol pass-through', href: '/en/reference/protocols', icon: 'check', description: 'Use when the client and provider already speak the same protocol.' },
+    { title: 'Responses client to Anthropic provider', href: '/en/using/recipes#route-openai-responses-to-an-anthropic-provider', icon: 'flow', description: 'Useful when a local OpenAI-compatible client targets an Anthropic Messages upstream.' },
+    { title: 'Chat client to Anthropic provider', href: '/en/using/recipes#route-one-model-to-an-anthropic-provider', icon: 'route', description: 'Use explicit routes when only one model should cross protocols.' },
+    { title: 'Anthropic client to Responses provider', href: '/en/reference/protocols', icon: 'protocol', description: 'Use only when the implemented pair preserves the behavior your client expects.' },
+  ]}
+/>
+
+## Lossiness questions
+
+Before choosing a cross-protocol pair, ask:
+
+<ReferenceTable
+  columns={['Question', 'Why it matters']}
+  rows={[
+    ['Does the client rely on exact output item ids?', 'Responses has itemized output and stable item identities that other protocols may not model the same way.'],
+    ['Does the provider emit tool calls incrementally?', 'Streaming tool-call chunks have protocol-specific identifiers and terminal events.'],
+    ['Does the client inspect stop or finish reasons?', 'Stop reasons are related but not identical across protocols. See status reference.'],
+    ['Does the client require provider-specific fields?', 'Provider-specific fields should not leak through a generic conversion boundary.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="tip" title="Prefer explicit routes for experiments">
+  If only one model needs a cross-protocol provider, use an explicit route with `request_protocol`. That makes endpoint-specific behavior visible and prevents surprising default routing.
+</ProxaiCallout>
+
+## Related docs
+
+- [Routing and Providers](/en/using/routing-and-providers)
+- [Protocols Reference](/en/reference/protocols)
+- [Route Matching](/en/reference/route-matching)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)

@@ -1,3 +1,5 @@
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css";
 @import "react-json-view-lite/dist/index.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));

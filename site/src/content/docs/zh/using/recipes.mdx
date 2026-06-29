@@ -1,0 +1,176 @@
+---
+title: Recipes
+description: 面向任务的 ProxAI 配置与调试配方
+---
+
+import { DecisionCards, FeatureGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Recipes
+
+Recipes 是面向任务的短路径。它们会把精确字段、默认值和行为契约反链到 reference 页面，而不是在每个任务里重复全部规则。
+
+<ProxaiCallout type="note" title="单一事实来源">
+  用 recipes 完成任务。精确语义看 [配置参考](/zh/reference/configuration)、[协议](/zh/reference/protocols)、[路由匹配](/zh/reference/route-matching) 和 [Capture phases](/zh/reference/capture-phases)。
+</ProxaiCallout>
+
+<FeatureGrid
+  items={[
+    { title: '单一上游 provider', href: '#使用一个-openai-兼容上游', icon: 'rocket', description: '让 OpenAI 兼容客户端走一个默认上游。' },
+    { title: 'Responses 到 Anthropic', href: '#把-openai-responses-路由到-anthropic-provider', icon: 'flow', description: '入站使用 Responses，上游使用 Anthropic Messages。' },
+    { title: '路由一个模型', href: '#把一个模型路由到不同-provider', icon: 'route', description: '按入站协议和模型 pattern 选择 provider。' },
+    { title: 'Provider 认证', href: '#调试-provider-认证', icon: 'key', description: '检查 ProxAI 发给上游的 API key 和 auth header。' },
+    { title: 'JSON 错误', href: '#为-sdk-客户端返回-json-错误', icon: 'alert', description: '把可读 text errors 切换成 JSON error payload。' },
+    { title: '安全 capture', href: '#安全-capture-一次请求', icon: 'security', description: '只打开一个 phase，复现一次，然后关闭。' },
+    { title: 'Route override', href: '#临时覆盖-route', icon: 'terminal', description: '用 CLI route override，不修改长期配置。' },
+    { title: '流式卡住', href: '#诊断流式卡住', icon: 'timer', description: '区分 byte idle timeout 和语义 tool-call stall。' },
+  ]}
+/>
+
+## 使用一个 OpenAI 兼容上游
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '编辑本地配置', goal: '把 `config.toml` 作为运行时事实来源。', do: ['在 `[routing.default_provider_names]` 下设置按协议分组的默认 provider。', '定义一个 provider，包含 `protocol`、`base_url` 和 `api_key`。'], verify: '使用对应入站协议的请求会选中默认 provider。', docs: [{ label: '配置参考', href: '/zh/reference/configuration' }] },
+    { title: '接入客户端', goal: '让客户端流量发给 ProxAI，而不是直接发给 provider。', do: ['使用本地 `/v1` base URL。', '真实 provider 凭据保存在 ProxAI 配置里。'], verify: 'ProxAI 日志能看到本地入站流量和上游 provider 选择。', docs: [{ label: '客户端接入', href: '/zh/using/client-integration' }] },
+  ]}
+/>
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+## 把 OpenAI Responses 路由到 Anthropic provider
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '按入站协议选择 provider', goal: '客户端继续使用 `/v1/responses`，上游发送 Anthropic Messages。', do: ['把 `openai_responses` 默认 provider 设置为 Anthropic-compatible provider 名称。', '将该 provider 设置为 `protocol = "anthropic_messages"`。'], verify: '依赖前先确认兼容性矩阵中该 conversion pair 受支持。', docs: [{ label: '兼容性矩阵', href: '/zh/reference/compatibility-matrix' }, { label: '协议', href: '/zh/reference/protocols' }] },
+  ]}
+/>
+
+```toml
+[routing.default_provider_names]
+openai_responses = "anthropic_upstream"
+
+[providers.anthropic_upstream]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+```
+
+## 把一个模型路由到不同 provider
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '添加显式 route', goal: '只为选中的 model pattern 覆盖 defaults。', do: ['选择 `match_kind` 和 `model_pattern`。', '把 `provider` 设置为目标 provider 名称。', '只有上游模型名不同时才添加 `upstream_model`。'], verify: '命中的显式 route 优先于协议 defaults。', docs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
+    { title: '只在需要时使用 request protocol guard', goal: '避免同一个 model pattern 在不同 endpoint 上产生歧义。', do: ['当同一个 model pattern 需要按 endpoint 分流时，添加 `request_protocol`。', '如果所有入站 endpoint 应共享该 route，就不要添加它。'], verify: '模型命中但显式 `request_protocol` 不匹配时会失败，而不是静默 fallback。', docs: [{ label: '行为契约', href: '/zh/reference/behavior-contracts#路由与转换' }] },
+  ]}
+/>
+
+```toml
+[[routing.routes]]
+name = "m3_chat_to_anthropic"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+
+[providers.minimax]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+```
+
+<ProxaiCallout type="caution" title="Provider 名称只是标签">
+  `provider = "minimax"` 通过用户定义名称选择 provider。真正控制出站 wire 行为的是该 provider 的 `protocol`。
+</ProxaiCallout>
+
+## 调试 provider 认证
+
+<ReferenceTable
+  columns={['Provider protocol', '发给上游的认证 header', '事实来源']}
+  rows={[
+    ['`openai_responses` / `openai_chat_completions`', '`Authorization: Bearer <provider api_key>`', '`providers.<name>.api_key`'],
+    ['`anthropic_messages`', '`x-api-key: <provider api_key>`', '`providers.<name>.api_key`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+如果客户端强制要求 API key 字段，可以填 dummy local value，真实 key 放在 `config.toml`。见 [行为契约](/zh/reference/behavior-contracts#provider-认证)。
+
+## 为 SDK 客户端返回 JSON 错误
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '切换本地错误格式', goal: '调试时让 SDK 客户端收到结构化错误。', do: ['设置 `[error_responses].format = "json"`。', '复现失败请求。', '如果更偏向人类本地调试，可以切回 `text`。'], verify: '错误 payload 符合稳定错误响应参考。', docs: [{ label: '错误响应', href: '/zh/reference/error-responses' }] },
+  ]}
+/>
+
+```toml
+[error_responses]
+format = "json"
+```
+
+## 安全 capture 一次请求
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '选择一个 phase', goal: '最小化私有数据暴露面。', do: ['选择能回答问题的最窄 phase。', '出站 payload 问题优先 `provider_request`，provider 返回问题优先 `upstream_response`。'], verify: '你能解释为什么这个 phase 已经足够。', docs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }, { label: '隐私与本地数据', href: '/zh/using/privacy-and-local-data' }] },
+    { title: '复现一次并关闭 capture', goal: '避免积累私有产物。', do: ['为选中的 phase 开启 capture。', '发送一个最小请求。', '复现后立即关闭 capture。'], verify: 'Capture 产物只在本地存在，且不会被提交。', docs: [{ label: '环境与文件', href: '/zh/reference/environment-and-files' }] },
+  ]}
+/>
+
+```sh
+proxai capture enable provider-request
+# 复现一次
+proxai capture disable provider-request
+```
+
+<ReferenceTable
+  columns={['问题', 'Phase']}
+  rows={[
+    ['客户端到底发了什么？', '`inbound_request`'],
+    ['ProxAI 发给上游的是什么？', '`provider_request`'],
+    ['Provider 返回了什么？', '`upstream_response`'],
+    ['客户端最终收到什么？', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 临时覆盖 route
+
+不想修改长期配置时，可以用 CLI route override 做一次性运行：
+
+```sh
+proxai --route-override m3_chat_to_anthropic.model_pattern=MiniMax-M3-preview \
+       --route-override m3_chat_to_anthropic.upstream_model=MiniMax-M3
+```
+
+支持覆盖的字段包括 `request_protocol`、`match_kind`、`model_pattern`、`provider` 和 `upstream_model`。见 [CLI](/zh/reference/cli)。
+
+## 诊断流式卡住
+
+<DecisionCards
+  labels={{ when: '场景', choose: '选择', why: '原因' }}
+  items={[
+    { title: '没有 bytes 到达', icon: 'timer', when: '客户端等待，且没有观察到新的上游 bytes。', choose: '检查 transport 连通性和 `read_idle_timeout_secs`。', why: '这是 idle-read 问题，不一定是协议语义问题。' },
+    { title: '工具参数开始但未完成', icon: 'flow', when: 'Tool-call deltas 已开始，但语义完成事件没有到达。', choose: '检查 `[tool_calls].timeout_secs` 和 provider stream events。', why: 'ProxAI 会可预测地关闭卡住的 tool-call argument streams。' },
+    { title: '客户端事件 malformed', icon: 'alert', when: '客户端收到 bytes，但无法解析事件序列。', choose: '检查协议转换和 SSE reconstruction。', why: 'Carrier 可能健康，但翻译后的事件流无效。' },
+  ]}
+/>
+
+先看 [流式行为](/zh/protocol/streaming-behavior)。如果要调实现细节，再看 [流式内部实现](/zh/developer/streaming-internals)。

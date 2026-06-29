@@ -1,0 +1,67 @@
+---
+title: 调试工作流
+description: 安全诊断客户端错误、provider 失败、路由问题、转换 bug 和流式卡住的步骤化工作流
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 调试工作流
+
+当客户端请求失败、路由到错误 provider、返回 shape 不符合预期，或流式卡住时，使用这个工作流。
+
+<ProxaiCallout type="caution" title="窄范围 capture">
+  Captures 可能包含 prompts、工具参数、输出和上游 payload。开启最窄 phase，复现一次，然后关闭 capture。
+</ProxaiCallout>
+
+## 工作流
+
+<PipelineStrip
+  steps={[
+    { title: '读取客户端错误', description: '保留 HTTP status、payload type，以及问题发生在 stream 前还是 stream 中。' },
+    { title: '分类层级', description: '区分客户端请求、路由、provider auth、上游状态、translation 和 streaming semantics。' },
+    { title: '检查日志', description: '开启 captures 前，先看结构化日志和 request hints。' },
+    { title: '捕获一个 phase', description: '选择能回答问题的最窄 capture phase。' },
+    { title: '对比预期与实际', description: '对比 inbound request、provider request、upstream response 或 outbound response。' },
+    { title: '关闭并脱敏', description: '关闭 capture，分享前对产物脱敏。' },
+  ]}
+/>
+
+## 层级地图
+
+<ReferenceTable
+  columns={['症状', '可能层级', '有用 phase']}
+  rows={[
+    ['客户端请求立刻被拒绝', '入站请求校验', '`inbound_request`'],
+    ['选中了错误 provider', 'Routing / config', '`inbound_request` 和 logs'],
+    ['上游返回 401 / 403', 'Provider auth', '`provider_request` 加 upstream status'],
+    ['Provider 返回意外 JSON', '上游响应 shape', '`upstream_response`'],
+    ['客户端收到错误协议 shape', 'Translation / outbound reconstruction', '`outbound_response`'],
+    ['工具参数开始后 stream 卡住', 'Streaming semantics', 'stream logs 和 tool-call timeout'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Capture 命令
+
+```sh
+proxai capture enable provider-request
+# reproduce once
+proxai capture disable provider-request
+```
+
+Phase 名称和隐私风险见[捕获阶段](/zh/reference/capture-phases)。
+
+## 提 issue 前
+
+- 包含 ProxAI version 和 OS。
+- 包含 inbound endpoint 和 model name。
+- 包含选中的 provider protocol，不包含 provider API key。
+- 优先提供脱敏 capture 或最小 synthetic payload。
+- 不要包含 `Authorization`、`api_key`、私有 prompts、私有 outputs 或包含 secret 的完整上游 URL。
+
+## 相关文档
+
+- [常见排障](/zh/using/troubleshooting)
+- [观测与诊断](/zh/using/observability)
+- [错误响应](/zh/reference/error-responses)
+- [流式行为](/zh/protocol/streaming-behavior)

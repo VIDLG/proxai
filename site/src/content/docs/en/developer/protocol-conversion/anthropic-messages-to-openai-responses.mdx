@@ -1,0 +1,80 @@
+---
+title: Anthropic Messages to OpenAI Responses
+description: Developer guide for response, streaming, tool, reasoning, and terminal-state conversion from Anthropic Messages to OpenAI Responses
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Anthropic Messages to OpenAI Responses
+
+This page documents the conversion path used when the provider speaks Anthropic Messages and the client expects OpenAI Responses output.
+
+<ConversionPath
+  from={{ title: 'Provider response', description: '`anthropic_messages` Message or SSE stream' }}
+  via={[
+    { title: 'Read upstream', description: '`src/upstream/` reads body or ByteStream' },
+    { title: 'Translate response', description: 'Anthropic content blocks -> Responses output items' },
+    { title: 'Rebuild client response', description: '`src/http_support/` emits Responses JSON or typed SSE' },
+  ]}
+  to={{ title: 'Client response', description: '`openai_responses` envelope or events' }}
+/>
+
+## Non-streaming response mapping
+
+<ReferenceTable
+  columns={['Anthropic concept', 'Responses target', 'Notes']}
+  rows={[
+    ['`Message` envelope', 'Responses response envelope', 'Anthropic returns one final message; Responses returns an envelope with `output[]`.'],
+    ['Text block', 'Message output item/content part', 'Preserve visible text order.'],
+    ['`tool_use` block', '`function_call` output item', 'Preserve call identity using Responses item/call identifiers.'],
+    ['`thinking` block', 'Reasoning output item when representable', 'Transform provider-specific metadata instead of raw round-tripping.'],
+    ['`stop_reason`', 'Responses terminal status and output state', 'Map terminal behavior, not just field names.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Streaming event mapping
+
+<ReferenceTable
+  columns={['Anthropic event', 'Responses-side behavior']}
+  rows={[
+    ['`message_start`', 'Initialize response and usage state.'],
+    ['`content_block_start`', 'Emit or stage a Responses output item depending on block type.'],
+    ['`content_block_delta`', 'Emit text, reasoning, or function-argument deltas.'],
+    ['`content_block_stop`', 'Finalize the current Responses item/content part.'],
+    ['`message_delta`', 'Update stop and usage metadata; may not have a standalone Responses event.'],
+    ['`message_stop`', 'Emit Responses terminal event such as `response.completed`.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Identity differences
+
+<ReferenceTable
+  columns={['Anthropic', 'Responses', 'Consequence']}
+  rows={[
+    ['Content block `index`', 'Stable `item_id` plus output index', 'The translator must mint/track item ids for Responses events.'],
+    ['Tool `id` / tool result linkage', 'Function call item id and `call_id`', 'Do not expose raw provider ids as the only client identity.'],
+    ['Message-level terminal metadata', 'Response status plus item status', 'Terminal state may need to update both envelope and output items.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="One Anthropic message can become many Responses items">
+  Non-streaming Anthropic returns one `Message`, but Responses `output[]` can contain multiple typed items. Do not model this conversion as one message-to-one message.
+</ProxaiCallout>
+
+## Lossy areas
+
+- Anthropic content block `index` is stream-local; Responses item identity is client-visible and can be stable across turns.
+- Provider-specific thinking metadata may not have a Responses equivalent.
+- Anthropic `pause_turn` and refusal metadata need behavior-preserving target semantics.
+- Usage and stop metadata may arrive late in streams.
+
+## Related docs
+
+- [OpenAI Responses](/en/protocol/openai-responses)
+- [Anthropic Messages](/en/protocol/anthropic-messages)
+- [Streaming Identifiers](/en/developer/protocol-conversion/streaming-identifiers)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)

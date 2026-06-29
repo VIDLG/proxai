@@ -1,0 +1,109 @@
+---
+title: Client Integration
+description: Connect OpenAI-compatible and Anthropic-style clients to the local ProxAI proxy
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Client Integration
+
+Use this page when a local client or SDK asks for a base URL, API key, model, endpoint, or streaming setting.
+
+<ProxaiCallout type="note" title="The local client key is not the provider key">
+  Provider authentication is owned by `config.toml`. If a client UI requires an API key field, use a dummy local value there and keep the real upstream key in the selected provider config.
+</ProxaiCallout>
+
+## Connect a client
+
+<PipelineStrip
+  steps={[
+    { title: 'Start ProxAI', description: 'Run the local proxy using your runtime config.' },
+    { title: 'Set the base URL', description: 'Point the client at the local Proxy listener, not the upstream provider.' },
+    { title: 'Pick the endpoint', description: 'The request path determines the inbound protocol.' },
+    { title: 'Use a model name', description: 'Routes match the client-facing model before optional upstream_model rewrite.' },
+    { title: 'Send a small request', description: 'Verify routing and error format before using tools or large prompts.' },
+  ]}
+/>
+
+## Base URL and endpoints
+
+<ReferenceTable
+  columns={['Client endpoint', 'Inbound protocol', 'Use when']}
+  rows={[
+    ['`/v1/responses` or `/responses`', '`openai_responses`', 'The client supports OpenAI Responses semantics.'],
+    ['`/v1/chat/completions` or `/chat/completions`', '`openai_chat_completions`', 'The client expects Chat Completions `choices[]`.'],
+    ['`/v1/messages` or `/messages`', '`anthropic_messages`', 'The client sends Anthropic Messages payloads.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## API keys
+
+<ReferenceTable
+  columns={['Where', 'Value', 'Effect']}
+  rows={[
+    ['Client UI or SDK', 'Any local placeholder if required', 'Satisfies the client; does not control upstream provider auth.'],
+    ['`providers.<name>.api_key`', 'Real upstream provider key', 'Sent upstream using the provider protocol auth header.'],
+    ['Environment variables', 'Only if your launcher injects them into config or CLI', 'ProxAI does not require clients to send provider secrets.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+For exact auth behavior, see [Behavior Contracts](/en/reference/behavior-contracts#provider-authentication).
+
+## Model names and routes
+
+The client-facing model is matched before provider model rewrite:
+
+```toml
+[[routing.routes]]
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+- `model_pattern` matches what the client sends.
+- `provider` selects the upstream configuration.
+- `upstream_model` is what ProxAI sends to the provider.
+
+See [Routing and Providers](/en/using/routing-and-providers) and [Route Matching](/en/reference/route-matching).
+
+## Error format
+
+Use readable text for interactive debugging, and JSON when an SDK expects structured errors:
+
+```toml
+[error_responses]
+format = "json"
+```
+
+See [Error Responses](/en/reference/error-responses).
+
+## Streaming clients
+
+Streaming clients should expect protocol-specific terminal signals:
+
+<ReferenceTable
+  columns={['Protocol', 'Terminal signal']}
+  rows={[
+    ['OpenAI Responses', '`response.completed`'],
+    ['OpenAI Chat Completions', '`[DONE]`'],
+    ['Anthropic Messages', '`message_stop`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+If a stream stalls after tool-call arguments begin, check `[tool_calls].timeout_secs`. See [Streaming Behavior](/en/protocol/streaming-behavior).
+
+## Next pages
+
+<FeatureGrid
+  items={[
+    { title: 'Quick Start', href: '/en/using/quick-start', icon: 'rocket', description: 'First local run and config setup.' },
+    { title: 'Choose a Protocol', href: '/en/protocol/choosing-a-protocol', icon: 'protocol', description: 'Decide inbound and provider protocols.' },
+    { title: 'Troubleshooting', href: '/en/using/troubleshooting', icon: 'alert', description: 'Symptoms, likely causes, and next checks.' },
+    { title: 'CLI Reference', href: '/en/reference/cli', icon: 'terminal', description: 'Flags, route overrides, and capture commands.' },
+  ]}
+/>

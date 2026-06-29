@@ -1,0 +1,91 @@
+---
+title: Install and Upgrade
+description: Install ProxAI locally, find the app directory, and upgrade safely
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Install and Upgrade
+
+Use this page when you need the operational path: get a binary, run it locally, locate config, and upgrade without losing local state.
+
+<ProxaiCallout type="note" title="Runtime config stays local">
+  `config.toml` is intentionally local and git-ignored. The tracked `config.example.toml` is the reference example; runtime config lives in your app directory.
+</ProxaiCallout>
+
+## Install path
+
+<PipelineStrip
+  steps={[
+    { title: 'Get a release binary', description: 'Download the current ProxAI release for your platform or build locally from source.' },
+    { title: 'Put it on PATH', description: 'Place the executable somewhere your shell and client launcher can find.' },
+    { title: 'Start once', description: 'First run creates the app directory and local example files.' },
+    { title: 'Edit config.toml', description: 'Add providers, default provider names, and routes.' },
+    { title: 'Connect the client', description: 'Point OpenAI-compatible clients at the local ProxAI listener.' },
+  ]}
+/>
+
+For a first request walkthrough, use [Quick Start](/en/using/quick-start).
+
+## App directory
+
+ProxAI stores local runtime state in the app directory. The exact path depends on platform and startup configuration.
+
+<ReferenceTable
+  columns={['Artifact', 'Purpose']}
+  rows={[
+    ['`config.toml`', 'Local runtime configuration. Keep private and uncommitted.'],
+    ['`config.example.toml`', 'Generated local reference example. The repository copy remains canonical.'],
+    ['`captures/`', 'Optional local request/response artifacts for debugging. May contain private data.'],
+    ['`logs/`', 'Local diagnostic logs when configured.'],
+  ]}
+/>
+
+See [Environment and Files](/en/reference/environment-and-files) for exact file responsibilities.
+
+## Upgrade checklist
+
+<ReferenceTable
+  columns={['Check', 'Why it matters']}
+  rows={[
+    ['Read release notes', 'Look for config, routing, protocol conversion, streaming, or error response changes.'],
+    ['Keep `config.toml`', 'Do not replace local private config with the example file.'],
+    ['Compare examples', 'Use the tracked `config.example.toml` as the single example source when adding new options.'],
+    ['Run a small request', 'Verify default provider routing before using large prompts or tools.'],
+    ['Check streaming if used', 'Streaming behavior is user-visible and should be tested with your real client.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Local source build
+
+If you build from source, prefer the repository validation commands before replacing a working binary:
+
+```sh
+just check
+```
+
+For site-only changes, use:
+
+```sh
+just site check
+```
+
+## When to revisit config
+
+<FeatureGrid
+  items={[
+    { title: 'Add a provider', href: '/en/using/configuration#add-a-provider', icon: 'config', description: 'Add a named provider with protocol, base_url, and api_key.' },
+    { title: 'Route by model', href: '/en/using/routing-and-providers', icon: 'route', description: 'Use explicit routes when one model pattern needs a provider or protocol override.' },
+    { title: 'Change error format', href: '/en/reference/error-responses', icon: 'alert', description: 'Use text for humans or JSON for SDK-style clients.' },
+    { title: 'Capture a request', href: '/en/using/observability#capture-one-request', icon: 'security', description: 'Enable a narrow phase, reproduce once, then disable capture.' },
+  ]}
+/>
+
+## Safe rollback
+
+Rollback is usually replacing the binary with the previous version while keeping the same local `config.toml`. If the newer version introduced config fields, remove only the fields that the older binary cannot parse.
+
+<ProxaiCallout type="caution" title="Do not rollback captures into commits">
+  Captures and logs can include prompts, tool arguments, outputs, provider payloads, and upstream identifiers. Keep them local unless deliberately sanitized.
+</ProxaiCallout>

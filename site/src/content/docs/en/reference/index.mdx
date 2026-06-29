@@ -1,0 +1,47 @@
+---
+title: Reference
+description: Lookup hub for ProxAI configuration, CLI, protocols, route matching, capture phases, files, errors, contracts, and glossary
+---
+
+import { FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Reference
+
+Reference pages are lookup material. They should be stable, concise, and easy to scan. Use [Using ProxAI](/en/using) for task walkthroughs and [Developer Guide](/en/developer) for implementation details.
+
+<ProxaiCallout type="tip" title="Reference is not a tutorial">
+  Reference pages can link back to task docs, but they should stay focused on exact values, contracts, and lookup tables.
+</ProxaiCallout>
+
+## Configuration and runtime
+
+<FeatureGrid
+  items={[
+    { title: 'Configuration Reference', href: '/en/reference/configuration', icon: 'config', description: 'Single-source config.example.toml reference and links to field explanations and defaults.' },
+    { title: 'Defaults and Limits', href: '/en/reference/defaults-and-limits', icon: 'gauge', description: 'Default endpoints, timeouts, concurrency, body size, and capture defaults.' },
+    { title: 'Environment and Files', href: '/en/reference/environment-and-files', icon: 'file', description: 'App directories, generated runtime files, repository docs, and local artifact boundaries.' },
+  ]}
+/>
+
+## Routing and protocols
+
+<FeatureGrid
+  items={[
+    { title: 'Protocols', href: '/en/reference/protocols', icon: 'protocol', description: 'Protocol values, request paths, accepted locations, and supported conversion pairs.' },
+    { title: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix', icon: 'gauge', description: 'Protocol-pair support for requests, responses, streams, tools, reasoning, and known lossiness.' },
+    { title: 'Status and Stop Reasons', href: '/en/reference/status-and-stop-reasons', icon: 'stop', description: 'Terminal status, stop_reason, finish_reason, and streaming completion signal mappings.' },
+    { title: 'Route Matching', href: '/en/reference/route-matching', icon: 'route', description: 'Route outcomes, protocol guards, model patterns, and fallback behavior.' },
+    { title: 'Glossary', href: '/en/reference/glossary', icon: 'book', description: 'Shared terms for request protocols, provider protocols, phases, routes, and streaming.' },
+  ]}
+/>
+
+## Debugging and contracts
+
+<FeatureGrid
+  items={[
+    { title: 'CLI', href: '/en/reference/cli', icon: 'terminal', description: 'Runtime flags, route overrides, capture subcommands, and default endpoints.' },
+    { title: 'Capture Phases', href: '/en/reference/capture-phases', icon: 'security', description: 'Phase boundaries, config switches, CLI phase names, and privacy risk.' },
+    { title: 'Error Responses', href: '/en/reference/error-responses', icon: 'alert', description: 'Client-facing payload, type enum, HTTP status semantics, and preserved headers.' },
+    { title: 'Behavior Contracts', href: '/en/reference/behavior-contracts', icon: 'check', description: 'Stable promises ProxAI commits to across versions.' },
+  ]}
+/>

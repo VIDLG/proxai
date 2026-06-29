@@ -1,0 +1,110 @@
+---
+title: OpenAI Responses 到 Anthropic Messages
+description: 从 OpenAI Responses 到 Anthropic Messages 的 request、response、streaming、tool 和 status 转换开发者指南
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Responses 到 Anthropic Messages
+
+本页记录高价值转换 pair：客户端使用 OpenAI Responses，而选中的 provider 使用 Anthropic Messages。
+
+<ConversionPath
+  from={{ title: '入站', description: '`openai_responses` request payload' }}
+  via={[
+    { title: '规范化', description: 'ingress 解析 Responses input 和请求控制项' },
+    { title: '请求转换', description: 'Responses input/messages/tools -> Anthropic Messages request' },
+    { title: '响应转换', description: 'Anthropic Message/content blocks -> Responses output items' },
+  ]}
+  to={{ title: '出站', description: '`openai_responses` response 或 SSE events' }}
+/>
+
+## 状态
+
+<ReferenceTable
+  columns={['区域', '预期行为']}
+  rows={[
+    ['非流式请求', '当请求字段可以用 Anthropic Messages 表达时支持。'],
+    ['非流式响应', 'Anthropic 返回一个最终 `Message`；ProxAI 将其转换为带 `output[]` 的 Responses response envelope。'],
+    ['流式响应', 'Anthropic content-block events 会被累积，并发出 Responses 风格 typed SSE events。'],
+    ['不支持的 provider-specific 字段', '显式失败或有意忽略；不要把原始 provider 结构泄漏到 Responses output。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 请求映射
+
+<ReferenceTable
+  columns={['Responses 概念', 'Anthropic Messages 目标', '说明']}
+  rows={[
+    ['`input` easy messages', '`messages[]`', 'User/developer 内容在可表达时转换为 Anthropic message content blocks。'],
+    ['System/developer instructions', '`system` 或等价规范化指令位置', '保留指令意图，不重复成用户可见内容。'],
+    ['`tools[]` function tools', '`tools[]`', 'Function schema 应保留 name、description 和 JSON schema shape。'],
+    ['Hosted tools', 'Provider-compatible 表达或显式 unsupported 行为', '不要假装上游支持它并不支持的 hosted tools。'],
+    ['`reasoning.effort`', '可用时映射到 `output_config.effort`', '支持的 effort 值直接映射；disabled/minimal 映射为 disabled thinking 行为。'],
+    ['`reasoning.summary`', '有损映射到 `thinking.display`', 'Anthropic 没有等价的 summary 粒度。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 响应映射
+
+<ReferenceTable
+  columns={['Anthropic 概念', 'Responses 目标', '说明']}
+  rows={[
+    ['`Message` envelope', 'Responses response envelope', 'Anthropic 非流式返回一个 message；Responses output 可包含多个 typed items。'],
+    ['Text content block', 'Message output content', '保留响应内文本顺序。'],
+    ['Tool use block', 'Function call output item', '用目标协议标识符保留 call identity。'],
+    ['Thinking/reasoning block', '可表达时转换为 Reasoning output item', 'Provider-specific metadata 应被转换，而不是 raw-round-trip。'],
+    ['`stop_reason`', 'Responses status / terminal output 语义', '映射见状态与停止原因参考。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 流式映射
+
+<ReferenceTable
+  columns={['Anthropic event', 'Responses-side 预期']}
+  rows={[
+    ['`message_start`', '初始化 response state 和 output item assembly。'],
+    ['`content_block_start`', '根据 block type 启动 Responses output item 或 content part。'],
+    ['`content_block_delta`', '发出兼容 delta events，避免切断 Unicode 边界。'],
+    ['`content_block_stop`', '结束当前 item/content block。'],
+    ['`message_delta`', '可用时更新 usage 或 stop metadata。'],
+    ['`message_stop`', '发出终止 Responses event，例如 `response.completed`。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="不要把字节流关闭当成语义完成">
+  只有观察到 Anthropic 终止事件后，转换才算完成。没有 `message_stop` 的 socket 关闭是不完整 stream。
+</ProxaiCallout>
+
+## 有损区域
+
+- Responses output item identity 可能比 Anthropic message block identity 更丰富。
+- Hosted tools 可能没有 Anthropic 等价物。
+- Reasoning summary 粒度不是对称的。
+- Refusal metadata 应保留 refusal 语义，而不是原始上游 shape。
+- Provider-specific metadata，例如 signatures，不应作为未类型化 Responses payload 暴露。
+
+## 需要更新的测试
+
+<ReferenceTable
+  columns={['变更类型', '测试区域']}
+  rows={[
+    ['请求位置变化', 'System/developer normalization 和 message placement tests。'],
+    ['Tool mapping 变化', 'Tool call 和 tool result round-trip behavior tests。'],
+    ['Streaming event 变化', 'SSE terminal、stalled tool-call、Unicode scanning 和 event ordering tests。'],
+    ['Stop/status mapping 变化', 'Status and stop reason conversion tests 加 reference docs。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 相关文档
+
+- [协议转换](/zh/developer/protocol-conversion)
+- [消息位置](/zh/developer/protocol-conversion/message-placement)
+- [流式标识符](/zh/developer/protocol-conversion/streaming-identifiers)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)

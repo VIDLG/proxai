@@ -3,12 +3,12 @@ title: Error Responses
 description: Client-facing error payload, type enum, HTTP status semantics, and preserved headers
 ---
 
-import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
 import { JsonExample } from '@components/JsonExample.jsx';
 
 # Error Responses
 
-Single reference for what clients see when ProxAI fails: payload fields, allowed `type` values, HTTP status semantics, and preserved upstream headers. For the internal projection pipeline, see [Error Handling Internals](/en/error-handling-internals).
+Single reference for what clients see when ProxAI fails: payload fields, allowed `type` values, HTTP status semantics, and preserved upstream headers. For the internal projection pipeline, see [Error Handling Internals](/en/developer/error-handling-internals).
 
 ## JSON shape
 
@@ -38,13 +38,16 @@ Rendered interactively:
 
 ## Payload fields
 
-| Field | Type | Meaning |
-|---|---|---|
-| `message` | string | Human-readable error message |
-| `type` | enum | Client-facing error classification, snake_case |
-| `code` | string? | Upstream OpenAI-style error code, only when upstream provides one |
-| `param` | value? | Upstream OpenAI-style error param, only when upstream provides one |
-| `status` | u16 | Numeric status carried inside the JSON/SSE payload |
+<ReferenceTable
+  columns={['Field', 'Type', 'Meaning']}
+  rows={[
+    ['message', 'string', 'Human-readable error message'],
+    ['type', 'enum', 'Client-facing error classification, snake_case'],
+    ['code', 'string?', 'Upstream OpenAI-style error code, only when upstream provides one'],
+    ['param', 'value?', 'Upstream OpenAI-style error param, only when upstream provides one'],
+    ['status', 'u16', 'Numeric status carried inside the JSON/SSE payload'],
+  ]}
+/>
 
 <ProxaiCallout type="note" title="status is a payload field">
   `status` is the wire payload's numeric status code. It is especially important for SSE error events because HTTP status can no longer be changed after streaming has started.
@@ -61,10 +64,28 @@ upstream_response_body_read_error
 upstream_error_body_empty
 upstream_error_body_non_json
 upstream_error_body_unknown_shape
-sse_translation_error
+stream_translation_error
 ```
 
 ProxAI does not expose its internal typed error taxonomy verbatim. Each `type` above is a stable client-facing classification.
+
+## Type details
+
+<ReferenceTable
+  columns={['Type', 'Typical source', 'HTTP status', 'Details']}
+  rows={[
+    ['`invalid_request_error`', 'Inbound request parsing or validation', '`400`', 'Client request did not match the detected protocol.'],
+    ['`internal_error`', 'Config/runtime invariant/local IO/serialization', '`500`', 'Internal details are projected into a stable client-facing error.'],
+    ['`upstream_request_error`', 'Failed to send request upstream', '`502`', 'Provider request could not be sent or transport failed before a response status.'],
+    ['`upstream_error`', 'Upstream returned structured non-2xx error', 'Upstream status', '`code` and `param` are included only if upstream provided them.'],
+    ['`upstream_response_body_read_error`', 'Failed to read upstream error/success body', '`502`', 'Body carrier failed while reading upstream response.'],
+    ['`upstream_error_body_empty`', 'Upstream non-2xx with empty body', 'Upstream status', 'No upstream code/param is fabricated.'],
+    ['`upstream_error_body_non_json`', 'Upstream non-2xx body was not JSON', 'Upstream status', 'Message may include a compact body summary.'],
+    ['`upstream_error_body_unknown_shape`', 'Upstream non-2xx JSON had unknown shape', 'Upstream status', 'The JSON was readable but not a supported error schema.'],
+    ['`stream_translation_error`', 'Streaming conversion or terminal-event failure', '`502` or payload status in SSE', 'Used when a stream cannot be translated safely.'],
+  ]}
+  codeFirstColumn={false}
+/>
 
 ## Response formats
 
@@ -80,12 +101,15 @@ format = "text"   # or "json"
 
 ## HTTP status semantics
 
-| Status | Meaning |
-|---|---|
-| `400` | Inbound request was invalid for the detected protocol (`invalid_request_error`) |
-| `500` | ProxAI runtime invariant, local IO, serialization, or internal body read failed (`internal_error`) |
-| `502` / `503` / `504` | Upstream send/status/body-read failure (`upstream_*`) |
-| Upstream status | For upstream non-2xx responses, ProxAI maps the upstream status into its client-facing status while keeping the upstream numeric status inside the payload |
+<ReferenceTable
+  columns={['Status', 'Meaning']}
+  rows={[
+    ['400', 'Inbound request was invalid for the detected protocol (`invalid_request_error`)'],
+    ['500', 'ProxAI runtime invariant, local IO, serialization, or internal body read failed (`internal_error`)'],
+    ['502 / 503 / 504', 'Upstream send/status/body-read failure (`upstream_*`)'],
+    ['Upstream status', 'For upstream non-2xx responses, ProxAI maps the upstream status into its client-facing status while keeping the upstream numeric status inside the payload'],
+  ]}
+/>
 
 For streaming responses, the HTTP status has already started (usually `200`) when the error occurs, so the error arrives as an SSE event carrying the numeric `status` field.
 
@@ -99,7 +123,29 @@ For upstream non-2xx responses, ProxAI preserves useful diagnostic headers when 
 
 It does not fabricate these headers. Response `Content-Type` is decided by the outbound protocol, not passed through from the upstream — see [Contract C13](/en/reference/behavior-contracts#response-reconstruction). Upstream headers are filtered before forwarding — see [Contract C14](/en/reference/behavior-contracts#response-reconstruction).
 
+## SSE errors
+
+If an error happens after an SSE response has started, HTTP status can no longer be changed. ProxAI emits an SSE `event: error` payload with the same client-facing `error` object and a numeric `status` field.
+
+```text
+event: error
+data: {"type":"error","error":{"message":"stream error","type":"stream_translation_error","status":502}}
+```
+
+## Privacy contract
+
+<ReferenceTable
+  columns={['Rule', 'Reason']}
+  rows={[
+    ['Do not expose internal typed error names verbatim', 'Client-facing `type` values should remain stable and compact.'],
+    ['Do not fabricate upstream `code` or `param`', 'They are only present when the upstream provided them.'],
+    ['Do not log request bodies, Authorization headers, or API keys', 'Error paths must remain privacy-safe.'],
+    ['Preserve useful upstream headers only when present', '`Retry-After`, request ids, and rate-limit headers are diagnostic hints, not invented metadata.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
 ## Related references
 
-- [Configuration Example](/en/reference/configuration-example)
+- [Configuration Reference](/en/reference/configuration)
 - [CLI](/en/reference/cli)

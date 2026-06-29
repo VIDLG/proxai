@@ -1,0 +1,65 @@
+---
+title: Capture Phases
+description: ProxAI capture phase 名称、边界、内容与隐私风险参考
+---
+
+import { PipelineStageCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Capture Phases
+
+Capture phase 表示数据处在代理 pipeline 的哪个位置。Capture artifact、配置字段、flow local，以及描述代理链路的日志字段都应使用 phase 名称。
+
+<PipelineStageCards
+  labels={{ modules: '模块', responsibility: '职责' }}
+  stages={[
+    { name: 'inbound_request', modules: ['ingress/', 'pipeline/inbound_request'], responsibility: '本地客户端原始请求，已经经过 HTTP admission 和协议检测。' },
+    { name: 'provider_request', modules: ['routing', 'translation/', 'provider/*/request'], responsibility: '路由、协议转换、模型改写、projection 和序列化之后的 provider 请求。' },
+    { name: 'upstream_response', modules: ['provider/*/transport', 'pipeline/upstream_response'], responsibility: '出站响应重建之前的上游 status、headers 和 body bytes。' },
+    { name: 'outbound_response', modules: ['translation/', 'http_support'], responsibility: '为客户端入站协议重建后的最终响应。' },
+  ]}
+/>
+
+## 配置开关
+
+<ReferenceTable
+  columns={['配置字段', 'Phase']}
+  rows={[
+    ['inbound_request_enabled', '`inbound_request`'],
+    ['provider_request_enabled', '`provider_request`'],
+    ['upstream_response_enabled', '`upstream_response`'],
+    ['outbound_response_enabled', '`outbound_response`'],
+  ]}
+/>
+
+## CLI phase 名称
+
+Capture CLI 使用 hyphenated phase 名称：
+
+```sh
+proxai capture enable inbound-request
+proxai capture enable provider-request
+proxai capture enable upstream-response
+proxai capture enable outbound-response
+```
+
+## 隐私风险
+
+<ReferenceTable
+  columns={['Phase', '可能包含的敏感内容']}
+  rows={[
+    ['inbound_request', '客户端 prompt、输入文件、tool 输出、客户端传入 headers'],
+    ['provider_request', '转换后的 prompt、provider payload、tool arguments、provider auth 决策'],
+    ['upstream_response', '模型输出、tool-call arguments、provider headers、原始 SSE bytes'],
+    ['outbound_response', '最终模型输出和协议特定 response payload'],
+  ]}
+/>
+
+<ProxaiCallout type="caution" title="Captures 是本地调试产物">
+  不要提交 captures。如果 capture 要变成 fixture，必须先裁剪并脱敏 private prompts、keys、upstream URLs、headers 和模型输出。
+</ProxaiCallout>
+
+## 相关文档
+
+- [观测与诊断](/zh/using/observability)
+- [CLI](/zh/reference/cli)
+- [行为契约](/zh/reference/behavior-contracts#隐私)

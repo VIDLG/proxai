@@ -3,7 +3,7 @@ title: Protocols
 description: Protocol values, request paths, accepted locations, and supported conversion pairs
 ---
 
-import { ProtocolCompare, ProtocolMatrix, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ProtocolCompare, ProtocolConversionMatrix, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
 
 # Protocols
 
@@ -11,11 +11,14 @@ Single reference for ProxAI protocol values: what they are, where they are accep
 
 ## Values and request paths
 
-| Protocol value | Wire protocol | Request path |
-|---|---|---|
-| `openai_responses` | OpenAI Responses API | `/v1/responses` |
-| `openai_chat_completions` | OpenAI Chat Completions API | `/v1/chat/completions` |
-| `anthropic_messages` | Anthropic Messages API | `/v1/messages` |
+<ReferenceTable
+  columns={['Protocol value', 'Wire protocol', 'Request path']}
+  rows={[
+    ['openai_responses', 'OpenAI Responses API', '`/v1/responses`'],
+    ['openai_chat_completions', 'OpenAI Chat Completions API', '`/v1/chat/completions`'],
+    ['anthropic_messages', 'Anthropic Messages API', '`/v1/messages`'],
+  ]}
+/>
 
 <ProxaiCallout type="note" title="Detected, not declared">
   The inbound protocol is detected from the request path. Clients do not send `request_protocol` as a field.
@@ -38,17 +41,7 @@ Single reference for ProxAI protocol values: what they are, where they are accep
 
 ## Supported conversion pairs
 
-<ProtocolMatrix
-  rows={[
-    { inbound: 'openai_responses', provider: 'openai_responses', status: 'Pass-through' },
-    { inbound: 'openai_chat_completions', provider: 'openai_chat_completions', status: 'Pass-through' },
-    { inbound: 'anthropic_messages', provider: 'anthropic_messages', status: 'Pass-through' },
-    { inbound: 'openai_responses', provider: 'openai_chat_completions', status: 'Explicit conversion' },
-    { inbound: 'openai_responses', provider: 'anthropic_messages', status: 'Explicit conversion' },
-    { inbound: 'openai_chat_completions', provider: 'anthropic_messages', status: 'Explicit conversion' },
-    { inbound: 'anthropic_messages', provider: 'openai_responses', status: 'Explicit conversion' },
-  ]}
-/>
+<ProtocolConversionMatrix />
 
 All other pairs fail explicitly. Notable intentionally unsupported pairs:
 
@@ -71,9 +64,9 @@ src/translation/anthropic_messages/to_openai_responses/
 src/translation/openai_chat_completions/to_anthropic_messages/
 ```
 
-For the conversion design rules, see [Protocol Conversion](/en/protocol-conversion).
+For the conversion design rules, see [Protocol Conversion](/en/developer/protocol-conversion).
 
 ## Related references
 
-- [Configuration Example](/en/reference/configuration-example)
+- [Configuration Reference](/en/reference/configuration)
 - [Defaults and Limits](/en/reference/defaults-and-limits)

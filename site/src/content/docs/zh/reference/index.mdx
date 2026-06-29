@@ -1,0 +1,47 @@
+---
+title: 参考
+description: ProxAI 配置、CLI、协议、路由匹配、capture phases、文件、错误、契约和术语表入口
+---
+
+import { FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 参考
+
+Reference 页面用于查表，应稳定、紧凑、容易扫描。任务 walkthrough 看 [使用 ProxAI](/zh/using)，实现细节看 [开发者指南](/zh/developer)。
+
+<ProxaiCallout type="tip" title="Reference 不是教程">
+  Reference 页面可以反向链接任务文档，但应聚焦精确取值、契约和查表内容。
+</ProxaiCallout>
+
+## 配置与运行时
+
+<FeatureGrid
+  items={[
+    { title: '配置参考', href: '/zh/reference/configuration', icon: 'config', description: 'config.example.toml 单一来源参考，以及字段说明和默认值入口。' },
+    { title: '默认值与限制', href: '/zh/reference/defaults-and-limits', icon: 'gauge', description: '默认端点、超时、并发、请求体大小和 capture 默认值。' },
+    { title: '环境与文件', href: '/zh/reference/environment-and-files', icon: 'file', description: 'App 目录、生成的运行时文件、仓库文档和本地产物边界。' },
+  ]}
+/>
+
+## 路由与协议
+
+<FeatureGrid
+  items={[
+    { title: '协议', href: '/zh/reference/protocols', icon: 'protocol', description: '协议取值、请求 path、可用位置与支持的转换对。' },
+    { title: '兼容性矩阵', href: '/zh/reference/compatibility-matrix', icon: 'gauge', description: '协议 pair 在请求、响应、流式、工具、reasoning 和已知有损点上的支持情况。' },
+    { title: '状态与停止原因', href: '/zh/reference/status-and-stop-reasons', icon: 'stop', description: '终止状态、stop_reason、finish_reason 和流式完成信号映射。' },
+    { title: '路由匹配', href: '/zh/reference/route-matching', icon: 'route', description: 'Route 结果、protocol guards、model patterns 和 fallback 行为。' },
+    { title: '术语表', href: '/zh/reference/glossary', icon: 'book', description: 'request protocol、provider protocol、phase、route 和 streaming 的共享术语。' },
+  ]}
+/>
+
+## 调试与契约
+
+<FeatureGrid
+  items={[
+    { title: 'CLI', href: '/zh/reference/cli', icon: 'terminal', description: '运行 flag、route override、capture 子命令和默认端点。' },
+    { title: 'Capture Phases', href: '/zh/reference/capture-phases', icon: 'security', description: 'Phase 边界、配置开关、CLI phase 名称与隐私风险。' },
+    { title: '错误响应', href: '/zh/reference/error-responses', icon: 'alert', description: '客户端 payload、type 枚举、HTTP status 语义与保留 headers。' },
+    { title: '行为契约', href: '/zh/reference/behavior-contracts', icon: 'check', description: 'ProxAI 跨版本承诺的稳定行为。' },
+  ]}
+/>

@@ -1,0 +1,66 @@
+---
+title: SDK 对齐与兼容性
+description: Anthropic SDK 对齐、required-nullable 字段和 provider 兼容性归一化规则。
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { FeatureGrid, ProtocolCompare } from '@components/ProxaiDocs.jsx';
+
+# SDK 对齐与兼容性
+
+## SDK 对齐
+
+Anthropic Messages wire model 会与 vendored 官方 TypeScript SDK（位于 `contrib/anthropic-sdk-typescript`）比较：
+
+```sh
+just compare-anthropic-protocol
+```
+
+比较内容包括类型覆盖、字段覆盖和顺序、serde discriminator 处理、枚举字面量、untagged union、结构化 SDK marker，以及选定的 serde 字段语义。
+
+
+## Required-nullable 字段
+
+TypeScript 区分以下两种 shape：
+
+```ts
+field?: T          // optional：字段可以不存在
+field: T | null    // required nullable：字段应该存在，但可以为 null
+```
+
+Rust `Option<T>` 在反序列化时同时接受缺失和 `null`，因此它既不比任一 shape 更严格。对 SDK optional 字段来说足够精确；但对 SDK required-nullable 字段来说，它是有意更宽松的表示。
+
+当 SDK required-nullable 字段用 `Option<T>` 表示时，应直接在 Rust 字段上标记：
+
+```rust
+pub struct Usage {
+    pub output_tokens: u32,
+    /// @sdk(required_nullable_accepts_missing)
+    pub server_tool_use: Option<ServerToolUsage>,
+}
+```
+
+这个 marker 表示：
+
+- SDK shape：`field: T | null`
+- Rust shape：`Option<T>`
+- 有意差异：ProxAI 也接受字段缺失，作为兼容性容忍
+
+当 SDK 字段是 optional（`field?: T` 或 `field?: T | null`）时，不要使用这个 marker。缺失本来就是官方 shape 的一部分。
+
+不要用这个 marker 为 SDK required non-null 字段（`field: T`）使用 `Option<T>` 找理由。这类字段应该在 Rust 中保持非 optional，除非有另一个单独记录的协议决策。
+
+Compare 脚本会在 `Required-nullable fields accepting missing` 小节中紧凑打印被标记字段。未标记的 required-nullable `Option<T>` 字段会导致比较失败。
+
+
+## 兼容性归一化
+
+Provider 兼容性归一化只能把保守或已测量到的上游偏差修复为最接近的官方协议 shape。当前保守修复包括：JSON 对象中缺失的 SDK required-nullable 响应字段（`missing -> null`），以及裸 `message_start` 事件归一化为官方嵌套 `message` shape。当前已测量的 provider 修复包括：
+
+- MiniMax-compatible streams 可能在 thinking `content_block_start` 上省略 `signature`，因此 ProxAI 只针对这个窄场景插入空 signature。
+- GLM 5.1 Anthropic-compatible streams 可能只在 `server_tool_use` 中发出一个 counter，因此 ProxAI 会把缺失的 `web_fetch_requests` 或 `web_search_requests` counter 填为 `0`。
+
+不要添加其他 provider-specific 业务默认值，例如缺失 tool caller，除非有已测量的上游案例和聚焦 fixture 记录该行为。
+
+这些修复应保持在 provider 兼容性处理中。它们不应重新定义官方 wire model。

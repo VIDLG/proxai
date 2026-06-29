@@ -1,0 +1,50 @@
+---
+title: Glossary
+description: Shared ProxAI terminology for protocols, phases, routing, providers, streaming, captures, and errors
+---
+
+import { GlossaryCards } from '@components/ProxaiDocs.jsx';
+
+# Glossary
+
+Use these terms consistently in docs, configuration, code comments, logs, and capture metadata. This page is a terminology map; exact values live in the corresponding reference pages.
+
+## Protocols and routing
+
+<GlossaryCards
+  terms={[
+    { term: 'request protocol', definition: 'The inbound protocol detected from the local request path, such as `openai_responses` or `anthropic_messages`.', doNotConfuseWith: 'Provider `protocol`, which controls outbound wire behavior.', usedIn: ['routing', 'ingress', 'captures'], relatedDocs: [{ label: 'Protocols', href: '/en/reference/protocols' }, { label: 'Route Matching', href: '/en/reference/route-matching' }] },
+    { term: 'provider protocol', definition: 'The outbound protocol configured on a provider; controls provider request serialization and upstream response handling.', doNotConfuseWith: 'Provider name. Names are user labels and do not imply protocol semantics.', usedIn: ['providers', 'translation', 'transport'], relatedDocs: [{ label: 'Provider Setup', href: '/en/using/provider-setup' }, { label: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix' }] },
+    { term: 'protocol value', definition: 'One of `openai_responses`, `openai_chat_completions`, or `anthropic_messages`.', doNotConfuseWith: 'Marketing names such as OpenAI or Anthropic; values describe wire behavior.', usedIn: ['config', 'routing', 'translation'], relatedDocs: [{ label: 'Protocols', href: '/en/reference/protocols' }] },
+    { term: 'translation pair', definition: 'A directed conversion from inbound request protocol to provider protocol, for example `openai_chat_completions -> anthropic_messages`.', doNotConfuseWith: 'A provider route. Routes choose providers; translation pairs convert payloads and streams.', usedIn: ['translation', 'compatibility'], relatedDocs: [{ label: 'Protocol Conversion', href: '/en/developer/protocol-conversion' }, { label: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix' }] },
+    { term: 'provider name', definition: 'User-defined label for a configured upstream provider.', doNotConfuseWith: 'Provider protocol. The name `anthropic` does not automatically mean `anthropic_messages`.', usedIn: ['config', 'routes'], relatedDocs: [{ label: 'Routing and Providers', href: '/en/using/routing-and-providers' }] },
+    { term: 'route', definition: 'An explicit model/protocol rule that selects a provider before default provider fallback.', doNotConfuseWith: 'Default provider selection, which only applies when no explicit route matches.', usedIn: ['routing', 'config'], relatedDocs: [{ label: 'Route Matching', href: '/en/reference/route-matching' }] },
+    { term: 'request_protocol guard', definition: 'Optional route field that restricts a model match to one detected inbound protocol.', doNotConfuseWith: 'Provider protocol. A guard filters inbound matching; it does not control outbound serialization.', usedIn: ['routing', 'config'], relatedDocs: [{ label: 'Route Matching', href: '/en/reference/route-matching' }, { label: 'Behavior Contracts', href: '/en/reference/behavior-contracts#routing-and-conversion' }] },
+  ]}
+/>
+
+## Phases and diagnostics
+
+<GlossaryCards
+  terms={[
+    { term: 'inbound_request', definition: 'Pipeline phase containing the local client request as ProxAI received it.', doNotConfuseWith: '`provider_request`, which is after provider selection, translation, model rewrite, and serialization.', usedIn: ['captures', 'logs'], relatedDocs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }] },
+    { term: 'provider_request', definition: 'Pipeline phase containing the selected, translated, serialized provider request.', doNotConfuseWith: 'Raw inbound client payload. Provider request may have a different protocol and model name.', usedIn: ['captures', 'provider request'], relatedDocs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }] },
+    { term: 'upstream_response', definition: 'Pipeline phase containing upstream status, headers, and raw body bytes.', doNotConfuseWith: '`outbound_response`, which is after response translation/reconstruction.', usedIn: ['captures', 'provider response'], relatedDocs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }] },
+    { term: 'outbound_response', definition: 'Pipeline phase containing the final response returned to the local client.', doNotConfuseWith: 'Upstream raw body; outbound response may have a translated protocol shape.', usedIn: ['captures', 'client response'], relatedDocs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }] },
+    { term: 'capture phase', definition: 'Named pipeline location where optional debugging artifacts can be written.', doNotConfuseWith: 'Logs. Captures can contain private payload data and require stricter handling.', usedIn: ['debugging', 'privacy'], relatedDocs: [{ label: 'Privacy and Local Data', href: '/en/using/privacy-and-local-data' }] },
+    { term: 'request hints', definition: 'Compact protocol-aware log summaries that avoid private request bodies.', doNotConfuseWith: 'Payload captures, which are explicit local artifacts.', usedIn: ['logs', 'observability'], relatedDocs: [{ label: 'Observability', href: '/en/using/observability' }] },
+  ]}
+/>
+
+## Streaming and errors
+
+<GlossaryCards
+  terms={[
+    { term: 'SSE', definition: 'Server-Sent Events; the streaming carrier used by OpenAI-compatible and Anthropic-style streaming responses.', doNotConfuseWith: 'Protocol event semantics. SSE is the carrier; each protocol defines its own event names and terminal markers.', usedIn: ['streaming', 'translation'], relatedDocs: [{ label: 'Streaming Behavior', href: '/en/protocol/streaming-behavior' }] },
+    { term: 'terminal event', definition: 'Protocol-specific event or sentinel that marks semantic stream completion, such as `response.completed`, `[DONE]`, or `message_stop`.', doNotConfuseWith: 'TCP connection close. A closed byte stream without a terminal event can still be semantically incomplete.', usedIn: ['streaming', 'tool calls'], relatedDocs: [{ label: 'Status and Stop Reasons', href: '/en/reference/status-and-stop-reasons' }] },
+    { term: 'semantic timeout', definition: 'Timeout for a protocol-level condition, such as started-but-unfinished streamed tool-call arguments.', doNotConfuseWith: 'Idle-read timeout, which is about no upstream bytes arriving.', usedIn: ['tool calls', 'streaming'], relatedDocs: [{ label: 'Streaming and Tools', href: '/en/using/streaming-and-tools' }] },
+    { term: 'idle-read timeout', definition: 'Transport-level timeout while waiting for upstream response bytes.', doNotConfuseWith: 'Total request duration cap. It only fires when no new bytes arrive within the configured window.', usedIn: ['transport', 'streaming'], relatedDocs: [{ label: 'Defaults and Limits', href: '/en/reference/defaults-and-limits' }] },
+    { term: 'stop reason', definition: 'Provider/protocol-specific reason for ending generation, such as Anthropic `stop_reason`.', doNotConfuseWith: 'OpenAI Chat `finish_reason` or Responses `status`; mappings are protocol-specific.', usedIn: ['responses', 'streaming'], relatedDocs: [{ label: 'Status and Stop Reasons', href: '/en/reference/status-and-stop-reasons' }] },
+    { term: 'client-facing error type', definition: 'Stable compact `type` value returned to clients, such as `stream_translation_error`.', doNotConfuseWith: 'Internal Rust error taxonomy such as `TranslationError` or `SseError`.', usedIn: ['errors', 'SDKs'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+  ]}
+/>

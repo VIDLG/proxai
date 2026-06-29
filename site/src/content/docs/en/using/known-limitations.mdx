@@ -1,0 +1,50 @@
+---
+title: Known Limitations
+description: Current ProxAI boundaries, unsupported behavior, and intentional non-goals
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Known Limitations
+
+This page sets expectations for what ProxAI intentionally does not do today. It is a user-facing summary; exact protocol support lives in [Compatibility Matrix](/en/reference/compatibility-matrix), and exact configuration fields live in [Configuration Reference](/en/reference/configuration).
+
+<ProxaiCallout type="note" title="Limitations are design boundaries">
+  ProxAI is a small local compatibility proxy. It should not grow into a generic AI gateway unless the project explicitly chooses that direction.
+</ProxaiCallout>
+
+## Intentional non-goals
+
+<ContractCards
+  layout="single"
+  contracts={[
+    { id: 'L1', title: 'Not a hosted gateway', body: 'ProxAI is designed for local compatibility and diagnostics, not multi-tenant hosting, account management, billing, or provider administration.' },
+    { id: 'L2', title: 'Not a universal protocol converter', body: 'Only explicit protocol pairs are supported. Unsupported pairs fail explicitly instead of silently falling through.' },
+    { id: 'L3', title: 'Not a prompt analytics platform', body: 'Default logs should stay compact and body-safe. Captures are local debugging artifacts, not product analytics.' },
+    { id: 'L4', title: 'Not a provider control plane', body: 'Runtime behavior belongs in `config.toml`; ProxAI does not manage provider accounts or rotate provider credentials for users.' },
+  ]}
+/>
+
+## Practical limits
+
+<ReferenceTable
+  columns={['Area', 'Limit', 'Where to check']}
+  rows={[
+    ['Protocol pairs', 'Support is pair-specific and direction-specific. Request, non-streaming response, and streaming support can differ.', '[Compatibility Matrix](/en/reference/compatibility-matrix)'],
+    ['Lossiness', 'Some conversions cannot preserve every source protocol concept exactly.', '[Lossiness and Fidelity](/en/protocol/lossiness-and-fidelity)'],
+    ['Streaming', 'Stream correctness depends on complete terminal events and provider event semantics.', '[Streaming Behavior](/en/protocol/streaming-behavior)'],
+    ['Tool calls', 'Started-but-unfinished streamed tool arguments are bounded by semantic timeout, not guessed into valid calls.', '[Status and Stop Reasons](/en/reference/status-and-stop-reasons)'],
+    ['Capture', 'Captures can contain private data and must stay local unless manually sanitized.', '[Privacy and Local Data](/en/using/privacy-and-local-data)'],
+    ['Provider quirks', 'Provider-local compatibility belongs in provider code; cross-protocol shape changes belong in translation.', '[Module Boundaries](/en/developer/architecture/module-boundaries)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## If you hit a limit
+
+1. Confirm the behavior in the relevant reference page.
+2. Reproduce with the smallest request and the narrowest useful capture phase.
+3. Decide whether the change belongs to provider compatibility, protocol translation, routing, or docs.
+4. If it changes user-visible behavior, update both user docs and reference docs.
+
+For local debugging paths, see [Debugging Workflow](/en/using/debugging-workflow) and [Troubleshooting](/en/using/troubleshooting).

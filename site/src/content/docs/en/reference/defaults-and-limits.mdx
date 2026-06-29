@@ -3,66 +3,91 @@ title: Defaults and Limits
 description: Default endpoints, timeouts, concurrency, body size, and capture defaults
 ---
 
+import { ReferenceTable } from '@components/ProxaiDocs.jsx';
+
 # Defaults and Limits
 
-Quick lookup for the most-used ProxAI defaults and runtime limits. Values reflect the generated `config.example.toml`. For the authoritative annotated file, see [Configuration Example](/en/reference/configuration-example); this page is a curated summary, not a complete mirror.
+Quick lookup for the most-used ProxAI defaults and runtime limits. Values reflect the generated `config.example.toml`. For the authoritative annotated file, see [Configuration Reference](/en/reference/configuration); this page is a curated summary, not a complete mirror.
 
 ## Endpoints
 
-| Setting | Default |
-|---|---|
-| Proxy listen address | `http://127.0.0.1:18080` |
-| MCP endpoint | `http://127.0.0.1:18081/mcp` |
+<ReferenceTable
+  columns={['Setting', 'Default']}
+  rows={[
+    ['Proxy listen address', '`http://127.0.0.1:18080`'],
+    ['MCP endpoint', '`http://127.0.0.1:18081/mcp`'],
+  ]}
+  codeFirstColumn={false}
+/>
 
 ## Request admission
 
-| Setting | Default |
-|---|---|
-| `max_request_body_bytes` | `52428800` (50 MiB) |
-| `max_concurrent_requests` | `64` |
+<ReferenceTable
+  columns={['Setting', 'Default']}
+  rows={[
+    ['`max_request_body_bytes`', '`52428800` (50 MiB)'],
+    ['`max_concurrent_requests`', '`64`'],
+  ]}
+/>
 
 ## Timeouts
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `read_idle_timeout_secs` | `120` | Idle-read timeout while waiting for upstream bytes (not a total request timeout). See [Contract C22](/en/reference/behavior-contracts#streaming). |
-| `[tool_calls].timeout_secs` | `120` | Semantic timeout for incomplete streamed tool-call arguments (must be > 0). See [Contract C4](/en/reference/behavior-contracts#configuration-and-startup). |
+<ReferenceTable
+  columns={['Setting', 'Default', 'Meaning']}
+  rows={[
+    ['`read_idle_timeout_secs`', '`120`', 'Idle-read timeout while waiting for upstream bytes (not a total request timeout). See [Contract C22](/en/reference/behavior-contracts#streaming).'],
+    ['`[tool_calls].timeout_secs`', '`120`', 'Semantic timeout for incomplete streamed tool-call arguments (must be > 0). See [Contract C4](/en/reference/behavior-contracts#configuration-and-startup).'],
+  ]}
+/>
 
 ## Capture defaults
 
 All capture phases default to `false`. ProxAI creates the app dir `captures/` folder at startup; the phase switches only control whether artifacts are written.
 
-| Phase | Default |
-|---|---|
-| `inbound_request_enabled` | `false` |
-| `provider_request_enabled` | `false` |
-| `upstream_response_enabled` | `false` |
-| `outbound_response_enabled` | `false` |
+<ReferenceTable
+  columns={['Phase', 'Default']}
+  rows={[
+    ['`inbound_request_enabled`', '`false`'],
+    ['`provider_request_enabled`', '`false`'],
+    ['`upstream_response_enabled`', '`false`'],
+    ['`outbound_response_enabled`', '`false`'],
+  ]}
+/>
 
 ## Logging defaults
 
-| Setting | Default |
-|---|---|
-| `level` | `info` |
-| `output_format` | `human` |
-| `use_color` | `true` |
-| `warn_ms` | `5000` |
-| `error_ms` | `15000` |
+<ReferenceTable
+  columns={['Setting', 'Default']}
+  rows={[
+    ['`level`', '`info`'],
+    ['`output_format`', '`human`'],
+    ['`use_color`', '`true`'],
+    ['`warn_ms`', '`5000`'],
+    ['`error_ms`', '`15000`'],
+  ]}
+/>
 
 ## Error response default
 
-| Setting | Default |
-|---|---|
-| `[error_responses].format` | `text` |
+<ReferenceTable
+  columns={['Setting', 'Default']}
+  rows={[
+    ['`[error_responses].format`', '`text`'],
+  ]}
+/>
 
 ## App directory
 
-| Platform | Default location |
-|---|---|
-| Windows | `%USERPROFILE%\\.proxai\\` |
-| Linux/macOS | `~/.proxai/` |
+<ReferenceTable
+  columns={['Platform', 'Default location']}
+  rows={[
+    ['Windows', '`%USERPROFILE%\\.proxai\\`'],
+    ['Linux/macOS', '`~/.proxai/`'],
+  ]}
+  codeFirstColumn={false}
+/>
 
 ## Related references
 
-- [Configuration Example](/en/reference/configuration-example)
+- [Configuration Reference](/en/reference/configuration)
 - [CLI](/en/reference/cli)

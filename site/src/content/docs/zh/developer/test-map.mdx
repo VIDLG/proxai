@@ -1,0 +1,56 @@
+---
+title: 测试地图
+description: 面向维护者的配置、路由、转换、流式、错误、capture 和文档变更验证指南
+robots: noindex
+---
+
+import { ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# 测试地图
+
+先用 [该改哪里](/zh/developer/where-to-change-code) 定位源码边界，再用本页选择覆盖该变更的最小验证；只有必要时再扩大范围。
+
+<ProxaiCallout type="note" title="Windows 上优先使用 just recipes">
+  在 Windows 上，如果本地 proxy 可能正在运行，优先使用项目 `just` recipes。它们可以避免被锁定的 `target/debug/proxai.exe` 导致 target 目录冲突。
+</ProxaiCallout>
+
+## 按变更类型选择验证
+
+<ReferenceTable
+  columns={['变更领域', '先运行', '再考虑']}
+  rows={[
+    ['纯文档', '`just site check`', '对新的 IA 或组件密集页面做手动导航检查'],
+    ['仅格式化', '`cargo fmt --check`', '合并更广泛改动前运行 `just check`'],
+    ['配置 schema/defaults', '聚焦配置加载测试', '`pixi run cargo test --lib` 或 `just check`'],
+    ['Route matching', 'Route matching unit/e2e tests', '如果 proxy 行为变化，运行 `just test-e2e`'],
+    ['协议转换', 'Pair-specific conversion tests', '覆盖 request/response 行为的 proxy e2e tests'],
+    ['Streaming/SSE/tool calls', '目标 streaming tests 和 fixtures', '流式回归用户可见，因此考虑 `just test-e2e`'],
+    ['错误渲染', 'Error projection tests', '当 stream state 相关时，同时检查 HTTP 和 SSE error 行为'],
+    ['Capture/logging', 'Capture 行为测试和 docs checker phase coverage', '审查生成产物的隐私边界'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 测试选择流程
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    { title: '识别边界', goal: '在知道改了什么之前，不要先跑大而全的测试。', do: ['把变更映射到 config、routing、translation、streaming、errors、capture、docs 或 release packaging。', '使用 `developer/where-to-change-code` 中的源码归属。'], verify: '你能说出主要模块和受影响的用户可见行为。', docs: [{ label: '该改哪里', href: '/zh/developer/where-to-change-code' }] },
+    { title: '运行最小有意义检查', goal: '快速发现局部错误。', do: ['纯文档变更跑 docs checks。', '运行时模块改动跑聚焦 Rust 测试。', '协议转换改动跑 pair-specific tests。'], verify: '最小相关检查通过后，再扩大验证。', docs: [{ label: '文档维护', href: '/zh/developer/docs-maintenance' }] },
+    { title: '为用户可见行为扩大验证', goal: '覆盖用户实际命中的 proxy 和 streaming 路径。', do: ['Route、provider、normalization、streaming、capture 或 request/response 行为变化时运行 e2e。', '流式相关时，按需覆盖 terminal events、不完整工具流、stall 和 Unicode 边界。'], verify: '更广的命令通过，或失败已被理解并限定范围。', docs: [{ label: '流式内部实现', href: '/zh/developer/streaming-internals' }] },
+  ]}
+/>
+
+## 常用命令
+
+```sh
+just site check
+cargo fmt --check
+pixi run cargo clippy --lib --tests -- -D warnings
+pixi run cargo test --lib
+just test-e2e
+just check
+```
+
+使用根目录 `justfile` 和 `site/justfile` 里真实存在的项目 recipes；不要在文档里发明尚未加入仓库的新验证命令。

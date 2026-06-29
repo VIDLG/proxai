@@ -1,0 +1,75 @@
+---
+title: 信息损失与保真度
+description: 理解透传、支持的转换、有损映射，以及如何选择更高保真的协议路径
+---
+
+import { ProxaiCallout, ReferenceTable, ReasonMap } from '@components/ProxaiDocs.jsx';
+
+# 信息损失与保真度
+
+支持某个转换 pair，并不代表每个 provider-specific 或 protocol-specific 字段都能完全对称。ProxAI 优先保留行为，其次才是原始字段名称。
+
+<ProxaiCallout type="tip" title="需要精确 shape 时优先透传">
+  如果客户端依赖精确 provider 或协议字段，尽量使用相同的入站协议和 provider 协议。跨协议转换用于兼容，不是无损归档。
+</ProxaiCallout>
+
+## 术语
+
+<ReferenceTable
+  columns={['术语', '含义']}
+  rows={[
+    ['透传', '入站协议和 provider 协议相同。ProxAI 仍负责路由、认证、传输、错误和观测。'],
+    ['支持的转换', 'ProxAI 对 request/response/streaming 行为有显式协议 pair 实现。'],
+    ['有损映射', '目标协议无法精确表达某些源细节，因此 ProxAI 保留最接近的行为。'],
+    ['不支持的 pair', '不存在转换实现；ProxAI 会显式失败。'],
+  ]}
+/>
+
+## 常见有损区域
+
+<ReasonMap
+  layout="single"
+  labels={{ mapsTo: '影响' }}
+  groups={[
+    {
+      title: '可能损失保真度的位置',
+      items: [
+        { value: 'Output item identity', mapsTo: '多轮引用', note: 'Responses 有稳定 output items 和 item references；其他协议可能只暴露 message blocks。' },
+        { value: 'Tool-call streaming', mapsTo: '增量拼装', note: '不同协议用 index、id、content block index 或 item id 标识工具调用。' },
+        { value: 'Reasoning controls', mapsTo: 'effort 和 summary', note: 'Reasoning effort 与 summary controls 在不同 provider 间不对称。' },
+        { value: 'Stop and finish reasons', mapsTo: '终止状态', note: '`stop_reason`、`finish_reason` 和 response status 相关但不完全相同。' },
+        { value: 'Hosted tools', mapsTo: 'provider 能力', note: '目标 provider 可能不支持源协议使用的 hosted tool 模型。' },
+        { value: 'Provider metadata', mapsTo: '隐私和可移植性', note: 'Provider-specific signatures 或 ids 应转换或省略，而不是作为通用 output 泄漏。' },
+      ],
+    },
+  ]}
+/>
+
+## 为保真度选择协议
+
+<ReferenceTable
+  columns={['需求', '优先选择']}
+  rows={[
+    ['精确 output item id 和原生 Responses 多轮行为', '可用时使用 `openai_responses` 入站到 `openai_responses` provider。'],
+    ['旧客户端要求 `choices[]`', '使用 `openai_chat_completions` 入站和兼容 provider 协议。'],
+    ['Anthropic-native content block 行为', '使用 `anthropic_messages` 入站和 `anthropic_messages` provider。'],
+    ['更看重本地客户端兼容，而非精确上游 shape', '使用预期明确的已支持转换 pair。'],
+    ['调试转换行为', '开启最窄 capture phase，对比 provider_request / outbound_response。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 契约
+
+- 不支持的 pair 显式失败。
+- 跨协议转换不得静默泄漏原始 provider 结构。
+- 流式转换必须保留终止语义。
+- 工具调用完成必须和自然文本完成保持区分。
+- 目标协议能表达时，应保留错误和 refusal 语义。
+
+## 相关文档
+
+- [如何选择协议](/zh/protocol/choosing-a-protocol)
+- [协议参考](/zh/reference/protocols)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)
+- [协议转换](/zh/developer/protocol-conversion)

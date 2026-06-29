@@ -1,0 +1,110 @@
+---
+title: OpenAI Responses to Anthropic Messages
+description: Developer guide for request, response, streaming, tool, and status conversion from OpenAI Responses to Anthropic Messages
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Responses to Anthropic Messages
+
+This page documents the high-value conversion pair used when a client speaks OpenAI Responses and the selected provider speaks Anthropic Messages.
+
+<ConversionPath
+  from={{ title: 'Inbound', description: '`openai_responses` request payload' }}
+  via={[
+    { title: 'Normalize', description: 'ingress parses Responses input and request controls' },
+    { title: 'Translate request', description: 'Responses input/messages/tools -> Anthropic Messages request' },
+    { title: 'Translate response', description: 'Anthropic Message/content blocks -> Responses output items' },
+  ]}
+  to={{ title: 'Outbound', description: '`openai_responses` response or SSE events' }}
+/>
+
+## Status
+
+<ReferenceTable
+  columns={['Area', 'Expected behavior']}
+  rows={[
+    ['Non-streaming request', 'Supported when request fields can be represented in Anthropic Messages.'],
+    ['Non-streaming response', 'Anthropic returns one final `Message`; ProxAI converts it into one Responses response envelope with `output[]`.'],
+    ['Streaming response', 'Anthropic content-block events are accumulated and emitted as Responses-style typed SSE events.'],
+    ['Unsupported provider-specific fields', 'Fail or ignore deliberately; do not leak raw provider structures through Responses output.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Request mapping
+
+<ReferenceTable
+  columns={['Responses concept', 'Anthropic Messages target', 'Notes']}
+  rows={[
+    ['`input` easy messages', '`messages[]`', 'User/developer content becomes Anthropic message content blocks where possible.'],
+    ['System/developer instructions', '`system` or equivalent normalized instruction placement', 'Preserve instruction intent without duplicating user-visible content.'],
+    ['`tools[]` function tools', '`tools[]`', 'Function schema should preserve name, description, and JSON schema shape.'],
+    ['Hosted tools', 'Provider-compatible representation or explicit unsupported behavior', 'Do not pretend an upstream supports hosted tools if it does not.'],
+    ['`reasoning.effort`', '`output_config.effort` when available', 'Supported effort values map directly; disabled/minimal maps to disabled thinking behavior.'],
+    ['`reasoning.summary`', '`thinking.display` lossily', 'Anthropic has no equivalent summary granularity.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Response mapping
+
+<ReferenceTable
+  columns={['Anthropic concept', 'Responses target', 'Notes']}
+  rows={[
+    ['`Message` envelope', 'Responses response envelope', 'Anthropic non-streaming returns one message; Responses output may contain multiple typed items.'],
+    ['Text content block', 'Message output content', 'Preserve text order within the response.'],
+    ['Tool use block', 'Function call output item', 'Preserve call identity using target-protocol identifiers.'],
+    ['Thinking/reasoning block', 'Reasoning output item when representable', 'Provider-specific metadata should be transformed, not raw-round-tripped.'],
+    ['`stop_reason`', 'Responses status / terminal output semantics', 'See status and stop reasons reference for mappings.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Streaming mapping
+
+<ReferenceTable
+  columns={['Anthropic event', 'Responses-side expectation']}
+  rows={[
+    ['`message_start`', 'Initialize response state and output item assembly.'],
+    ['`content_block_start`', 'Start a Responses output item or content part depending on block type.'],
+    ['`content_block_delta`', 'Emit compatible delta events without slicing Unicode boundaries.'],
+    ['`content_block_stop`', 'Finalize the current item/content block.'],
+    ['`message_delta`', 'Update usage or stop metadata when available.'],
+    ['`message_stop`', 'Emit terminal Responses event such as `response.completed`.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="Do not confuse terminal byte closure with semantic completion">
+  The conversion is complete only after the Anthropic terminal event is observed. Socket closure without `message_stop` is an incomplete stream.
+</ProxaiCallout>
+
+## Lossy areas
+
+- Responses output item identity may be richer than Anthropic message block identity.
+- Hosted tools may not have Anthropic equivalents.
+- Reasoning summary granularity is not symmetric.
+- Refusal metadata should preserve refusal semantics, not raw upstream shapes.
+- Provider-specific metadata such as signatures should not be exposed as untyped Responses payloads.
+
+## Tests to update
+
+<ReferenceTable
+  columns={['Change type', 'Test area']}
+  rows={[
+    ['Request placement change', 'System/developer normalization and message placement tests.'],
+    ['Tool mapping change', 'Tool call and tool result round-trip behavior tests.'],
+    ['Streaming event change', 'SSE terminal, stalled tool-call, Unicode scanning, and event ordering tests.'],
+    ['Stop/status mapping change', 'Status and stop reason conversion tests plus reference docs.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Related docs
+
+- [Protocol Conversion](/en/developer/protocol-conversion)
+- [Message Placement](/en/developer/protocol-conversion/message-placement)
+- [Streaming Identifiers](/en/developer/protocol-conversion/streaming-identifiers)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)

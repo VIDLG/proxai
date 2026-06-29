@@ -1,0 +1,82 @@
+---
+title: Provider Setup
+description: Configure provider names, provider protocols, base URLs, API keys, defaults, and explicit routes
+---
+
+import { FeatureGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Provider Setup
+
+A provider is a named upstream configuration. The **provider name** is your label; the **provider protocol** controls outbound wire behavior.
+
+<ProxaiCallout type="note" title="Names are labels">
+  `providers.openai`, `providers.minimax`, or `providers.work` are arbitrary names. Only `providers.<name>.protocol` tells ProxAI whether to send OpenAI Responses, Chat Completions, or Anthropic Messages upstream.
+</ProxaiCallout>
+
+## Minimal provider
+
+```toml
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+## Provider fields
+
+<ReferenceTable
+  columns={['Field', 'Meaning']}
+  rows={[
+    ['`protocol`', 'Outbound provider protocol: `openai_responses`, `openai_chat_completions`, or `anthropic_messages`.'],
+    ['`base_url`', 'Upstream provider origin. ProxAI constructs the protocol path.'],
+    ['`api_key`', 'Real upstream key. Sent using provider-owned auth headers.'],
+    ['`compatibility`', 'Optional compatibility mode for provider-specific behavior when configured.'],
+  ]}
+/>
+
+## Use as default
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+```
+
+Defaults are used only when no explicit route matches. See [Behavior Contracts](/en/reference/behavior-contracts#routing-and-conversion).
+
+## Route one model
+
+```toml
+[[routing.routes]]
+request_protocol = "openai_responses"
+match_kind = "exact"
+model_pattern = "my-model"
+provider = "anthropic_upstream"
+upstream_model = "claude-like-model"
+```
+
+Use `request_protocol` when the same model pattern should behave differently by endpoint.
+
+## Auth behavior
+
+<ReferenceTable
+  columns={['Provider protocol', 'Upstream auth header']}
+  rows={[
+    ['`openai_responses` / `openai_chat_completions`', '`Authorization: Bearer <api_key>`'],
+    ['`anthropic_messages`', '`x-api-key: <api_key>`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Client-supplied `Authorization` is not used as upstream provider auth. See [Client Integration](/en/using/client-integration).
+
+## Next pages
+
+<FeatureGrid
+  items={[
+    { title: 'Configuration', href: '/en/using/configuration', icon: 'config', description: 'Task-oriented config setup.' },
+    { title: 'Routing and Providers', href: '/en/using/routing-and-providers', icon: 'route', description: 'How explicit routes and defaults choose providers.' },
+    { title: 'Configuration Reference', href: '/en/reference/configuration', icon: 'file', description: 'Exact fields and config.example.toml reference.' },
+    { title: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix', icon: 'protocol', description: 'Protocol-pair support lookup.' },
+  ]}
+/>

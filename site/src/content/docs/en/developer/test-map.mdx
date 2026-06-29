@@ -1,0 +1,55 @@
+---
+title: Test Map
+description: Maintainer validation guide for config, routing, translation, streaming, errors, capture, and docs changes
+robots: noindex
+---
+
+import { ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Test Map
+
+Use this page after [Where to Change Code](/en/developer/where-to-change-code) to choose the smallest validation that covers a change, then expand outward only when needed.
+
+<ProxaiCallout type="note" title="Prefer just recipes on Windows">
+  On Windows, prefer project `just` recipes when a local proxy may be running. They avoid target-directory conflicts with a locked `target/debug/proxai.exe`.
+</ProxaiCallout>
+
+## Validation by change type
+
+<ReferenceTable
+  columns={['Change area', 'Start with', 'Then consider']}
+  rows={[
+    ['Docs only', '`just site check`', 'Manual navigation for new IA or component-heavy pages'],
+    ['Formatting only', '`cargo fmt --check`', '`just check` before merging broader edits'],
+    ['Config schema/defaults', 'Focused config loading tests', '`pixi run cargo test --lib` or `just check`'],
+    ['Route matching', 'Route matching unit/e2e tests', '`just test-e2e` if proxy behavior changes'],
+    ['Protocol conversion', 'Pair-specific conversion tests', 'Proxy e2e tests for request/response behavior'],
+    ['Streaming/SSE/tool calls', 'Targeted streaming tests and fixtures', '`just test-e2e` because streaming regressions are user-visible'],
+    ['Error rendering', 'Error projection tests', 'HTTP and SSE error behavior checks when stream state matters'],
+    ['Capture/logging', 'Capture behavior tests and docs checker phase coverage', 'Privacy review of generated artifacts'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Test selection workflow
+
+<TaskSteps
+  steps={[
+    { title: 'Identify the boundary', goal: 'Avoid running broad tests before you know what changed.', do: ['Map the change to config, routing, translation, streaming, errors, capture, docs, or release packaging.', 'Use source ownership from `developer/where-to-change-code`.'], verify: 'You can name the primary module and user-visible behavior affected.', docs: [{ label: 'Where to Change Code', href: '/en/developer/where-to-change-code' }] },
+    { title: 'Run the narrowest meaningful check', goal: 'Catch local mistakes quickly.', do: ['Use docs checks for docs-only changes.', 'Use focused Rust tests for changed runtime modules.', 'Use pair-specific tests for translation changes.'], verify: 'The smallest relevant check passes before broader validation.', docs: [{ label: 'Docs Maintenance', href: '/en/developer/docs-maintenance' }] },
+    { title: 'Expand for user-visible behavior', goal: 'Cover proxy and streaming paths that users actually hit.', do: ['Run e2e checks for route, provider, normalization, streaming, capture, or request/response behavior changes.', 'For streaming, include terminal events, incomplete tool streams, stalls, and Unicode boundaries when relevant.'], verify: 'The broader command passes or failures are understood and scoped.', docs: [{ label: 'Streaming Internals', href: '/en/developer/streaming-internals' }] },
+  ]}
+/>
+
+## Common commands
+
+```sh
+just site check
+cargo fmt --check
+pixi run cargo clippy --lib --tests -- -D warnings
+pixi run cargo test --lib
+just test-e2e
+just check
+```
+
+Use the exact project recipes from the root `justfile` and `site/justfile`; do not invent new validation commands in docs unless they are added to the repository.

@@ -1,0 +1,67 @@
+---
+title: SDK Alignment and Compatibility
+description: Anthropic SDK alignment, required-nullable fields, and provider compatibility normalization rules.
+robots: noindex
+---
+
+import { ConversionPath, FeatureGrid, ProtocolCompare, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { JsonExample } from '@components/JsonExample.jsx';
+
+# SDK Alignment and Compatibility
+
+## SDK alignment
+
+The Anthropic Messages wire model is compared against the vendored official TypeScript SDK under `contrib/anthropic-sdk-typescript` using:
+
+```sh
+just compare-anthropic-protocol
+```
+
+The comparison checks type coverage, field coverage and order, serde discriminator handling, enum literals, untagged unions, structured SDK markers, and selected serde field semantics.
+
+
+## Required-nullable fields
+
+TypeScript distinguishes these two shapes:
+
+```ts
+field?: T          // optional: the field may be absent
+field: T | null    // required nullable: the field should be present, but may be null
+```
+
+Rust `Option<T>` accepts both missing and `null` during deserialization, so it is stricter than neither shape. It is exact enough for SDK-optional fields, but it is intentionally wider than SDK required-nullable fields.
+
+When an SDK required-nullable field is represented as `Option<T>`, mark the Rust field directly:
+
+```rust
+pub struct Usage {
+    pub output_tokens: u32,
+    /// @sdk(required_nullable_accepts_missing)
+    pub server_tool_use: Option<ServerToolUsage>,
+}
+```
+
+This marker means:
+
+- SDK shape: `field: T | null`
+- Rust shape: `Option<T>`
+- Intentional difference: ProxAI also accepts a missing field as compatibility tolerance
+
+Do not use this marker when the SDK field is optional (`field?: T` or `field?: T | null`). Missing is already part of the official shape there.
+
+Do not use this marker to justify `Option<T>` for SDK required non-null fields (`field: T`). Those should remain non-optional in Rust unless there is a separate, explicitly documented protocol decision.
+
+The compare script prints marked fields compactly in the `Required-nullable fields accepting missing` section. Unmarked required-nullable `Option<T>` fields fail the comparison.
+
+
+## Compatibility normalization
+
+Provider compatibility normalization should repair only conservative or measured upstream deviations into the nearest official protocol shape. Current conservative repairs are SDK required-nullable response fields missing from JSON objects (`missing -> null`) and bare `message_start` events normalized into the official nested `message` shape. Current measured provider repairs:
+
+- MiniMax-compatible streams may omit `signature` on a thinking `content_block_start`, so ProxAI inserts an empty signature for that narrow case.
+- GLM 5.1 Anthropic-compatible streams may emit `server_tool_use` with only one counter, so ProxAI fills the absent `web_fetch_requests` or `web_search_requests` counter with `0`.
+
+Do not add other provider-specific business defaults, such as missing tool callers, unless a measured upstream case and a focused fixture document the behavior.
+
+Keep these repairs local to provider compatibility handling. They should not redefine the official wire model.

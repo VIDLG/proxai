@@ -130,7 +130,7 @@ impl ResponsesUpstreamState {
             if let Some(error) = nested_error_event(event) {
                 self.record_event(&ResponseStreamEvent::ResponseError(error));
             } else if let Ok(event) = serde_json::from_str::<ResponseStreamEvent>(&event.data) {
-                self.record_event(&event.into());
+                self.record_event(&event);
             }
         }
     }

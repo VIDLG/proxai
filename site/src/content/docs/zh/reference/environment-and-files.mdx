@@ -1,0 +1,57 @@
+---
+title: 环境与文件
+description: ProxAI 本地目录、生成文件、日志、captures 与仓库隐私边界参考
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 环境与文件
+
+ProxAI 把运行时状态保留在本地。仓库包含源码和脱敏示例；app 目录包含运行时配置、日志和 captures。
+
+## App 目录
+
+<ReferenceTable
+  columns={['平台', '默认 app 目录']}
+  rows={[
+    ['Windows', '`%USERPROFILE%\\.proxai\\`'],
+    ['Linux/macOS', '`~/.proxai/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 运行时条目
+
+<ReferenceTable
+  columns={['条目', '用途', '是否提交？']}
+  rows={[
+    ['config.toml', '本地运行时配置，包含 provider API keys', '否'],
+    ['config.example.toml', '从 tracked defaults 生成的本地示例/参考', '只提交脱敏的 tracked examples'],
+    ['logs/', '本地调试运行日志', '否'],
+    ['captures/', '用于复现代理/provider 问题的可选 phase captures', '否'],
+  ]}
+/>
+
+## 仓库文档与示例
+
+<ReferenceTable
+  columns={['路径', '角色']}
+  rows={[
+    ['site/', '可发布文档的单一来源'],
+    ['site/src/content/docs/en/', '英文文档页面'],
+    ['site/src/content/docs/zh/', '中文文档页面'],
+    ['config.example.toml', 'tracked default/example configuration'],
+    ['README.md / README_CN.md', '仓库入口，链接到文档站'],
+  ]}
+/>
+
+<ProxaiCallout type="caution" title="本地产物留在本地">
+  不要提交 `config.toml`、API keys、private captures、logs，或包含 private prompts 的本地复现 fixtures。提交的 fixtures 应该裁剪并脱敏。
+</ProxaiCallout>
+
+## 相关文档
+
+- [快速开始](/zh/using/quick-start)
+- [配置说明](/zh/using/configuration)
+- [配置参考](/zh/reference/configuration)
+- [Capture Phases](/zh/reference/capture-phases)

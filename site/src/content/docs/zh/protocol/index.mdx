@@ -1,0 +1,160 @@
+---
+title: 协议模型总览
+description: ProxAI 的协议模型、协议取值、转换路径与协议交互示例
+---
+
+import { FeatureGrid, PipelineStrip, ProtocolConversionMatrix, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 协议模型总览
+
+ProxAI 把**数据处在代理链路的哪个阶段**和**这个阶段使用哪种 wire protocol**拆成两个独立概念。这个页面是协议指南的入口：当你需要理解 request path、协议取值、转换支持或各协议交互示例时，从这里开始。
+
+## 两条轴线
+
+<PipelineStrip
+  steps={[
+    { title: 'inbound_request', description: '客户端发给 ProxAI 的原始请求。' },
+    { title: 'provider_request', description: 'ProxAI 准备发给选中上游 provider 的请求。' },
+    { title: 'upstream_response', description: '上游 provider 返回给 ProxAI 的响应。' },
+    { title: 'outbound_response', description: 'ProxAI 返回给客户端协议的响应。' },
+  ]}
+/>
+
+<ReferenceTable
+  columns={['协议值', 'Wire 行为']}
+  rows={[
+    ['openai_responses', 'OpenAI Responses API：item 化 `output[]`、稳定 `item_id`、类型化 streaming events。'],
+    ['openai_chat_completions', 'OpenAI Chat Completions API：`choices[]`、assistant messages、`tool_calls[]`、`[DONE]` stream。'],
+    ['anthropic_messages', 'Anthropic Messages API：单个 `Message`、扁平 `content[]` blocks、`content_block` streaming events。'],
+  ]}
+/>
+
+<ProxaiCallout type="note" title="路由不是翻译">
+  route 可以选择一个协议不同于入站请求的 provider。这时必须存在显式转换路径；未支持的协议对会明确失败。
+</ProxaiCallout>
+
+## 按任务阅读
+
+<FeatureGrid
+  items={[
+    {
+      title: '我要配置路由',
+      href: '/zh/using/routing-and-providers',
+      icon: 'route',
+      description: '当你要决定哪个 provider 处理哪个模型或请求 endpoint 时，看这里。',
+    },
+    {
+      title: '我要理解协议行为',
+      href: '/zh/protocol#协议文档',
+      icon: 'protocol',
+      description: '当你需要 request/response shape、流式行为或交互示例时，看这里。',
+    },
+    {
+      title: '我要维护转换逻辑',
+      href: '/zh/developer/protocol-conversion',
+      icon: 'flow',
+      description: '当你维护 `src/translation/` 或评审跨协议语义时，看这里。',
+    },
+    {
+      title: '我要查精确协议取值',
+      href: '/zh/reference/protocols',
+      icon: 'file',
+      description: '配置值、请求 path、支持转换对等稳定查表内容在 Reference 中。',
+    },
+    {
+      title: '我要对齐停止原因',
+      href: '/zh/reference/status-and-stop-reasons',
+      icon: 'stop',
+      description: '比较 status、finish_reason、stop_reason 和流式终止事件时看这里。',
+    },
+  ]}
+/>
+
+## 协议文档
+
+<FeatureGrid
+  items={[
+    {
+      title: '如何选择协议',
+      href: '/zh/protocol/choosing-a-protocol',
+      icon: 'route',
+      description: '配置透传或转换路由前，先决定入站协议和 provider 协议。',
+    },
+    {
+      title: '信息损失与保真度',
+      href: '/zh/protocol/lossiness-and-fidelity',
+      icon: 'gauge',
+      description: '理解跨协议转换在哪里能保留行为、但不能保留精确源 shape。',
+    },
+    {
+      title: 'OpenAI Responses 概览',
+      href: '/zh/protocol/openai-responses',
+      icon: 'protocol',
+      description: 'Responses 请求/响应模型与 output item 语义。',
+    },
+    {
+      title: 'OpenAI Responses 交互示例',
+      href: '/zh/protocol/openai-responses/interaction-example',
+      icon: 'flow',
+      description: 'Function tools、hosted tools、item ids、content parts 和 terminal response events。',
+    },
+    {
+      title: 'OpenAI Chat Completions 概览',
+      href: '/zh/protocol/openai-chat-completions',
+      icon: 'protocol',
+      description: 'Chat completion choices、messages、delta 与 tool calls。',
+    },
+    {
+      title: 'OpenAI Chat Completions 交互示例',
+      href: '/zh/protocol/openai-chat-completions/interaction-example',
+      icon: 'flow',
+      description: 'Function tools、tool messages、`tool_calls[].index`、finish reason 和 `[DONE]`。',
+    },
+    {
+      title: 'Anthropic Messages 概览',
+      href: '/zh/protocol/anthropic-messages',
+      icon: 'protocol',
+      description: 'Anthropic message content blocks、stop reasons 与 streaming events。',
+    },
+    {
+      title: 'Anthropic Messages 交互示例',
+      href: '/zh/protocol/anthropic-messages/interaction-example',
+      icon: 'flow',
+      description: '本地工具、服务端工具、content block index、message delta 和 `message_stop`。',
+    },
+    {
+      title: '流式行为',
+      href: '/zh/protocol/streaming-behavior',
+      icon: 'timer',
+      description: 'Terminal events、SSE 预期和工具调用卡住超时行为。',
+    },
+  ]}
+/>
+
+## 选择协议路径
+
+<ReferenceTable
+  columns={['客户端调用', '检测出的 request protocol', '从这里开始']}
+  rows={[
+    ['`/v1/responses`', '`openai_responses`', '[OpenAI Responses](/zh/protocol/openai-responses)'],
+    ['`/v1/chat/completions`', '`openai_chat_completions`', '[OpenAI Chat Completions](/zh/protocol/openai-chat-completions)'],
+    ['`/v1/messages`', '`anthropic_messages`', '[Anthropic Messages](/zh/protocol/anthropic-messages)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 转换支持
+
+<ProtocolConversionMatrix
+  labels={{
+    inbound: '入站 \\ Provider',
+    responses: 'Responses',
+    chat: 'Chat',
+    anthropic: 'Anthropic',
+    pass: '透传',
+    supported: '支持',
+    unsupported: '不支持',
+  }}
+/>
+
+其他跨协议转换保持显式未支持，直到逐个实现。权威查表页是 [协议参考](/zh/reference/protocols)。

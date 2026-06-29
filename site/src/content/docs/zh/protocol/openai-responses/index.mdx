@@ -1,0 +1,266 @@
+---
+title: OpenAI Responses 协议
+description: OpenAI Responses 协议详解——item 化 output、稳定 item_id、content/summary 嵌套、hosted tools 容器
+---
+
+import { FeatureGrid, ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Responses 协议
+
+<ProtocolQuickFacts
+  protocol="openai_responses"
+  requestPath="/v1/responses"
+  codeAreas={[
+    'src/protocol/openai/responses/wire',
+    'src/protocol/openai/responses/request',
+    'src/protocol/openai/responses/response',
+    'src/provider/openai/responses',
+  ]}
+  convertsTo={['openai_chat_completions', 'anthropic_messages']}
+/>
+
+## 请求模型
+
+运行时先由 ingress 解析入站 body，生成 `PreparedOpenaiResponsesRequest`。协议层的轻量投影是 `RequestProjection`，位于 `src/protocol/openai/responses/request/projection.rs`。
+
+`RequestProjection` 保留路由、日志和诊断需要的字段，例如：
+
+- `model`
+- `instructions`
+- `stream` / `stream_options`
+- `tools` / `tool_choice` / `parallel_tool_calls`
+- `reasoning`
+- `text`
+- `max_output_tokens`
+- `previous_response_id`
+- `prompt_cache_key`
+
+它刻意不包含完整 `input`。`input` 可能很大且包含私有提示词，下游代码不应通过 projection 依赖原始 prompt 内容。真正转发给上游的 JSON 仍来自 normalized payload。
+
+请求输入的 wire model 由 `InputParam`、`InputItem`、`Item`、`InputMessage` 等类型表示：
+
+```rust
+enum InputParam {
+    Text(String),
+    Items(Vec<InputItem>),
+}
+
+enum InputItem {
+    ItemReference(ItemReference),
+    Item(Item),
+    EasyMessage(EasyInputMessage),
+}
+```
+
+`EasyInputMessage` 和 `InputMessage` 支持 `user`、`system`、`developer` 等角色。proxai 的 Responses ingress 会做项目关心的系统消息归一化，避免某些上游不能接受特定 Responses system-message shape。
+
+## 非流式响应
+
+Responses API 的完整响应由 `Response` 表示：
+
+```rust
+struct Response {
+    id: String,
+    object: String,
+    model: String,
+    status: Status,
+    output: Vec<OutputItem>,
+    usage: Option<ResponseUsage>,
+    error: Option<ErrorObject>,
+    ...
+}
+```
+
+输出主体是 `OutputItem`：
+
+```rust
+enum OutputItem {
+    Message(OutputMessage),
+    FunctionCall(FunctionToolCall),
+    FunctionCallOutput(FunctionToolCallOutputResource),
+    WebSearchCall(WebSearchToolCall),
+    FileSearchCall(FileSearchToolCall),
+    McpCall(MCPToolCall),
+    CodeInterpreterCall(CodeInterpreterToolCall),
+    ...
+}
+```
+
+Responses 的重要特点是输出不是单个 assistant message，而是一组带类型的 item。文本、推理、工具调用、工具结果、MCP approval 等都在同一个 `output` 序列里表达。
+
+## 用户端工具调用
+
+用户端工具主要是客户端提供定义、模型请求调用、客户端执行后把结果带回。
+
+函数工具定义：
+
+```rust
+struct FunctionTool {
+    name: String,
+    parameters: Option<Value>,
+    strict: Option<bool>,
+    description: Option<String>,
+    defer_loading: Option<bool>,
+}
+```
+
+模型请求调用时输出：
+
+```rust
+struct FunctionToolCall {
+    arguments: String,
+    call_id: String,
+    namespace: Option<String>,
+    name: String,
+    id: Option<String>,
+    status: Option<OutputStatus>,
+}
+```
+
+客户端把结果带回时使用：
+
+```rust
+struct FunctionCallOutputItemParam {
+    call_id: String,
+    output: FunctionCallOutput,
+    id: Option<String>,
+    status: Option<OutputStatus>,
+}
+```
+
+关键关联字段是 `call_id`。模型发出的 `FunctionToolCall.call_id` 必须和后续 `FunctionCallOutputItemParam.call_id` 对上。
+
+Responses 协议还建模了 `custom`、`local_shell`、`shell`、`apply_patch` 等调用形态。proxai 将它们保留为协议专属 item，而不是压成通用工具结构。
+
+## 服务端工具调用
+
+Responses 的服务端或托管工具通过 `Tool` enum 声明，通过 `OutputItem` 和流事件观察执行过程。
+
+工具定义入口：
+
+```rust
+enum Tool {
+    Function(FunctionTool),
+    FileSearch(FileSearchTool),
+    WebSearch(WebSearchTool),
+    Mcp(MCPTool),
+    CodeInterpreter(CodeInterpreterTool),
+    ImageGeneration(ImageGenTool),
+    Computer(ComputerTool),
+    ToolSearch(ToolSearchToolParam),
+    ...
+}
+```
+
+MCP 工具有单独结构：
+
+```rust
+struct MCPTool {
+    server_label: String,
+    allowed_tools: Option<MCPToolAllowedTools>,
+    authorization: Option<String>,
+    connector_id: Option<McpToolConnectorId>,
+    headers: Option<Value>,
+    require_approval: Option<MCPToolRequireApproval>,
+    server_url: Option<String>,
+    ...
+}
+```
+
+MCP 执行过程可能产生：
+
+- `MCPListTools`
+- `MCPApprovalRequest`
+- `MCPApprovalResponse`
+- `MCPToolCall`
+
+这些都是 Responses 协议原生 item。proxai 日志和 observer 只提取必要摘要，不记录原始请求体、授权头或私有提示词。
+
+## SSE 流式
+
+Responses 流事件由 `ResponseStreamEvent` 表示。每个事件都有 `sequence_number`，proxai 可以用它观察事件顺序。
+
+主要事件族：
+
+- 响应生命周期：`ResponseCreated`、`ResponseInProgress`、`ResponseCompleted`、`ResponseFailed`、`ResponseIncomplete`、`ResponseQueued`
+- item 生命周期：`ResponseOutputItemAdded`、`ResponseOutputItemDone`
+- 文本内容：`ResponseContentPartAdded`、`ResponseOutputTextDelta`、`ResponseOutputTextDone`、`ResponseContentPartDone`
+- 拒绝内容：`ResponseRefusalDelta`、`ResponseRefusalDone`
+- 函数参数：`ResponseFunctionCallArgumentsDelta`、`ResponseFunctionCallArgumentsDone`
+- MCP 参数：`ResponseMCPCallArgumentsDelta`、`ResponseMCPCallArgumentsDone`
+- 托管工具状态：web/file/code/image/MCP 的 in-progress/searching/completed/failed 事件
+- 错误事件：`ResponseError`
+
+函数工具参数在流里以字符串片段增量到达：
+
+```rust
+struct ResponseFunctionCallArgumentsDeltaEvent {
+    sequence_number: u64,
+    item_id: String,
+    output_index: u32,
+    delta: String,
+}
+
+struct ResponseFunctionCallArgumentsDoneEvent {
+    name: Option<String>,
+    sequence_number: u64,
+    item_id: String,
+    output_index: u32,
+    arguments: String,
+}
+```
+
+这类事件是 proxai 重点保护的行为：如果上游开始流工具参数但长时间没有 terminal/done 事件，Responses observer 可以按 `[tool_calls].timeout_secs` 产出诊断，避免客户端无限等待。实现集中在 `src/provider/openai/responses/stream_wrapper.rs` 和 `tool_arguments.rs` 附近。
+
+### output items、并行与串行
+
+Responses 的顶层输出单元是 `output[]`。与 Chat Completions 的 `choices[]` 不同，Responses 更扁平：message、reasoning、function_call、web_search_call、MCP call 等主要输出实体都是顶层 `OutputItem`。
+
+同一个“并行读取两个文件”的工具调用，在 Responses 中会表现为两个并列 output item：
+
+```text
+output[0] function_call fc_main  read_file(src/main.rs)
+output[1] function_call fc_cargo read_file(Cargo.toml)
+```
+
+流式事件里，这些 item 可以交错产出 delta：
+
+```text
+fc_main.arguments:  "{\"path" -> "\":\"src/main.rs\"}"
+fc_cargo.arguments: "{\"path" -> "\":\"Cargo.toml\"}"
+msg_1.content[0]:   "Done" -> "."
+```
+
+串行顺序由同一个 item/content key 下事件的到达顺序表示。常见 key 是：
+
+```text
+item_id / output_index
+item_id + content_index
+item_id + summary_index
+```
+
+proxai 的 Responses observer 优先用 item `id` 或事件中的 `item_id` 识别实体；没有稳定 id 时，用 `kind + output_index` 作为 fallback，避免 `output_item.added` 和 `output_item.done` 重复计数同一个匿名 item。
+
+Responses 不是完全没有嵌套，`message.content[]`、`reasoning.summary[]` 仍然是 item 内部的数组；但主要输出实体被提升到顶层 `output[]`，因此比 Chat Completions 的 `choice -> message -> tool_calls` 更 flat。
+
+关于 Responses 与其他协议在流式标识模型、事件粒度（event-oriented vs snapshot-bound）、以及跨协议翻译时如何分配 / 累积 `item_id`、`sequence_number`、`output` 数组等，详见 [协议转换](protocol-conversion) 的 `## Streaming identifier model and parallel assembly` 章节。
+
+## 完整交互示例
+
+完整的多轮 SSE 示例已经拆到独立页面，避免协议概览页过长。
+
+<FeatureGrid
+  items={[
+    { title: 'Responses 完整交互示例', icon: 'flow', href: '/zh/protocol/openai-responses/interaction-example', description: '用用户端 function tool、hosted web_search 和两轮 SSE 展示 Responses 的 item 化交互。' },
+  ]}
+/>
+
+## proxai 当前处理方式
+
+`openai_responses -> openai_responses` 是已接入路径：
+
+1. ingress 解析和归一化请求。
+2. request preparation 替换上游 model 等转发字段。
+3. provider 按 OpenAI-compatible headers 转发。
+4. 非流式响应做协议摘要和错误归一化。
+5. SSE 响应保留原始 bytes，同时 observer 解析事件用于日志、terminal 检测和工具参数超时诊断。

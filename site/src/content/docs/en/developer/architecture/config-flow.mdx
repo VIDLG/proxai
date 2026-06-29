@@ -1,0 +1,91 @@
+---
+title: Config Flow
+description: Maintainer guide to config loading, validation, defaults, providers, routes, and runtime state
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+export const configNodes = [
+  { id: 'flags', position: { x: 0, y: 0 }, data: { label: 'CLI flags\n--config / overrides' } },
+  { id: 'path', position: { x: 240, y: 0 }, data: { label: 'config path\napp directory' } },
+  { id: 'load', position: { x: 480, y: 0 }, data: { label: 'load config.toml\nparse TOML' } },
+  { id: 'validate', position: { x: 720, y: 0 }, data: { label: 'validate schema\nroutes/providers' } },
+  { id: 'state', position: { x: 960, y: 0 }, data: { label: 'AppState\nruntime config' } },
+];
+
+export const configEdges = [
+  { id: 'e1', source: 'flags', target: 'path', animated: true },
+  { id: 'e2', source: 'path', target: 'load', animated: true },
+  { id: 'e3', source: 'load', target: 'validate', animated: true },
+  { id: 'e4', source: 'validate', target: 'state', animated: true },
+];
+
+# Config Flow
+
+This page explains how runtime configuration moves from files and CLI overrides into validated runtime state.
+
+<ProxaiCallout type="note" title="Config is runtime truth">
+  `config.toml` is the local runtime source of truth. `config.example.toml` is the tracked example source. Documentation follows code and verified defaults, not aspirational configuration examples.
+</ProxaiCallout>
+
+## Flow
+
+<FlowDiagram nodes={configNodes} edges={configEdges} height={260} client:only="react" />
+
+## Stages
+
+<PipelineStrip
+  steps={[
+    { title: 'Resolve config path', description: 'Use --config when provided; otherwise use the app directory location.' },
+    { title: 'Generate local examples', description: 'First run can create local example files without overwriting the tracked repository example.' },
+    { title: 'Parse config.toml', description: 'Load TOML into the typed config schema.' },
+    { title: 'Validate invariants', description: 'Required providers, routes, protocols, and timeout values are checked before startup completes.' },
+    { title: 'Build runtime state', description: 'Validated config becomes AppState used by request handling.' },
+  ]}
+/>
+
+## Ownership
+
+<ReferenceTable
+  columns={['Concern', 'Owner']}
+  rows={[
+    ['Config schema', '`src/config.rs`'],
+    ['App directory resolution', '`src/paths.rs`'],
+    ['CLI flags and temporary overrides', '`src/cli/`'],
+    ['Provider selection from config', '`src/routing/` and pipeline routing step'],
+    ['Runtime request access', '`AppState` in `src/lib.rs`'],
+    ['User-facing examples', '`config.example.toml`, `using/configuration`, `reference/configuration`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Invariants
+
+<ReferenceTable
+  columns={['Invariant', 'Why']}
+  rows={[
+    ['Invalid config fails startup', 'A partially-valid proxy would be harder to diagnose than a startup error.'],
+    ['Provider protocol controls outbound wire behavior', 'Provider names are arbitrary labels and cannot imply protocol semantics.'],
+    ['Route `request_protocol` guards are strict', 'Endpoint-specific routing must not fall through silently.'],
+    ['`tool_calls.timeout_secs` must be positive', 'Tool-call stalls need a bounded semantic timeout.'],
+    ['Local private config is not committed', '`config.toml`, captures, and logs can contain secrets or prompts.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## When adding a setting
+
+1. Add the typed field in `src/config.rs`.
+2. Add a concise example/comment in `config.example.toml`.
+3. Wire the setting into `src/main.rs`, `src/lib.rs`, or the owning module.
+4. Update user docs if behavior is user-facing.
+5. Update reference docs and tests for defaults/validation.
+
+## Related docs
+
+- [Configuration](/en/using/configuration)
+- [Configuration Reference](/en/reference/configuration)
+- [Defaults and Limits](/en/reference/defaults-and-limits)
+- [Contributor Checklist](/en/developer/contributor-checklist)

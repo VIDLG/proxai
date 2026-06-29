@@ -1,0 +1,99 @@
+---
+title: 贡献者检查清单
+description: 修改 ProxAI 运行时配置、路由、协议转换、流式、错误、测试和文档时的维护者检查清单
+robots: noindex
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 贡献者检查清单
+
+修改 ProxAI 行为并准备提交 PR 前，使用这份清单检查。它刻意偏操作化：同步代码路径、测试和文档，让项目保持一致。
+
+<ProxaiCallout type="tip" title="小代理，显式变更">
+  优先做聚焦改动，保持 ProxAI 作为本地兼容代理的定位。除非有明确产品决策，不要把 routing 或 provider 支持扩展成泛 AI gateway。
+</ProxaiCallout>
+
+## 按改动类型
+
+<ContractCards
+  contracts={[
+    { id: 'C1', title: '运行时配置', body: '更新 `src/config.rs`、`config.example.toml`、`using/configuration` 文档、相关 `reference/*` 页面，以及 generated default 测试。' },
+    { id: 'C2', title: 'Provider 或 route 行为', body: '更新 route matching 行为、provider request preparation、provider transport/auth、行为契约和聚焦 route 测试。' },
+    { id: 'C3', title: '新增转换 pair', body: '补齐 request、non-streaming response、streaming conversion、route selection 支持、协议文档和 e2e 行为测试。' },
+    { id: 'C4', title: '流式行为', body: '检查 terminal events、SSE byte preservation、idle-read timeout、semantic tool-call timeout、Unicode chunk scanning 和 stream outcome logs。' },
+    { id: 'C5', title: '错误渲染', body: '更新 typed error projection、客户端错误 payload、保留 headers、SSE error rendering、文档和契约。' },
+    { id: 'C6', title: '文档架构', body: '保持 `en` 与 `zh` 页面成对，更新 sidebar，更新 index/hub 页面，并运行 `just site check`。' },
+  ]}
+/>
+
+## 协议转换边界
+
+<ReferenceTable
+  columns={['边界', '规则']}
+  rows={[
+    ['请求转换', '`(request_protocol, provider_protocol, normalized_payload) -> payload`'],
+    ['非流式响应转换', '`(request_protocol, provider_protocol, payload) -> payload`'],
+    ['流式响应转换', '`(request_protocol, provider_protocol, ByteStream) -> ByteStream`'],
+    ['不要传入', '不要把 HTTP `Response`、`Body`、route/model rewrite details 或 provider request structs 传进 `translation/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 文档边界
+
+<ReferenceTable
+  columns={['分区', '负责内容', '避免内容']}
+  rows={[
+    ['`using/`', '任务 walkthrough：如何运行、配置、路由、观测和排障 ProxAI', '长 reference 表或源码级 internals'],
+    ['`protocol/`', 'Wire behavior、request/response shapes、streaming expectations 和交互示例', '属于 `developer/` 的实现细节'],
+    ['`developer/`', '源码级架构、转换边界、streaming internals、error internals 和维护者清单', '面向用户的安装配置教程'],
+    ['`reference/`', '精确取值、默认值、phase names、protocol names、行为契约和术语', '教程流或实现叙事'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 契约地图
+
+<ReferenceTable
+  columns={['改动范围', '相关契约']}
+  rows={[
+    ['运行时配置与启动', '[C1–C4](/zh/reference/behavior-contracts#配置与启动)'],
+    ['监听分离与 MCP', '[C5–C6](/zh/reference/behavior-contracts#监听分离)'],
+    ['路由与转换', '[C7–C10](/zh/reference/behavior-contracts#路由与转换)'],
+    ['Provider 认证', '[C11–C12](/zh/reference/behavior-contracts#provider-认证)'],
+    ['响应重建', '[C13–C14](/zh/reference/behavior-contracts#响应重建)'],
+    ['错误', '[C15–C22](/zh/reference/behavior-contracts#错误)'],
+    ['隐私', '[C23–C25](/zh/reference/behavior-contracts#隐私)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 校验命令
+
+<ReferenceTable
+  columns={['改动范围', '建议校验']}
+  rows={[
+    ['仅文档', '`just site check`'],
+    ['仅格式', '`cargo fmt --check`'],
+    ['Rust 单元覆盖', '`just test_lib`'],
+    ['代理行为 / 路由 / 规范化', '`just test-e2e`'],
+    ['Rust warning-free 检查', '`pixi run cargo clippy --lib --tests -- -D warnings`'],
+    ['完整本地路径', '`just check`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 隐私检查
+
+- 不要提交 `config.toml`、API keys、private captures、logs 或包含 prompt 的本地 fixtures。
+- 脱敏 fixtures 应保持最小，不包含 private upstream URLs 或 credentials。
+- 日志不应包含 request bodies、Authorization headers、API keys 或 private prompts。
+
+## 相关文档
+
+- [架构](/zh/developer/architecture)
+- [协议转换](/zh/developer/protocol-conversion)
+- [流式内部实现](/zh/developer/streaming-internals)
+- [错误处理内部实现](/zh/developer/error-handling-internals)
+- [行为契约](/zh/reference/behavior-contracts)

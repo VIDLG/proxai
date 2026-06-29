@@ -1,7 +1,8 @@
 use serde_json::Value;
 
 use crate::error::{RequestError, Result};
-use crate::protocol::anthropic::messages::MessageCreateParamsBase;
+use crate::protocol::anthropic::messages::{MessageCreateParamsBase, ThinkingConfigParam};
+use tracing::warn;
 
 #[derive(Debug)]
 pub(crate) struct PreparedAnthropicMessagesRequest {
@@ -29,6 +30,14 @@ pub(crate) fn prepare_anthropic_messages_request(
         return Err(RequestError::Invalid(
             "Anthropic Messages requests must include a non-empty `model`.".to_string(),
         ));
+    }
+    if let Some(ThinkingConfigParam::Enabled(thinking)) = parsed.thinking.as_ref() {
+        warn!(
+            event = "anthropic_legacy_thinking_budget",
+            model = %parsed.model,
+            budget_tokens = thinking.budget_tokens,
+            "accepted Anthropic legacy thinking.type=enabled budget_tokens; prefer output_config.effort or thinking.type=adaptive"
+        );
     }
 
     Ok(PreparedAnthropicMessagesRequest {

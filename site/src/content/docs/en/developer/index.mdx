@@ -1,0 +1,72 @@
+---
+title: Developer Guide
+description: Maintainer-facing guide to ProxAI architecture, translation boundaries, streaming internals, and error handling
+robots: noindex
+---
+
+import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# Developer Guide
+
+This section is for maintainers changing ProxAI internals. It focuses on source-level boundaries, protocol conversion rules, streaming behavior, and error projection.
+
+<ProxaiCallout type="caution" title="Internal docs">
+  These pages describe implementation boundaries. User-facing behavior belongs in [Using ProxAI](/en/using), [Protocol Guide](/en/protocol), and [Reference](/en/reference).
+</ProxaiCallout>
+
+## Core boundaries
+
+<PipelineStageCards
+  stages={[
+    { name: 'ingress', codeName: false, modules: ['src/ingress/', 'src/protocol/'], responsibility: 'Detect inbound protocol, parse payloads, and normalize inbound request shape.' },
+    { name: 'routing', codeName: false, modules: ['src/config.rs', 'pipeline routing'], responsibility: 'Select provider by protocol-aware defaults or explicit model routes.' },
+    { name: 'translation', codeName: false, modules: ['src/translation/'], responsibility: 'Convert protocol payloads and streams across pure protocol boundaries.' },
+    { name: 'provider', codeName: false, modules: ['src/provider/*/request', 'src/provider/*/transport'], responsibility: 'Prepare provider request payloads, rewrite models, add provider auth, construct upstream URLs, and send.' },
+    { name: 'response reconstruction', codeName: false, modules: ['src/http_support', 'src/error/'], responsibility: 'Translate responses back to the inbound protocol and render compact client-facing errors.' },
+  ]}
+/>
+
+## Source tree map
+
+<ModuleGrid
+  modules={[
+    { name: 'src/ingress/', icon: 'route', description: 'Inbound HTTP path/protocol detection, request parsing, and normalization before routing.' },
+    { name: 'src/protocol/', icon: 'protocol', description: 'Wire data models for OpenAI Responses, OpenAI Chat Completions, Anthropic Messages, and SSE payloads.' },
+    { name: 'src/translation/', icon: 'flow', description: 'Pure protocol-to-protocol payload and stream conversion across explicit pairs.' },
+    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation, projection, provider model rewrite, and outbound payload serialization.' },
+    { name: 'src/provider/*/transport', icon: 'terminal', description: 'Upstream URL construction, provider authentication headers, and HTTP send behavior.' },
+    { name: 'src/provider/*/response', icon: 'timer', description: 'Provider response summaries, streaming observers, protocol state machines, and outcome diagnostics.' },
+    { name: 'src/http_support/', icon: 'architecture', description: 'HTTP carrier helpers for response header/body reconstruction and byte streams.' },
+    { name: 'src/error/', icon: 'alert', description: 'Typed internal errors and compact client-facing HTTP/SSE error rendering.' },
+    { name: 'src/observe/', icon: 'gauge', description: 'Structured logs, request hints, duration coloring, and capture-safe diagnostics.' },
+  ]}
+/>
+
+## Pages
+
+<FeatureGrid
+  items={[
+    { title: 'Architecture', href: '/en/developer/architecture', icon: 'architecture', description: 'Request lifecycle, module boundaries, pipeline phases, and how protocol translation fits into the proxy.' },
+    { title: 'Request Lifecycle', href: '/en/developer/architecture/request-lifecycle', icon: 'flow', description: 'Source-level path from inbound request through provider transport to outbound response.' },
+    { title: 'Protocol Conversion', href: '/en/developer/protocol-conversion', icon: 'flow', description: 'Pair-oriented conversion rules, wire-model alignment, SDK comparison, and streaming identifier models.' },
+    { title: 'Streaming Internals', href: '/en/developer/streaming-internals', icon: 'terminal', description: 'Carrier, BodyObserver, SSE scanner, and protocol state machines.' },
+    { title: 'Error Handling Internals', href: '/en/developer/error-handling-internals', icon: 'alert', description: 'Typed errors, ErrorResponseSpec, fields, payload, and HTTP/SSE rendering.' },
+    { title: 'Where to Change Code', href: '/en/developer/where-to-change-code', icon: 'route', description: 'Task map for source owners, tests, validation, and docs that move with implementation changes.' },
+    { title: 'Test Map', href: '/en/developer/test-map', icon: 'check', description: 'Validation guide for config, routing, translation, streaming, errors, capture, and docs changes.' },
+    { title: 'Contributor Checklist', href: '/en/developer/contributor-checklist', icon: 'check', description: 'Operational checklist for runtime settings, conversion pairs, streaming, errors, tests, and docs.' },
+    { title: 'Docs Maintenance', href: '/en/developer/docs-maintenance', icon: 'book', description: 'Rules for doc ownership, bilingual pages, MDX components, validation, and source-of-truth boundaries.' },
+  ]}
+/>
+
+## Change map
+
+<ModuleGrid
+  modules={[
+    { name: 'New runtime setting', icon: 'config', description: 'Update src/config.rs, config.example.toml, user docs, reference docs, and tests for generated defaults.' },
+    { name: 'Where to change code', icon: 'route', description: 'Use the task-oriented source map before touching routing, provider, translation, streaming, error, capture, or docs internals.' },
+    { name: 'Test map', icon: 'check', description: 'Choose the narrowest validation command first, then expand for user-visible proxy or streaming behavior.' },
+    { name: 'New conversion pair', icon: 'flow', description: 'Add request/response/streaming conversion, route support, behavior tests, and protocol docs.' },
+    { name: 'Streaming change', icon: 'timer', description: 'Check carrier semantics, SSE terminal events, tool-call stalls, Unicode chunk scanning, and e2e tests.' },
+    { name: 'Error rendering change', icon: 'alert', description: 'Update error projection, preserved headers, SSE error behavior, and behavior contracts.' },
+  ]}
+/>

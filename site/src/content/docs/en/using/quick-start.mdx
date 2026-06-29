@@ -1,0 +1,109 @@
+---
+title: Quick Start
+description: Run ProxAI locally, generate config, configure one provider, connect a client, and verify the proxy
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Quick Start
+
+This guide gets you from a fresh checkout or release binary to a running local proxy with one configured upstream provider.
+
+<PipelineStrip
+  steps={[
+    { title: 'Install or build ProxAI', description: 'Use a release binary or build the Rust project locally.' },
+    { title: 'Run once', description: 'Generate the app directory and local config files.' },
+    { title: 'Configure one provider', description: 'Set provider protocol, base_url, api_key, and default routing.' },
+    { title: 'Connect a client', description: 'Point the client base URL at the local proxy and send a small request.' },
+  ]}
+/>
+
+## Local endpoints
+
+<ReferenceTable
+  columns={['Endpoint', 'Default URL', 'Purpose']}
+  rows={[
+    ['Proxy', '`http://127.0.0.1:18080`', 'OpenAI-compatible and Anthropic-style request proxy'],
+    ['MCP', '`http://127.0.0.1:18081/mcp`', 'Local MCP control surface'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Some clients want the base URL without `/v1`; others want a full endpoint path. Use the client convention, but the proxy ultimately serves `/v1/responses`, `/v1/chat/completions`, and `/v1/messages`.
+
+## App directory
+
+Runtime files are generated under the user app directory:
+
+<ReferenceTable
+  columns={['Platform', 'Path']}
+  rows={[
+    ['Windows', '`%USERPROFILE%\\.proxai\\`'],
+    ['Linux/macOS', '`~/.proxai/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Important files and folders:
+
+- `config.toml` — local runtime configuration, intentionally git-ignored
+- `config.example.toml` — generated example/reference
+- `logs/` — runtime logs
+- `captures/` — optional per-phase captures
+
+<ProxaiCallout type="caution" title="Keep secrets local">
+  Do not commit `config.toml`, API keys, logs, captures, or private prompt fixtures. The tracked repository should only contain sanitized examples.
+</ProxaiCallout>
+
+## Minimal provider config
+
+Start with one provider and default routes for the inbound protocols you expect to use:
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+If your upstream speaks Anthropic Messages instead, set provider `protocol = "anthropic_messages"` and use the matching provider base URL/key. Supported protocol values are listed in [Protocols](/en/reference/protocols).
+
+## Connect a client
+
+Use the local proxy URL as your client base URL:
+
+```text
+http://127.0.0.1:18080
+```
+
+For clients that require an API key in the UI, you can usually enter a dummy key. ProxAI forwards the provider key configured in `config.toml` instead of the client's `Authorization` header for OpenAI-compatible providers.
+
+## Verify it works
+
+<ReferenceTable
+  columns={['Check', 'Expected result']}
+  rows={[
+    ['Proxy starts', 'No config load error; local listener binds to `127.0.0.1:18080` by default'],
+    ['Client request reaches ProxAI', 'Logs show a compact request summary without private body content'],
+    ['Provider is selected', 'Route/default provider resolves to the configured provider name'],
+    ['Upstream responds', 'Client receives a protocol-compatible response or a compact upstream error'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+If a check fails, go to [Troubleshooting](/en/using/troubleshooting) and capture the narrowest useful phase for one sanitized request.
+
+## Next steps
+
+<FeatureGrid
+  items={[
+    { title: 'Configuration', href: '/en/using/configuration', icon: 'config', description: 'Task-oriented config guide for providers, routes, captures, logging, and errors.' },
+    { title: 'Recipes', href: '/en/using/recipes', icon: 'zap', description: 'Common setup and debugging paths.' },
+    { title: 'Routing and Providers', href: '/en/using/routing-and-providers', icon: 'route', description: 'How providers are selected and how protocols map to wire behavior.' },
+    { title: 'Troubleshooting', href: '/en/using/troubleshooting', icon: 'alert', description: 'Symptom cards with useful capture phases and next checks.' },
+  ]}
+/>

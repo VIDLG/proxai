@@ -1,0 +1,71 @@
+---
+title: Docs Maintenance
+description: Maintainer rules for ProxAI documentation structure, bilingual pages, MDX components, and validation
+robots: noindex
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Docs Maintenance
+
+This page defines how ProxAI documentation should evolve. It is maintainer-facing and complements `AGENTS.md`.
+
+<ProxaiCallout type="caution" title="Docs follow code">
+  Documentation follows code and verified behavior; code does not follow aspirational docs. When docs and implementation disagree, inspect implementation, tests, and config defaults first, then update docs or code deliberately.
+</ProxaiCallout>
+
+## Ownership by section
+
+<ReferenceTable
+  columns={['Section', 'Owns', 'Should not own']}
+  rows={[
+    ['`using/`', 'Task walkthroughs for running, configuring, routing, observing, and troubleshooting.', 'Source-level implementation detail or exhaustive field lookup.'],
+    ['`protocol/`', 'Wire behavior, request paths, protocol concepts, streaming expectations, and interaction examples.', 'Internal Rust module ownership unless needed for context.'],
+    ['`developer/`', 'Implementation boundaries, module maps, conversion internals, streaming internals, and contributor workflow.', 'Casual user onboarding or SEO-facing product copy.'],
+    ['`reference/`', 'Stable lookup values, defaults, exact fields, behavior contracts, glossary, and tables.', 'Step-by-step tutorials or speculative future features.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Page rules
+
+<ContractCards
+  contracts={[
+    { id: 'D1', title: 'English and Chinese pages stay paired', body: 'Every `en/` page should have the same relative path under `zh/`. Structure should stay aligned even when wording is not literal translation.' },
+    { id: 'D2', title: 'Developer pages are noindex', body: 'Pages under `developer/` should include `robots: noindex` so casual search traffic lands on user-facing docs first.' },
+    { id: 'D3', title: 'Reference stays stable', body: 'Reference pages should prefer exact values, compact tables, and behavior contracts over narrative walkthroughs.' },
+    { id: 'D4', title: 'Use components for scan-heavy content', body: 'Prefer MDX components for cards, lookup tables, timelines, module maps, and protocol matrices instead of raw Markdown tables.' },
+    { id: 'D5', title: 'Avoid old slugs', body: 'Do not reintroduce legacy root pages. Current public docs live under `using/`, `protocol/`, `developer/`, and `reference/`.' },
+    { id: 'D6', title: 'Private data stays out', body: 'Never commit captures, logs, prompts, API keys, Authorization headers, or private upstream payloads.' },
+  ]}
+/>
+
+## When changing behavior
+
+<ReferenceTable
+  columns={['Change', 'Docs to check']}
+  rows={[
+    ['Runtime config field', '`using/configuration`, `reference/configuration`, `reference/defaults-and-limits`, `config.example.toml`, README files.'],
+    ['Protocol conversion behavior', '`protocol/`, `developer/protocol-conversion`, `reference/protocols`, `reference/status-and-stop-reasons`.'],
+    ['Streaming behavior', '`protocol/streaming-behavior`, `developer/streaming-internals`, `reference/behavior-contracts`.'],
+    ['Error response behavior', '`using/troubleshooting`, `reference/error-responses`, `developer/error-handling-internals`, behavior contracts.'],
+    ['Release/deployment docs', '`using/install-and-upgrade`, `site/README.md`, Netlify config if site publishing changes.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Validation
+
+Run the site check before publishing docs:
+
+```sh
+just site check
+```
+
+This builds the Starlight site and runs the docs checker for bilingual pairs, sidebar slugs, internal links, anchors, stale paths, table leftovers, developer `noindex`, hub coverage, and heading quality.
+
+## Related docs
+
+- [Contributor Checklist](/en/developer/contributor-checklist)
+- [Architecture](/en/developer/architecture)
+- [Behavior Contracts](/en/reference/behavior-contracts)

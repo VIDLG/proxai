@@ -30,7 +30,7 @@ pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResu
 pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
     crate::translation::streaming::translate_sse_stream(
         input,
-        streaming::ChatToAnthropicStreamTranslator::default(),
+        streaming::MessagesStreamTranslator::default(),
     )
 }
 

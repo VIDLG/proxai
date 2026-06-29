@@ -31,7 +31,7 @@ fn anthropic_hints_render_display_tokens_from_projection() {
         "max_tokens": 256,
         "stream": true,
         "service_tier": "standard_only",
-        "thinking": {"type": "enabled", "budget_tokens": 1024},
+        "thinking": {"type": "adaptive", "display": "summarized"},
         "tool_choice": {"type": "tool", "name": "lookup"},
         "tools": [{
             "type": "custom",
@@ -53,6 +53,6 @@ fn anthropic_hints_render_display_tokens_from_projection() {
 
     assert!(projection_hint.contains("tier:standard_only"));
     assert!(summary_hints.contains(&"tc:tool:lookup".to_string()));
-    assert!(summary_hints.contains(&"think:1024".to_string()));
+    assert!(summary_hints.contains(&"think:adaptive".to_string()));
     assert!(summary_hints.contains(&"tools[c:1(lookup)]".to_string()));
 }

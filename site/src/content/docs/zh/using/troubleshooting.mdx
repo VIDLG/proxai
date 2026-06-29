@@ -1,0 +1,174 @@
+---
+title: 常见排障
+description: 按症状排查 ProxAI 请求形态、路由、provider、流式、运行时文件和错误渲染问题
+---
+
+import { FeatureGrid, ProxaiCallout, TroubleshootingGrid } from '@components/ProxaiDocs.jsx';
+
+# 常见排障
+
+从客户端看到的症状开始，再检查最窄的有用层级。每张卡片都给出可能原因、第一批检查项、有用的 capture phase，以及深入解释所在文档。
+
+<ProxaiCallout type="tip" title="先 capture，再猜测">
+  大多数症状用一次脱敏 capture 最容易诊断。为单次请求开启最窄的有用 phase，调试完再关掉。见 [Capture Phases](/zh/reference/capture-phases)。
+</ProxaiCallout>
+
+## 请求形态与路由
+
+<TroubleshootingGrid
+  labels={{ causes: '可能原因', next: '下一步检查', layer: '层级', capture: '有用 capture', docs: '相关文档' }}
+  items={[
+    {
+      symptom: '客户端看到 404 或 unsupported path',
+      icon: 'alert',
+      layer: 'Ingress',
+      capture: 'inbound_request',
+      causes: ['客户端没有使用支持的 endpoint。', '客户端 base URL 多了 `/v1` 或缺少预期 route suffix。'],
+      next: ['使用 `/v1/responses`、`/v1/chat/completions` 或 `/v1/messages`。', '检查客户端需要的 base URL 是否包含 `/v1`。', '确认本地代理监听在配置端口。'],
+      docs: [{ label: '协议', href: '/zh/reference/protocols' }, { label: '默认值', href: '/zh/reference/defaults-and-limits' }],
+    },
+    {
+      symptom: '客户端看到 400 invalid_request_error',
+      icon: 'alert',
+      layer: 'Ingress validation',
+      capture: 'inbound_request',
+      causes: ['入站请求 body 不符合检测出的协议。', '客户端给当前 endpoint 发送了不支持的 shape。'],
+      next: ['检查请求 path。', 'Capture 一次脱敏 inbound request。', '对照协议指南检查 payload shape。'],
+      docs: [{ label: '协议指南', href: '/zh/protocol' }, { label: '错误响应', href: '/zh/reference/error-responses' }],
+    },
+    {
+      symptom: '选错了 provider',
+      icon: 'route',
+      layer: 'Routing',
+      capture: 'provider_request',
+      causes: ['route 顺序或模型 pattern 命中了非预期 route。', '`request_protocol` guard 省略或和预期不一致。', '请求落到了 default provider fallback。'],
+      next: ['检查 `[[routing.routes]]`。', '检查 `routing.default_provider_names`。', '对比实际入站协议和显式 `request_protocol` guard。'],
+      docs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }, { label: '路由说明', href: '/zh/using/routing-and-providers' }],
+    },
+    {
+      symptom: '协议不匹配配置错误',
+      icon: 'protocol',
+      layer: 'Routing / conversion',
+      capture: 'provider_request',
+      causes: ['Route 模型命中，但显式 `request_protocol` 与检测出的入站协议不同。', '选中的 provider protocol 需要未支持的转换 pair。'],
+      next: ['只有 endpoint-specific routing 才设置 `request_protocol`。', '检查支持的转换 pairs。', '检查选中 provider 的 protocol。'],
+      docs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }, { label: '协议', href: '/zh/reference/protocols' }],
+    },
+  ]}
+/>
+
+## Provider 与上游
+
+<TroubleshootingGrid
+  labels={{ causes: '可能原因', next: '下一步检查', layer: '层级', capture: '有用 capture', docs: '相关文档' }}
+  items={[
+    {
+      symptom: '客户端看到 401 / 403 upstream',
+      icon: 'key',
+      layer: 'Provider authentication',
+      capture: 'provider_request',
+      causes: ['Provider `api_key` 缺失、错误、过期或 scope 不对。', '上游拒绝了 ProxAI 发出的 provider auth header。'],
+      next: ['检查本地 `[providers.<name>].api_key`。', '确认 provider protocol 决定 auth header 形态。', '不要依赖客户端 UI 传真实 key，provider config 应该拥有认证。'],
+      docs: [{ label: '配置说明', href: '/zh/using/configuration' }, { label: '行为契约', href: '/zh/reference/behavior-contracts#provider-认证' }],
+    },
+    {
+      symptom: '客户端看到 429 upstream',
+      icon: 'timer',
+      layer: 'Upstream status',
+      capture: 'upstream_response',
+      causes: ['上游限流或配额耗尽。', '并发量超过 provider 能力。'],
+      next: ['检查保留的 `Retry-After` 和 rate-limit headers。', '检查 provider quota。', '如有必要调低 `[server].max_concurrent_requests`。'],
+      docs: [{ label: '默认值', href: '/zh/reference/defaults-and-limits' }, { label: '错误响应', href: '/zh/reference/error-responses' }],
+    },
+    {
+      symptom: '客户端看到 502 / 503 / 504 upstream_error',
+      icon: 'terminal',
+      layer: 'Upstream transport / status',
+      capture: 'upstream_response',
+      causes: ['Provider 返回非 2xx status。', '上游错误 body 为空、非 JSON 或 shape 未知。', '网络或 idle-read timeout。'],
+      next: ['检查 provider `base_url`。', 'Capture 一次 upstream response。', '确认上游 endpoint 可达且协议兼容。'],
+      docs: [{ label: '配置说明', href: '/zh/using/configuration' }, { label: '错误响应', href: '/zh/reference/error-responses' }],
+    },
+  ]}
+/>
+
+## 流式
+
+<TroubleshootingGrid
+  labels={{ causes: '可能原因', next: '下一步检查', layer: '层级', capture: '有用 capture', docs: '相关文档' }}
+  items={[
+    {
+      symptom: '流开始但一直不完成',
+      icon: 'timer',
+      layer: 'Streaming semantics',
+      capture: 'upstream_response',
+      causes: ['Provider 没有发送协议 terminal event。', '上游连接仍打开，但语义上已经卡住。'],
+      next: ['对照预期 terminal events。', '查看 stream outcome logs。', 'Capture upstream SSE tail。'],
+      docs: [{ label: '流式行为', href: '/zh/protocol/streaming-behavior' }, { label: '流式内部', href: '/zh/developer/streaming-internals' }],
+    },
+    {
+      symptom: 'Tool-call arguments 卡住',
+      icon: 'timer',
+      layer: 'Streaming tool-call semantics',
+      capture: 'upstream_response',
+      causes: ['上游开始发送 tool arguments，但没有发送匹配的 done event。', '语义 tool-call timeout 对当前客户端体验来说过高。'],
+      next: ['调整 `[tool_calls].timeout_secs`。', '检查 provider event sequence。', 'Capture upstream SSE tail。'],
+      docs: [{ label: '流式行为', href: '/zh/protocol/streaming-behavior' }, { label: '默认值', href: '/zh/reference/defaults-and-limits' }],
+    },
+    {
+      symptom: '客户端收到 malformed streaming event',
+      icon: 'alert',
+      layer: 'Translation / response reconstruction',
+      capture: 'outbound_response',
+      causes: ['Provider stream shape 与选中的 provider protocol 不一致。', 'Streaming translation 遇到了未支持的语义事件。'],
+      next: ['检查入站协议与 provider protocol。', '对照支持的 conversion pairs。', 'Capture 一次脱敏 outbound response bytes。'],
+      docs: [{ label: '协议', href: '/zh/reference/protocols' }, { label: '协议转换', href: '/zh/developer/protocol-conversion' }],
+    },
+  ]}
+/>
+
+## 配置、文件与错误渲染
+
+<TroubleshootingGrid
+  labels={{ causes: '可能原因', next: '下一步检查', layer: '层级', capture: '有用 capture', docs: '相关文档' }}
+  items={[
+    {
+      symptom: 'ProxAI 启动失败',
+      icon: 'config',
+      layer: 'Configuration loading',
+      capture: 'none',
+      causes: ['`config.toml` 缺少必需 section。', 'Provider 条目缺少必填字段。', 'Route 引用了未知 provider。'],
+      next: ['对照生成的 `config.example.toml`。', '检查本地 app 目录。', '检查 route/provider 名称是否拼错。'],
+      docs: [{ label: '配置说明', href: '/zh/using/configuration' }, { label: '环境与文件', href: '/zh/reference/environment-and-files' }],
+    },
+    {
+      symptom: 'Captures 没有写入',
+      icon: 'file',
+      layer: 'Local filesystem / capture config',
+      capture: 'none',
+      causes: ['对应 phase 开关没有打开。', '打开的 phase 与你检查的 phase 不同。', 'app 目录不是你以为的那个。'],
+      next: ['运行 `proxai capture status`。', '检查 `[capture]` switches。', '确认 app 目录位置。'],
+      docs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }, { label: '环境与文件', href: '/zh/reference/environment-and-files' }],
+    },
+    {
+      symptom: '客户端期望 JSON 但收到 text',
+      icon: 'alert',
+      layer: 'Error rendering',
+      capture: 'outbound_response',
+      causes: ['`[error_responses].format` 设置为 `text`，这是可读性默认值。', '客户端期望 OpenAI 风格 JSON error payload。'],
+      next: ['如果客户端要求 JSON，设置 `[error_responses].format = "json"`。', '检查 outbound response content type。'],
+      docs: [{ label: '错误响应', href: '/zh/reference/error-responses' }, { label: '配置说明', href: '/zh/using/configuration' }],
+    },
+  ]}
+/>
+
+## 相关文档
+
+<FeatureGrid
+  items={[
+    { title: '配置说明', href: '/zh/using/configuration', icon: 'config', description: 'server、routing、providers、capture、logging、errors 的运行时任务。' },
+    { title: '路由匹配', href: '/zh/reference/route-matching', icon: 'route', description: '精确 route 结果和 protocol guard 行为。' },
+    { title: 'Capture Phases', href: '/zh/reference/capture-phases', icon: 'security', description: 'Phase 边界和隐私风险。' },
+    { title: '流式行为', href: '/zh/protocol/streaming-behavior', icon: 'rocket', description: '流式响应的预期行为与 terminal event。' },
+  ]}
+/>

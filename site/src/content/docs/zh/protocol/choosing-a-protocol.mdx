@@ -1,0 +1,95 @@
+---
+title: 如何选择协议
+description: 如何为 ProxAI 路由选择入站协议和 provider 协议
+---
+
+import { ConversionPath, FeatureGrid, ProxaiCallout, ProtocolConversionMatrix, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 如何选择协议
+
+ProxAI 中有两个协议决策：
+
+- **入站协议** — 本地客户端发送的协议，由请求路径检测。
+- **Provider 协议** — ProxAI 发给上游的协议，由选中的 provider 配置决定。
+
+两者相同时是透传；两者不同时，ProxAI 会在已支持的 pair 上执行转换。
+
+## 决策路径
+
+<ConversionPath
+  from={{ title: '客户端请求路径', description: '/v1/responses、/v1/chat/completions 或 /v1/messages' }}
+  via={[
+    { title: '路由选择', description: '默认 provider，或按 request_protocol + model 的显式路由' },
+    { title: 'Provider 协议', description: 'provider.protocol 控制出站线协议行为' },
+  ]}
+  to={{ title: '上游请求', description: '按选中的 provider 协议序列化' }}
+/>
+
+## 先从客户端开始
+
+<ReferenceTable
+  columns={['客户端使用', '入站协议', '典型原因']}
+  rows={[
+    ['OpenAI Responses', '`openai_responses`', '需要 itemized output、现代 Responses 语义或 hosted-tool 风格 payload。'],
+    ['OpenAI Chat Completions', '`openai_chat_completions`', '旧 SDK、期望 `choices[]` 的客户端，或仅支持 Chat Completions 的集成。'],
+    ['Anthropic Messages', '`anthropic_messages`', '客户端本身已经发 Anthropic 风格 message payload。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 再选择 provider 协议
+
+<ReferenceTable
+  columns={['Provider 期望', '设置 provider.protocol', '说明']}
+  rows={[
+    ['OpenAI Responses', '`openai_responses`', '适合 OpenAI-compatible Responses 上游。'],
+    ['OpenAI Chat Completions', '`openai_chat_completions`', '适合只支持 Chat Completions 的上游。'],
+    ['Anthropic Messages', '`anthropic_messages`', '适合 Anthropic-compatible `/v1/messages` 上游。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Provider 名称只是用户标签，不表示协议语义。真正有语义的是 provider 的 `protocol` 字段。
+
+## 支持的 pair
+
+<ProtocolConversionMatrix labels={{ inbound: '入站 \\ Provider', responses: 'Responses', chat: 'Chat', anthropic: 'Anthropic', pass: '透传', supported: '支持', unsupported: '不支持' }} />
+
+不支持的 pair 会显式失败。如果路由已经匹配但协议 pair 未实现，ProxAI 不应该静默落回另一个 provider。
+
+## 常见选择
+
+<FeatureGrid
+  items={[
+    { title: '同协议透传', href: '/zh/reference/protocols', icon: 'check', description: '当客户端和 provider 已经使用同一协议时使用。' },
+    { title: 'Responses 客户端到 Anthropic provider', href: '/zh/using/recipes#将-openai-responses-路由到-anthropic-provider', icon: 'flow', description: '本地 OpenAI-compatible 客户端需要访问 Anthropic Messages 上游时使用。' },
+    { title: 'Chat 客户端到 Anthropic provider', href: '/zh/using/recipes#将某个模型路由到-anthropic-provider', icon: 'route', description: '只有某个模型需要跨协议时使用显式路由。' },
+    { title: 'Anthropic 客户端到 Responses provider', href: '/zh/reference/protocols', icon: 'protocol', description: '仅当已实现 pair 能保留客户端期望行为时使用。' },
+  ]}
+/>
+
+## 信息损失问题
+
+选择跨协议 pair 前，先问：
+
+<ReferenceTable
+  columns={['问题', '为什么重要']}
+  rows={[
+    ['客户端是否依赖精确的 output item id？', 'Responses 有 itemized output 和稳定 item 身份，其他协议未必以同样方式表达。'],
+    ['Provider 是否增量输出工具调用？', '流式工具调用 chunk 有协议特定的标识符和终止事件。'],
+    ['客户端是否检查 stop 或 finish reason？', '各协议的停止原因相关但不完全相同。见状态参考。'],
+    ['客户端是否需要 provider 特有字段？', 'Provider 特有字段不应穿透通用转换边界。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="tip" title="实验性配置优先用显式路由">
+  如果只有某个模型需要跨协议 provider，使用带 `request_protocol` 的显式路由。这样 endpoint-specific 行为可见，也能避免默认路由带来惊喜。
+</ProxaiCallout>
+
+## 相关文档
+
+- [路由与 Provider](/zh/using/routing-and-providers)
+- [协议参考](/zh/reference/protocols)
+- [路由匹配](/zh/reference/route-matching)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)

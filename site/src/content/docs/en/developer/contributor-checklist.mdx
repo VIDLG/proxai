@@ -1,0 +1,99 @@
+---
+title: Contributor Checklist
+description: Maintainer checklist for changing ProxAI runtime settings, routing, protocol conversion, streaming, errors, tests, and docs
+robots: noindex
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Contributor Checklist
+
+Use this checklist before opening a pull request that changes ProxAI behavior. It is intentionally operational: update the code path, tests, and docs that keep the project coherent.
+
+<ProxaiCallout type="tip" title="Small proxy, explicit changes">
+  Prefer focused changes that preserve ProxAI's role as a local compatibility proxy. Do not turn routing or provider support into a generic AI gateway without an explicit product decision.
+</ProxaiCallout>
+
+## By change type
+
+<ContractCards
+  contracts={[
+    { id: 'C1', title: 'Runtime setting', body: 'Update `src/config.rs`, `config.example.toml`, docs in `using/configuration`, relevant `reference/*` pages, and generated default tests.' },
+    { id: 'C2', title: 'Provider or route behavior', body: 'Update route matching behavior, provider request preparation, provider transport/auth, behavior contracts, and focused route tests.' },
+    { id: 'C3', title: 'New conversion pair', body: 'Add request, non-streaming response, streaming conversion, route selection support, protocol docs, and e2e behavior tests.' },
+    { id: 'C4', title: 'Streaming behavior', body: 'Check terminal events, SSE byte preservation, idle-read timeout, semantic tool-call timeout, Unicode chunk scanning, and stream outcome logs.' },
+    { id: 'C5', title: 'Error rendering', body: 'Update typed error projection, client-facing error payload, preserved headers, SSE error rendering, docs, and contracts.' },
+    { id: 'C6', title: 'Documentation architecture', body: 'Keep pages paired under `en` and `zh`, update sidebar, update index/hub pages, and run `just site check`.' },
+  ]}
+/>
+
+## Protocol conversion boundary
+
+<ReferenceTable
+  columns={['Boundary', 'Rule']}
+  rows={[
+    ['Request translation', '`(request_protocol, provider_protocol, normalized_payload) -> payload`'],
+    ['Non-streaming response translation', '`(request_protocol, provider_protocol, payload) -> payload`'],
+    ['Streaming response translation', '`(request_protocol, provider_protocol, ByteStream) -> ByteStream`'],
+    ['Do not pass through', 'HTTP `Response`, `Body`, route/model rewrite details, or provider request structs into `translation/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Documentation boundaries
+
+<ReferenceTable
+  columns={['Section', 'Owns', 'Avoid']}
+  rows={[
+    ['`using/`', 'Task walkthroughs: how to run, configure, route, observe, and troubleshoot ProxAI', 'Long reference tables or source-level internals'],
+    ['`protocol/`', 'Wire behavior, request/response shapes, streaming expectations, and interaction examples', 'Implementation details that belong in `developer/`'],
+    ['`developer/`', 'Source-level architecture, conversion boundaries, streaming internals, error internals, and maintainer checklists', 'User-facing setup instructions'],
+    ['`reference/`', 'Exact values, defaults, phase names, protocol names, behavior contracts, and glossary terms', 'Tutorial flow or implementation narrative'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Contract map
+
+<ReferenceTable
+  columns={['Change area', 'Relevant contracts']}
+  rows={[
+    ['Runtime settings and startup', '[C1–C4](/en/reference/behavior-contracts#configuration-and-startup)'],
+    ['Listener separation and MCP', '[C5–C6](/en/reference/behavior-contracts#listener-separation)'],
+    ['Routing and conversion', '[C7–C10](/en/reference/behavior-contracts#routing-and-conversion)'],
+    ['Provider authentication', '[C11–C12](/en/reference/behavior-contracts#provider-authentication)'],
+    ['Response reconstruction', '[C13–C14](/en/reference/behavior-contracts#response-reconstruction)'],
+    ['Errors', '[C15–C22](/en/reference/behavior-contracts#errors)'],
+    ['Privacy', '[C23–C25](/en/reference/behavior-contracts#privacy)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Validation commands
+
+<ReferenceTable
+  columns={['Change area', 'Suggested validation']}
+  rows={[
+    ['Docs only', '`just site check`'],
+    ['Formatting only', '`cargo fmt --check`'],
+    ['Rust unit coverage', '`just test_lib`'],
+    ['Proxy behavior / routing / normalization', '`just test-e2e`'],
+    ['Warning-free Rust checks', '`pixi run cargo clippy --lib --tests -- -D warnings`'],
+    ['Full local path', '`just check`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Privacy checklist
+
+- Do not commit `config.toml`, API keys, private captures, logs, or prompt-bearing local fixtures.
+- Sanitized fixtures should be minimal and should not contain private upstream URLs or credentials.
+- Logs should not include request bodies, Authorization headers, API keys, or private prompts.
+
+## Related docs
+
+- [Architecture](/en/developer/architecture)
+- [Protocol Conversion](/en/developer/protocol-conversion)
+- [Streaming Internals](/en/developer/streaming-internals)
+- [Error Handling Internals](/en/developer/error-handling-internals)
+- [Behavior Contracts](/en/reference/behavior-contracts)

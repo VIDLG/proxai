@@ -12,7 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::protocol::anthropic::messages::{
     ContentBlock, DirectCaller, Message as AnthropicMessage, MessageCreateParamsBase, MessageType,
-    Role, StopReason, TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock, Usage,
+    RedactedThinkingBlock, Role, StopReason, TextBlock, ThinkingBlock, ToolCaller, ToolUseBlock,
+    Usage,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -88,7 +89,10 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
     if let Some(metadata) = translate_metadata(metadata) {
         request.insert("metadata".to_string(), metadata);
     }
-    if let Some(thinking) = translate_reasoning(reasoning) {
+    if let Some(output_config) = translate_output_config(reasoning) {
+        request.insert("output_config".to_string(), output_config);
+    }
+    if let Some(thinking) = translate_thinking(reasoning) {
         request.insert("thinking".to_string(), thinking);
     }
     if let Some(tools) = translate_tools(tools) {
@@ -103,7 +107,7 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
 }
 
 pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
-    translate_sse_stream(input, OpenaiToAnthropicStreamTranslator::default())
+    translate_sse_stream(input, MessagesStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
@@ -113,7 +117,7 @@ pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResu
 }
 
 #[derive(Debug, Default)]
-struct OpenaiToAnthropicStreamTranslator {
+struct MessagesStreamTranslator {
     message_started: bool,
     message_id: Option<String>,
     model: Option<String>,
@@ -150,6 +154,16 @@ enum OpenaiStreamEvent {
     },
     #[serde(rename = "response.output_text.done")]
     OutputTextDone { output_index: Option<u32> },
+    #[serde(rename = "response.reasoning_summary_part.added")]
+    ReasoningSummaryPartAdded {
+        output_index: u32,
+        part: OpenaiReasoningSummaryPart,
+    },
+    #[serde(rename = "response.reasoning_summary_part.done")]
+    ReasoningSummaryPartDone {
+        output_index: u32,
+        part: OpenaiReasoningSummaryPart,
+    },
     #[serde(rename = "response.reasoning_summary_text.delta")]
     ReasoningSummaryTextDelta {
         output_index: Option<u32>,
@@ -157,6 +171,13 @@ enum OpenaiStreamEvent {
     },
     #[serde(rename = "response.reasoning_summary_text.done")]
     ReasoningSummaryTextDone { output_index: Option<u32> },
+    #[serde(rename = "response.reasoning_text.delta")]
+    ReasoningTextDelta {
+        output_index: Option<u32>,
+        delta: String,
+    },
+    #[serde(rename = "response.reasoning_text.done")]
+    ReasoningTextDone { output_index: Option<u32> },
     #[serde(rename = "response.function_call_arguments.delta")]
     FunctionCallArgumentsDelta {
         output_index: Option<u32>,
@@ -207,7 +228,7 @@ enum OpenaiStreamOutputItem {
     Reasoning { id: Option<String> },
 }
 
-impl StreamingEventTranslator for OpenaiToAnthropicStreamTranslator {
+impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)?;
         let mut chunks = Vec::new();
@@ -307,7 +328,19 @@ impl StreamingEventTranslator for OpenaiToAnthropicStreamTranslator {
             OpenaiStreamEvent::OutputTextDone { output_index } => {
                 self.stop_block(output_index.unwrap_or(0), &mut chunks)?;
             }
+            OpenaiStreamEvent::ReasoningSummaryPartAdded { output_index, part } => {
+                let _ = part;
+                self.ensure_thinking_block(output_index, &mut chunks)?;
+            }
+            OpenaiStreamEvent::ReasoningSummaryPartDone { output_index, part } => {
+                let _ = part;
+                self.stop_block(output_index, &mut chunks)?;
+            }
             OpenaiStreamEvent::ReasoningSummaryTextDelta {
+                output_index,
+                delta,
+            }
+            | OpenaiStreamEvent::ReasoningTextDelta {
                 output_index,
                 delta,
             } => {
@@ -322,7 +355,8 @@ impl StreamingEventTranslator for OpenaiToAnthropicStreamTranslator {
                     }),
                 )?);
             }
-            OpenaiStreamEvent::ReasoningSummaryTextDone { output_index } => {
+            OpenaiStreamEvent::ReasoningSummaryTextDone { output_index }
+            | OpenaiStreamEvent::ReasoningTextDone { output_index } => {
                 self.stop_block(output_index.unwrap_or(0), &mut chunks)?;
             }
             OpenaiStreamEvent::FunctionCallArgumentsDelta {
@@ -377,7 +411,7 @@ impl StreamingEventTranslator for OpenaiToAnthropicStreamTranslator {
     }
 }
 
-impl OpenaiToAnthropicStreamTranslator {
+impl MessagesStreamTranslator {
     fn record_response(&mut self, response: OpenaiStreamResponse) {
         if let Some(id) = response.id {
             self.message_id = Some(id);
@@ -596,6 +630,10 @@ enum OpenaiOutputItem {
     Reasoning {
         #[serde(default)]
         summary: Vec<OpenaiReasoningSummaryPart>,
+        #[serde(default)]
+        content: Vec<OpenaiReasoningContent>,
+        #[serde(default)]
+        encrypted_content: Option<String>,
     },
     #[serde(other)]
     Unknown,
@@ -608,6 +646,15 @@ enum OpenaiMessageContent {
     OutputText { text: String },
     #[serde(rename = "refusal")]
     Refusal { refusal: String },
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum OpenaiReasoningContent {
+    #[serde(rename = "reasoning_text")]
+    ReasoningText { text: String },
     #[serde(other)]
     Unknown,
 }
@@ -705,18 +752,39 @@ fn translate_response_output_item(item: &OpenaiOutputItem) -> Vec<ContentBlock> 
                 .unwrap_or_else(|| Value::String(String::new())),
             name: name.clone(),
         })],
-        OpenaiOutputItem::Reasoning { summary } => summary
-            .iter()
-            .filter_map(|part| match part {
-                OpenaiReasoningSummaryPart::SummaryText { text } => {
-                    Some(ContentBlock::Thinking(ThinkingBlock {
-                        thinking: text.clone(),
-                        signature: String::new(),
-                    }))
-                }
-                OpenaiReasoningSummaryPart::Unknown => None,
-            })
-            .collect(),
+        OpenaiOutputItem::Reasoning {
+            summary,
+            content,
+            encrypted_content,
+        } => {
+            let mut blocks: Vec<ContentBlock> = summary
+                .iter()
+                .filter_map(|part| match part {
+                    OpenaiReasoningSummaryPart::SummaryText { text } => {
+                        Some(ContentBlock::Thinking(ThinkingBlock {
+                            thinking: text.clone(),
+                            signature: String::new(),
+                        }))
+                    }
+                    OpenaiReasoningSummaryPart::Unknown => None,
+                })
+                .chain(content.iter().filter_map(|part| match part {
+                    OpenaiReasoningContent::ReasoningText { text } => {
+                        Some(ContentBlock::Thinking(ThinkingBlock {
+                            thinking: text.clone(),
+                            signature: String::new(),
+                        }))
+                    }
+                    OpenaiReasoningContent::Unknown => None,
+                }))
+                .collect();
+            if let Some(data) = encrypted_content {
+                blocks.push(ContentBlock::RedactedThinking(RedactedThinkingBlock {
+                    data: data.clone(),
+                }));
+            }
+            blocks
+        }
         OpenaiOutputItem::Unknown => vec![ContentBlock::Text(TextBlock {
             citations: None,
             text: "[OpenAI Responses output item omitted during Anthropic translation]".to_string(),
@@ -742,9 +810,9 @@ fn anthropic_stop_reason(status: Option<OpenaiResponseStatus>) -> Option<StopRea
     match status {
         Some(OpenaiResponseStatus::Completed) => Some(StopReason::EndTurn),
         Some(OpenaiResponseStatus::Incomplete) => Some(StopReason::MaxTokens),
-        Some(OpenaiResponseStatus::Failed) | Some(OpenaiResponseStatus::Cancelled) => {
-            Some(StopReason::Refusal)
-        }
+        Some(OpenaiResponseStatus::Failed) => Some(StopReason::Refusal),
+        // Cancelled / Queued are client-side lifecycle states with no
+        // Anthropic equivalent; emit no stop reason.
         _ => None,
     }
 }
@@ -1016,16 +1084,47 @@ fn translate_tool_choice(
     Some(object)
 }
 
-fn translate_reasoning(reasoning: Option<&Value>) -> Option<Value> {
+fn translate_output_config(reasoning: Option<&Value>) -> Option<Value> {
     let effort = reasoning?.get("effort").and_then(Value::as_str)?;
     match effort {
-        "none" | "minimal" => Some(json!({"type": "disabled"})),
-        "low" => Some(json!({"type": "enabled", "budget_tokens": 1024})),
-        "medium" => Some(json!({"type": "enabled", "budget_tokens": 4096})),
-        "high" => Some(json!({"type": "enabled", "budget_tokens": 8192})),
-        "xhigh" => Some(json!({"type": "enabled", "budget_tokens": 16384})),
+        "low" | "medium" | "high" | "xhigh" => Some(json!({"effort": effort})),
+        // Anthropic output_config has no `none` / `minimal` effort. Those are
+        // represented through the Anthropic-specific `thinking` field instead.
+        "none" | "minimal" => None,
         _ => None,
     }
+}
+
+fn translate_thinking(reasoning: Option<&Value>) -> Option<Value> {
+    let reasoning = reasoning?;
+    let summary =
+        reasoning
+            .get("summary")
+            .and_then(Value::as_str)
+            .and_then(|summary| match summary {
+                "auto" | "concise" | "detailed" => Some("summarized"),
+                _ => None,
+            });
+
+    let mut thinking = match reasoning.get("effort").and_then(Value::as_str) {
+        Some("none" | "minimal") => json!({"type": "disabled"}),
+        // `effort` is translated through `output_config`; if a Responses
+        // summary is also requested, use Anthropic's display-only adaptive
+        // thinking mode rather than inventing a token budget.
+        Some("low" | "medium" | "high" | "xhigh") | None if summary.is_some() => {
+            json!({"type": "adaptive"})
+        }
+        _ => return None,
+    };
+
+    if let Some(summary) = summary
+        && let Some(object) = thinking.as_object_mut()
+        && object.get("type").and_then(Value::as_str) != Some("disabled")
+    {
+        object.insert("display".to_string(), Value::String(summary.to_string()));
+    }
+
+    Some(thinking)
 }
 
 fn translate_metadata(metadata: Option<&Value>) -> Option<Value> {

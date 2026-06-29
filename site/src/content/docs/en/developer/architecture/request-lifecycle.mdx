@@ -1,0 +1,76 @@
+---
+title: Request Lifecycle
+description: Source-level request lifecycle from inbound HTTP request to outbound response
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { PipelineStageCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+export const lifecycleNodes = [
+  { id: 'client', position: { x: 0, y: 80 }, data: { label: 'Client request' } },
+  { id: 'ingress', position: { x: 220, y: 0 }, data: { label: 'ingress\nparse + normalize' } },
+  { id: 'routing', position: { x: 440, y: 0 }, data: { label: 'routing\nprovider selection' } },
+  { id: 'providerRequest', position: { x: 660, y: 0 }, data: { label: 'provider_request\ntranslate + serialize' } },
+  { id: 'transport', position: { x: 880, y: 80 }, data: { label: 'transport\nsend upstream' } },
+  { id: 'upstream', position: { x: 660, y: 180 }, data: { label: 'upstream_response\nbody or stream' } },
+  { id: 'outbound', position: { x: 440, y: 180 }, data: { label: 'outbound_response\ntranslate back' } },
+  { id: 'http', position: { x: 220, y: 180 }, data: { label: 'http_support\nrebuild HTTP' } },
+  { id: 'response', position: { x: 0, y: 180 }, data: { label: 'Client response' } },
+];
+
+export const lifecycleEdges = [
+  { id: 'e1', source: 'client', target: 'ingress', animated: true },
+  { id: 'e2', source: 'ingress', target: 'routing', animated: true },
+  { id: 'e3', source: 'routing', target: 'providerRequest', animated: true },
+  { id: 'e4', source: 'providerRequest', target: 'transport', animated: true },
+  { id: 'e5', source: 'transport', target: 'upstream', animated: true },
+  { id: 'e6', source: 'upstream', target: 'outbound', animated: true },
+  { id: 'e7', source: 'outbound', target: 'http', animated: true },
+  { id: 'e8', source: 'http', target: 'response', animated: true },
+];
+
+# Request Lifecycle
+
+This page describes the source-level request path. User-facing behavior lives in [Using ProxAI](/en/using) and protocol behavior lives in [Protocol Guide](/en/protocol).
+
+<ProxaiCallout type="note" title="Follow the data phase">
+  The easiest way to reason about the code is to track which phase owns the data: `inbound_request`, `provider_request`, `upstream_response`, or `outbound_response`.
+</ProxaiCallout>
+
+## Flow
+
+<FlowDiagram nodes={lifecycleNodes} edges={lifecycleEdges} height={380} client:only="react" />
+
+## Stages
+
+<PipelineStageCards
+  stages={[
+    { name: 'inbound_request', modules: ['src/ingress/', 'src/pipeline/inbound.rs'], responsibility: 'Detect request path, read body, parse protocol payload, normalize inbound request metadata.' },
+    { name: 'routing', codeName: false, modules: ['src/routing/', 'src/config.rs'], responsibility: 'Resolve explicit route or protocol-aware default provider; enforce request_protocol guards.' },
+    { name: 'provider_request', modules: ['src/provider/*/request', 'src/translation/'], responsibility: 'Translate payload if protocols differ, rewrite provider model, serialize the upstream request.' },
+    { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: 'Construct upstream URL, attach provider-owned auth headers, and send via HTTP.' },
+    { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: 'Read status, headers, non-streaming body, or streaming byte carrier.' },
+    { name: 'outbound_response', modules: ['src/translation/', 'src/http_support/'], responsibility: 'Translate provider response back to the inbound protocol and rebuild the client HTTP response.' },
+  ]}
+/>
+
+## Important invariants
+
+<ReferenceTable
+  columns={['Invariant', 'Reason']}
+  rows={[
+    ['Translation does not own HTTP `Response`', 'The translation layer should stay pure at the carrier boundary.'],
+    ['Provider auth comes from provider config', 'Client-supplied Authorization does not control upstream provider auth.'],
+    ['Route match errors are explicit', 'A protocol guard mismatch should not fall through to a different provider.'],
+    ['Streaming completion is semantic', 'Completion requires terminal protocol events, not just socket closure.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Related docs
+
+- [Architecture](/en/developer/architecture)
+- [Protocol Conversion](/en/developer/protocol-conversion)
+- [Capture Phases](/en/reference/capture-phases)
+- [Behavior Contracts](/en/reference/behavior-contracts)

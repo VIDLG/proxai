@@ -1,17 +1,103 @@
 ---
 title: Documentation
-description: ProxAI English documentation
+description: ProxAI documentation hub for users, protocol integrators, maintainers, and reference lookup
 ---
 
-import { FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { DocSectionMap, FeatureGrid, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+
+export const requestFlowNodes = [
+  { id: 'client', position: { x: 0, y: 80 }, data: { label: 'Client' } },
+  { id: 'ingress', position: { x: 180, y: 0 }, data: { label: 'Ingress\nnormalize' } },
+  { id: 'route', position: { x: 360, y: 0 }, data: { label: 'Route\nprovider' } },
+  { id: 'translate', position: { x: 540, y: 0 }, data: { label: 'Translate\nif needed' } },
+  { id: 'provider', position: { x: 720, y: 80 }, data: { label: 'Provider' } },
+  { id: 'back', position: { x: 360, y: 180 }, data: { label: 'Translate back\nclient protocol' } },
+  { id: 'response', position: { x: 0, y: 180 }, data: { label: 'Response' } },
+];
+
+export const requestFlowEdges = [
+  { id: 'e1', source: 'client', target: 'ingress', animated: true },
+  { id: 'e2', source: 'ingress', target: 'route', animated: true },
+  { id: 'e3', source: 'route', target: 'translate', animated: true },
+  { id: 'e4', source: 'translate', target: 'provider', animated: true },
+  { id: 'e5', source: 'provider', target: 'back', animated: true },
+  { id: 'e6', source: 'back', target: 'response', animated: true },
+];
 
 # ProxAI Documentation
 
-ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It normalizes a few upstream-breaking request shapes, routes to explicit providers, and translates across supported protocols when configured.
+ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It accepts local OpenAI-compatible traffic, normalizes specific upstream-breaking request shapes, routes to explicit providers, and translates between supported protocols when configured.
 
 <ProxaiCallout type="tip" title="Focused by design">
-  ProxAI is intentionally small: local compatibility, explicit protocol routing, compact diagnostics, and minimal surprises.
+  ProxAI is intentionally small: local compatibility, explicit protocol routing, compact diagnostics, and minimal surprises. It is not a general multi-tenant AI gateway.
 </ProxaiCallout>
+
+## One request through ProxAI
+
+<FlowDiagram nodes={requestFlowNodes} edges={requestFlowEdges} height={330} client:only="react" />
+
+## Start here
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Install and run locally',
+      href: '/en/using/install-and-upgrade',
+      icon: 'rocket',
+      description: 'Fastest path from a fresh machine to a running local proxy and editable config.toml.',
+    },
+    {
+      title: 'Add or route a provider',
+      href: '/en/using/routing-and-providers',
+      icon: 'route',
+      description: 'Route by model, request protocol, provider protocol, and upstream model rewrite.',
+    },
+    {
+      title: 'Debug a failed request',
+      href: '/en/using/troubleshooting',
+      icon: 'alert',
+      description: 'Common symptoms, likely causes, next checks, and where to inspect logs/captures.',
+    },
+    {
+      title: 'Understand protocol behavior',
+      href: '/en/protocol',
+      icon: 'protocol',
+      description: 'Protocol values, request paths, pass-through/conversion paths, and interaction examples.',
+    },
+  ]}
+/>
+
+## Choose your path
+
+<DocSectionMap
+  sections={[
+    {
+      title: 'Using ProxAI',
+      icon: 'rocket',
+      audience: 'User view',
+      description: 'Task-oriented pages for running, configuring, routing, observing, and troubleshooting the local proxy.',
+    },
+    {
+      title: 'Protocol Guide',
+      icon: 'protocol',
+      audience: 'Protocol view',
+      description: 'Protocol concepts, supported wire behaviors, streaming expectations, and per-protocol interaction examples.',
+    },
+    {
+      title: 'Developer Guide',
+      icon: 'architecture',
+      audience: 'Maintainer view',
+      description: 'Internal architecture, module boundaries, conversion design, streaming internals, and error rendering.',
+    },
+    {
+      title: 'Reference',
+      icon: 'file',
+      audience: 'Lookup view',
+      description: 'Exact configuration reference, CLI flags, defaults, protocol values, error payloads, and behavior contracts.',
+    },
+  ]}
+/>
 
 ## Using ProxAI
 
@@ -19,31 +105,67 @@ ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It n
   items={[
     {
       title: 'Quick start',
-      href: '/en/quick-start',
+      href: '/en/using/quick-start',
       icon: 'rocket',
       description: 'Run ProxAI locally, find the app directory, edit config.toml, and connect a client.',
     },
     {
+      title: 'Install and upgrade',
+      href: '/en/using/install-and-upgrade',
+      icon: 'terminal',
+      description: 'Get a binary, locate local runtime files, upgrade safely, and roll back without losing config.',
+    },
+    {
+      title: 'Client integration',
+      href: '/en/using/client-integration',
+      icon: 'terminal',
+      description: 'Base URL, endpoints, local API keys, model routing, error format, and streaming clients.',
+    },
+    {
+      title: 'Set up a provider',
+      href: '/en/using/provider-setup',
+      icon: 'config',
+      description: 'Provider names, protocols, base URLs, API keys, defaults, and explicit routes.',
+    },
+    {
+      title: 'Try common recipes',
+      href: '/en/using/recipes',
+      icon: 'zap',
+      description: 'Task-oriented paths for provider setup, model routing, safe captures, and streaming diagnosis.',
+    },
+    {
       title: 'Configuration',
-      href: '/en/configuration',
+      href: '/en/using/configuration',
       icon: 'config',
       description: 'Server listeners, routing, providers, capture, logging, and error response behavior.',
     },
     {
       title: 'Routing and providers',
-      href: '/en/routing-and-providers',
+      href: '/en/using/routing-and-providers',
       icon: 'route',
       description: 'How routes select providers and how provider protocol controls outbound wire behavior.',
     },
     {
       title: 'Observability',
-      href: '/en/observability',
+      href: '/en/using/observability',
       icon: 'terminal',
       description: 'Logs, captures, request hints, and privacy boundaries for local debugging.',
     },
     {
+      title: 'Streaming and tools',
+      href: '/en/using/streaming-and-tools',
+      icon: 'timer',
+      description: 'User-facing guide to terminal events, tool-call stalls, and timeout layers.',
+    },
+    {
+      title: 'Debugging workflow',
+      href: '/en/using/debugging-workflow',
+      icon: 'alert',
+      description: 'Step-by-step workflow for classifying failures, capturing one phase, and sharing sanitized evidence.',
+    },
+    {
       title: 'Troubleshooting',
-      href: '/en/troubleshooting',
+      href: '/en/using/troubleshooting',
       icon: 'alert',
       description: 'Common symptoms, likely causes, and next checks across requests, providers, and streaming.',
     },
@@ -56,15 +178,45 @@ ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It n
   items={[
     {
       title: 'Protocol overview',
-      href: '/en/protocols-overview',
+      href: '/en/protocol',
       icon: 'protocol',
-      description: 'How ProxAI separates pipeline phases from wire protocols and which conversion paths are supported.',
+      description: 'Protocol values, pipeline phases, supported runtime paths, and per-protocol walkthroughs.',
+    },
+    {
+      title: 'Choose a protocol',
+      href: '/en/protocol/choosing-a-protocol',
+      icon: 'route',
+      description: 'Decide inbound and provider protocols before configuring pass-through or conversion routes.',
+    },
+    {
+      title: 'Lossiness and fidelity',
+      href: '/en/protocol/lossiness-and-fidelity',
+      icon: 'gauge',
+      description: 'Understand pass-through, supported conversion, lossy mappings, and higher-fidelity protocol choices.',
+    },
+    {
+      title: 'OpenAI Responses',
+      href: '/en/protocol/openai-responses',
+      icon: 'protocol',
+      description: 'Itemized output, stable item ids, hosted tools, and typed streaming events.',
+    },
+    {
+      title: 'OpenAI Chat Completions',
+      href: '/en/protocol/openai-chat-completions',
+      icon: 'protocol',
+      description: 'Choices, assistant messages, tool call chunks, finish reasons, and `[DONE]`.',
+    },
+    {
+      title: 'Anthropic Messages',
+      href: '/en/protocol/anthropic-messages',
+      icon: 'protocol',
+      description: 'Message envelope, flat content blocks, stop reasons, and content block streams.',
     },
     {
       title: 'Streaming behavior',
-      href: '/en/streaming-behavior',
-      icon: 'rocket',
-      description: 'What to expect from streamed responses, terminal events, and stalled tool-call timeouts.',
+      href: '/en/protocol/streaming-behavior',
+      icon: 'timer',
+      description: 'Client-visible streaming expectations, terminal events, and stalled tool-call timeouts.',
     },
   ]}
 />
@@ -75,27 +227,51 @@ ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It n
   items={[
     {
       title: 'Architecture',
-      href: '/en/architecture',
+      href: '/en/developer/architecture',
       icon: 'architecture',
       description: 'Request lifecycle, module boundaries, pipeline phases, and how protocol translation fits into the proxy.',
     },
     {
+      title: 'Module boundaries',
+      href: '/en/developer/architecture/module-boundaries',
+      icon: 'architecture',
+      description: 'Where parsing, routing, translation, provider behavior, HTTP carriers, errors, and observation belong.',
+    },
+    {
+      title: 'Config flow',
+      href: '/en/developer/architecture/config-flow',
+      icon: 'config',
+      description: 'How config.toml, examples, CLI overrides, validation, providers, and runtime state fit together.',
+    },
+    {
+      title: 'Error flow',
+      href: '/en/developer/architecture/error-flow',
+      icon: 'alert',
+      description: 'How internal errors become compact client-facing HTTP and SSE errors.',
+    },
+    {
       title: 'Protocol conversion',
-      href: '/en/protocol-conversion',
+      href: '/en/developer/protocol-conversion',
       icon: 'flow',
-      description: 'Pair-oriented conversion rules, wire-model alignment, and SDK comparison expectations.',
+      description: 'Pair-oriented conversion rules, wire-model alignment, SDK comparison, and streaming identifier models.',
     },
     {
       title: 'Streaming internals',
-      href: '/en/streaming-internals',
+      href: '/en/developer/streaming-internals',
       icon: 'terminal',
       description: 'Carrier, BodyObserver, SSE scanner, and protocol state machines.',
     },
     {
       title: 'Error handling internals',
-      href: '/en/error-handling-internals',
+      href: '/en/developer/error-handling-internals',
       icon: 'alert',
       description: 'Typed errors, ErrorResponseSpec, fields, payload, and HTTP/SSE rendering.',
+    },
+    {
+      title: 'Contributor checklist',
+      href: '/en/developer/contributor-checklist',
+      icon: 'check',
+      description: 'Operational checklist for runtime settings, conversion pairs, streaming, errors, tests, and docs.',
     },
   ]}
 />
@@ -105,10 +281,10 @@ ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It n
 <FeatureGrid
   items={[
     {
-      title: 'Configuration example',
-      href: '/en/reference/configuration-example',
+      title: 'Configuration reference',
+      href: '/en/reference/configuration',
       icon: 'config',
-      description: 'Full reference of the generated config.example.toml.',
+      description: 'Single-source config.example.toml reference and links to field explanations and defaults.',
     },
     {
       title: 'CLI',
@@ -129,16 +305,52 @@ ProxAI is a small local compatibility proxy for OpenAI-compatible requests. It n
       description: 'Protocol values, request paths, accepted locations, and supported conversion pairs.',
     },
     {
+      title: 'Compatibility matrix',
+      href: '/en/reference/compatibility-matrix',
+      icon: 'protocol',
+      description: 'Protocol-pair support for request, response, streaming, tools, reasoning, and known lossiness.',
+    },
+    {
+      title: 'Route matching',
+      href: '/en/reference/route-matching',
+      icon: 'route',
+      description: 'Exact route matching outcomes, protocol guards, model patterns, and fallback behavior.',
+    },
+    {
+      title: 'Capture phases',
+      href: '/en/reference/capture-phases',
+      icon: 'security',
+      description: 'Phase boundaries, config switches, CLI phase names, and privacy risks.',
+    },
+    {
+      title: 'Environment and files',
+      href: '/en/reference/environment-and-files',
+      icon: 'file',
+      description: 'App directories, generated runtime files, repository docs, and local artifact boundaries.',
+    },
+    {
       title: 'Error responses',
       href: '/en/reference/error-responses',
       icon: 'alert',
       description: 'Client-facing payload, type enum, HTTP status semantics, and preserved headers.',
     },
     {
-      title: 'Behavior contracts',
+      title: 'Status and stop reasons',
+      href: '/en/reference/status-and-stop-reasons',
+      icon: 'stop',
+      description: 'Map stop_reason, finish_reason, status, and streaming terminal events across protocols.',
+    },
+    {
+      title: 'Behavior Contracts',
       href: '/en/reference/behavior-contracts',
       icon: 'security',
       description: 'Stable promises ProxAI commits to across versions.',
+    },
+    {
+      title: 'Glossary',
+      href: '/en/reference/glossary',
+      icon: 'book',
+      description: 'Shared terminology for protocols, phases, routing, providers, streaming, captures, and errors.',
     },
   ]}
 />

@@ -3,7 +3,7 @@ title: CLI
 description: ProxAI runtime flags, route overrides, capture subcommands, and default endpoints
 ---
 
-import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
 
 # CLI
 
@@ -28,15 +28,18 @@ proxai \
   --route-override ROUTE.FIELD=VALUE
 ```
 
-| Flag | Purpose |
-|---|---|
-| `--config` | Path to a config file (defaults to app dir `config.toml`) |
-| `--upstream` | Temporarily override the `openai_responses` default provider's upstream URL for this run |
-| `--api-key` | Temporarily override the `openai_responses` default provider's API key for this run |
-| `--port` | Override the local proxy listen port |
-| `--log-level` | Override log level |
-| `--log-format` | Override log output format (`human` or `json`) |
-| `--route-override` | Temporarily override a named `[[routing.routes]]` field |
+<ReferenceTable
+  columns={['Flag', 'Purpose']}
+  rows={[
+    ['--config', 'Path to a config file (defaults to app dir `config.toml`)'],
+    ['--upstream', 'Temporarily override the `openai_responses` default provider upstream URL for this run'],
+    ['--api-key', 'Temporarily override the `openai_responses` default provider API key for this run'],
+    ['--port', 'Override the local proxy listen port'],
+    ['--log-level', 'Override log level'],
+    ['--log-format', 'Override log output format (`human` or `json`)'],
+    ['--route-override', 'Temporarily override a named `[[routing.routes]]` field'],
+  ]}
+/>
 
 ## Route overrides
 
@@ -68,9 +71,9 @@ proxai --capture-upstream-response
 proxai --capture-outbound-response
 ```
 
-For what each capture phase means, see [Observability](/en/observability). For default endpoints and other runtime limits, see [Defaults and Limits](/en/reference/defaults-and-limits). MCP is a local-only control surface — see [Behavior Contract C5 and C6](/en/reference/behavior-contracts#listener-separation).
+For what each capture phase means, see [Observability](/en/using/observability). For default endpoints and other runtime limits, see [Defaults and Limits](/en/reference/defaults-and-limits). MCP is a local-only control surface — see [Behavior Contract C5 and C6](/en/reference/behavior-contracts#listener-separation).
 
 ## Related references
 
-- [Configuration Example](/en/reference/configuration-example)
+- [Configuration Reference](/en/reference/configuration)
 - [Error Responses](/en/reference/error-responses)

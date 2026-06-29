@@ -1,0 +1,88 @@
+---
+title: 该改哪里
+description: 面向维护者的任务地图，用于定位 ProxAI 行为变更对应的源码模块、测试和文档
+robots: noindex
+---
+
+import { ModuleGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# 该改哪里
+
+这页是维护者用的路由图：把常见变更请求指向源码 owner、验证路径和需要随代码一起更新的文档。
+
+<ProxaiCallout type="caution" title="代码是事实来源">
+  文档跟随实现和已验证行为。如果文档与代码冲突，先检查实现、测试和 `config.example.toml`，再有意地更新代码或文档。
+</ProxaiCallout>
+
+## 变更路由图
+
+<ModuleGrid
+  modules={[
+    { name: '运行时配置项', icon: 'config', description: '从 `src/config.rs` 开始；更新 `config.example.toml`、`src/main.rs` 或 `src/lib.rs` 的 wiring、用户文档、参考文档和配置加载测试。' },
+    { name: '入站协议解析', icon: 'route', description: '从 `src/ingress/` 和 `src/protocol/` 开始；保持基于 path 的 request protocol detection，并在 routing 前 normalize。' },
+    { name: 'Route matching', icon: 'route', description: '从 `src/routing/` 开始；保持严格 `request_protocol` guard，不要让显式 guard mismatch 静默 fallthrough。' },
+    { name: 'Provider request 行为', icon: 'file', description: '从 `src/provider/*/request` 开始；model rewrite、projection 和 serialization 属于 provider 侧。' },
+    { name: 'Provider transport', icon: 'terminal', description: '从 `src/provider/*/transport` 开始；auth headers、上游 URL 构造和 HTTP send 不应进入纯 translation。' },
+    { name: '协议转换', icon: 'flow', description: '从 `src/translation/` 开始；保持 request/response/stream conversion 在 carrier 边界上是纯协议转换。' },
+    { name: '流式语义', icon: 'timer', description: '从 SSE scanner、streaming translation modules 和 provider response observers 开始；保持终止事件、Unicode 安全和工具调用卡住处理。' },
+    { name: '客户端错误', icon: 'alert', description: '从 `src/error/` 开始；保持稳定、紧凑、安全的错误投影和安全上游 header 保留。' },
+    { name: 'Capture/logging', icon: 'gauge', description: '从 `src/observe/` 开始；日志保持紧凑、结构化、body-safe，并与 reference phase 名称一致。' },
+  ]}
+/>
+
+## 任务检查表
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    {
+      title: '新增或修改运行时配置字段',
+      goal: '让运行时配置继续以 `config.toml` 和被跟踪示例为中心。',
+      do: ['更新 `src/config.rs`。', '在 `config.example.toml` 加简洁示例/注释。', '只在需要时接入启动或运行时状态。', '更新 `using/configuration` 和 `reference/configuration`。', '新增或调整配置加载/default 测试。'],
+      verify: '`just site check` 和相关 Rust 配置测试与新默认值、文档一致。',
+      docs: [{ label: '配置流程', href: '/zh/developer/architecture/config-flow' }, { label: '配置参考', href: '/zh/reference/configuration' }],
+    },
+    {
+      title: '新增协议转换路径',
+      goal: '保持显式 pair-oriented translation。',
+      do: ['只有 inbound → provider request 行为受支持时才加 request conversion。', 'Provider → inbound response 行为受支持时才加非流式 response conversion。', '流式转换单独实现；不要假设非流式支持就等于流式支持。', '更新兼容性文档和行为测试。'],
+      verify: '不支持的 pair 显式失败；支持的 pair 有 payload 和 stream terminal semantics 覆盖。',
+      docs: [{ label: '协议转换', href: '/zh/developer/protocol-conversion' }, { label: '兼容性矩阵', href: '/zh/reference/compatibility-matrix' }],
+    },
+    {
+      title: '修复流式回归',
+      goal: '保持 bytes、事件顺序、终止检测和语义 timeout。',
+      do: ['用最小 stream fixture 复现。', '判断失败位于 carrier、SSE event semantics、protocol conversion 还是客户端响应重建。', '按需增加终止事件、不完整工具流、工具参数卡住或 Unicode chunk 边界覆盖。'],
+      verify: '先跑目标 streaming tests，再扩大到 e2e 验证。',
+      docs: [{ label: '流式内部机制', href: '/zh/developer/streaming-internals' }, { label: '流式行为', href: '/zh/protocol/streaming-behavior' }],
+    },
+    {
+      title: '修改错误渲染',
+      goal: '保持错误紧凑、稳定、安全、有诊断价值。',
+      do: ['把内部错误映射到稳定客户端类型。', '保留 `Retry-After` 等安全上游 header。', '避免泄露私有 bodies、auth headers、API keys 或 prompts。', '更新 reference error types 和行为契约。'],
+      verify: '当 stream state 相关时，HTTP 与 SSE 错误行为都要覆盖。',
+      docs: [{ label: '错误流程', href: '/zh/developer/architecture/error-flow' }, { label: '错误响应', href: '/zh/reference/error-responses' }],
+    },
+  ]}
+/>
+
+## 源码归属表
+
+<ReferenceTable
+  columns={['如果你要改', '主要源码区域', '还要检查']}
+  rows={[
+    ['CLI flags', '`src/cli/`', '`README.md`, `README_CN.md`, `reference/cli`'],
+    ['生成的 app-directory defaults', '`src/paths.rs`、配置加载代码', '`config.example.toml`、配置测试'],
+    ['Route protocol guards', '`src/routing/`', '`reference/route-matching`、proxy e2e route tests'],
+    ['Provider model rewrite', '`src/provider/*/request`', 'Provider 设置文档和兼容性矩阵'],
+    ['Anthropic wire structs', '`src/protocol/anthropic/`', 'SDK alignment 文档和转换测试'],
+    ['OpenAI Responses wire 行为', '`src/protocol/openai/responses/`', 'Responses 协议文档和转换测试'],
+    ['Capture phase 名称', '`src/observe/` 和 flow locals', '`reference/capture-phases`、docs checker phase coverage'],
+    ['Docs IA 或双语页面', '`site/src/content/docs/`', '`tools/check_docs_i18n.py`、`developer/docs-maintenance`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 验证顺序
+
+优先运行覆盖变更边界的最小验证，再向外扩大。纯文档工作运行 `just site check`。运行时行为按 `AGENTS.md` 和相关测试 recipe 验证。

@@ -1,0 +1,57 @@
+---
+title: Environment and Files
+description: Reference for ProxAI local directories, generated files, logs, captures, and repository privacy boundaries
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Environment and Files
+
+ProxAI keeps runtime state local. The repository contains source code and sanitized examples; the app directory contains runtime configuration, logs, and captures.
+
+## App directory
+
+<ReferenceTable
+  columns={['Platform', 'Default app directory']}
+  rows={[
+    ['Windows', '`%USERPROFILE%\\.proxai\\`'],
+    ['Linux/macOS', '`~/.proxai/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Runtime entries
+
+<ReferenceTable
+  columns={['Entry', 'Purpose', 'Commit?']}
+  rows={[
+    ['config.toml', 'Local runtime configuration, including provider API keys', 'No'],
+    ['config.example.toml', 'Generated local example/reference copied from tracked defaults', 'Only sanitized tracked examples'],
+    ['logs/', 'Runtime logs for local debugging', 'No'],
+    ['captures/', 'Optional phase captures for reproducing proxy/provider issues', 'No'],
+  ]}
+/>
+
+## Repository docs and examples
+
+<ReferenceTable
+  columns={['Path', 'Role']}
+  rows={[
+    ['site/', 'Single source for publishable documentation'],
+    ['site/src/content/docs/en/', 'English documentation pages'],
+    ['site/src/content/docs/zh/', 'Chinese documentation pages'],
+    ['config.example.toml', 'Tracked default/example configuration'],
+    ['README.md / README_CN.md', 'Compact repository entry points that link to the site'],
+  ]}
+/>
+
+<ProxaiCallout type="caution" title="Keep local artifacts local">
+  Do not commit `config.toml`, API keys, private captures, logs, or local repro fixtures containing private prompts. Committed fixtures should be trimmed and sanitized.
+</ProxaiCallout>
+
+## Related docs
+
+- [Quick Start](/en/using/quick-start)
+- [Configuration](/en/using/configuration)
+- [Configuration Reference](/en/reference/configuration)
+- [Capture Phases](/en/reference/capture-phases)

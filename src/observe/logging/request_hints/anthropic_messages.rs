@@ -89,7 +89,7 @@ fn render_tool_choice_compact(tool_choice: &ToolChoice) -> String {
 
 fn render_thinking_compact(thinking: &ThinkingConfigParam) -> String {
     match thinking {
-        ThinkingConfigParam::Enabled(value) => format!("think:{}", value.budget_tokens),
+        ThinkingConfigParam::Enabled(_) => "think:legacy_enabled".to_string(),
         ThinkingConfigParam::Adaptive(_) => "think:adaptive".to_string(),
         ThinkingConfigParam::Disabled(_) => "think:disabled".to_string(),
     }

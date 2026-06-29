@@ -1,0 +1,83 @@
+---
+title: Zed 接入
+description: 将 Zed 连接到本地 ProxAI，并安全调试 Responses、流式和工具调用问题
+---
+
+import { DecisionCards, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Zed 接入
+
+当你希望 Zed 访问 ProxAI，而不是直接访问 provider 时，用这页。ProxAI 保持本地运行，接收 OpenAI 兼容请求，再转发到配置好的上游 provider。
+
+<ProxaiCallout type="note" title="本地代理边界">
+  Zed 把请求发到 ProxAI 的本地 base URL。ProxAI 再根据入站协议、模型和 provider 配置路由。长期路由行为应放在 `config.toml`，不要散落在临时客户端设置里。
+</ProxaiCallout>
+
+## 接入检查表
+
+<TaskSteps
+  labels={{ goal: '目标', do: '操作', verify: '验证', docs: '相关文档' }}
+  steps={[
+    {
+      title: '本地运行 ProxAI',
+      goal: '先启动本地代理，再配置 Zed。',
+      do: ['使用目标 `config.toml` 启动 ProxAI。', '从 `[server]` 或临时 CLI override 确认本地端口。'],
+      verify: '基础请求能到达本地 listener，而不是直接访问上游 provider。',
+      docs: [{ label: '快速开始', href: '/zh/using/quick-start' }, { label: 'CLI 参考', href: '/zh/reference/cli' }],
+    },
+    {
+      title: '让 Zed 指向本地 base URL',
+      goal: '让 Zed 使用 ProxAI 作为 OpenAI 兼容 endpoint。',
+      do: ['使用 ProxAI 本地 base URL，通常是 `http://127.0.0.1:<port>/v1`。', '如果客户端要求 key，可以使用本地 client key；上游 provider key 应放在 ProxAI provider 配置里。'],
+      verify: 'ProxAI 日志能看到入站请求和选中的 route/provider。',
+      docs: [{ label: '客户端接入', href: '/zh/using/client-integration' }, { label: '观测与诊断', href: '/zh/using/observability' }],
+    },
+    {
+      title: '让 endpoint 匹配目标入站协议',
+      goal: '让 ProxAI 从请求 path 检测真实 request protocol。',
+      do: ['`/v1/responses` 对应 `openai_responses`。', '`/v1/chat/completions` 对应 `openai_chat_completions`。', '只有当相同 model pattern 需要 endpoint-specific 行为时，才加 route `request_protocol`。'],
+      verify: '路由选择使用预期入站协议，显式 protocol guard 不会静默 fall through。',
+      docs: [{ label: '协议', href: '/zh/reference/protocols' }, { label: '路由匹配', href: '/zh/reference/route-matching' }],
+    },
+    {
+      title: '窄范围调试流式/工具症状',
+      goal: '只 capture 解释 Zed 可见问题所需的 phase。',
+      do: ['工具调用卡住时，优先看 `upstream_response` 或 `outbound_response` capture。', '未经脱敏不要分享完整 capture；其中可能包含 prompt、工具参数或 provider 输出。'],
+      verify: '终止事件、stop reason 或 stream translation error 能解释客户端症状。',
+      docs: [{ label: '流式与工具调用', href: '/zh/using/streaming-and-tools' }, { label: 'Capture phases', href: '/zh/reference/capture-phases' }],
+    },
+  ]}
+/>
+
+## 应该配置在哪里
+
+<ReferenceTable
+  columns={['事项', '归属位置']}
+  rows={[
+    ['Zed base URL', 'Zed 客户端设置，指向 ProxAI 本地 `/v1` base URL'],
+    ['本地 client key 要求', '如果客户端集成要求，放在 Zed/client 设置中'],
+    ['Provider API key', '`config.toml` provider 配置或支持的环境展开，不要写进文档或 capture'],
+    ['模型到 provider 的路由', '`config.toml` 中的 `[[routes]]` 和 `[routing.defaults]`'],
+    ['Provider 协议行为', '`providers.<name>.protocol`'],
+    ['临时端口/上游 override', '短期本地测试用 CLI flags'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 常见 Zed 决策
+
+<DecisionCards
+  labels={{ when: '场景', choose: '选择', why: '原因' }}
+  items={[
+    { title: 'Zed 使用 Responses', icon: 'protocol', when: '客户端发送 `/v1/responses` 请求。', choose: '只有 endpoint-specific route 需要 `request_protocol = "openai_responses"`；其他情况让 path 检测处理。', why: 'Responses 有更丰富的 output item、工具事件和终态语义。' },
+    { title: 'Provider 使用 Anthropic Messages', icon: 'route', when: '上游 provider 期望 Anthropic Messages wire payload。', choose: '将选中 provider 设置为 `protocol = "anthropic_messages"`。', why: 'Provider protocol 控制出站 wire 行为；provider 名称只是用户标签。' },
+    { title: '工具流看起来卡住', icon: 'timer', when: 'Zed 在工具调用参数或终止事件不完整时等待。', choose: '先检查 streaming/tool-call 行为和语义 timeout，再改路由。', why: '流式回归是用户可见的，而且通常只发生在某个 phase。' },
+    { title: '错误不好读', icon: 'alert', when: 'Zed 展示的本地错误过于紧凑。', choose: '临时使用 JSON error responses，并开启窄 phase capture。', why: '默认保持可读，调试时再拿结构化诊断。' },
+  ]}
+/>
+
+## 隐私提示
+
+Zed 接入可能包含私有 prompt、工具调用、文件片段和 provider 输出。ProxAI 不应记录 request bodies、`Authorization` headers、API keys 或不必要的私有上游 URL 细节。Capture 是本地调试产物，应视为敏感数据。
+
+分享日志或 capture 前，先看 [隐私与本地数据](/zh/using/privacy-and-local-data) 和 [环境与文件](/zh/reference/environment-and-files)。

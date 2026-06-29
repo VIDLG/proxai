@@ -1,0 +1,82 @@
+---
+title: Provider 设置
+description: 配置 provider 名称、provider 协议、base URL、API key、默认 provider 和显式路由
+---
+
+import { FeatureGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Provider 设置
+
+Provider 是一个命名上游配置。**Provider 名称**是你的标签；**provider protocol** 控制出站 wire 行为。
+
+<ProxaiCallout type="note" title="名称只是标签">
+  `providers.openai`、`providers.minimax` 或 `providers.work` 都是任意名称。只有 `providers.<name>.protocol` 决定 ProxAI 向上游发送 OpenAI Responses、Chat Completions 还是 Anthropic Messages。
+</ProxaiCallout>
+
+## 最小 provider
+
+```toml
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+## Provider 字段
+
+<ReferenceTable
+  columns={['字段', '含义']}
+  rows={[
+    ['`protocol`', '出站 provider 协议：`openai_responses`、`openai_chat_completions` 或 `anthropic_messages`。'],
+    ['`base_url`', '上游 provider origin。ProxAI 会构造协议 path。'],
+    ['`api_key`', '真实上游 key。按 provider-owned auth headers 发送。'],
+    ['`compatibility`', '可选兼容模式，用于配置 provider-specific 行为。'],
+  ]}
+/>
+
+## 作为默认 provider
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+```
+
+只有没有显式 route 匹配时才使用 defaults。见[行为契约](/zh/reference/behavior-contracts#路由与转换)。
+
+## 路由某个模型
+
+```toml
+[[routing.routes]]
+request_protocol = "openai_responses"
+match_kind = "exact"
+model_pattern = "my-model"
+provider = "anthropic_upstream"
+upstream_model = "claude-like-model"
+```
+
+当同一个 model pattern 需要按 endpoint 表现不同时，使用 `request_protocol`。
+
+## 认证行为
+
+<ReferenceTable
+  columns={['Provider 协议', '上游认证 header']}
+  rows={[
+    ['`openai_responses` / `openai_chat_completions`', '`Authorization: Bearer <api_key>`'],
+    ['`anthropic_messages`', '`x-api-key: <api_key>`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+客户端传入的 `Authorization` 不作为上游 provider 认证。见[客户端接入](/zh/using/client-integration)。
+
+## 后续页面
+
+<FeatureGrid
+  items={[
+    { title: '配置说明', href: '/zh/using/configuration', icon: 'config', description: '面向任务的配置设置。' },
+    { title: '路由与 Provider', href: '/zh/using/routing-and-providers', icon: 'route', description: '显式 routes 和 defaults 如何选择 provider。' },
+    { title: '配置参考', href: '/zh/reference/configuration', icon: 'file', description: '精确字段和 config.example.toml 参考。' },
+    { title: '兼容性矩阵', href: '/zh/reference/compatibility-matrix', icon: 'protocol', description: '协议 pair 支持查表。' },
+  ]}
+/>

@@ -1,0 +1,150 @@
+---
+title: Protocol Overview
+description: ProxAI protocol model, supported protocol values, conversion paths, and protocol walkthroughs
+---
+
+import { FeatureGrid, PipelineStrip, ProtocolConversionMatrix, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Protocol Overview
+
+ProxAI separates **where data is in the proxy pipeline** from **which wire protocol that data uses**. This page is the protocol guide hub: start here when you need to understand request paths, protocol values, conversion support, or per-protocol walkthroughs.
+
+## Two axes
+
+<PipelineStrip
+  steps={[
+    { title: 'inbound_request', description: 'The original client request received by ProxAI.' },
+    { title: 'provider_request', description: 'The request ProxAI prepares for the selected upstream provider.' },
+    { title: 'upstream_response', description: 'The response returned by the upstream provider.' },
+    { title: 'outbound_response', description: 'The response ProxAI returns to the client-facing protocol.' },
+  ]}
+/>
+
+<ReferenceTable
+  columns={['Protocol value', 'Wire behavior']}
+  rows={[
+    ['openai_responses', 'OpenAI Responses API: itemized `output[]`, stable `item_id`, typed streaming events.'],
+    ['openai_chat_completions', 'OpenAI Chat Completions API: `choices[]`, assistant messages, `tool_calls[]`, `[DONE]` streams.'],
+    ['anthropic_messages', 'Anthropic Messages API: single `Message`, flat `content[]` blocks, `content_block` streaming events.'],
+  ]}
+/>
+
+<ProxaiCallout type="note" title="Routing is not translation">
+  A route may select a provider whose protocol differs from the inbound request protocol. That requires an explicit translation pair; unsupported pairs fail explicitly.
+</ProxaiCallout>
+
+## Read by task
+
+<FeatureGrid
+  items={[
+    {
+      title: 'I need to configure routing',
+      href: '/en/using/routing-and-providers',
+      icon: 'route',
+      description: 'Use this when you are deciding which provider handles which model or request endpoint.',
+    },
+    {
+      title: 'I need protocol behavior',
+      href: '/en/protocol#protocol-docs',
+      icon: 'protocol',
+      description: 'Use this when you need request/response shape, streaming behavior, or interaction examples.',
+    },
+    {
+      title: 'I need conversion internals',
+      href: '/en/developer/protocol-conversion',
+      icon: 'flow',
+      description: 'Use this when maintaining `src/translation/` or reviewing cross-protocol semantics.',
+    },
+    {
+      title: 'I need exact protocol names',
+      href: '/en/reference/protocols',
+      icon: 'file',
+      description: 'Use this as the stable lookup page for config values, request paths, and supported pairs.',
+    },
+    {
+      title: 'I need stop reason mapping',
+      href: '/en/reference/status-and-stop-reasons',
+      icon: 'stop',
+      description: 'Use this when comparing status, finish_reason, stop_reason, and terminal streaming events.',
+    },
+  ]}
+/>
+
+## Protocol docs
+
+<FeatureGrid
+  items={[
+    {
+      title: 'Choose a protocol',
+      href: '/en/protocol/choosing-a-protocol',
+      icon: 'route',
+      description: 'Decide inbound and provider protocols before configuring pass-through or conversion routes.',
+    },
+    {
+      title: 'Lossiness and fidelity',
+      href: '/en/protocol/lossiness-and-fidelity',
+      icon: 'gauge',
+      description: 'Understand where cross-protocol conversion can preserve behavior but not exact source shape.',
+    },
+    {
+      title: 'OpenAI Responses overview',
+      href: '/en/protocol/openai-responses',
+      icon: 'protocol',
+      description: 'Responses request/response model and output item semantics.',
+    },
+    {
+      title: 'OpenAI Responses interaction example',
+      href: '/en/protocol/openai-responses/interaction-example',
+      icon: 'flow',
+      description: 'Function tools, hosted tools, item ids, content parts, and terminal response events.',
+    },
+    {
+      title: 'OpenAI Chat Completions overview',
+      href: '/en/protocol/openai-chat-completions',
+      icon: 'protocol',
+      description: 'Chat completion choices, messages, deltas, and tool calls.',
+    },
+    {
+      title: 'OpenAI Chat Completions interaction example',
+      href: '/en/protocol/openai-chat-completions/interaction-example',
+      icon: 'flow',
+      description: 'Function tools, tool messages, `tool_calls[].index`, finish reasons, and `[DONE]`.',
+    },
+    {
+      title: 'Anthropic Messages overview',
+      href: '/en/protocol/anthropic-messages',
+      icon: 'protocol',
+      description: 'Anthropic message content blocks, stop reasons, and streaming events.',
+    },
+    {
+      title: 'Anthropic Messages interaction example',
+      href: '/en/protocol/anthropic-messages/interaction-example',
+      icon: 'flow',
+      description: 'Local tools, server tools, content block indices, message deltas, and `message_stop`.',
+    },
+    {
+      title: 'Streaming behavior',
+      href: '/en/protocol/streaming-behavior',
+      icon: 'timer',
+      description: 'Terminal events, SSE expectations, and stalled tool-call timeout behavior.',
+    },
+  ]}
+/>
+
+## Choose the protocol path
+
+<ReferenceTable
+  columns={['Client calls', 'Detected request protocol', 'Start with']}
+  rows={[
+    ['`/v1/responses`', '`openai_responses`', '[OpenAI Responses](/en/protocol/openai-responses)'],
+    ['`/v1/chat/completions`', '`openai_chat_completions`', '[OpenAI Chat Completions](/en/protocol/openai-chat-completions)'],
+    ['`/v1/messages`', '`anthropic_messages`', '[Anthropic Messages](/en/protocol/anthropic-messages)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Conversion support
+
+<ProtocolConversionMatrix />
+
+Unsupported pairs fail explicitly until implemented. The authoritative lookup lives in [Protocols Reference](/en/reference/protocols).

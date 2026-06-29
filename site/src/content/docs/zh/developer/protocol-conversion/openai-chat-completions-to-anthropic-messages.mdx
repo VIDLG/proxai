@@ -1,0 +1,80 @@
+---
+title: OpenAI Chat Completions 到 Anthropic Messages
+description: 从 OpenAI Chat Completions 到 Anthropic Messages 的 request、response、streaming、tool 和 stop 转换开发者指南
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Chat Completions 到 Anthropic Messages
+
+本页记录客户端使用 OpenAI Chat Completions，而选中的 provider 使用 Anthropic Messages 时的转换 pair。
+
+<ConversionPath
+  from={{ title: '入站', description: '`openai_chat_completions` request payload' }}
+  via={[
+    { title: '规范化', description: '`src/ingress/` 解析 Chat messages 和 tools' },
+    { title: '请求转换', description: 'Chat messages/tools -> Anthropic Messages request' },
+    { title: '响应转换', description: 'Anthropic Message/content blocks -> Chat choices' },
+  ]}
+  to={{ title: '出站', description: '`openai_chat_completions` response 或 SSE chunks' }}
+/>
+
+## 请求映射
+
+<ReferenceTable
+  columns={['Chat 概念', 'Anthropic Messages 目标', '说明']}
+  rows={[
+    ['`messages[]`', '`messages[]` 加规范化 system placement', 'Chat system/developer instructions 不应重复成用户可见 turns。'],
+    ['Assistant text', 'Assistant content blocks', '保留有序可见文本。'],
+    ['`tools[]` function definitions', '`tools[]`', '尽量保留 name、description 和 JSON schema。'],
+    ['Assistant `tool_calls[]`', 'Anthropic `tool_use` blocks', 'Chat `tool_calls[].index` 是 stream-local；Anthropic content blocks 使用 content-block indices。'],
+    ['Tool result messages', 'Anthropic `tool_result` blocks', '目标协议能表达时保留 call id linkage。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 响应映射
+
+<ReferenceTable
+  columns={['Anthropic 概念', 'Chat 目标', '说明']}
+  rows={[
+    ['Text content block', '`choices[0].message.content`', 'Chat 每个 choice 只有一个 assistant message。'],
+    ['Tool use block', '`choices[0].message.tool_calls[]`', '分配稳定 call ids 和 function names。'],
+    ['Thinking/reasoning block', '支持时映射到 Chat-compatible reasoning extension', '普通 Chat reasoning 结构较弱；除非必须，不要混入 ordinary content。'],
+    ['`stop_reason`', '`finish_reason`', '谨慎映射自然轮次、token 限制、tool use 和 refusals。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 流式映射
+
+<ReferenceTable
+  columns={['Anthropic event', 'Chat SSE 预期']}
+  rows={[
+    ['`message_start`', '初始化 choice 和 assistant role delta。'],
+    ['Text `content_block_delta`', '发出 `delta.content` chunks。'],
+    ['Tool `input_json_delta`', '按 Chat tool index 发出 `delta.tool_calls[].function.arguments` chunks。'],
+    ['`message_delta.stop_reason`', '终态已知时设置最终 `finish_reason`。'],
+    ['`message_stop`', '发出最终 chunk 和 `[DONE]`。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="Chat 的身份模型更弱">
+  Chat Completions 没有 Responses 风格的 output item identity。Tool-call `index` 只在单次 streamed choice 内有意义，不要基于它构建跨轮语义。
+</ProxaiCallout>
+
+## 有损区域
+
+- Chat 没有原生 output item graph。
+- Reasoning 支持更弱，通常依赖扩展字段。
+- Chat streaming 使用 `tool_calls[].index`；Anthropic streaming 使用 content block `index`。
+- Chat `[DONE]` 是 stream carrier terminator；Anthropic `message_stop` 是语义终止事件。
+
+## 相关文档
+
+- [消息位置](/zh/developer/protocol-conversion/message-placement)
+- [流式标识符](/zh/developer/protocol-conversion/streaming-identifiers)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)
+- [兼容性矩阵](/zh/reference/compatibility-matrix)

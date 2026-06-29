@@ -37,6 +37,9 @@ fn translates_anthropic_request_to_chat_completion_shape() {
             }
         }],
         "tool_choice": {"type": "tool", "name": "lookup", "disable_parallel_tool_use": true},
+        "metadata": {"user_id": "user_123"},
+        "output_config": {"format": {"type": "json_schema", "schema": {"type": "object"}}},
+        "service_tier": "standard_only",
         "temperature": 0.2,
         "top_p": 0.9,
         "stop_sequences": ["END"]
@@ -79,6 +82,14 @@ fn translates_anthropic_request_to_chat_completion_shape() {
         json!({"function": {"name": "lookup"}})
     );
     assert_eq!(translated["parallel_tool_calls"], false);
+    assert_eq!(translated["metadata"]["user_id"], "user_123");
+    assert_eq!(translated["safety_identifier"], "user_123");
+    assert_eq!(translated["response_format"]["type"], "json_schema");
+    assert_eq!(
+        translated["response_format"]["json_schema"]["schema"],
+        json!({"type": "object"})
+    );
+    assert_eq!(translated["service_tier"], "default");
     assert_eq!(translated["stop"], "END");
 }
 
@@ -221,7 +232,7 @@ fn translates_anthropic_output_effort_to_chat_reasoning_effort() {
         "max_tokens": 128,
         "messages": [{"role": "user", "content": "think"}],
         "output_config": {"effort": "xhigh"},
-        "thinking": {"type": "enabled", "budget_tokens": 2048}
+        "thinking": {"type": "adaptive", "display": "summarized"}
     });
 
     let translated = translate_request_payload(&payload).unwrap();
@@ -230,7 +241,21 @@ fn translates_anthropic_output_effort_to_chat_reasoning_effort() {
 }
 
 #[test]
-fn translates_anthropic_thinking_to_chat_reasoning_effort() {
+fn does_not_translate_anthropic_adaptive_thinking_to_chat_reasoning_effort() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 128,
+        "messages": [{"role": "user", "content": "think"}],
+        "thinking": {"type": "adaptive", "display": "summarized"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert!(translated["reasoning_effort"].is_null());
+}
+
+#[test]
+fn maps_legacy_enabled_thinking_budget_to_chat_reasoning_effort_fallback() {
     let payload = json!({
         "model": "claude-sonnet-4-5",
         "max_tokens": 128,
@@ -241,6 +266,21 @@ fn translates_anthropic_thinking_to_chat_reasoning_effort() {
     let translated = translate_request_payload(&payload).unwrap();
 
     assert_eq!(translated["reasoning_effort"], "high");
+}
+
+#[test]
+fn prefers_anthropic_output_effort_over_legacy_budget_for_chat() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 128,
+        "messages": [{"role": "user", "content": "think"}],
+        "output_config": {"effort": "low"},
+        "thinking": {"type": "enabled", "budget_tokens": 9000}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["reasoning_effort"], "low");
 }
 
 #[test]

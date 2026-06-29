@@ -1,0 +1,87 @@
+---
+title: Where to Change Code
+description: Maintainer task map for finding the right ProxAI source modules, tests, and docs when changing behavior
+robots: noindex
+---
+
+import { ModuleGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Where to Change Code
+
+Use this page as a maintainer routing map. It points common change requests to the source owners, validation paths, and documentation that should move with the code.
+
+<ProxaiCallout type="caution" title="Code is the source of truth">
+  Documentation follows implementation and verified behavior. If docs and code disagree, inspect the implementation, tests, and `config.example.toml` first, then update code or docs deliberately.
+</ProxaiCallout>
+
+## Change routing map
+
+<ModuleGrid
+  modules={[
+    { name: 'Runtime setting', icon: 'config', description: 'Start in `src/config.rs`; update `config.example.toml`, wiring in `src/main.rs` or `src/lib.rs`, user docs, reference docs, and config-loading tests.' },
+    { name: 'Inbound protocol parsing', icon: 'route', description: 'Start in `src/ingress/` and `src/protocol/`; keep request protocol detection path-based and normalize before routing.' },
+    { name: 'Route matching', icon: 'route', description: 'Start in `src/routing/`; preserve strict `request_protocol` guard behavior and avoid silent fallthrough for mismatched explicit guards.' },
+    { name: 'Provider request behavior', icon: 'file', description: 'Start in `src/provider/*/request`; keep model rewrite, projection, and serialization provider-owned.' },
+    { name: 'Provider transport', icon: 'terminal', description: 'Start in `src/provider/*/transport`; keep auth headers, upstream URL construction, and HTTP send behavior outside pure translation.' },
+    { name: 'Protocol conversion', icon: 'flow', description: 'Start in `src/translation/`; keep request/response/stream conversions pure at the carrier boundary.' },
+    { name: 'Streaming semantics', icon: 'timer', description: 'Start in SSE scanner, streaming translation modules, and provider response observers; preserve terminal events, Unicode safety, and tool-call stall handling.' },
+    { name: 'Client-facing errors', icon: 'alert', description: 'Start in `src/error/`; keep stable compact error projection and safe preserved upstream headers.' },
+    { name: 'Capture/logging', icon: 'gauge', description: 'Start in `src/observe/`; keep logs compact, structured, body-safe, and phase names aligned with reference docs.' },
+  ]}
+/>
+
+## Task checklist
+
+<TaskSteps
+  steps={[
+    {
+      title: 'Add or change a runtime config field',
+      goal: 'Keep runtime configuration centered on `config.toml` and its tracked example.',
+      do: ['Update `src/config.rs`.', 'Add a concise example/comment to `config.example.toml`.', 'Wire through startup/runtime state only where needed.', 'Update `using/configuration` and `reference/configuration`.', 'Add or adjust config loading/default tests.'],
+      verify: '`just site check` and relevant Rust config tests agree with the new default and docs.',
+      docs: [{ label: 'Config Flow', href: '/en/developer/architecture/config-flow' }, { label: 'Configuration Reference', href: '/en/reference/configuration' }],
+    },
+    {
+      title: 'Add a protocol conversion path',
+      goal: 'Preserve explicit pair-oriented translation.',
+      do: ['Add request conversion only if inbound → provider request behavior is supported.', 'Add non-streaming response conversion if provider → inbound response behavior is supported.', 'Add streaming conversion separately; do not assume non-streaming support implies stream support.', 'Update compatibility docs and behavior tests.'],
+      verify: 'Unsupported pairs fail explicitly; supported pairs have behavior coverage for payloads and stream terminal semantics.',
+      docs: [{ label: 'Protocol Conversion', href: '/en/developer/protocol-conversion' }, { label: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix' }],
+    },
+    {
+      title: 'Fix a streaming regression',
+      goal: 'Preserve bytes, event order, terminal detection, and semantic timeouts.',
+      do: ['Reproduce with the smallest stream fixture.', 'Identify whether the failure is carrier, SSE event semantics, protocol conversion, or client-facing reconstruction.', 'Add coverage for terminal events, incomplete tool streams, stalled tool-call arguments, or Unicode chunk boundaries as appropriate.'],
+      verify: 'Targeted streaming tests pass before broader e2e validation.',
+      docs: [{ label: 'Streaming Internals', href: '/en/developer/streaming-internals' }, { label: 'Streaming Behavior', href: '/en/protocol/streaming-behavior' }],
+    },
+    {
+      title: 'Change error rendering',
+      goal: 'Keep errors compact, stable, safe, and useful.',
+      do: ['Map internal errors to stable client-facing types.', 'Preserve useful safe upstream headers such as `Retry-After`.', 'Avoid leaking private bodies, auth headers, API keys, or private prompts.', 'Update reference error types and behavior contracts.'],
+      verify: 'HTTP and SSE error behavior are both covered when stream state matters.',
+      docs: [{ label: 'Error Flow', href: '/en/developer/architecture/error-flow' }, { label: 'Error Responses', href: '/en/reference/error-responses' }],
+    },
+  ]}
+/>
+
+## Source ownership table
+
+<ReferenceTable
+  columns={['If you are changing', 'Primary source area', 'Also check']}
+  rows={[
+    ['CLI flags', '`src/cli/`', '`README.md`, `README_CN.md`, `reference/cli`'],
+    ['Generated app-directory defaults', '`src/paths.rs`, config loading code', '`config.example.toml`, config tests'],
+    ['Route protocol guards', '`src/routing/`', '`reference/route-matching`, proxy e2e route tests'],
+    ['Provider model rewrite', '`src/provider/*/request`', 'Provider setup docs and compatibility matrix'],
+    ['Anthropic wire structs', '`src/protocol/anthropic/`', 'SDK alignment docs and conversion tests'],
+    ['OpenAI Responses wire behavior', '`src/protocol/openai/responses/`', 'Responses protocol docs and conversion tests'],
+    ['Capture phase names', '`src/observe/` and flow locals', '`reference/capture-phases`, docs checker phase coverage'],
+    ['Docs IA or bilingual pages', '`site/src/content/docs/`', '`tools/check_docs_i18n.py`, `developer/docs-maintenance`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Validation order
+
+Prefer the smallest validation that covers the changed boundary, then move outward. For documentation-only work, run `just site check`. For runtime behavior, use the project validation guidance in `AGENTS.md` and the relevant test recipes.

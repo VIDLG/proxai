@@ -1,0 +1,73 @@
+---
+title: 开发者指南
+description: 面向维护者的 ProxAI 架构、转换边界、流式内部机制和错误处理指南
+robots: noindex
+---
+
+import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@components/ProxaiDocs.jsx';
+
+# 开发者指南
+
+本章节面向修改 ProxAI 内部实现的维护者，重点是源码边界、协议转换规则、流式行为和错误投影。
+
+<ProxaiCallout type="caution" title="内部文档">
+  这些页面描述实现边界。面向用户的行为应放在 [使用 ProxAI](/zh/using)、[协议指南](/zh/protocol) 和 [参考](/zh/reference)。
+</ProxaiCallout>
+
+## 核心边界
+
+<PipelineStageCards
+  labels={{ modules: '模块', responsibility: '职责' }}
+  stages={[
+    { name: 'ingress', codeName: false, modules: ['src/ingress/', 'src/protocol/'], responsibility: '检测入站协议、解析 payload，并规范化入站请求形状。' },
+    { name: 'routing', codeName: false, modules: ['src/config.rs', 'pipeline routing'], responsibility: '通过协议感知 defaults 或显式模型 route 选择 provider。' },
+    { name: 'translation', codeName: false, modules: ['src/translation/'], responsibility: '在纯协议边界上转换协议 payload 和 streams。' },
+    { name: 'provider', codeName: false, modules: ['src/provider/*/request', 'src/provider/*/transport'], responsibility: '准备 provider request payload、改写模型、添加 provider auth、构造上游 URL 并发送。' },
+    { name: 'response reconstruction', codeName: false, modules: ['src/http_support', 'src/error/'], responsibility: '把响应翻译回入站协议，并渲染紧凑的客户端错误。' },
+  ]}
+/>
+
+## 源码目录地图
+
+<ModuleGrid
+  modules={[
+    { name: 'src/ingress/', icon: 'route', description: '入站 HTTP path/protocol 检测、请求解析，以及 routing 前的 normalization。' },
+    { name: 'src/protocol/', icon: 'protocol', description: 'OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 和 SSE payload 的 wire data models。' },
+    { name: 'src/translation/', icon: 'flow', description: '显式 pair 之间的纯协议 payload 和 stream 转换。' },
+    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation、projection、provider model rewrite 和 outbound payload serialization。' },
+    { name: 'src/provider/*/transport', icon: 'terminal', description: '上游 URL 构造、provider authentication headers 和 HTTP send 行为。' },
+    { name: 'src/provider/*/response', icon: 'timer', description: 'Provider response summaries、streaming observers、协议状态机和 outcome diagnostics。' },
+    { name: 'src/http_support/', icon: 'architecture', description: 'response header/body reconstruction 和 byte streams 的 HTTP carrier helpers。' },
+    { name: 'src/error/', icon: 'alert', description: '内部 typed errors 和紧凑的客户端 HTTP/SSE error rendering。' },
+    { name: 'src/observe/', icon: 'gauge', description: '结构化日志、request hints、duration coloring 和 capture-safe diagnostics。' },
+  ]}
+/>
+
+## 页面
+
+<FeatureGrid
+  items={[
+    { title: '架构', href: '/zh/developer/architecture', icon: 'architecture', description: '请求生命周期、模块边界、pipeline 阶段，以及协议转换如何接入代理链路。' },
+    { title: '请求生命周期', href: '/zh/developer/architecture/request-lifecycle', icon: 'flow', description: '从入站请求、provider transport 到出站响应的源码级路径。' },
+    { title: '协议转换', href: '/zh/developer/protocol-conversion', icon: 'flow', description: '面向协议 pair 的转换规则、wire model 对齐、SDK 比对和流式标识模型。' },
+    { title: '流式内部实现', href: '/zh/developer/streaming-internals', icon: 'terminal', description: 'carrier、BodyObserver、SSE scanner 与协议状态机。' },
+    { title: '错误处理内部实现', href: '/zh/developer/error-handling-internals', icon: 'alert', description: '强类型错误、ErrorResponseSpec、fields、payload 与 HTTP/SSE 渲染。' },
+    { title: '该改哪里', href: '/zh/developer/where-to-change-code', icon: 'route', description: '面向 source owners、测试、验证和随实现移动的文档的任务地图。' },
+    { title: '测试地图', href: '/zh/developer/test-map', icon: 'check', description: '配置、路由、转换、流式、错误、capture 和文档变更的验证指南。' },
+    { title: '贡献者检查清单', href: '/zh/developer/contributor-checklist', icon: 'check', description: '运行时配置、转换 pair、流式、错误、测试和文档的操作清单。' },
+    { title: '文档维护', href: '/zh/developer/docs-maintenance', icon: 'book', description: '文档职责、双语页面、MDX 组件、验证和 source-of-truth 边界规则。' },
+  ]}
+/>
+
+## 改动地图
+
+<ModuleGrid
+  modules={[
+    { name: '新增运行时配置', icon: 'config', description: '更新 src/config.rs、config.example.toml、用户文档、reference 文档，以及 generated defaults 测试。' },
+    { name: '该改哪里', icon: 'route', description: '修改 routing、provider、translation、streaming、error、capture 或 docs internals 前，先看任务化源码地图。' },
+    { name: '测试地图', icon: 'check', description: '先选择最窄验证命令，再为用户可见 proxy 或 streaming 行为扩大验证。' },
+    { name: '新增转换 pair', icon: 'flow', description: '补齐 request/response/streaming conversion、route 支持、行为测试和协议文档。' },
+    { name: '修改 streaming', icon: 'timer', description: '检查 carrier 语义、SSE terminal events、tool-call stalls、Unicode chunk scanning 和 e2e 测试。' },
+    { name: '修改错误渲染', icon: 'alert', description: '更新错误投影、保留 headers、SSE error 行为和行为契约。' },
+  ]}
+/>

@@ -1,0 +1,91 @@
+---
+title: 安装与升级
+description: 本地安装 ProxAI、定位应用目录，并安全升级
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 安装与升级
+
+当你需要处理运维路径时使用本页：获取二进制、在本地运行、定位配置，并在不丢失本地状态的前提下升级。
+
+<ProxaiCallout type="note" title="运行时配置保持本地">
+  `config.toml` 有意保持本地并被 git 忽略。仓库中的 `config.example.toml` 是参考示例；真正的运行时配置位于你的应用目录。
+</ProxaiCallout>
+
+## 安装路径
+
+<PipelineStrip
+  steps={[
+    { title: '获取发布二进制', description: '下载适合当前平台的 ProxAI release，或从源码本地构建。' },
+    { title: '放入 PATH', description: '把可执行文件放到 shell 和客户端启动器都能找到的位置。' },
+    { title: '首次启动', description: '第一次运行会创建应用目录和本地示例文件。' },
+    { title: '编辑 config.toml', description: '添加 provider、默认 provider 名称和路由。' },
+    { title: '连接客户端', description: '把 OpenAI-compatible 客户端指向本地 ProxAI 监听地址。' },
+  ]}
+/>
+
+第一次发请求的完整流程见[快速开始](/zh/using/quick-start)。
+
+## 应用目录
+
+ProxAI 会把本地运行状态放在应用目录。具体路径取决于平台和启动配置。
+
+<ReferenceTable
+  columns={['产物', '用途']}
+  rows={[
+    ['`config.toml`', '本地运行时配置。应保持私有，不提交。'],
+    ['`config.example.toml`', '生成的本地参考示例。仓库中的副本仍是规范示例。'],
+    ['`captures/`', '可选的本地请求/响应调试产物，可能包含私有数据。'],
+    ['`logs/`', '配置后生成的本地诊断日志。'],
+  ]}
+/>
+
+文件职责见[环境与文件](/zh/reference/environment-and-files)。
+
+## 升级检查清单
+
+<ReferenceTable
+  columns={['检查项', '为什么重要']}
+  rows={[
+    ['阅读发布说明', '关注配置、路由、协议转换、流式或错误响应变化。'],
+    ['保留 `config.toml`', '不要用示例文件覆盖本地私有配置。'],
+    ['对比示例', '新增选项时以仓库中的 `config.example.toml` 作为单一示例来源。'],
+    ['跑一个小请求', '在处理大 prompt 或工具调用前，先验证默认 provider 路由。'],
+    ['如果使用流式则单独检查', '流式行为对用户可见，应该用真实客户端验证。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 本地源码构建
+
+如果从源码构建，在替换工作中的二进制之前，优先运行仓库验证命令：
+
+```sh
+just check
+```
+
+只改站点时使用：
+
+```sh
+just site check
+```
+
+## 什么时候需要回看配置
+
+<FeatureGrid
+  items={[
+    { title: '添加 provider', href: '/zh/using/configuration#添加-provider', icon: 'config', description: '添加带 protocol、base_url 和 api_key 的命名 provider。' },
+    { title: '按模型路由', href: '/zh/using/routing-and-providers', icon: 'route', description: '当某个模型模式需要 provider 或协议覆盖时使用显式路由。' },
+    { title: '修改错误格式', href: '/zh/reference/error-responses', icon: 'alert', description: '面向人工调试使用 text，面向 SDK 风格客户端使用 JSON。' },
+    { title: '捕获一个请求', href: '/zh/using/observability#捕获一个请求', icon: 'security', description: '开启最窄阶段，复现一次，然后关闭捕获。' },
+  ]}
+/>
+
+## 安全回滚
+
+通常只需要把二进制替换回旧版本，同时保留同一个本地 `config.toml`。如果新版本引入了配置字段，只移除旧版本无法解析的字段。
+
+<ProxaiCallout type="caution" title="不要把捕获产物作为回滚材料提交">
+  captures 和 logs 可能包含 prompt、工具参数、输出、provider payload 和上游标识。除非经过有意脱敏，否则保持本地。
+</ProxaiCallout>

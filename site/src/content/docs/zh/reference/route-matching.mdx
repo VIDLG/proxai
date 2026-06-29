@@ -1,0 +1,72 @@
+---
+title: 路由匹配
+description: ProxAI route matching、protocol guard、model pattern 与 fallback 行为参考
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+
+# 路由匹配
+
+Route matching 为一个入站请求选择 provider。随后 provider 的 `protocol` 决定出站 wire 行为。
+
+<FlowDiagram
+  client:only="react"
+  height={520}
+  nodes={[
+    { id: 'start', position: { x: 0, y: 0 }, data: { label: '入站请求\npath 检测协议' }, type: 'default' },
+    { id: 'route', position: { x: 0, y: 140 }, data: { label: '扫描显式 routes' }, type: 'default' },
+    { id: 'model', position: { x: 0, y: 280 }, data: { label: 'model_pattern 命中？' }, type: 'default' },
+    { id: 'guard', position: { x: 260, y: 280 }, data: { label: 'request_protocol 兼容？' }, type: 'default' },
+    { id: 'provider', position: { x: 260, y: 420 }, data: { label: '选择 route provider' }, type: 'default' },
+    { id: 'fallback', position: { x: -260, y: 420 }, data: { label: '使用入站协议\n默认 provider' }, type: 'default' },
+    { id: 'error', position: { x: 520, y: 420 }, data: { label: '配置错误\n模型命中 + 协议不匹配' }, type: 'default' },
+  ]}
+  edges={[
+    { id: 'a', source: 'start', target: 'route', label: '' },
+    { id: 'b', source: 'route', target: 'model', label: '' },
+    { id: 'c', source: 'model', target: 'guard', label: '是' },
+    { id: 'd', source: 'model', target: 'fallback', label: '无 route 命中' },
+    { id: 'e', source: 'guard', target: 'provider', label: '是 / 未设置 guard' },
+    { id: 'f', source: 'guard', target: 'error', label: '显式不匹配' },
+  ]}
+/>
+
+## Route 字段
+
+<ReferenceTable
+  columns={['字段', '作用']}
+  rows={[
+    ['name', '`--route-override` 使用的可选稳定标识'],
+    ['request_protocol', '可选入站协议 guard：`openai_responses`、`openai_chat_completions` 或 `anthropic_messages`'],
+    ['match_kind', '`exact`、`glob`、`regex` 或 `auto`'],
+    ['model_pattern', '匹配入站 model 的逻辑模型选择器'],
+    ['provider', 'route 命中时选择的 provider 名称'],
+    ['upstream_model', 'provider request 序列化前应用的可选模型改写'],
+  ]}
+/>
+
+## 匹配结果
+
+<ReferenceTable
+  columns={['条件', '结果']}
+  rows={[
+    ['模型没有命中任何显式 route', '使用 `routing.default_provider_names.<inbound_protocol>`'],
+    ['模型命中且 `request_protocol` 省略', 'Route 可以匹配检测出的入站协议'],
+    ['模型命中且显式 `request_protocol` 等于检测出的协议', '使用 route provider'],
+    ['模型命中但显式 `request_protocol` 不同', '返回配置错误，而不是 fallback'],
+    ['选中 provider protocol 与入站协议不同', '如果支持对应转换 pair，则执行显式转换；否则显式失败'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="tip" title="谨慎使用 request_protocol">
+  普通模型路由可以省略 `request_protocol`。只有同一个模型 pattern 需要 endpoint-specific 行为时再设置它。
+</ProxaiCallout>
+
+## 相关文档
+
+- [路由与 Provider](/zh/using/routing-and-providers)
+- [配置说明](/zh/using/configuration)
+- [协议](/zh/reference/protocols)
+- [行为契约](/zh/reference/behavior-contracts#路由与转换)

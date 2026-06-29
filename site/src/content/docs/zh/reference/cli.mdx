@@ -3,7 +3,7 @@ title: CLI
 description: ProxAI 运行 flag、route override、capture 子命令与默认端点
 ---
 
-import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
 
 # CLI
 
@@ -28,15 +28,18 @@ proxai \
   --route-override ROUTE.FIELD=VALUE
 ```
 
-| Flag | 用途 |
-|---|---|
-| `--config` | 指定 config 文件路径（默认为 app dir 下的 `config.toml`） |
-| `--upstream` | 临时覆盖本次运行中 `openai_responses` 默认 provider 的上游 URL |
-| `--api-key` | 临时覆盖本次运行中 `openai_responses` 默认 provider 的 API key |
-| `--port` | 覆盖本地代理监听端口 |
-| `--log-level` | 覆盖日志级别 |
-| `--log-format` | 覆盖日志输出格式（`human` 或 `json`） |
-| `--route-override` | 临时覆盖某个具名 `[[routing.routes]]` 字段 |
+<ReferenceTable
+  columns={['Flag', '用途']}
+  rows={[
+    ['--config', '指定 config 文件路径（默认为 app dir 下的 `config.toml`）'],
+    ['--upstream', '临时覆盖本次运行中 `openai_responses` 默认 provider 的上游 URL'],
+    ['--api-key', '临时覆盖本次运行中 `openai_responses` 默认 provider 的 API key'],
+    ['--port', '覆盖本地代理监听端口'],
+    ['--log-level', '覆盖日志级别'],
+    ['--log-format', '覆盖日志输出格式（`human` 或 `json`）'],
+    ['--route-override', '临时覆盖某个具名 `[[routing.routes]]` 字段'],
+  ]}
+/>
 
 ## Route override
 
@@ -68,9 +71,9 @@ proxai --capture-upstream-response
 proxai --capture-outbound-response
 ```
 
-每个 capture phase 的含义见 [观测与诊断](/zh/observability)。默认端点和其他运行时限制见 [默认值与限制](/zh/reference/defaults-and-limits)。MCP 仅是本地控制面，见 [行为契约 C5 和 C6](/zh/reference/behavior-contracts#监听分离)。
+每个 capture phase 的含义见 [观测与诊断](/zh/using/observability)。默认端点和其他运行时限制见 [默认值与限制](/zh/reference/defaults-and-limits)。MCP 仅是本地控制面，见 [行为契约 C5 和 C6](/zh/reference/behavior-contracts#监听分离)。
 
 ## 相关参考
 
-- [配置示例](/zh/reference/configuration-example)
+- [配置参考](/zh/reference/configuration)
 - [错误响应](/zh/reference/error-responses)

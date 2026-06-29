@@ -23,7 +23,7 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
 }
 
 pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
-    translate_sse_stream(input, streaming::AnthropicToChatStreamTranslator::default())
+    translate_sse_stream(input, streaming::ChatCompletionStreamTranslator::default())
 }
 
 pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {

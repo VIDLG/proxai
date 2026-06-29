@@ -1,0 +1,147 @@
+---
+title: 协议转换
+description: 协议转换边界、命名、路由与专题索引的开发者总览。
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { FeatureGrid, ProtocolCompare } from '@components/ProxaiDocs.jsx';
+
+# 协议转换与 Wire Model 对齐
+
+English version: [Protocol Conversion and Wire-Model Alignment](/en/developer/protocol-conversion)
+
+ProxAI 保持协议转换显式、按协议对组织。这里是开发者视角的总览，具体规则拆分到专题页，便于维护和查阅。
+
+> 这是 `src/translation/` 的开发者入口。如果你想看面向使用者的协议行为，请先看 [协议指南](/zh/protocol)。
+
+## 边界
+
+- `src/protocol/` 负责协议专属的 Rust wire model。
+- `src/ingress/` 负责翻译前的入站解析与归一化。
+- `src/translation/` 负责在入站 `request_protocol` 和出站 provider `protocol` 之间做纯跨协议转换。
+- `src/provider/request.rs` 负责 provider 请求准备，包括模型改写、projection/summary 提取和 JSON body 序列化。
+- `src/provider/transport.rs` 负责出站 HTTP 传输、认证头、上游 URL 构造和发送。
+- `src/http_support/` 负责 HTTP carrier 辅助能力，例如 `ByteStream`、content-type/header 辅助和响应重建。
+
+不要把通用跨协议转换隐藏在 provider 子树里。Provider 代码可以处理 provider 本地兼容性怪癖，但协议到协议的 shape 改写应该放在 `src/translation/`。
+
+Translation API 在 carrier 边界应保持纯粹：
+
+- 请求转换：`(request_protocol, provider_protocol, normalized_payload) -> payload`
+- 非流式响应转换：`(request_protocol, provider_protocol, payload) -> payload`
+- 流式响应转换：`(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+
+不要把 HTTP `Response`、`Body`、provider request struct 或路由/模型改写细节传进 `src/translation/`。
+
+
+## 命名
+
+使用协议名描述 wire 行为：
+
+- `openai_responses`
+- `openai_chat_completions`
+- `anthropic_messages`
+
+转换模块使用成对命名，例如：
+
+- `openai_responses -> anthropic_messages`
+- `anthropic_messages -> openai_responses`
+
+Provider 名称是用户标签，不应被当成语义协议标识。
+
+
+## 路由与转换
+
+路由可以指定 `request_protocol`。如果省略，该路由可以匹配任意从实际请求路径检测出的入站协议。Provider `protocol` 控制出站 wire 格式，因此路由协议过滤和协议转换是两个独立决策。
+
+只有当同一个 model pattern 需要按不同请求 endpoint 分流时，才设置 `request_protocol`。如果 model pattern 匹配，但显式 `request_protocol` 与入站请求协议不同，ProxAI 会报告配置错误，而不是静默落到默认 provider。
+
+
+## Responses ↔ Anthropic 翻译架构
+
+ProxAI 位于客户端和上游 provider 之间，在每次请求/响应周期中执行两层翻译：
+
+<FlowDiagram
+  height={260}
+  nodes={[
+    { id: 'client', position: { x: 0, y: 80 }, data: { label: 'Client\nZed / SDK' }, type: 'default' },
+    { id: 'proxai', position: { x: 260, y: 80 }, data: { label: 'ProxAI\n翻译层' }, type: 'default' },
+    { id: 'upstream', position: { x: 560, y: 80 }, data: { label: 'Anthropic-compatible\n上游' }, type: 'default' },
+  ]}
+  edges={[
+    { id: 'client-proxai', source: 'client', target: 'proxai', label: 'openai_responses / chat / anthropic_messages', animated: true },
+    { id: 'proxai-upstream', source: 'proxai', target: 'upstream', label: 'anthropic_messages', animated: true },
+  ]}
+/>
+
+这意味着代理不会透传原始 provider 结构。每个方向独立翻译。这实现了 [行为契约 C27](/zh/reference/behavior-contracts#转换纯度)：
+
+- **请求**（client -> Anthropic）：客户端的 Responses 或 Chat payload 被翻译为 Anthropic Messages 请求。
+- **响应**（Anthropic -> client）：Anthropic 的 message 响应被翻译回客户端理解的 Responses 或 Chat payload。
+
+### InputItem: EasyMessage vs Item
+
+Responses 的 `input` 接受 `Vec<InputItem>`，每个 item 可以是：
+
+<ProtocolCompare
+  columns={['变体', '用途', '使用场景']}
+  rows={[
+    ['`EasyInputMessage`', '简单的 `role + content` 消息', '客户端构造新的 user/developer 消息'],
+    ['`Item`', '类型化的输出 item（function_call, reasoning 等）', '多轮对话：客户端将上一轮的 response item 原样回传'],
+    ['`ItemReference`', '通过 id 引用之前的 item', '多轮对话：引用 item 而不需要重复完整内容'],
+  ]}
+/>
+
+**ProxAI 的 Anthropic 翻译只产生 `EasyInputMessage`。** 这是因为 Anthropic 的 `MessageParam` 只有简单的 `role + content` 结构，没有回传 response item 的概念。`Item` 变体是给原生 Responses 客户端使用的，这些客户端会在多轮之间保留完整的 response 结构。
+
+`Item` 的使用示例（原生 Responses 多轮对话，非 Anthropic 翻译）：
+
+```json
+{
+  "input": [
+    {"type": "message", "role": "user", "content": "search"},
+    {"type": "function_call", "id": "fc_1", "name": "lookup", "arguments": "{}"},
+    {"type": "function_call_output", "call_id": "fc_1", "output": "result"}
+  ]
+}
+```
+
+### 为什么需要两层翻译
+
+Anthropic 的响应 item（`ToolUseBlock`, `ThinkingBlock` 等）在返回给客户端时会翻译为 Responses 输出 item（`FunctionCall`, `ReasoningItem` 等）。原始的 Anthropic 特有元数据（`tool_use_id`, `signature` 等）会在此过程中转换，因此客户端无法逐字节原样回传 Anthropic 结构。这是设计意图 -- ProxAI 保证两个方向的翻译正确性，客户端始终使用目标协议的类型。
+
+### Reasoning 请求控制
+
+OpenAI Responses 与 Anthropic-compatible Messages 对 reasoning 控制项的拆分不同：
+
+- Responses `reasoning.effort` 会映射到 Anthropic `output_config.effort`，支持的 effort 值为 `low`、`medium`、`high`、`xhigh`。这是 Anthropic 侧首选的 effort 字段。
+- Responses `reasoning.summary`（`auto`、`concise`、`detailed`）只能有损映射为 Anthropic `thinking.display: "summarized"`；Anthropic 没有等价的 summary 细粒度。
+- 只有 Responses `reasoning.summary`、没有 effort 时，映射为 Anthropic `thinking: {"type":"adaptive", "display":"summarized"}`。
+- 同时存在 Responses `reasoning.effort` 与 `reasoning.summary` 时，映射为 `output_config.effort` 加 adaptive `thinking.display`；ProxAI 不会凭空生成 legacy `thinking.budget_tokens`。
+- Responses `reasoning.effort: "none" | "minimal"` 映射为 Anthropic `thinking: {"type":"disabled"}`，因为 `output_config.effort` 没有 disabled/minimal 值。
+- Anthropic -> Responses 和 Anthropic -> Chat 请求转换仅把手动 `thinking.type: "enabled"` / `budget_tokens` 模式作为 legacy 兼容 fallback 接受。如果没有 `output_config.effort`，ProxAI 会把 budget 有损映射为 effort 枚举并记录 warning；如果存在 `output_config.effort`，则以它为准并忽略 legacy budget，同时记录 warning。
+- Anthropic `thinking.display: "summarized"` 映射为 Responses `reasoning.summary: "auto"`；`display: "omitted"` 不会请求 Responses summary。
+
+
+## 转换专题
+
+<FeatureGrid
+  items={[
+    { title: '消息位置', icon: 'route', href: '/zh/developer/protocol-conversion/message-placement', description: 'System/developer 指令、用户内容、工具调用、工具结果、choices 与流式终止。' },
+    { title: 'Refusal 与 Status 映射', icon: 'alert', href: '/zh/developer/protocol-conversion/refusal-and-status', description: 'Refusal 内容与终态状态在 Anthropic、Responses 和 Chat 之间如何映射。' },
+    { title: 'Anthropic Messages 到 Responses', icon: 'flow', href: '/zh/developer/protocol-conversion/anthropic-messages-to-openai-responses', description: 'Content blocks、tool_use、thinking、stop reasons 和 stream events 到 Responses output items。' },
+    { title: 'Chat 到 Anthropic Messages', icon: 'flow', href: '/zh/developer/protocol-conversion/openai-chat-completions-to-anthropic-messages', description: 'Chat 客户端的 messages、tools、streaming chunks、finish reasons 和有损 identity 行为。' },
+    { title: 'Responses 到 Anthropic Messages', icon: 'flow', href: '/zh/developer/protocol-conversion/openai-responses-to-anthropic-messages', description: '最高价值 pair 的 request、response、streaming、tool、reasoning 和 stop 转换。' },
+    { title: 'SDK 对齐与兼容性', icon: 'check', href: '/zh/developer/protocol-conversion/sdk-alignment', description: 'Required-nullable 字段、TypeScript SDK 比对和已测量的兼容性修复。' },
+    { title: '流式标识符', icon: 'flow', href: '/zh/developer/protocol-conversion/streaming-identifiers', description: '流内 index、item_id、事件粒度、snapshot-bound state 与并行拼装。' },
+  ]}
+/>
+
+## 文档维护期望
+
+当协议转换或 wire-model 对齐规则发生变化时：
+
+1. 更新本文档。
+2. 如果行为变化影响用户或示例，更新 `site/src/content/docs/en/` 与 `site/src/content/docs/zh/` 下的相关协议文档。
+3. 当变化影响面向用户的开发工作流或配置时，更新 `README.md` 和 `README_CN.md`。

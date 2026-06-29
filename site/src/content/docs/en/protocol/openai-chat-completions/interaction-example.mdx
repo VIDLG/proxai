@@ -1,0 +1,37 @@
+---
+title: Chat Completions Interaction Example
+description: A compact multi-turn Chat Completions flow with function tools, tool messages, and SSE chunks
+---
+
+import { EventTimeline, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Chat Completions Interaction Example
+
+Back to [OpenAI Chat Completions](/en/protocol/openai-chat-completions).
+
+This compact example mirrors the detailed Chinese walkthrough. It shows the Chat shape: candidate `choices[]`, each containing one assistant delta/message and optional `tool_calls[]`.
+
+<EventTimeline events={[
+  { name: 'client request', description: 'Client sends ordered `messages`, a function tool, optional search-like request settings, and `stream: true`.' },
+  { name: 'assistant delta', description: 'The stream starts with a choice delta, usually carrying `role: assistant`.' },
+  { name: 'tool call deltas', description: '`choices[].delta.tool_calls[]` carries function argument fragments.' },
+  { name: 'finish_reason', description: '`finish_reason: tool_calls` marks that arguments are complete and local tools should run.' },
+  { name: 'tool message', description: 'The next request sends a `role: tool` message with the matching `tool_call_id`.' },
+  { name: 'final answer', description: 'The final stream emits `delta.content`, then `finish_reason: stop`, then `[DONE]`.' },
+]} />
+
+## Join keys
+
+<ReferenceTable
+  columns={['Entity', 'Join key', 'Notes']}
+  rows={[
+    ['choice', '`choices[].index`', 'Different candidate answers can interleave.'],
+    ['tool call', '`choice.index + tool_calls[].index`', 'Later argument chunks may omit the tool id/name.'],
+    ['tool result', '`tool_call_id`', 'The next request returns local tool output with this id.'],
+    ['stream end', '`finish_reason` then `[DONE]`', 'Chat streams use a data-only sentinel after terminal chunks.'],
+  ]}
+/>
+
+<ProxaiCallout type="note" title="ProxAI behavior">
+  For `openai_chat_completions -> openai_chat_completions`, ProxAI preserves SSE bytes and observes chunks for usage, finish reason, and compact logs. It does not inject Responses-style tool argument timeout diagnostics on the Chat pass-through path.
+</ProxaiCallout>

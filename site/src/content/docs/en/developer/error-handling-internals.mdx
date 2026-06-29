@@ -1,0 +1,84 @@
+---
+title: Error Handling Internals
+description: Internal error projection — typed errors, ErrorResponseSpec, fields, payload, and rendering
+robots: noindex
+---
+
+import { ConversionPath, FeatureGrid, ProxaiCallout, ReferenceTable, TroubleshootingGrid } from '@components/ProxaiDocs.jsx';
+import { JsonExample } from '@components/JsonExample.jsx';
+
+export const upstreamErrorPayload = {
+  error: {
+    message: 'quota exhausted',
+    type: 'upstream_error',
+    code: 'rate_limit_exceeded',
+    param: 'input',
+    status: 429,
+  },
+};
+
+# Error Handling Internals
+
+ProxAI keeps internal errors strongly typed, then projects them into compact client-facing HTTP or SSE errors. The projection boundary is centralized so provider, upstream, and translation code do not each invent their own response format.
+
+<ProxaiCallout type="tip" title="Typed inside, stable outside">
+  Internal errors preserve domain semantics for code and diagnostics. Client responses stay small, stable, and readable.
+</ProxaiCallout>
+
+## Error projection pipeline
+
+<ConversionPath
+  from={{ title: 'Typed internal error', description: 'RequestError, ConfigError, InternalError, UpstreamError, TranslationError, SSE errors' }}
+  via={[
+    { title: 'error/render.rs', description: 'Maps domain errors into ErrorResponseSpec' },
+    { title: 'ErrorResponseFields', description: 'Shared HTTP/SSE status + payload fields' },
+  ]}
+  to={{ title: 'Client response', description: 'HTTP text/json response or SSE error event bytes' }}
+/>
+
+## Internal error taxonomy
+
+<ReferenceTable
+  columns={['Error type', 'Meaning']}
+  rows={[
+    ['RequestError', 'Inbound body or validation failure'],
+    ['ConfigError', 'Config loading and config-file reads'],
+    ['InternalError', 'Runtime invariants, local IO, JSON serialization, internal body reads'],
+    ['UpstreamError', 'Upstream send/status/body-read failures'],
+    ['TranslationError', 'Protocol payload conversion failures'],
+    ['SseError / SseTranslationError', 'SSE event semantics'],
+    ['ByteStreamError', 'Stream carrier failures'],
+  ]}
+/>
+
+Do not hide semantic stream or HTTP failures inside `std::io::Error`; reserve IO errors for real OS/filesystem IO.
+
+## Client-facing payload
+
+JSON format wraps a compact error payload:
+
+<JsonExample data={upstreamErrorPayload} />
+
+Text format returns only the human-readable message, which is the default for Zed readability.
+
+## Preserved upstream details
+
+For upstream non-2xx responses, ProxAI keeps useful details when the upstream actually provides them:
+
+- `Retry-After`
+- upstream request id headers
+- rate-limit headers
+- OpenAI-style `code`
+- OpenAI-style `param`
+
+It should not fabricate upstream `code` or `param` values. These rules implement [Behavior Contract C15 and C18](/en/reference/behavior-contracts#errors).
+
+## Related docs
+
+<FeatureGrid
+  items={[
+    { title: 'Configuration', href: '/en/using/configuration', icon: 'config', description: 'Choose text or JSON error responses with [error_responses].' },
+    { title: 'Observability', href: '/en/using/observability', icon: 'terminal', description: 'Capture and logging boundaries for debugging failures safely.' },
+    { title: 'Troubleshooting', href: '/en/using/troubleshooting', icon: 'alert', description: 'User-facing symptom cards and next checks.' },
+  ]}
+/>

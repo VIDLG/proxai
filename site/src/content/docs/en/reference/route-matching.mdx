@@ -1,0 +1,72 @@
+---
+title: Route Matching
+description: Reference for ProxAI route matching, protocol guards, model patterns, and fallback behavior
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+
+# Route Matching
+
+Route matching selects a provider for one inbound request. Provider `protocol` then decides the outbound wire behavior.
+
+<FlowDiagram
+  client:only="react"
+  height={520}
+  nodes={[
+    { id: 'start', position: { x: 0, y: 0 }, data: { label: 'Inbound request\npath detects protocol' }, type: 'default' },
+    { id: 'route', position: { x: 0, y: 140 }, data: { label: 'Scan explicit routes' }, type: 'default' },
+    { id: 'model', position: { x: 0, y: 280 }, data: { label: 'model_pattern matches?' }, type: 'default' },
+    { id: 'guard', position: { x: 260, y: 280 }, data: { label: 'request_protocol compatible?' }, type: 'default' },
+    { id: 'provider', position: { x: 260, y: 420 }, data: { label: 'Select route provider' }, type: 'default' },
+    { id: 'fallback', position: { x: -260, y: 420 }, data: { label: 'Use default provider\nfor inbound protocol' }, type: 'default' },
+    { id: 'error', position: { x: 520, y: 420 }, data: { label: 'Config error\nmodel match + protocol mismatch' }, type: 'default' },
+  ]}
+  edges={[
+    { id: 'a', source: 'start', target: 'route', label: '' },
+    { id: 'b', source: 'route', target: 'model', label: '' },
+    { id: 'c', source: 'model', target: 'guard', label: 'yes' },
+    { id: 'd', source: 'model', target: 'fallback', label: 'no route matches' },
+    { id: 'e', source: 'guard', target: 'provider', label: 'yes / omitted guard' },
+    { id: 'f', source: 'guard', target: 'error', label: 'explicit mismatch' },
+  ]}
+/>
+
+## Route fields
+
+<ReferenceTable
+  columns={['Field', 'Role']}
+  rows={[
+    ['name', 'Optional stable identifier used by `--route-override`'],
+    ['request_protocol', 'Optional inbound protocol guard: `openai_responses`, `openai_chat_completions`, or `anthropic_messages`'],
+    ['match_kind', '`exact`, `glob`, `regex`, or `auto`'],
+    ['model_pattern', 'Logical model selector matched against the inbound model'],
+    ['provider', 'Provider name selected when the route matches'],
+    ['upstream_model', 'Optional model rewrite applied before the provider request is serialized'],
+  ]}
+/>
+
+## Matching outcomes
+
+<ReferenceTable
+  columns={['Condition', 'Outcome']}
+  rows={[
+    ['Model does not match any explicit route', 'Use `routing.default_provider_names.<inbound_protocol>`'],
+    ['Model matches and `request_protocol` is omitted', 'Route can match the detected inbound protocol'],
+    ['Model matches and explicit `request_protocol` equals detected protocol', 'Use the route provider'],
+    ['Model matches but explicit `request_protocol` differs', 'Return a configuration error instead of falling through'],
+    ['Selected provider protocol differs from inbound protocol', 'Use the explicit translation pair if supported; otherwise fail explicitly'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="tip" title="Use request_protocol sparingly">
+  Omit `request_protocol` for ordinary model routing. Set it only when the same model pattern needs endpoint-specific behavior.
+</ProxaiCallout>
+
+## Related docs
+
+- [Routing and Providers](/en/using/routing-and-providers)
+- [Configuration](/en/using/configuration)
+- [Protocols](/en/reference/protocols)
+- [Behavior Contracts](/en/reference/behavior-contracts#routing-and-conversion)

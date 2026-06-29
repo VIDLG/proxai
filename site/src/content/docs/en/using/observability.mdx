@@ -1,0 +1,112 @@
+---
+title: Observability
+description: Task-oriented guide to safe ProxAI logs, captures, request hints, and privacy-preserving diagnostics
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Observability
+
+Use observability to answer one debugging question at a time without leaking private prompts, API keys, or unnecessary upstream details.
+
+<ProxaiCallout type="tip" title="Start narrow">
+  Prefer compact logs first. If logs are not enough, capture the narrowest phase for one sanitized request, then disable capture again.
+</ProxaiCallout>
+
+## Read logs safely
+
+Logs should be compact, structured, and privacy-preserving by default. They can help identify routing decisions, provider selection, upstream status, stream outcomes, and request hints without storing full payloads.
+
+Logs should not include:
+
+- request bodies
+- `Authorization` headers
+- API keys
+- private prompts
+- unnecessary private upstream URL details
+
+These rules implement [Behavior Contract C23–C25](/en/reference/behavior-contracts#privacy).
+
+## Capture one request
+
+<PipelineStrip
+  steps={[
+    { title: 'Choose the question', description: 'What do you need to see: client input, provider request, upstream response, or final outbound response?' },
+    { title: 'Pick the phase', description: 'Use the narrowest capture phase that can answer the question.' },
+    { title: 'Enable briefly', description: 'Use `proxai capture enable ...` or `[capture]` switches for a short debugging window.' },
+    { title: 'Reproduce once', description: 'Send one minimal sanitized request.' },
+    { title: 'Disable and sanitize', description: 'Keep captures local; sanitize before turning anything into a fixture.' },
+  ]}
+/>
+
+CLI example:
+
+```sh
+proxai capture status
+proxai capture enable provider-request
+# reproduce once
+proxai capture disable provider-request
+```
+
+## Choose the phase
+
+<ReferenceTable
+  columns={['Question', 'Phase']}
+  rows={[
+    ['What did the local client send?', '`inbound_request`'],
+    ['Which provider payload did ProxAI prepare?', '`provider_request`'],
+    ['What status, headers, or bytes did the upstream return?', '`upstream_response`'],
+    ['What did ProxAI return to the client?', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+The capture directory is fixed under the app directory. Config only controls whether each phase is written:
+
+```toml
+[capture]
+inbound_request_enabled = false
+provider_request_enabled = false
+upstream_response_enabled = false
+outbound_response_enabled = false
+```
+
+For exact phase boundaries and privacy risks, see [Capture Phases](/en/reference/capture-phases).
+
+## Sanitize a capture
+
+Before sharing or committing anything derived from a capture:
+
+- remove API keys and Authorization headers
+- remove private prompts, files, tool arguments, and model outputs
+- trim unrelated request/response data
+- replace private upstream URLs with sanitized placeholders
+- keep only the smallest payload that reproduces the behavior
+
+<ProxaiCallout type="caution" title="Captures can contain private data">
+  Captures may include prompts, tool arguments, model outputs, and upstream payloads. Keep them local unless they have been deliberately trimmed and sanitized.
+</ProxaiCallout>
+
+## Understand request hints
+
+Request hints are small protocol-aware summaries used for diagnostics. They should help identify common routing/proxy issues without logging full payloads.
+
+Useful hints include:
+
+<ReferenceTable
+  columns={['Hint type', 'Useful for']}
+  rows={[
+    ['Detected request protocol', 'Confirming path-based ingress behavior'],
+    ['Model and route summary', 'Checking provider selection without logging prompts'],
+    ['Streaming outcome', 'Understanding whether terminal events were seen'],
+    ['Upstream status summary', 'Separating provider failure from local translation failure'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Related docs
+
+- [Troubleshooting](/en/using/troubleshooting)
+- [Capture Phases](/en/reference/capture-phases)
+- [Environment and Files](/en/reference/environment-and-files)
+- [Streaming behavior](/en/protocol/streaming-behavior)

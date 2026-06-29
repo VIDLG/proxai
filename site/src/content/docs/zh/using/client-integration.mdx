@@ -1,0 +1,109 @@
+---
+title: 客户端接入
+description: 将 OpenAI-compatible 或 Anthropic-style 客户端连接到本地 ProxAI 代理
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 客户端接入
+
+当本地客户端或 SDK 需要填写 base URL、API key、model、endpoint 或 streaming 设置时，看本页。
+
+<ProxaiCallout type="note" title="本地客户端 key 不是 provider key">
+  Provider 认证由 `config.toml` 控制。如果客户端 UI 要求填写 API key，可以填一个本地占位值；真正的上游 key 应放在选中的 provider 配置里。
+</ProxaiCallout>
+
+## 接入流程
+
+<PipelineStrip
+  steps={[
+    { title: '启动 ProxAI', description: '使用你的运行时配置启动本地代理。' },
+    { title: '设置 base URL', description: '让客户端指向本地 Proxy listener，而不是上游 provider。' },
+    { title: '选择 endpoint', description: '请求 path 决定入站协议。' },
+    { title: '使用模型名', description: '路由先匹配客户端发送的模型，再可选改写 upstream_model。' },
+    { title: '发送小请求', description: '在使用工具或大 prompt 前，先验证路由和错误格式。' },
+  ]}
+/>
+
+## Base URL 与 endpoints
+
+<ReferenceTable
+  columns={['客户端 endpoint', '入站协议', '使用场景']}
+  rows={[
+    ['`/v1/responses` 或 `/responses`', '`openai_responses`', '客户端支持 OpenAI Responses 语义。'],
+    ['`/v1/chat/completions` 或 `/chat/completions`', '`openai_chat_completions`', '客户端期望 Chat Completions `choices[]`。'],
+    ['`/v1/messages` 或 `/messages`', '`anthropic_messages`', '客户端发送 Anthropic Messages payload。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## API keys
+
+<ReferenceTable
+  columns={['位置', '值', '效果']}
+  rows={[
+    ['客户端 UI 或 SDK', '如果必填，可以用任意本地占位值', '满足客户端要求；不控制上游 provider 认证。'],
+    ['`providers.<name>.api_key`', '真实上游 provider key', '按 provider 协议认证头发送给上游。'],
+    ['环境变量', '仅当你的启动器把它注入配置或 CLI 时有效', 'ProxAI 不要求客户端发送 provider secret。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+精确认证行为见[行为契约](/zh/reference/behavior-contracts#provider-认证)。
+
+## 模型名与路由
+
+客户端发送的模型会先被匹配，然后才做 provider model rewrite：
+
+```toml
+[[routing.routes]]
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+```
+
+- `model_pattern` 匹配客户端发送的值。
+- `provider` 选择上游配置。
+- `upstream_model` 是 ProxAI 发给 provider 的模型名。
+
+详见[路由与 Provider](/zh/using/routing-and-providers) 和[路由匹配](/zh/reference/route-matching)。
+
+## 错误格式
+
+交互式调试优先使用可读 text；SDK 期望结构化错误时使用 JSON：
+
+```toml
+[error_responses]
+format = "json"
+```
+
+见[错误响应](/zh/reference/error-responses)。
+
+## 流式客户端
+
+流式客户端应预期协议专属终止信号：
+
+<ReferenceTable
+  columns={['协议', '终止信号']}
+  rows={[
+    ['OpenAI Responses', '`response.completed`'],
+    ['OpenAI Chat Completions', '`[DONE]`'],
+    ['Anthropic Messages', '`message_stop`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+如果工具调用参数已经开始但 stream 卡住，检查 `[tool_calls].timeout_secs`。见[流式行为](/zh/protocol/streaming-behavior)。
+
+## 后续页面
+
+<FeatureGrid
+  items={[
+    { title: '快速开始', href: '/zh/using/quick-start', icon: 'rocket', description: '首次本地运行和配置。' },
+    { title: '如何选择协议', href: '/zh/protocol/choosing-a-protocol', icon: 'protocol', description: '决定入站协议和 provider 协议。' },
+    { title: '常见排障', href: '/zh/using/troubleshooting', icon: 'alert', description: '症状、可能原因和下一步检查。' },
+    { title: 'CLI 参考', href: '/zh/reference/cli', icon: 'terminal', description: 'Flags、route overrides 和 capture commands。' },
+  ]}
+/>

@@ -1,0 +1,53 @@
+---
+title: 术语表
+description: ProxAI 协议、phase、路由、provider、streaming、capture 和错误的共享术语
+---
+
+import { GlossaryCards } from '@components/ProxaiDocs.jsx';
+
+# 术语表
+
+文档、配置、代码注释、日志和 capture metadata 中应一致使用这些术语。本页是术语地图；精确取值以对应 reference 页面为准。
+
+## 协议与路由
+
+<GlossaryCards
+  labels={{ definition: '定义', doNotConfuseWith: '不要混淆', usedIn: '使用位置', relatedDocs: '相关文档' }}
+  terms={[
+    { term: 'request protocol', definition: '从本地请求 path 检测出的入站协议，例如 `openai_responses` 或 `anthropic_messages`。', doNotConfuseWith: 'Provider `protocol`，后者控制出站 wire 行为。', usedIn: ['routing', 'ingress', 'captures'], relatedDocs: [{ label: '协议', href: '/zh/reference/protocols' }, { label: '路由匹配', href: '/zh/reference/route-matching' }] },
+    { term: 'provider protocol', definition: '配置在 provider 上的出站协议；控制 provider request 序列化和 upstream response 处理。', doNotConfuseWith: 'Provider name。名称只是用户标签，不表达协议语义。', usedIn: ['providers', 'translation', 'transport'], relatedDocs: [{ label: 'Provider 设置', href: '/zh/using/provider-setup' }, { label: '兼容性矩阵', href: '/zh/reference/compatibility-matrix' }] },
+    { term: 'protocol value', definition: '`openai_responses`、`openai_chat_completions` 或 `anthropic_messages` 三者之一。', doNotConfuseWith: 'OpenAI 或 Anthropic 这类市场名称；protocol value 描述 wire 行为。', usedIn: ['config', 'routing', 'translation'], relatedDocs: [{ label: '协议', href: '/zh/reference/protocols' }] },
+    { term: 'translation pair', definition: '从入站 request protocol 到 provider protocol 的有向转换，例如 `openai_chat_completions -> anthropic_messages`。', doNotConfuseWith: 'Provider route。Route 选择 provider；translation pair 转换 payload 和 stream。', usedIn: ['translation', 'compatibility'], relatedDocs: [{ label: '协议转换', href: '/zh/developer/protocol-conversion' }, { label: '兼容性矩阵', href: '/zh/reference/compatibility-matrix' }] },
+    { term: 'provider name', definition: '配置好的上游 provider 的用户定义标签。', doNotConfuseWith: 'Provider protocol。名称 `anthropic` 不会自动意味着 `anthropic_messages`。', usedIn: ['config', 'routes'], relatedDocs: [{ label: '路由与 Provider', href: '/zh/using/routing-and-providers' }] },
+    { term: 'route', definition: '默认 provider fallback 之前用于选择 provider 的显式 model/protocol 规则。', doNotConfuseWith: 'Default provider selection；它只在没有显式 route 命中时生效。', usedIn: ['routing', 'config'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
+    { term: 'request_protocol guard', definition: '可选 route 字段，把一个模型匹配限制到某个检测出的入站协议。', doNotConfuseWith: 'Provider protocol。Guard 过滤入站匹配，不控制出站序列化。', usedIn: ['routing', 'config'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }, { label: '行为契约', href: '/zh/reference/behavior-contracts#路由与转换' }] },
+  ]}
+/>
+
+## Phase 与诊断
+
+<GlossaryCards
+  labels={{ definition: '定义', doNotConfuseWith: '不要混淆', usedIn: '使用位置', relatedDocs: '相关文档' }}
+  terms={[
+    { term: 'inbound_request', definition: '包含 ProxAI 收到的本地客户端请求的 pipeline phase。', doNotConfuseWith: '`provider_request`，后者已经经过 provider 选择、转换、模型改写和序列化。', usedIn: ['captures', 'logs'], relatedDocs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }] },
+    { term: 'provider_request', definition: '包含选中、转换并序列化后的 provider request 的 pipeline phase。', doNotConfuseWith: '原始入站客户端 payload。Provider request 可能使用不同协议和模型名。', usedIn: ['captures', 'provider request'], relatedDocs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }] },
+    { term: 'upstream_response', definition: '包含上游 status、headers 和原始 body bytes 的 pipeline phase。', doNotConfuseWith: '`outbound_response`，后者已经过 response translation/reconstruction。', usedIn: ['captures', 'provider response'], relatedDocs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }] },
+    { term: 'outbound_response', definition: '包含返回给本地客户端的最终响应的 pipeline phase。', doNotConfuseWith: '上游原始 body；outbound response 可能已经被转换成入站协议形状。', usedIn: ['captures', 'client response'], relatedDocs: [{ label: 'Capture phases', href: '/zh/reference/capture-phases' }] },
+    { term: 'capture phase', definition: '可写入可选调试 artifacts 的具名 pipeline 位置。', doNotConfuseWith: 'Logs。Captures 可能包含私有 payload 数据，需要更严格处理。', usedIn: ['debugging', 'privacy'], relatedDocs: [{ label: '隐私与本地数据', href: '/zh/using/privacy-and-local-data' }] },
+    { term: 'request hints', definition: '紧凑的、协议感知的日志摘要，避免记录 private request bodies。', doNotConfuseWith: 'Payload captures，后者是显式本地产物。', usedIn: ['logs', 'observability'], relatedDocs: [{ label: '观测与诊断', href: '/zh/using/observability' }] },
+  ]}
+/>
+
+## 流式与错误
+
+<GlossaryCards
+  labels={{ definition: '定义', doNotConfuseWith: '不要混淆', usedIn: '使用位置', relatedDocs: '相关文档' }}
+  terms={[
+    { term: 'SSE', definition: 'Server-Sent Events；OpenAI 兼容与 Anthropic 风格 streaming response 使用的流式 carrier。', doNotConfuseWith: '协议事件语义。SSE 是 carrier；每个协议定义自己的事件名和终止标记。', usedIn: ['streaming', 'translation'], relatedDocs: [{ label: '流式行为', href: '/zh/protocol/streaming-behavior' }] },
+    { term: 'terminal event', definition: '标记语义流完成的协议特定事件或 sentinel，例如 `response.completed`、`[DONE]` 或 `message_stop`。', doNotConfuseWith: 'TCP 连接关闭。没有 terminal event 的 byte stream 关闭仍可能是语义不完整。', usedIn: ['streaming', 'tool calls'], relatedDocs: [{ label: '状态与停止原因', href: '/zh/reference/status-and-stop-reasons' }] },
+    { term: 'semantic timeout', definition: '协议语义条件的超时，例如 streamed tool-call arguments 已开始但未完成。', doNotConfuseWith: 'Idle-read timeout，后者表示没有上游 bytes 到达。', usedIn: ['tool calls', 'streaming'], relatedDocs: [{ label: '流式与工具调用', href: '/zh/using/streaming-and-tools' }] },
+    { term: 'idle-read timeout', definition: '等待上游 response bytes 时的传输层超时。', doNotConfuseWith: '总请求时长上限。它只在配置窗口内没有新 bytes 到达时触发。', usedIn: ['transport', 'streaming'], relatedDocs: [{ label: '默认值与限制', href: '/zh/reference/defaults-and-limits' }] },
+    { term: 'stop reason', definition: 'Provider/protocol-specific 的 generation 结束原因，例如 Anthropic `stop_reason`。', doNotConfuseWith: 'OpenAI Chat `finish_reason` 或 Responses `status`；映射是协议特定的。', usedIn: ['responses', 'streaming'], relatedDocs: [{ label: '状态与停止原因', href: '/zh/reference/status-and-stop-reasons' }] },
+    { term: 'client-facing error type', definition: '返回给客户端的稳定紧凑 `type` 值，例如 `stream_translation_error`。', doNotConfuseWith: '`TranslationError` 或 `SseError` 这类内部 Rust error taxonomy。', usedIn: ['errors', 'SDKs'], relatedDocs: [{ label: '错误响应', href: '/zh/reference/error-responses' }] },
+  ]}
+/>

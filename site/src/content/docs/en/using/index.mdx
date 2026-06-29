@@ -1,0 +1,58 @@
+---
+title: Using ProxAI
+description: User-facing guide for running, configuring, routing, observing, and troubleshooting ProxAI
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Using ProxAI
+
+This section is for running ProxAI as a local compatibility proxy. Start here if you are configuring providers, routing models, capturing one request, or debugging client-visible behavior.
+
+<PipelineStrip
+  steps={[
+    { title: 'Run locally', description: 'Install or build ProxAI, generate the app directory, and point your client at the local proxy.' },
+    { title: 'Configure providers', description: 'Keep long-lived runtime behavior in config.toml.' },
+    { title: 'Route intentionally', description: 'Use protocol-aware defaults and explicit routes only where needed.' },
+    { title: 'Debug safely', description: 'Use compact logs and narrow capture phases without committing private artifacts.' },
+  ]}
+/>
+
+<ProxaiCallout type="tip" title="Task docs first, reference second">
+  Use these pages for workflows. Use [Reference](/en/reference) when you need exact fields, defaults, phase names, or behavior contracts.
+</ProxaiCallout>
+
+## Scope
+
+<ReferenceTable
+  columns={['ProxAI is', 'ProxAI is not']}
+  rows={[
+    ['A local compatibility proxy for OpenAI-compatible and Anthropic-style traffic', 'A hosted multi-tenant AI gateway'],
+    ['An explicit protocol router with selected conversion pairs', 'A universal converter for every provider/protocol shape'],
+    ['A compact diagnostics tool for local Zed/proxy/provider problems', 'A prompt logging or analytics platform'],
+    ['A config.toml-centered local runtime', 'A provider management control plane'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+
+## Pages
+
+<FeatureGrid
+  items={[
+    { title: 'Quick Start', href: '/en/using/quick-start', icon: 'rocket', description: 'Run ProxAI locally, find the app directory, edit config.toml, and connect a client.' },
+    { title: 'Install and Upgrade', href: '/en/using/install-and-upgrade', icon: 'terminal', description: 'Get a binary, locate runtime files, upgrade safely, and roll back while preserving config.' },
+    { title: 'Client Integration', href: '/en/using/client-integration', icon: 'terminal', description: 'Base URL, endpoints, local keys, model routing, error format, and streaming client behavior.' },
+    { title: 'Zed Integration', href: '/en/using/zed-integration', icon: 'laptop', description: 'Point Zed at the local proxy, choose endpoints intentionally, and debug Responses/tool streaming safely.' },
+    { title: 'Provider Setup', href: '/en/using/provider-setup', icon: 'config', description: 'Provider names, protocols, base URLs, API keys, defaults, and explicit routes.' },
+    { title: 'Streaming and Tools', href: '/en/using/streaming-and-tools', icon: 'timer', description: 'Terminal events, tool-call stalls, semantic timeouts, idle-read timeouts, and safe captures.' },
+    { title: 'Privacy and Local Data', href: '/en/using/privacy-and-local-data', icon: 'security', description: 'Local artifacts, capture privacy, safe sharing, and what should never appear in logs.' },
+    { title: 'Known Limitations', href: '/en/using/known-limitations', icon: 'unsupported', description: 'Intentional non-goals, unsupported protocol pairs, lossy conversions, and local-data boundaries.' },
+    { title: 'Debugging Workflow', href: '/en/using/debugging-workflow', icon: 'alert', description: 'Classify failures, capture one phase, compare payloads, and sanitize evidence.' },
+    { title: 'Recipes', href: '/en/using/recipes', icon: 'zap', description: 'Task paths for provider setup, model routing, safe captures, and streaming diagnosis.' },
+    { title: 'Configuration', href: '/en/using/configuration', icon: 'config', description: 'Server listeners, routing, providers, capture, logging, and error response behavior.' },
+    { title: 'Routing and Providers', href: '/en/using/routing-and-providers', icon: 'route', description: 'How routes select providers and provider protocol controls outbound wire behavior.' },
+    { title: 'Observability', href: '/en/using/observability', icon: 'terminal', description: 'Logs, captures, request hints, and privacy boundaries for local debugging.' },
+    { title: 'Troubleshooting', href: '/en/using/troubleshooting', icon: 'alert', description: 'Common symptoms, likely causes, and next checks across requests, providers, and streaming.' },
+  ]}
+/>

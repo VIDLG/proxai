@@ -13,6 +13,9 @@ build:
 
 check:
     {{ pixi }} run -- pnpm run build
+    just check-docs
+
+check-docs:
     python ../tools/check_docs_i18n.py
 
 start:

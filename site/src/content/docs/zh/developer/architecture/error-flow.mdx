@@ -1,0 +1,88 @@
+---
+title: 错误流程
+description: 内部错误、上游失败、响应投影、保留 headers 与 SSE 错误渲染的维护者指南
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 错误流程
+
+本页说明内部失败如何变成紧凑的客户端 HTTP 或 SSE 错误。
+
+<ConversionPath
+  from={{ title: '内部错误', description: 'RequestError / ConfigError / UpstreamError / TranslationError / SseError / ByteStreamError' }}
+  via={[
+    { title: '分类', description: '选择稳定的客户端错误 type 和 status' },
+    { title: '保留安全细节', description: '保留有用上游 headers，同时不泄漏私有数据' },
+    { title: '渲染', description: '根据响应是否已开始，渲染 HTTP body 或 SSE error event' },
+  ]}
+  to={{ title: '客户端错误', description: 'text 或 JSON ErrorResponseSpec' }}
+/>
+
+## 内部分类
+
+<ReferenceTable
+  columns={['错误族', '用于']}
+  rows={[
+    ['`RequestError`', '入站 body 解析和客户端请求校验失败。'],
+    ['`ConfigError`', '配置加载、配置文件读取、route/provider 校验和启动配置失败。'],
+    ['`InternalError`', '代理运行时不变量、本地文件系统 IO、body 读取、序列化和边界失败。'],
+    ['`UpstreamError`', 'Provider 发送失败、非成功状态和上游 body 读取失败。'],
+    ['`TranslationError`', '协议 payload 转换失败。'],
+    ['`SseError` / `SseTranslationError`', 'SSE event 语义和流式转换失败。'],
+    ['`ByteStreamError`', 'Byte stream carrier 失败。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 投影规则
+
+<ReferenceTable
+  columns={['规则', '原因']}
+  rows={[
+    ['不要逐字暴露内部 taxonomy', '客户端 type 应稳定且紧凑。'],
+    ['Payload 总是包含数字 `status`', 'SSE error event 在 stream 开始后无法再改变 HTTP status。'],
+    ['上游提供时保留有用诊断 headers', '`Retry-After`、upstream request id 和 rate-limit headers 有助于调试。'],
+    ['不要伪造上游 `code` 或 `param`', '这些值只有上游实际提供时才存在。'],
+    ['不要记录私有 request body 或 Authorization headers', '错误默认也必须隐私安全。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## HTTP 与 SSE
+
+<ReferenceTable
+  columns={['Carrier', '行为']}
+  rows={[
+    ['HTTP 响应开始前', '按配置渲染普通 HTTP error，payload 为 text 或 JSON。'],
+    ['SSE stream 开始后', '尽可能渲染协议兼容 error event；payload 中包含 status。'],
+    ['上游非 2xx', '投影为配置的客户端错误格式，并保留安全 headers。'],
+    ['Stream 语义失败', '返回/发出能区分 incomplete terminal semantics 与正常完成的错误。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="不要把语义性流失败包装成 IO">
+  SSE 语义和 byte-stream carrier 错误应使用 stream-specific errors。`std::io::Error` 只用于真实 OS/文件系统 IO。
+</ProxaiCallout>
+
+## 源码归属
+
+<ReferenceTable
+  columns={['关注点', '归属']}
+  rows={[
+    ['Domain error taxonomy', '`src/error/`'],
+    ['SSE 语义失败', '`src/sse.rs` 和 streaming translation modules'],
+    ['Byte stream carriers', '`src/http_support/`'],
+    ['Proxy 请求生命周期', '`src/lib.rs` 和 pipeline modules'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 相关文档
+
+- [错误处理内部实现](/zh/developer/error-handling-internals)
+- [错误响应](/zh/reference/error-responses)
+- [行为契约](/zh/reference/behavior-contracts#错误)
+- [流式内部实现](/zh/developer/streaming-internals)

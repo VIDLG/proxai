@@ -3,12 +3,12 @@ title: 错误响应
 description: 面向客户端的错误 payload、type 枚举、HTTP status 语义与保留的 headers
 ---
 
-import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
 import { JsonExample } from '@components/JsonExample.jsx';
 
 # 错误响应
 
-ProxAI 失败时客户端能看到的统一参考：payload 字段、允许的 `type` 取值、HTTP status 语义和保留的 upstream headers。内部投影链路见 [错误处理内部实现](/zh/error-handling-internals)。
+ProxAI 失败时客户端能看到的统一参考：payload 字段、允许的 `type` 取值、HTTP status 语义和保留的 upstream headers。内部投影链路见 [错误处理内部实现](/zh/developer/error-handling-internals)。
 
 ## JSON 形态
 
@@ -38,13 +38,16 @@ ProxAI 失败时客户端能看到的统一参考：payload 字段、允许的 `
 
 ## Payload 字段
 
-| 字段 | 类型 | 含义 |
-|---|---|---|
-| `message` | string | 人类可读的错误信息 |
-| `type` | enum | 面向客户端的错误分类，snake_case |
-| `code` | string? | 上游 OpenAI 风格错误 code，仅在上游提供时保留 |
-| `param` | value? | 上游 OpenAI 风格错误 param，仅在上游提供时保留 |
-| `status` | u16 | JSON/SSE payload 内携带的数字状态码 |
+<ReferenceTable
+  columns={['字段', '类型', '含义']}
+  rows={[
+    ['message', 'string', '人类可读的错误信息'],
+    ['type', 'enum', '面向客户端的错误分类，snake_case'],
+    ['code', 'string?', '上游 OpenAI 风格错误 code，仅在上游提供时保留'],
+    ['param', 'value?', '上游 OpenAI 风格错误 param，仅在上游提供时保留'],
+    ['status', 'u16', 'JSON/SSE payload 内携带的数字状态码'],
+  ]}
+/>
 
 <ProxaiCallout type="note" title="status 是 payload 字段">
   `status` 是 wire payload 内的数字状态码。SSE error event 中尤其重要，因为流式开始后无法再修改 HTTP status。
@@ -61,10 +64,28 @@ upstream_response_body_read_error
 upstream_error_body_empty
 upstream_error_body_non_json
 upstream_error_body_unknown_shape
-sse_translation_error
+stream_translation_error
 ```
 
 ProxAI 不会把内部强类型 error taxonomy 原样暴露。上面这些 `type` 是稳定的客户端分类。
+
+## Type 详情
+
+<ReferenceTable
+  columns={['Type', '典型来源', 'HTTP status', '细节']}
+  rows={[
+    ['`invalid_request_error`', '入站请求解析或校验', '`400`', '客户端请求不符合检测出的协议。'],
+    ['`internal_error`', 'Config/runtime invariant/local IO/serialization', '`500`', '内部细节会投影成稳定的客户端错误。'],
+    ['`upstream_request_error`', '发送上游请求失败', '`502`', 'Provider request 无法发送，或收到 response status 前 transport 失败。'],
+    ['`upstream_error`', '上游返回结构化非 2xx 错误', '上游 status', '`code` 和 `param` 仅在上游提供时包含。'],
+    ['`upstream_response_body_read_error`', '读取上游错误/成功 body 失败', '`502`', '读取上游 response 时 body carrier 失败。'],
+    ['`upstream_error_body_empty`', '上游非 2xx 且 body 为空', '上游 status', '不会伪造上游 code/param。'],
+    ['`upstream_error_body_non_json`', '上游非 2xx body 不是 JSON', '上游 status', 'Message 可能包含紧凑 body 摘要。'],
+    ['`upstream_error_body_unknown_shape`', '上游非 2xx JSON shape 未知', '上游 status', 'JSON 可读，但不是支持的错误 schema。'],
+    ['`stream_translation_error`', '流式转换或终止事件失败', '`502` 或 SSE payload status', '当 stream 无法安全转换时使用。'],
+  ]}
+  codeFirstColumn={false}
+/>
 
 ## 响应格式
 
@@ -80,12 +101,15 @@ format = "text"   # 或 "json"
 
 ## HTTP status 语义
 
-| Status | 含义 |
-|---|---|
-| `400` | 入站请求对检测出的协议无效（`invalid_request_error`） |
-| `500` | ProxAI 运行时不变量、本地 IO、序列化或内部 body 读取失败（`internal_error`） |
-| `502` / `503` / `504` | 上游发送/状态/body 读取失败（`upstream_*`） |
-| 上游 status | 对上游非 2xx 响应，ProxAI 把上游 status 映射为客户端可见 status，并在 payload 中保留上游数字 status |
+<ReferenceTable
+  columns={['Status', '含义']}
+  rows={[
+    ['400', '入站请求对检测出的协议无效（`invalid_request_error`）'],
+    ['500', 'ProxAI 运行时不变量、本地 IO、序列化或内部 body 读取失败（`internal_error`）'],
+    ['502 / 503 / 504', '上游发送/状态/body 读取失败（`upstream_*`）'],
+    ['上游 status', '对上游非 2xx 响应，ProxAI 把上游 status 映射为客户端可见 status，并在 payload 中保留上游数字 status'],
+  ]}
+/>
 
 流式响应的错误通常发生在 HTTP status 已经开始（一般是 `200`）之后，因此错误以 SSE event 形式送达，event 内携带数字 `status` 字段。
 
@@ -99,7 +123,29 @@ format = "text"   # 或 "json"
 
 不会伪造这些 headers。响应 `Content-Type` 由 outbound 协议决定，不透传上游的，见 [契约 C13](/zh/reference/behavior-contracts#响应重建)。Upstream headers 在转发前会经过过滤，见 [契约 C14](/zh/reference/behavior-contracts#响应重建)。
 
+## SSE 错误
+
+如果错误发生在 SSE 响应开始之后，HTTP status 已无法修改。ProxAI 会发出 SSE `event: error` payload，其中包含相同的客户端 `error` 对象和数字 `status` 字段。
+
+```text
+event: error
+data: {"type":"error","error":{"message":"stream error","type":"stream_translation_error","status":502}}
+```
+
+## 隐私契约
+
+<ReferenceTable
+  columns={['规则', '原因']}
+  rows={[
+    ['不要逐字暴露内部 typed error 名称', '客户端 `type` values 应稳定且紧凑。'],
+    ['不要伪造上游 `code` 或 `param`', '只有上游实际提供时才出现。'],
+    ['不要记录 request bodies、Authorization headers 或 API keys', '错误路径也必须隐私安全。'],
+    ['只在上游提供时保留有用 headers', '`Retry-After`、request ids 和 rate-limit headers 是诊断提示，不是编造的元数据。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
 ## 相关参考
 
-- [配置示例](/zh/reference/configuration-example)
+- [配置参考](/zh/reference/configuration)
 - [CLI](/zh/reference/cli)

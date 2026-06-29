@@ -1,0 +1,197 @@
+---
+title: Refusal 与 Status 映射
+description: Anthropic Messages、OpenAI Responses 与 Chat 之间的 refusal 内容语义和终态映射。
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { FeatureGrid, ProtocolCompare } from '@components/ProxaiDocs.jsx';
+
+# Refusal 与 Status 映射
+
+## Refusal 与普通内容语义
+
+`refusal` 表示模型生成的拒答内容，不是普通 assistant 文本上的附加标注。跨协议转换时应让它和普通文本保持区分。
+
+三个支持的协议用不同方式表达这种区分：
+
+<ProtocolCompare
+  columns={['协议', '普通 assistant 文本', 'Refusal', '普通文本和 refusal 能否在同一条 assistant message 中并存？']}
+  rows={[
+    ['`openai_responses`', '`output[].content[]` 中 `type: "output_text"` 的 part', '`output[].content[]` 中 `type: "refusal"` 的 part', '结构上可以作为不同 content part 并存，但语义上不常见；当目标协议能表达 part 时应保留顺序。'],
+    ['`openai_chat_completions`', '`choices[].message.content` 或流式 `delta.content`', '`choices[].message.refusal` 或流式 `delta.refusal`', 'wire 字段都是 nullable/optional，但 refusal 不应在 `content` 中重复同一段文字。Assistant request content parts 也说明：要么是一个或多个 `text` part，要么是正好一个 `refusal` part。'],
+    ['`anthropic_messages`', '`content[]` 中的 `text` block', '`stop_reason: "refusal"` 加可选 `stop_details.explanation`；可见拒答文字也可能以 `text` block 出现', '没有单独的 refusal content block。被拒答的 message 仍可能包含可见 text block，因此 translator 必须结合上下文判断这些 text block 是拒答文字还是普通内容。'],
+  ]}
+/>
+
+### OpenAI Responses
+
+Responses 将 message content 保持为 typed parts，因此普通文本和 refusal 是同一个 `content[]` 数组中的不同值：
+
+```json
+{
+  "type": "message",
+  "role": "assistant",
+  "status": "completed",
+  "content": [
+    {
+      "type": "output_text",
+      "text": "I can help with safe alternatives.",
+      "annotations": []
+    },
+    {
+      "type": "refusal",
+      "refusal": "I can't provide instructions for that request."
+    }
+  ]
+}
+```
+
+如果目标协议能保留 typed content parts，就保留二者区别。如果目标协议是 Chat Completions，除非目标侧没有 refusal 字段，否则不要把 refusal text 合并进普通 `message.content`。
+
+### OpenAI Chat Completions
+
+Chat response message 将普通内容和 refusal 暴露为同级字段：
+
+```json
+{
+  "role": "assistant",
+  "content": null,
+  "refusal": "I can't provide instructions for that request."
+}
+```
+
+JSON shape 在顶层没有让 `content` 和 `refusal` 强制互斥，但二者语义不同。不要在两个字段中输出同一段拒答文本：
+
+```json
+{
+  "role": "assistant",
+  "content": "I can't provide instructions for that request.",
+  "refusal": "I can't provide instructions for that request."
+}
+```
+
+应把这种重复 shape 视为需要避免生成的兼容性产物，而不是理想输出。
+
+Assistant request content parts 更明确地表达了这种区分：数组可以包含一个或多个 `text` part，或者正好一个 `refusal` part。这也强化了语义规则：refusal 是一种替代的 content kind，而不是普通文本上的装饰。
+
+流式响应中也有相同区分：
+
+```text
+data: {"choices":[{"index":0,"delta":{"refusal":"I can't help with that."},"finish_reason":null}]}
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: [DONE]
+```
+
+如果普通 `delta.content` 已经被转发，而后续上游事件才说明这一轮是 refusal，那么 stream 无法撤回已发内容。这种情况下不要再发送重复的 refusal 文本；只有当 refusal 能在普通内容发出前表达时，才使用 `delta.refusal`。
+
+### Anthropic Messages
+
+Anthropic 没有专门的 refusal content block。可见拒答文字仍然是普通的 `content[]` text；拒答语义由 message 级 stop 字段携带：
+
+- 可见文字：`content[]` 中的 `text` block；
+- 拒答标记：`stop_reason: "refusal"`；
+- 可选拒答元信息：`stop_details`，例如 `explanation` 和 provider 分类。
+
+这和 Chat Completions 不同。Chat 把拒答文字放在普通内容旁边的同级字段 `choices[].message.refusal` 中，`message.content` 和 `message.refusal` 是两个不同的内容槽位。Anthropic 中，普通 assistant 文本和可见拒答文字使用同一种 `text` block shape；translator 只能通过 message 级 stop 字段判断这些 text block 应变成 Chat `message.content` 还是 Chat `message.refusal`。
+
+拒答由 message 级字段识别：
+
+```json
+{
+  "id": "msg_01",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "I can't provide instructions for that request."
+    }
+  ],
+  "stop_reason": "refusal",
+  "stop_details": {
+    "category": "safety",
+    "explanation": "The request asks for unsafe instructions."
+  }
+}
+```
+
+Anthropic -> Chat Completions 非流式转换规则：
+
+- 当 `stop_reason == "refusal"` 且存在可见 text block 时，把展平后的可见文本放入 `message.refusal`，并让 `message.content` 缺省/null；
+- 当 `stop_reason == "refusal"` 且没有可见 text 时，使用 `stop_details.explanation` 作为 fallback `message.refusal`；
+- 不映射 `stop_details.category`，因为 Chat Completions 没有等价字段；
+- 将 choice `finish_reason` 映射为 `stop`，因为 refusal 是一个终止的 assistant turn，不是工具调用。
+
+目标 Chat response 示例：
+
+```json
+{
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "refusal": "I can't provide instructions for that request."
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 `stop_details` 会在 content block delta 之后到达。因此 proxai 使用 best-effort 规则：
+
+- 将 Anthropic `thinking` block 文本和 `thinking_delta` 片段映射到 Zed 支持的 Chat-compatible 扩展字段 `delta.reasoning_content`；不要把 thinking 文本放进普通 `delta.content`；
+- 忽略 `signature_delta` 和 `redacted_thinking` payload，不把它们泄露进 Chat content，因为 Chat Completions 没有标准且安全的字段承载这些值；
+- 如果还没有发出 text delta，将 `stop_details.explanation` 转成 `delta.refusal`；
+- 如果 text 已经作为 `delta.content` 发出，则不要再发重复 refusal 文本；
+- 最终 choice `finish_reason` 仍映射为 `stop`。
+
+这不如缓冲整条 stream 后再严格重建 refusal 语义精确，但可以保留低延迟流式体验，并避免撤回已经转发的内容。
+
+
+## Status 映射
+
+`anthropic_messages` 和 `openai_responses` 以不同方式表达响应的终态。Anthropic 在 message 上使用单一的 `stop_reason` 枚举；Responses 使用顶层 `status` 字段，具有更丰富的生命周期状态。
+
+### 双向映射
+
+<ProtocolCompare
+  columns={['Anthropic `stop_reason`', 'Responses `status`', '理由']}
+  rows={[
+    ['`end_turn`', '`completed`', '模型正常终止。'],
+    ['`stop_sequence`', '`completed`', '命中停止序列，仍属正常终止。'],
+    ['`tool_use`', '`completed`', '模型完成本轮输出并请求工具执行。'],
+    ['`pause_turn`', '`completed`', '模型完成本轮输出，等待外部动作。'],
+    ['`max_tokens`', '`incomplete`', '输出在自然完成前被截断。'],
+    ['`refusal`', '`failed`', '模型拒绝产生有用输出。'],
+    ['_(无 / 流式中)_', '`in_progress`', '响应仍在生成中。'],
+  ]}
+/>
+
+<ProtocolCompare
+  columns={['Responses `status`', 'Anthropic `stop_reason`', '理由']}
+  rows={[
+    ['`completed`', '`end_turn`', '最接近的正常终止等价物。'],
+    ['`incomplete`', '`max_tokens`', '响应被截断。'],
+    ['`failed`', '`refusal`', '模型未产生可用响应。'],
+    ['`cancelled`', '_(无)_', '客户端侧生命周期状态，Anthropic 无对应。'],
+    ['`queued`', '_(无)_', '客户端侧生命周期状态，Anthropic 无对应。'],
+    ['`in_progress`', '_(无)_', '流式传输中，尚无终态 stop_reason。'],
+  ]}
+/>
+
+### Round-trip 一致性
+
+正向和反向映射为三个主要终态设计了完整的 round-trip：
+
+```text
+end_turn  → completed  → end_turn    ✅
+max_tokens → incomplete → max_tokens ✅
+refusal   → failed     → refusal    ✅
+```
+
+`stop_sequence`、`pause_turn` 和 `tool_use` 在正向映射中都归为 `completed`，反向 round-trip 为 `end_turn`。这是有意的粒度损失——Responses `status` 不区分这些终止模式。
+
+`cancelled` 和 `queued` 是 Responses 客户端侧生命周期状态，Anthropic 无对应；反向映射不产生 `stop_reason`。

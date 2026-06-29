@@ -1,0 +1,64 @@
+---
+title: Capture Phases
+description: Reference for ProxAI capture phase names, boundaries, contents, and privacy risk
+---
+
+import { PipelineStageCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Capture Phases
+
+Capture phases name where data sits in the proxy pipeline. Use phase names for capture artifacts, config fields, flow locals, and logs that describe the proxy pipeline.
+
+<PipelineStageCards
+  stages={[
+    { name: 'inbound_request', modules: ['ingress/', 'pipeline/inbound_request'], responsibility: 'The original local client request after HTTP admission and protocol detection.' },
+    { name: 'provider_request', modules: ['routing', 'translation/', 'provider/*/request'], responsibility: 'The selected provider request after routing, protocol conversion, model rewrite, projection, and serialization.' },
+    { name: 'upstream_response', modules: ['provider/*/transport', 'pipeline/upstream_response'], responsibility: 'The upstream status, headers, and body bytes before outbound response reconstruction.' },
+    { name: 'outbound_response', modules: ['translation/', 'http_support'], responsibility: 'The final response reconstructed for the client-facing inbound protocol.' },
+  ]}
+/>
+
+## Config switches
+
+<ReferenceTable
+  columns={['Config field', 'Phase']}
+  rows={[
+    ['inbound_request_enabled', '`inbound_request`'],
+    ['provider_request_enabled', '`provider_request`'],
+    ['upstream_response_enabled', '`upstream_response`'],
+    ['outbound_response_enabled', '`outbound_response`'],
+  ]}
+/>
+
+## CLI phase names
+
+The capture CLI accepts hyphenated phase names:
+
+```sh
+proxai capture enable inbound-request
+proxai capture enable provider-request
+proxai capture enable upstream-response
+proxai capture enable outbound-response
+```
+
+## Privacy risk
+
+<ReferenceTable
+  columns={['Phase', 'Likely sensitive content']}
+  rows={[
+    ['inbound_request', 'Client prompts, input files, tool outputs, client-provided headers'],
+    ['provider_request', 'Translated prompts, provider payloads, tool arguments, provider auth decisions'],
+    ['upstream_response', 'Model output, tool-call arguments, provider headers, raw SSE bytes'],
+    ['outbound_response', 'Final model output and protocol-specific response payload'],
+  ]}
+/>
+
+<ProxaiCallout type="caution" title="Captures are local debugging artifacts">
+  Do not commit captures. If a capture becomes a fixture, trim and sanitize private prompts, keys, upstream URLs, headers, and model outputs first.
+</ProxaiCallout>
+
+## Related docs
+
+- [Observability](/en/using/observability)
+- [CLI](/en/reference/cli)
+- [Behavior Contracts](/en/reference/behavior-contracts#privacy)

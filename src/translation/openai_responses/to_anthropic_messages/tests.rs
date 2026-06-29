@@ -30,7 +30,8 @@ fn translates_text_request_with_instructions_and_function_tool() {
                 "properties": {"id": {"type": "string"}},
                 "required": ["id"]
             }
-        }]
+        }],
+        "reasoning": {"effort": "high", "summary": "auto"}
     });
 
     let translated = translate_request_payload(&payload).unwrap();
@@ -44,6 +45,9 @@ fn translates_text_request_with_instructions_and_function_tool() {
     assert_eq!(translated["tools"][0]["name"], "lookup");
     assert_eq!(translated["tool_choice"]["type"], "any");
     assert_eq!(translated["tool_choice"]["disable_parallel_tool_use"], true);
+    assert_eq!(translated["output_config"]["effort"], "high");
+    assert_eq!(translated["thinking"]["type"], "adaptive");
+    assert_eq!(translated["thinking"]["display"], "summarized");
 }
 
 #[test]
@@ -79,6 +83,65 @@ fn translates_glm_responses_request_with_unknown_input_item() {
         "[OpenAI Responses item `future_zed_item` omitted during Anthropic translation]"
     );
 }
+#[test]
+fn translates_reasoning_effort_without_summary_to_output_config_only() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "reasoning": {"effort": "high"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["output_config"]["effort"], "high");
+    assert!(translated.get("thinking").is_none());
+}
+
+#[test]
+fn translates_reasoning_summary_without_effort_to_adaptive_thinking_display() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "reasoning": {"summary": "detailed"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert!(translated.get("output_config").is_none());
+    assert_eq!(translated["thinking"]["type"], "adaptive");
+    assert_eq!(translated["thinking"]["display"], "summarized");
+}
+
+#[test]
+fn translates_reasoning_effort_and_summary_to_output_config_plus_display() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "reasoning": {"effort": "medium", "summary": "concise"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["output_config"]["effort"], "medium");
+    assert_eq!(translated["thinking"]["type"], "adaptive");
+    assert_eq!(translated["thinking"]["display"], "summarized");
+}
+
+#[test]
+fn translates_minimal_reasoning_effort_to_disabled_thinking() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "reasoning": {"effort": "minimal", "summary": "auto"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert!(translated.get("output_config").is_none());
+    assert_eq!(translated["thinking"]["type"], "disabled");
+    assert!(translated["thinking"].get("display").is_none());
+}
+
 #[test]
 fn translates_message_items_and_tool_roundtrip_items() {
     let payload = json!({
@@ -235,7 +298,7 @@ fn translates_openai_response_to_anthropic_message_shape() {
             {
                 "type": "reasoning",
                 "id": "rs_1",
-                "summary": [{"type": "summary_text", "text": "thinking"}],
+                "content": [{"type": "reasoning_text", "text": "thinking"}],
                 "status": "completed"
             }
         ],

@@ -3,79 +3,99 @@ title: Behavior Contracts
 description: Stable promises ProxAI commits to across versions
 ---
 
-import { ProxaiCallout } from '@components/ProxaiDocs.jsx';
+import { ContractCards, ProxaiCallout } from '@components/ProxaiDocs.jsx';
 
 # Behavior Contracts
 
 These are promises ProxAI commits to. Breaking any of them is a breaking change that requires a major version bump and a migration note (see [C30](#versioning)). They are more stable than field names or config defaults.
 
-<ProxaiCallout type="note" title="Why a separate page">
-  Field references describe "what a setting is". Behavior contracts describe "how the system must behave". Contracts are referenced from the pages that implement them.
+<ProxaiCallout type="note" title="Contracts are not tutorials">
+  Contracts are the stable behavior reference. Task pages should link here instead of restating these promises in full.
 </ProxaiCallout>
 
 ## Configuration and startup
 
-- **C1.** `config.toml` with missing required fields always fails to start. ProxAI never boots into a partially-valid runtime state using implicit defaults.
-- **C2.** First run always generates `config.example.toml` in the app directory as a local reference.
-- **C3.** The tracked `config.example.toml` in the repository is the canonical example. ProxAI never overwrites it at runtime.
-- **C4.** `[tool_calls].timeout_secs` must be greater than zero, otherwise ProxAI fails to start.
+<ContractCards layout="single" contracts={[
+  { id: 'C1', title: 'Strict config loading', promise: '`config.toml` with missing required fields always fails to start. ProxAI never boots into a partially-valid runtime state using implicit defaults.', sourceOwner: '`src/config.rs`', failureMode: 'Proxy starts with missing provider, route, protocol, or timeout data.', suggestedTests: ['Config loading/default tests', 'Startup validation tests'], relatedDocs: [{ label: 'Configuration', href: '/en/reference/configuration' }] },
+  { id: 'C2', title: 'Local example generation', promise: 'First run always generates `config.example.toml` in the app directory as a local reference.', sourceOwner: '`src/paths.rs` and config bootstrap code', failureMode: 'New users cannot discover the local configuration shape.', suggestedTests: ['Generated app-directory defaults tests'], relatedDocs: [{ label: 'Environment and Files', href: '/en/reference/environment-and-files' }] },
+  { id: 'C3', title: 'Tracked example is canonical', promise: 'The tracked `config.example.toml` in the repository is the canonical example. ProxAI never overwrites it at runtime.', sourceOwner: '`config.example.toml` and config bootstrap code', failureMode: 'Runtime generation mutates repository documentation source.', suggestedTests: ['Config example generation tests', 'Docs config coverage check'], relatedDocs: [{ label: 'Configuration', href: '/en/reference/configuration' }] },
+  { id: 'C4', title: 'Tool-call timeout is required', promise: '`[tool_calls].timeout_secs` must be greater than zero, otherwise ProxAI fails to start.', sourceOwner: '`src/config.rs`', failureMode: 'Tool-call semantic stalls can hang indefinitely.', suggestedTests: ['Config validation tests', 'Streaming tool-call timeout tests'], relatedDocs: [{ label: 'Defaults and Limits', href: '/en/reference/defaults-and-limits' }] },
+]} />
 
 ## Listener separation
 
-- **C5.** The MCP listener always binds to a local address (`127.0.0.1` by default) and is never exposed to external networks by ProxAI itself.
-- **C6.** MCP is a control surface only. Model requests flow through the Proxy listener, never through MCP.
+<ContractCards contracts={[
+  { id: 'C5', title: 'MCP stays local', promise: 'The MCP listener always binds to a local address (`127.0.0.1` by default) and is never exposed to external networks by ProxAI itself.', sourceOwner: 'Listener setup and config defaults', failureMode: 'Control surface is exposed outside the local machine.', suggestedTests: ['Listener default tests'], relatedDocs: [{ label: 'Defaults and Limits', href: '/en/reference/defaults-and-limits' }] },
+  { id: 'C6', title: 'MCP is not a model path', promise: 'MCP is a control surface only. Model requests flow through the Proxy listener, never through MCP.', sourceOwner: 'HTTP routing/listener setup', failureMode: 'Model traffic reaches control endpoints.', suggestedTests: ['Route/listener separation tests'], relatedDocs: [{ label: 'Architecture', href: '/en/developer/architecture' }] },
+]} />
 
 ## Routing and conversion
 
-- **C7.** Default providers are used only when no explicit route matches. A matching route always wins over defaults.
-- **C8.** Unimplemented conversion pairs always fail explicitly. ProxAI never silently falls through to a default provider when a route matches but the protocol pair is unsupported.
-- **C9.** Provider `protocol` is the semantic identifier. Provider names are user labels and never change wire behavior.
-- **C10.** If a route sets `request_protocol` and the model matches but the inbound protocol differs, ProxAI returns a configuration error instead of routing anyway.
+<ContractCards layout="single" contracts={[
+  { id: 'C7', title: 'Explicit routes win', promise: 'Default providers are used only when no explicit route matches. A matching route always wins over defaults.', sourceOwner: '`src/routing/`', failureMode: 'Default provider steals traffic from a matching route.', suggestedTests: ['Route matching tests', 'Proxy e2e route tests'], relatedDocs: [{ label: 'Route Matching', href: '/en/reference/route-matching' }] },
+  { id: 'C8', title: 'Unsupported pairs fail explicitly', promise: 'Unimplemented conversion pairs always fail explicitly. ProxAI never silently falls through to a default provider when a route matches but the protocol pair is unsupported.', sourceOwner: '`src/translation/` and routing dispatch', failureMode: 'Unsupported conversion silently routes to a different provider.', suggestedTests: ['Compatibility matrix coverage', 'Unsupported pair e2e tests'], relatedDocs: [{ label: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix' }] },
+  { id: 'C9', title: 'Provider protocol is semantic', promise: 'Provider `protocol` is the semantic identifier. Provider names are user labels and never change wire behavior.', sourceOwner: '`src/config.rs`, `src/provider/`, `src/translation/`', failureMode: 'Provider name accidentally changes serialization or response parsing.', suggestedTests: ['Provider protocol dispatch tests'], relatedDocs: [{ label: 'Glossary', href: '/en/reference/glossary' }] },
+  { id: 'C10', title: 'Request protocol guards are strict', promise: 'If a route sets `request_protocol` and the model matches but the inbound protocol differs, ProxAI returns a configuration error instead of routing anyway.', sourceOwner: '`src/routing/`', failureMode: 'Endpoint-specific routes silently fall through.', suggestedTests: ['Protocol-aware route matching tests'], relatedDocs: [{ label: 'Route Matching', href: '/en/reference/route-matching' }] },
+]} />
 
 ## Provider authentication
 
-- **C11.** Provider `api_key` is always sent upstream. For OpenAI providers (`openai_responses`, `openai_chat_completions`) it is sent as `Authorization: Bearer <key>` and any client-supplied `Authorization` header is ignored.
-- **C12.** For Anthropic Messages providers, the key is sent as `x-api-key`.
+<ContractCards contracts={[
+  { id: 'C11', title: 'OpenAI provider auth is controlled by ProxAI', promise: 'Provider `api_key` is always sent upstream. For OpenAI providers (`openai_responses`, `openai_chat_completions`) it is sent as `Authorization: Bearer <key>` and any client-supplied `Authorization` header is ignored.', sourceOwner: '`src/provider/*/transport`', failureMode: 'Client credentials leak upstream or provider credentials are not used.', suggestedTests: ['Provider transport header tests'], relatedDocs: [{ label: 'Provider Setup', href: '/en/using/provider-setup' }] },
+  { id: 'C12', title: 'Anthropic provider auth uses x-api-key', promise: 'For Anthropic Messages providers, the key is sent as `x-api-key`.', sourceOwner: '`src/provider/*/transport`', failureMode: 'Anthropic-compatible upstream rejects auth or receives wrong auth header.', suggestedTests: ['Anthropic transport header tests'], relatedDocs: [{ label: 'Provider Setup', href: '/en/using/provider-setup' }] },
+]} />
 
 ## Response reconstruction
 
-- **C13.** Response `Content-Type` is decided by the outbound protocol, not passed through from the upstream.
-- **C14.** Upstream headers are filtered before forwarding. The forwardable set is explicitly controlled by ProxAI, never a verbatim copy of all upstream headers.
+<ContractCards contracts={[
+  { id: 'C13', title: 'Outbound protocol decides content type', promise: 'Response `Content-Type` is decided by the outbound protocol, not passed through from the upstream.', sourceOwner: '`src/http_support/` and response translation', failureMode: 'Client receives upstream content type incompatible with inbound protocol.', suggestedTests: ['Response reconstruction tests'], relatedDocs: [{ label: 'Protocols', href: '/en/reference/protocols' }] },
+  { id: 'C14', title: 'Headers are filtered', promise: 'Upstream headers are filtered before forwarding. The forwardable set is explicitly controlled by ProxAI, never a verbatim copy of all upstream headers.', sourceOwner: '`src/http_support/`', failureMode: 'Private or protocol-incompatible upstream headers leak to the client.', suggestedTests: ['Header filtering tests'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+]} />
 
 ## Errors
 
-- **C15.** For non-2xx upstream responses, ProxAI preserves useful diagnostic headers when the upstream actually provides them: `Retry-After`, upstream request id, rate-limit headers. It never fabricates these headers.
-- **C16.** Client-facing errors always include a numeric `status` field inside the payload. This is essential for SSE error events where HTTP status can no longer be changed.
-- **C17.** ProxAI never exposes its internal typed error taxonomy verbatim. Client-facing `type` values are a fixed stable enum, extended only additively.
-- **C18.** ProxAI never fabricates upstream `code` or `param` values. They are only present when the upstream actually provided them.
+<ContractCards layout="single" contracts={[
+  { id: 'C15', title: 'Useful upstream diagnostic headers are preserved', promise: 'For non-2xx upstream responses, ProxAI preserves useful diagnostic headers when the upstream actually provides them: `Retry-After`, upstream request id, rate-limit headers. It never fabricates these headers.', sourceOwner: '`src/error/` and upstream response handling', failureMode: 'Clients lose actionable retry/rate-limit information or receive fabricated data.', suggestedTests: ['Upstream error projection tests'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+  { id: 'C16', title: 'Client errors carry status in payload', promise: 'Client-facing errors always include a numeric `status` field inside the payload. This is essential for SSE error events where HTTP status can no longer be changed.', sourceOwner: '`src/error/render.rs`', failureMode: 'SSE error events lose status context.', suggestedTests: ['HTTP and SSE error rendering tests'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+  { id: 'C17', title: 'Internal error taxonomy is private', promise: 'ProxAI never exposes its internal typed error taxonomy verbatim. Client-facing `type` values are a fixed stable enum, extended only additively.', sourceOwner: '`src/error/`', failureMode: 'Internal Rust error names become public API.', suggestedTests: ['Error type projection tests', 'Docs checker error type coverage'], relatedDocs: [{ label: 'Error Handling Internals', href: '/en/developer/error-handling-internals' }] },
+  { id: 'C18', title: 'Upstream code and param are not fabricated', promise: 'ProxAI never fabricates upstream `code` or `param` values. They are only present when the upstream actually provided them.', sourceOwner: '`src/error/`', failureMode: 'Clients make decisions from invented upstream metadata.', suggestedTests: ['Upstream error body shape tests'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+]} />
 
 ## Streaming
 
-- **C19.** SSE streams are always observed for terminal events. A stream is considered complete only when the expected terminal event arrives (`response.completed`, `[DONE]`, or `message_stop`).
-- **C20.** Stalled tool-call argument streams always close within `[tool_calls].timeout_secs`. ProxAI never lets a client hang indefinitely after tool-call arguments have started.
-- **C21.** SSE bytes and `text/event-stream` content type are preserved through translation.
-- **C22.** `read_idle_timeout_secs` is an idle-read timeout, not a total request duration cap. It only fires when no new upstream bytes arrive within the configured window.
+<ContractCards layout="single" contracts={[
+  { id: 'C19', title: 'Streams require terminal events', promise: 'SSE streams are always observed for terminal events. A stream is considered complete only when the expected terminal event arrives (`response.completed`, `[DONE]`, or `message_stop`).', sourceOwner: 'SSE scanner and streaming translation modules', failureMode: 'Client treats semantically incomplete streams as successful.', suggestedTests: ['Terminal event tests', 'Incomplete stream tests'], relatedDocs: [{ label: 'Streaming Behavior', href: '/en/protocol/streaming-behavior' }] },
+  { id: 'C20', title: 'Tool-call stalls close predictably', promise: 'Stalled tool-call argument streams always close within `[tool_calls].timeout_secs`. ProxAI never lets a client hang indefinitely after tool-call arguments have started.', sourceOwner: 'Streaming state machines and tool-call timeout handling', failureMode: 'Client hangs forever after partial tool arguments.', suggestedTests: ['Tool-call stall tests'], relatedDocs: [{ label: 'Streaming and Tools', href: '/en/using/streaming-and-tools' }] },
+  { id: 'C21', title: 'SSE carrier is preserved', promise: 'SSE bytes and `text/event-stream` content type are preserved through translation.', sourceOwner: '`src/http_support/`, SSE translation modules', failureMode: 'Streaming clients receive non-SSE carrier data.', suggestedTests: ['SSE carrier tests'], relatedDocs: [{ label: 'Streaming Internals', href: '/en/developer/streaming-internals' }] },
+  { id: 'C22', title: 'Read timeout is idle-based', promise: '`read_idle_timeout_secs` is an idle-read timeout, not a total request duration cap. It only fires when no new upstream bytes arrive within the configured window.', sourceOwner: 'Provider transport/upstream read handling', failureMode: 'Long but active streams are incorrectly cut off.', suggestedTests: ['Idle timeout tests'], relatedDocs: [{ label: 'Defaults and Limits', href: '/en/reference/defaults-and-limits' }] },
+]} />
 
 ## Privacy
 
-- **C23.** ProxAI never logs request bodies, `Authorization` headers, API keys, or private prompts.
-- **C24.** Capture artifacts are local files under the app directory only. They are never transmitted by ProxAI itself.
-- **C25.** Capture paths are fixed and not configurable, to avoid accidental writes to arbitrary locations.
+<ContractCards contracts={[
+  { id: 'C23', title: 'Private request data is not logged', promise: 'ProxAI never logs request bodies, `Authorization` headers, API keys, or private prompts.', sourceOwner: '`src/observe/` and logging call sites', failureMode: 'Private prompts or credentials appear in default logs.', suggestedTests: ['Logging redaction review', 'Request hint tests'], relatedDocs: [{ label: 'Privacy and Local Data', href: '/en/using/privacy-and-local-data' }] },
+  { id: 'C24', title: 'Captures stay local', promise: 'Capture artifacts are local files under the app directory only. They are never transmitted by ProxAI itself.', sourceOwner: '`src/observe/` capture writers', failureMode: 'Capture artifacts leave the local machine automatically.', suggestedTests: ['Capture writer tests'], relatedDocs: [{ label: 'Environment and Files', href: '/en/reference/environment-and-files' }] },
+  { id: 'C25', title: 'Capture paths are fixed', promise: 'Capture paths are fixed and not configurable, to avoid accidental writes to arbitrary locations.', sourceOwner: '`src/observe/` and paths code', failureMode: 'User-provided paths write private captures into unsafe locations.', suggestedTests: ['Capture path tests'], relatedDocs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }] },
+]} />
 
 ## Translation purity
 
-- **C26.** Translation stays pure at the HTTP carrier boundary. It accepts protocol values and payload/stream carriers, not HTTP `Response`/`Body`, route details, model rewrite details, or provider-private structs.
-- **C27.** ProxAI never round-trips raw provider structures across a translation pair. Each direction is independently translated into the target protocol's types.
-- **C28.** Provider-local normalization belongs in `provider/`. General cross-protocol shape changes belong in `translation/`. Provider code must not hide protocol-to-protocol conversion.
+<ContractCards layout="single" contracts={[
+  { id: 'C26', title: 'Translation is carrier-pure', promise: 'Translation stays pure at the HTTP carrier boundary. It accepts protocol values and payload/stream carriers, not HTTP `Response`/`Body`, route details, model rewrite details, or provider-private structs.', sourceOwner: '`src/translation/`', failureMode: 'Translation depends on HTTP/provider internals and becomes impossible to reason about pair-wise.', suggestedTests: ['Boundary-focused conversion tests'], relatedDocs: [{ label: 'Module Boundaries', href: '/en/developer/architecture/module-boundaries' }] },
+  { id: 'C27', title: 'No raw provider round-trips', promise: 'ProxAI never round-trips raw provider structures across a translation pair. Each direction is independently translated into the target protocol\'s types.', sourceOwner: '`src/translation/`', failureMode: 'Target protocol receives provider-private structures.', suggestedTests: ['Pair-specific response conversion tests'], relatedDocs: [{ label: 'Protocol Conversion', href: '/en/developer/protocol-conversion' }] },
+  { id: 'C28', title: 'Provider quirks stay in provider code', promise: 'Provider-local normalization belongs in `provider/`. General cross-protocol shape changes belong in `translation/`. Provider code must not hide protocol-to-protocol conversion.', sourceOwner: '`src/provider/` and `src/translation/`', failureMode: 'Protocol conversion logic is hidden in provider-specific adapters.', suggestedTests: ['Provider/request and translation boundary review'], relatedDocs: [{ label: 'Where to Change Code', href: '/en/developer/where-to-change-code' }] },
+]} />
 
 ## Versioning
 
-- **C29.** Client-facing `type` values are extended additively. Existing values are never renamed or removed without a major version bump.
-- **C30.** Breaking any contract in this page (C1–C30) is a breaking change that requires a major version bump and a migration note.
+<ContractCards contracts={[
+  { id: 'C29', title: 'Client-facing error types are additive', promise: 'Client-facing `type` values are extended additively. Existing values are never renamed or removed without a major version bump.', sourceOwner: '`src/error/render.rs` and reference docs', failureMode: 'Existing clients break on renamed or removed error types.', suggestedTests: ['Error type coverage checker'], relatedDocs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+  { id: 'C30', title: 'Contract breaks are major-version changes', promise: 'Breaking any contract in this page (C1–C30) is a breaking change that requires a major version bump and a migration note.', sourceOwner: 'Release process and docs', failureMode: 'User-visible breaking behavior ships as a minor/patch change.', suggestedTests: ['Release checklist review'], relatedDocs: [{ label: 'Contributor Checklist', href: '/en/developer/contributor-checklist' }] },
+]} />
 
 ## Related references
 
-- [Configuration Example](/en/reference/configuration-example)
+- [Configuration Reference](/en/reference/configuration)
 - [Defaults and Limits](/en/reference/defaults-and-limits)
 - [Error Responses](/en/reference/error-responses)
 - [Protocols](/en/reference/protocols)

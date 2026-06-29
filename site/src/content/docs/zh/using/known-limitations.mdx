@@ -1,0 +1,50 @@
+---
+title: 已知限制
+description: 当前 ProxAI 的边界、不支持行为和有意的非目标
+---
+
+import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 已知限制
+
+这页用于说明 ProxAI 今天有意不做什么。它是面向用户的摘要；精确协议支持见 [兼容性矩阵](/zh/reference/compatibility-matrix)，精确配置字段见 [配置参考](/zh/reference/configuration)。
+
+<ProxaiCallout type="note" title="限制也是设计边界">
+  ProxAI 是小型本地兼容代理。除非项目明确选择这个方向，否则它不应扩展成通用 AI gateway。
+</ProxaiCallout>
+
+## 有意的非目标
+
+<ContractCards
+  layout="single"
+  contracts={[
+    { id: 'L1', title: '不是托管 gateway', body: 'ProxAI 面向本地兼容和诊断，不负责多租户托管、账号管理、计费或 provider 管理。' },
+    { id: 'L2', title: '不是万能协议转换器', body: '只支持显式协议 pair。不支持的 pair 会显式失败，而不是静默 fall through。' },
+    { id: 'L3', title: '不是 prompt analytics 平台', body: '默认日志应保持紧凑且 body-safe。Capture 是本地调试产物，不是产品分析数据。' },
+    { id: 'L4', title: '不是 provider 控制面', body: '运行时行为属于 `config.toml`；ProxAI 不管理 provider 账号，也不替用户轮换 provider 凭据。' },
+  ]}
+/>
+
+## 实际限制
+
+<ReferenceTable
+  columns={['领域', '限制', '查看哪里']}
+  rows={[
+    ['协议 pair', '支持是按 pair、按方向区分的。Request、非流式 response 和 streaming 支持可能不同。', '[兼容性矩阵](/zh/reference/compatibility-matrix)'],
+    ['有损性', '某些转换无法精确保留源协议中的所有概念。', '[有损性与保真度](/zh/protocol/lossiness-and-fidelity)'],
+    ['流式', '流正确性依赖完整终止事件和 provider event 语义。', '[流式行为](/zh/protocol/streaming-behavior)'],
+    ['工具调用', '已开始但未完成的 streamed tool arguments 由语义 timeout 限界，不会被猜成有效调用。', '[状态与停止原因](/zh/reference/status-and-stop-reasons)'],
+    ['Capture', 'Captures 可能包含私有数据，除非手动脱敏，否则应保持本地。', '[隐私与本地数据](/zh/using/privacy-and-local-data)'],
+    ['Provider quirks', 'Provider-local compatibility 属于 provider code；跨协议 shape changes 属于 translation。', '[模块边界](/zh/developer/architecture/module-boundaries)'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 如果遇到限制
+
+1. 先在对应 reference 页面确认当前行为。
+2. 用最小请求和最窄有用 capture phase 复现。
+3. 判断变更属于 provider compatibility、protocol translation、routing 还是 docs。
+4. 如果会改变用户可见行为，同时更新用户文档和 reference 文档。
+
+本地调试路径见 [调试工作流](/zh/using/debugging-workflow) 和 [常见排障](/zh/using/troubleshooting)。

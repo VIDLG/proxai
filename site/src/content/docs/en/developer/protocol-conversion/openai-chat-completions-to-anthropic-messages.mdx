@@ -1,0 +1,80 @@
+---
+title: OpenAI Chat Completions to Anthropic Messages
+description: Developer guide for request, response, streaming, tool, and stop conversion from OpenAI Chat Completions to Anthropic Messages
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# OpenAI Chat Completions to Anthropic Messages
+
+This page documents the conversion pair used when a client speaks OpenAI Chat Completions and the selected provider speaks Anthropic Messages.
+
+<ConversionPath
+  from={{ title: 'Inbound', description: '`openai_chat_completions` request payload' }}
+  via={[
+    { title: 'Normalize', description: '`src/ingress/` parses Chat messages and tools' },
+    { title: 'Translate request', description: 'Chat messages/tools -> Anthropic Messages request' },
+    { title: 'Translate response', description: 'Anthropic Message/content blocks -> Chat choices' },
+  ]}
+  to={{ title: 'Outbound', description: '`openai_chat_completions` response or SSE chunks' }}
+/>
+
+## Request mapping
+
+<ReferenceTable
+  columns={['Chat concept', 'Anthropic Messages target', 'Notes']}
+  rows={[
+    ['`messages[]`', '`messages[]` plus normalized system placement', 'Chat system/developer instructions must not be duplicated as user-visible turns.'],
+    ['Assistant text', 'Assistant content blocks', 'Preserve ordered visible text.'],
+    ['`tools[]` function definitions', '`tools[]`', 'Preserve name, description, and JSON schema where possible.'],
+    ['Assistant `tool_calls[]`', 'Anthropic `tool_use` blocks', 'Chat `tool_calls[].index` is stream-local; Anthropic content blocks use content-block indices.'],
+    ['Tool result messages', 'Anthropic `tool_result` blocks', 'Preserve call id linkage where target protocol can represent it.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Response mapping
+
+<ReferenceTable
+  columns={['Anthropic concept', 'Chat target', 'Notes']}
+  rows={[
+    ['Text content block', '`choices[0].message.content`', 'Chat has a single assistant message per choice.'],
+    ['Tool use block', '`choices[0].message.tool_calls[]`', 'Assign stable call ids and function names.'],
+    ['Thinking/reasoning block', 'Chat-compatible reasoning extension when supported', 'Plain Chat has weak reasoning structure; do not mix reasoning into ordinary content unless required.'],
+    ['`stop_reason`', '`finish_reason`', 'Map natural turns, token limits, tool use, and refusals carefully.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Streaming mapping
+
+<ReferenceTable
+  columns={['Anthropic event', 'Chat SSE expectation']}
+  rows={[
+    ['`message_start`', 'Initialize choice and assistant role delta.'],
+    ['Text `content_block_delta`', 'Emit `delta.content` chunks.'],
+    ['Tool `input_json_delta`', 'Emit `delta.tool_calls[].function.arguments` chunks keyed by Chat tool index.'],
+    ['`message_delta.stop_reason`', 'Set final `finish_reason` when terminal state is known.'],
+    ['`message_stop`', 'Emit final chunk and `[DONE]`.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="Chat has weaker identity">
+  Chat Completions has no Responses-style output item identity. Tool-call `index` is only meaningful inside one streamed choice. Avoid building cross-turn semantics on it.
+</ProxaiCallout>
+
+## Lossy areas
+
+- Chat has no native output item graph.
+- Reasoning support is weaker and often extension-based.
+- Chat streaming uses `tool_calls[].index`; Anthropic streaming uses content block `index`.
+- Chat `[DONE]` is a stream carrier terminator; Anthropic `message_stop` is the semantic terminal event.
+
+## Related docs
+
+- [Message Placement](/en/developer/protocol-conversion/message-placement)
+- [Streaming Identifiers](/en/developer/protocol-conversion/streaming-identifiers)
+- [Status and Stop Reasons](/en/reference/status-and-stop-reasons)
+- [Compatibility Matrix](/en/reference/compatibility-matrix)

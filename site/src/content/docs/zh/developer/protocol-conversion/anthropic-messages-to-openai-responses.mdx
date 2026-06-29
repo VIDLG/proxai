@@ -1,0 +1,80 @@
+---
+title: Anthropic Messages 到 OpenAI Responses
+description: 从 Anthropic Messages 到 OpenAI Responses 的 response、streaming、tool、reasoning 和终止状态转换开发者指南
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Anthropic Messages 到 OpenAI Responses
+
+本页记录 provider 使用 Anthropic Messages，而客户端期望 OpenAI Responses output 时的转换路径。
+
+<ConversionPath
+  from={{ title: 'Provider response', description: '`anthropic_messages` Message 或 SSE stream' }}
+  via={[
+    { title: '读取上游', description: '`src/upstream/` 读取 body 或 ByteStream' },
+    { title: '响应转换', description: 'Anthropic content blocks -> Responses output items' },
+    { title: '重建客户端响应', description: '`src/http_support/` 发出 Responses JSON 或 typed SSE' },
+  ]}
+  to={{ title: '客户端响应', description: '`openai_responses` envelope 或 events' }}
+/>
+
+## 非流式响应映射
+
+<ReferenceTable
+  columns={['Anthropic 概念', 'Responses 目标', '说明']}
+  rows={[
+    ['`Message` envelope', 'Responses response envelope', 'Anthropic 返回一个最终 message；Responses 返回带 `output[]` 的 envelope。'],
+    ['Text block', 'Message output item/content part', '保留可见文本顺序。'],
+    ['`tool_use` block', '`function_call` output item', '使用 Responses item/call identifiers 保留 call identity。'],
+    ['`thinking` block', '可表达时映射为 Reasoning output item', '转换 provider-specific metadata，而不是 raw round-trip。'],
+    ['`stop_reason`', 'Responses terminal status 和 output state', '映射终止行为，而不只是字段名。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 流式事件映射
+
+<ReferenceTable
+  columns={['Anthropic event', 'Responses-side 行为']}
+  rows={[
+    ['`message_start`', '初始化 response 和 usage state。'],
+    ['`content_block_start`', '根据 block type 发出或暂存 Responses output item。'],
+    ['`content_block_delta`', '发出 text、reasoning 或 function-argument deltas。'],
+    ['`content_block_stop`', '结束当前 Responses item/content part。'],
+    ['`message_delta`', '更新 stop 和 usage metadata；可能没有独立 Responses event。'],
+    ['`message_stop`', '发出 Responses terminal event，例如 `response.completed`。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 身份差异
+
+<ReferenceTable
+  columns={['Anthropic', 'Responses', '影响']}
+  rows={[
+    ['Content block `index`', '稳定 `item_id` 加 output index', 'Translator 必须为 Responses events 生成/跟踪 item ids。'],
+    ['Tool `id` / tool result linkage', 'Function call item id 和 `call_id`', '不要只把原始 provider id 暴露成客户端身份。'],
+    ['Message-level terminal metadata', 'Response status 加 item status', '终止状态可能需要同时更新 envelope 和 output items。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="一个 Anthropic message 可以变成多个 Responses items">
+  非流式 Anthropic 返回一个 `Message`，但 Responses `output[]` 可以包含多个 typed items。不要把这个转换建模成一条 message 对一条 message。
+</ProxaiCallout>
+
+## 有损区域
+
+- Anthropic content block `index` 是 stream-local；Responses item identity 是客户端可见且可跨轮稳定的。
+- Provider-specific thinking metadata 可能没有 Responses 等价物。
+- Anthropic `pause_turn` 和 refusal metadata 需要保留行为的目标语义。
+- Usage 和 stop metadata 可能在 stream 后段才到达。
+
+## 相关文档
+
+- [OpenAI Responses](/zh/protocol/openai-responses)
+- [Anthropic Messages](/zh/protocol/anthropic-messages)
+- [流式标识符](/zh/developer/protocol-conversion/streaming-identifiers)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)

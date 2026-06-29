@@ -1,0 +1,170 @@
+---
+title: Recipes
+description: Task-oriented ProxAI configuration and debugging recipes
+---
+
+import { DecisionCards, FeatureGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Recipes
+
+Recipes are short task paths. They intentionally point back to reference pages for exact fields, defaults, and behavior contracts instead of duplicating every rule inline.
+
+<ProxaiCallout type="note" title="Single source of truth">
+  Use recipes to complete a task. Use [Configuration Reference](/en/reference/configuration), [Protocols](/en/reference/protocols), [Route Matching](/en/reference/route-matching), and [Capture Phases](/en/reference/capture-phases) for exact semantics.
+</ProxaiCallout>
+
+<FeatureGrid
+  items={[
+    { title: 'One upstream provider', href: '#use-one-openai-compatible-upstream', icon: 'rocket', description: 'Point OpenAI-compatible clients at one default upstream.' },
+    { title: 'Responses to Anthropic', href: '#route-openai-responses-to-an-anthropic-provider', icon: 'flow', description: 'Use Responses inbound with an Anthropic Messages provider.' },
+    { title: 'Route one model', href: '#route-one-model-to-a-different-provider', icon: 'route', description: 'Select a provider by inbound protocol and model pattern.' },
+    { title: 'Provider auth', href: '#debug-provider-auth', icon: 'key', description: 'Check which API key and auth header ProxAI sends upstream.' },
+    { title: 'JSON errors', href: '#return-json-errors-for-sdk-clients', icon: 'alert', description: 'Switch readable text errors to JSON error payloads.' },
+    { title: 'Safe capture', href: '#capture-one-request-safely', icon: 'security', description: 'Enable one phase, reproduce once, then turn it off.' },
+    { title: 'Route override', href: '#temporarily-override-a-route', icon: 'terminal', description: 'Use CLI route overrides without editing long-lived config.' },
+    { title: 'Stalled stream', href: '#diagnose-a-stalled-stream', icon: 'timer', description: 'Separate byte-level idle timeouts from semantic tool-call stalls.' },
+  ]}
+/>
+
+## Use one OpenAI-compatible upstream
+
+<TaskSteps
+  steps={[
+    { title: 'Edit local config', goal: 'Use `config.toml` as the runtime source of truth.', do: ['Set protocol-keyed defaults under `[routing.default_provider_names]`.', 'Define one provider with `protocol`, `base_url`, and `api_key`.'], verify: 'Requests using the configured inbound protocol select the default provider.', docs: [{ label: 'Configuration Reference', href: '/en/reference/configuration' }] },
+    { title: 'Connect the client', goal: 'Send client traffic to ProxAI, not directly to the provider.', do: ['Use the local `/v1` base URL.', 'Keep real provider credentials in ProxAI config.'], verify: 'ProxAI logs show local inbound traffic and upstream provider selection.', docs: [{ label: 'Client Integration', href: '/en/using/client-integration' }] },
+  ]}
+/>
+
+```toml
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+```
+
+## Route OpenAI Responses to an Anthropic provider
+
+<TaskSteps
+  steps={[
+    { title: 'Select the provider by inbound protocol', goal: 'Keep the client on `/v1/responses` while sending Anthropic Messages upstream.', do: ['Set `openai_responses` default provider to the Anthropic-compatible provider name.', 'Set that provider `protocol = "anthropic_messages"`.'], verify: 'The conversion pair is listed as supported before relying on it.', docs: [{ label: 'Compatibility Matrix', href: '/en/reference/compatibility-matrix' }, { label: 'Protocols', href: '/en/reference/protocols' }] },
+  ]}
+/>
+
+```toml
+[routing.default_provider_names]
+openai_responses = "anthropic_upstream"
+
+[providers.anthropic_upstream]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+```
+
+## Route one model to a different provider
+
+<TaskSteps
+  steps={[
+    { title: 'Add an explicit route', goal: 'Override defaults only for the selected model pattern.', do: ['Choose `match_kind` and `model_pattern`.', 'Set `provider` to the target provider name.', 'Add `upstream_model` only when the upstream model name differs.'], verify: 'A matching explicit route wins over protocol defaults.', docs: [{ label: 'Route Matching', href: '/en/reference/route-matching' }] },
+    { title: 'Use a request protocol guard only when needed', goal: 'Avoid endpoint ambiguity for the same model pattern.', do: ['Add `request_protocol` when the same model pattern must route differently by endpoint.', 'Do not add it when all inbound endpoints should share the same route.'], verify: 'A model match with the wrong explicit `request_protocol` fails instead of silently falling through.', docs: [{ label: 'Behavior Contracts', href: '/en/reference/behavior-contracts#routing-and-conversion' }] },
+  ]}
+/>
+
+```toml
+[[routing.routes]]
+name = "m3_chat_to_anthropic"
+request_protocol = "openai_chat_completions"
+match_kind = "exact"
+model_pattern = "MiniMax-M3-preview"
+provider = "minimax"
+upstream_model = "MiniMax-M3"
+
+[providers.minimax]
+protocol = "anthropic_messages"
+base_url = "https://example.invalid"
+api_key = "..."
+compatibility = "anthropic_compatible"
+```
+
+<ProxaiCallout type="caution" title="Provider names are labels">
+  `provider = "minimax"` selects a provider by user-defined name. The provider's `protocol` controls outbound wire behavior.
+</ProxaiCallout>
+
+## Debug provider auth
+
+<ReferenceTable
+  columns={['Provider protocol', 'Auth header sent upstream', 'Source of truth']}
+  rows={[
+    ['`openai_responses` / `openai_chat_completions`', '`Authorization: Bearer <provider api_key>`', '`providers.<name>.api_key`'],
+    ['`anthropic_messages`', '`x-api-key: <provider api_key>`', '`providers.<name>.api_key`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+If the client requires an API key field, use a dummy local value and keep the real key in `config.toml`. See [Behavior Contracts](/en/reference/behavior-contracts#provider-authentication).
+
+## Return JSON errors for SDK clients
+
+<TaskSteps
+  steps={[
+    { title: 'Switch the local error format', goal: 'Make SDK clients receive structured errors during debugging.', do: ['Set `[error_responses].format = "json"`.', 'Reproduce the failing request.', 'Switch back to `text` if human-readable local debugging is preferred.'], verify: 'The error payload matches the stable error response reference.', docs: [{ label: 'Error Responses', href: '/en/reference/error-responses' }] },
+  ]}
+/>
+
+```toml
+[error_responses]
+format = "json"
+```
+
+## Capture one request safely
+
+<TaskSteps
+  steps={[
+    { title: 'Pick one phase', goal: 'Minimize private data exposure.', do: ['Choose the narrowest phase that answers the question.', 'Prefer `provider_request` for outbound payload issues and `upstream_response` for provider return issues.'], verify: 'You can explain why this phase is enough.', docs: [{ label: 'Capture Phases', href: '/en/reference/capture-phases' }, { label: 'Privacy and Local Data', href: '/en/using/privacy-and-local-data' }] },
+    { title: 'Reproduce once and disable capture', goal: 'Avoid accumulating private artifacts.', do: ['Enable capture for the chosen phase.', 'Send one minimal request.', 'Disable capture immediately after reproduction.'], verify: 'The capture artifact exists locally and is not committed.', docs: [{ label: 'Environment and Files', href: '/en/reference/environment-and-files' }] },
+  ]}
+/>
+
+```sh
+proxai capture enable provider-request
+# reproduce once
+proxai capture disable provider-request
+```
+
+<ReferenceTable
+  columns={['Question', 'Phase']}
+  rows={[
+    ['What did the client send?', '`inbound_request`'],
+    ['What did ProxAI send upstream?', '`provider_request`'],
+    ['What did the provider return?', '`upstream_response`'],
+    ['What did the client receive?', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Temporarily override a route
+
+Use CLI route overrides for one run when you do not want to edit long-lived config:
+
+```sh
+proxai --route-override m3_chat_to_anthropic.model_pattern=MiniMax-M3-preview \
+       --route-override m3_chat_to_anthropic.upstream_model=MiniMax-M3
+```
+
+Supported override fields are `request_protocol`, `match_kind`, `model_pattern`, `provider`, and `upstream_model`. See [CLI](/en/reference/cli).
+
+## Diagnose a stalled stream
+
+<DecisionCards
+  items={[
+    { title: 'No bytes arrive', icon: 'timer', when: 'The client waits and no new upstream bytes are observed.', choose: 'Inspect transport connectivity and `read_idle_timeout_secs`.', why: 'This is an idle-read problem, not necessarily a protocol semantic problem.' },
+    { title: 'Tool arguments start but never finish', icon: 'flow', when: 'Tool-call deltas begin but the semantic completion event never arrives.', choose: 'Inspect `[tool_calls].timeout_secs` and provider stream events.', why: 'ProxAI closes stalled tool-call argument streams predictably.' },
+    { title: 'Malformed client event', icon: 'alert', when: 'The client receives bytes but cannot parse the event sequence.', choose: 'Inspect protocol conversion and SSE reconstruction.', why: 'The carrier may be healthy while the translated event stream is invalid.' },
+  ]}
+/>
+
+Start with [Streaming behavior](/en/protocol/streaming-behavior), then use [Streaming Internals](/en/developer/streaming-internals) if you are debugging implementation behavior.

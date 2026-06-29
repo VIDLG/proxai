@@ -11,8 +11,8 @@ use super::{
     citations::TextCitation,
     common::CacheControlEphemeral,
     tools::{
-        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlockParam, ToolUseBlock,
-        ToolUseBlockParam,
+        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlock, ToolResultBlockParam,
+        ToolUseBlock, ToolUseBlockParam,
         bash::{BashCodeExecutionToolResultBlock, BashCodeExecutionToolResultBlockParam},
         code_execution::{CodeExecutionToolResultBlock, CodeExecutionToolResultBlockParam},
         search::{
@@ -103,13 +103,15 @@ pub struct RedactedThinkingBlockParam {
 
 /// 🎯 @use: response-side content block union.
 /// Used by: message, stream
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlock {
     Text(TextBlock),
     Thinking(ThinkingBlock),
     RedactedThinking(RedactedThinkingBlock),
     ToolUse(ToolUseBlock),
+    ToolResult(ToolResultBlock),
     ServerToolUse(ServerToolUseBlock),
     WebSearchToolResult(WebSearchToolResultBlock),
     WebFetchToolResult(WebFetchToolResultBlock),

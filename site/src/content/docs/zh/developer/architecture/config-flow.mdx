@@ -1,0 +1,91 @@
+---
+title: 配置流程
+description: 配置加载、校验、默认值、providers、routes 与运行时状态的维护者指南
+robots: noindex
+---
+
+import { FlowDiagram } from '@components/FlowDiagram.jsx';
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+export const configNodes = [
+  { id: 'flags', position: { x: 0, y: 0 }, data: { label: 'CLI flags\n--config / overrides' } },
+  { id: 'path', position: { x: 240, y: 0 }, data: { label: 'config path\napp directory' } },
+  { id: 'load', position: { x: 480, y: 0 }, data: { label: 'load config.toml\nparse TOML' } },
+  { id: 'validate', position: { x: 720, y: 0 }, data: { label: 'validate schema\nroutes/providers' } },
+  { id: 'state', position: { x: 960, y: 0 }, data: { label: 'AppState\nruntime config' } },
+];
+
+export const configEdges = [
+  { id: 'e1', source: 'flags', target: 'path', animated: true },
+  { id: 'e2', source: 'path', target: 'load', animated: true },
+  { id: 'e3', source: 'load', target: 'validate', animated: true },
+  { id: 'e4', source: 'validate', target: 'state', animated: true },
+];
+
+# 配置流程
+
+本页说明运行时配置如何从文件和 CLI overrides 进入已校验的运行时状态。
+
+<ProxaiCallout type="note" title="配置是运行时事实来源">
+  `config.toml` 是本地运行时 source of truth。`config.example.toml` 是仓库追踪的示例来源。文档跟随代码和已验证默认值，而不是愿景式配置示例。
+</ProxaiCallout>
+
+## 流程
+
+<FlowDiagram nodes={configNodes} edges={configEdges} height={260} client:only="react" />
+
+## 阶段
+
+<PipelineStrip
+  steps={[
+    { title: '解析配置路径', description: '如果提供 --config 则使用它；否则使用 app directory 位置。' },
+    { title: '生成本地示例', description: '首次运行可创建本地示例文件，但不会覆盖仓库追踪的示例。' },
+    { title: '解析 config.toml', description: '把 TOML 加载到 typed config schema。' },
+    { title: '校验不变量', description: '启动完成前检查 required providers、routes、protocols 和 timeout values。' },
+    { title: '构造运行时状态', description: '校验后的配置成为请求处理使用的 AppState。' },
+  ]}
+/>
+
+## 归属
+
+<ReferenceTable
+  columns={['关注点', '归属']}
+  rows={[
+    ['配置 schema', '`src/config.rs`'],
+    ['App directory 解析', '`src/paths.rs`'],
+    ['CLI flags 和临时 overrides', '`src/cli/`'],
+    ['从配置中选择 provider', '`src/routing/` 和 pipeline routing step'],
+    ['运行时请求访问', '`src/lib.rs` 中的 `AppState`'],
+    ['用户可见示例', '`config.example.toml`、`using/configuration`、`reference/configuration`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 不变量
+
+<ReferenceTable
+  columns={['不变量', '原因']}
+  rows={[
+    ['无效配置导致启动失败', '部分有效的代理比启动错误更难诊断。'],
+    ['Provider protocol 控制出站 wire 行为', 'Provider 名称是任意标签，不能暗示协议语义。'],
+    ['Route `request_protocol` guard 严格执行', 'Endpoint-specific routing 不应静默 fallback。'],
+    ['`tool_calls.timeout_secs` 必须为正', '工具调用卡住需要有界语义超时。'],
+    ['本地私有配置不提交', '`config.toml`、captures 和 logs 可能包含 secrets 或 prompts。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 新增设置时
+
+1. 在 `src/config.rs` 添加 typed field。
+2. 在 `config.example.toml` 添加简洁示例/注释。
+3. 接入 `src/main.rs`、`src/lib.rs` 或归属模块。
+4. 如果行为面向用户，更新用户文档。
+5. 更新 reference 文档和默认值/校验测试。
+
+## 相关文档
+
+- [配置说明](/zh/using/configuration)
+- [配置参考](/zh/reference/configuration)
+- [默认值与限制](/zh/reference/defaults-and-limits)
+- [贡献者检查清单](/zh/developer/contributor-checklist)

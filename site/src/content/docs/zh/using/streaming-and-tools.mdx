@@ -1,0 +1,70 @@
+---
+title: 流式与工具调用
+description: 面向用户的流式终止事件、工具调用参数卡住、语义超时、idle-read 超时和安全 capture 指南
+---
+
+import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 流式与工具调用
+
+当纯文本 streaming 正常，但涉及工具时失败、卡住或返回意外事件，看本页。
+
+<ProxaiCallout type="note" title="有两个 timeout 层级">
+  `read_idle_timeout_secs` 观察上游字节。`[tool_calls].timeout_secs` 观察流式工具调用参数的语义完成。它们解决不同问题。
+</ProxaiCallout>
+
+## 终止信号
+
+<ReferenceTable
+  columns={['入站协议', '预期终止信号']}
+  rows={[
+    ['`openai_responses`', '`response.completed` 或兼容的 Responses terminal event'],
+    ['`openai_chat_completions`', '`data: [DONE]`'],
+    ['`anthropic_messages`', '`message_stop`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 诊断工具流卡住
+
+<PipelineStrip
+  steps={[
+    { title: '确认是否有字节到达', description: '如果没有字节到达，检查 provider 连通性和 read_idle_timeout_secs。' },
+    { title: '检查工具参数是否已经开始', description: '如果 argument chunks 已开始但永远不完成，这是语义性 tool-call stall。' },
+    { title: '检查 tool_calls timeout', description: '为不完整流式工具参数调整 [tool_calls].timeout_secs。' },
+    { title: '窄范围 capture', description: '只对一次脱敏复现使用 provider_request 或 upstream_response。' },
+    { title: '对比终止事件', description: '确认 provider 发出了其协议预期的 terminal event。' },
+  ]}
+/>
+
+## Timeout 地图
+
+<ReferenceTable
+  columns={['设置', '层级', '含义']}
+  rows={[
+    ['`[providers.<name>].read_idle_timeout_secs`', 'Transport carrier', '等待上游字节时允许的最大 idle gap。'],
+    ['`[tool_calls].timeout_secs`', 'Protocol semantics', '工具参数开始后，等待不完整流式工具参数的最长时间。'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## 安全 capture 选择
+
+<ReferenceTable
+  columns={['问题', 'Capture phase']}
+  rows={[
+    ['ProxAI 是否向上游发送了预期工具 schema？', '`provider_request`'],
+    ['Provider 是否发出了 tool-call argument chunks？', '`upstream_response`'],
+    ['客户端是否收到了预期翻译后的 chunks？', '`outbound_response`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+复现一次后始终关闭 capture。见[捕获阶段](/zh/reference/capture-phases)。
+
+## 相关文档
+
+- [流式行为](/zh/protocol/streaming-behavior)
+- [调试工作流](/zh/using/debugging-workflow)
+- [状态与停止原因](/zh/reference/status-and-stop-reasons)
+- [兼容性矩阵](/zh/reference/compatibility-matrix)

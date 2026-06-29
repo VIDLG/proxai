@@ -14,14 +14,14 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::sse::SseEvent;
 use crate::translation::streaming::{
-    RepresentableOutputTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
+    EmittedContentTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
     StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
 };
 
 use super::response::chat_stop_state;
 
 #[derive(Debug, Default)]
-pub(super) struct ChatToAnthropicStreamTranslator {
+pub(super) struct MessagesStreamTranslator {
     identity: Option<StreamIdentity>,
     lifecycle: ChatStreamLifecycle,
 }
@@ -66,7 +66,7 @@ struct ChatToAnthropicBlockState {
 #[derive(Debug, Default)]
 struct ChatStreamingState {
     blocks: ChatToAnthropicBlockState,
-    output: RepresentableOutputTracker,
+    output: EmittedContentTracker,
     refusal: String,
     choice_index: Option<u32>,
 }
@@ -302,7 +302,7 @@ fn single_representable_stream_choice(
     Ok(choice)
 }
 
-impl StreamingEventTranslator for ChatToAnthropicStreamTranslator {
+impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
         let payload = event.payload_with_type()?;
         let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload)?;
@@ -374,14 +374,14 @@ impl StreamingEventTranslator for ChatToAnthropicStreamTranslator {
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
         match &self.lifecycle {
             ChatStreamLifecycle::WaitingForFirstChunk => {
-                return Err(StreamTranslationError::Semantic(match end {
+                Err(StreamTranslationError::Semantic(match end {
                     SseStreamEnd::DoneSentinel => {
                         "Chat stream emitted [DONE] before any assistant message chunk".to_string()
                     }
                     SseStreamEnd::Eof => {
                         "Chat stream reached EOF before any assistant message chunk".to_string()
                     }
-                }));
+                }))
             }
             ChatStreamLifecycle::Streaming(state) => {
                 if !state.output.emitted_any() {
@@ -390,14 +390,14 @@ impl StreamingEventTranslator for ChatToAnthropicStreamTranslator {
                             .to_string(),
                     ));
                 }
-                return Err(StreamTranslationError::Semantic(match end {
+                Err(StreamTranslationError::Semantic(match end {
                     SseStreamEnd::DoneSentinel => {
                         "Chat stream emitted [DONE] before a terminal finish_reason".to_string()
                     }
                     SseStreamEnd::Eof => {
                         "Chat stream reached EOF before a terminal finish_reason".to_string()
                     }
-                }));
+                }))
             }
             ChatStreamLifecycle::ReceivedTerminalFinish(terminal) => {
                 let outputs = vec![
@@ -405,14 +405,14 @@ impl StreamingEventTranslator for ChatToAnthropicStreamTranslator {
                     MessageStreamEvent::MessageStop(MessageStopEvent),
                 ];
                 self.lifecycle = ChatStreamLifecycle::Stopped;
-                return encode_outputs(outputs);
+                encode_outputs(outputs)
             }
-            ChatStreamLifecycle::Stopped => return Ok(Vec::new()),
+            ChatStreamLifecycle::Stopped => Ok(Vec::new()),
         }
     }
 }
 
-impl ChatToAnthropicStreamTranslator {
+impl MessagesStreamTranslator {
     fn translate_usage_only_chunk(
         &mut self,
         chunk: &CreateChatCompletionStreamResponse,

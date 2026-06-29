@@ -1,0 +1,88 @@
+---
+title: Error Flow
+description: Maintainer guide to internal errors, upstream failures, response projection, preserved headers, and SSE error rendering
+robots: noindex
+---
+
+import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Error Flow
+
+This page explains how internal failures become compact client-facing HTTP or SSE errors.
+
+<ConversionPath
+  from={{ title: 'Internal error', description: 'RequestError / ConfigError / UpstreamError / TranslationError / SseError / ByteStreamError' }}
+  via={[
+    { title: 'Classify', description: 'Select stable client-facing error type and status' },
+    { title: 'Preserve safe details', description: 'Keep useful upstream headers without leaking private data' },
+    { title: 'Render', description: 'HTTP body or SSE error event depending on response state' },
+  ]}
+  to={{ title: 'Client error', description: 'text or JSON ErrorResponseSpec' }}
+/>
+
+## Internal taxonomy
+
+<ReferenceTable
+  columns={['Error family', 'Use for']}
+  rows={[
+    ['`RequestError`', 'Inbound body parsing and client request validation failures.'],
+    ['`ConfigError`', 'Config loading, config-file reads, route/provider validation, and startup config failures.'],
+    ['`InternalError`', 'Proxy runtime invariants, local filesystem IO, body reads, serialization, and boundary failures.'],
+    ['`UpstreamError`', 'Provider send failures, non-success statuses, and upstream body-read failures.'],
+    ['`TranslationError`', 'Protocol payload conversion failures.'],
+    ['`SseError` / `SseTranslationError`', 'SSE event semantics and streaming conversion failures.'],
+    ['`ByteStreamError`', 'Byte stream carrier failures.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Projection rules
+
+<ReferenceTable
+  columns={['Rule', 'Reason']}
+  rows={[
+    ['Do not expose internal taxonomy verbatim', 'Client-facing types should be stable and compact.'],
+    ['Always include numeric `status` in payload', 'SSE error events cannot change HTTP status after streaming starts.'],
+    ['Preserve useful upstream diagnostic headers when present', '`Retry-After`, upstream request ids, and rate-limit headers help debugging.'],
+    ['Do not fabricate upstream `code` or `param`', 'Those values only exist when the upstream provided them.'],
+    ['Do not log private request bodies or Authorization headers', 'Errors must remain privacy-safe by default.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## HTTP vs SSE
+
+<ReferenceTable
+  columns={['Carrier', 'Behavior']}
+  rows={[
+    ['HTTP before response starts', 'Render normal HTTP error with configured text or JSON payload.'],
+    ['SSE after stream starts', 'Render protocol-compatible error event where possible; include payload status.'],
+    ['Upstream non-2xx', 'Project upstream failure into configured client-facing error format and safe preserved headers.'],
+    ['Stream semantic failure', 'Emit/return an error that distinguishes incomplete terminal semantics from normal completion.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+<ProxaiCallout type="caution" title="Do not wrap semantic stream failures as IO">
+  Use stream-specific errors for SSE semantics and byte-stream carrier errors. Reserve `std::io::Error` for real OS/filesystem IO.
+</ProxaiCallout>
+
+## Source owners
+
+<ReferenceTable
+  columns={['Concern', 'Owner']}
+  rows={[
+    ['Domain error taxonomy', '`src/error/`'],
+    ['SSE semantic failures', '`src/sse.rs` and streaming translation modules'],
+    ['Byte stream carriers', '`src/http_support/`'],
+    ['Proxy request lifecycle', '`src/lib.rs` and pipeline modules'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Related docs
+
+- [Error Handling Internals](/en/developer/error-handling-internals)
+- [Error Responses](/en/reference/error-responses)
+- [Behavior Contracts](/en/reference/behavior-contracts#errors)
+- [Streaming Internals](/en/developer/streaming-internals)

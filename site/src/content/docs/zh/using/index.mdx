@@ -1,0 +1,58 @@
+---
+title: 使用 ProxAI
+description: 面向用户的 ProxAI 运行、配置、路由、观测和排障指南
+---
+
+import { FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 使用 ProxAI
+
+本章节面向把 ProxAI 作为本地兼容代理运行的用户。如果你要配置 provider、路由模型、capture 一次请求或调试客户端可见行为，从这里开始。
+
+<PipelineStrip
+  steps={[
+    { title: '本地运行', description: '安装或构建 ProxAI，生成 app 目录，并让客户端指向本地代理。' },
+    { title: '配置 providers', description: '长期运行时行为放在 config.toml。' },
+    { title: '显式路由', description: '使用协议感知 defaults，只在需要时添加显式 routes。' },
+    { title: '安全调试', description: '使用紧凑日志和最窄 capture phase，不提交私有产物。' },
+  ]}
+/>
+
+<ProxaiCallout type="tip" title="先看任务文档，再查 Reference">
+  工作流看这里。需要精确字段、默认值、phase 名称或行为契约时，再看 [参考](/zh/reference)。
+</ProxaiCallout>
+
+## 范围
+
+<ReferenceTable
+  columns={['ProxAI 是', 'ProxAI 不是']}
+  rows={[
+    ['本地兼容代理，处理 OpenAI 兼容与 Anthropic 风格流量', '托管式多租户 AI gateway'],
+    ['带显式转换 pair 的协议路由器', '所有 provider/protocol shape 的万能转换器'],
+    ['用于本地 Zed/proxy/provider 问题的紧凑诊断工具', 'Prompt logging 或 analytics 平台'],
+    ['以 config.toml 为中心的本地运行时', 'Provider 管理控制面'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+
+## 页面
+
+<FeatureGrid
+  items={[
+    { title: '快速开始', href: '/zh/using/quick-start', icon: 'rocket', description: '本地运行 ProxAI，找到 app 目录，编辑 config.toml，并让客户端接入。' },
+    { title: '安装与升级', href: '/zh/using/install-and-upgrade', icon: 'terminal', description: '获取二进制、定位运行时文件、安全升级，并在保留配置的前提下回滚。' },
+    { title: '客户端接入', href: '/zh/using/client-integration', icon: 'terminal', description: 'Base URL、endpoint、本地 key、模型路由、错误格式和流式客户端行为。' },
+    { title: 'Zed 接入', href: '/zh/using/zed-integration', icon: 'laptop', description: '让 Zed 指向本地代理，明确选择 endpoint，并安全调试 Responses/工具流式问题。' },
+    { title: 'Provider 设置', href: '/zh/using/provider-setup', icon: 'config', description: 'Provider 名称、协议、base URL、API key、defaults 和显式 routes。' },
+    { title: '流式与工具调用', href: '/zh/using/streaming-and-tools', icon: 'timer', description: '终止事件、工具调用卡住、语义超时、idle-read 超时和安全 capture。' },
+    { title: '隐私与本地数据', href: '/zh/using/privacy-and-local-data', icon: 'security', description: '本地产物、capture 隐私、安全分享，以及哪些内容绝不应进入日志。' },
+    { title: '已知限制', href: '/zh/using/known-limitations', icon: 'unsupported', description: '有意的非目标、不支持的协议 pair、有损转换和本地数据边界。' },
+    { title: '调试工作流', href: '/zh/using/debugging-workflow', icon: 'alert', description: '分类失败、捕获一个 phase、对比 payload 并脱敏证据。' },
+    { title: 'Recipes', href: '/zh/using/recipes', icon: 'zap', description: 'Provider 设置、模型路由、安全 capture 和流式诊断的任务路径。' },
+    { title: '配置说明', href: '/zh/using/configuration', icon: 'config', description: 'server、routing、providers、capture、logging 和错误响应配置。' },
+    { title: '路由与 Provider', href: '/zh/using/routing-and-providers', icon: 'route', description: 'route 如何选择 provider，以及 provider protocol 如何控制出站 wire 行为。' },
+    { title: '观测与诊断', href: '/zh/using/observability', icon: 'terminal', description: '日志、capture、请求摘要，以及本地调试时的隐私边界。' },
+    { title: '常见排障', href: '/zh/using/troubleshooting', icon: 'alert', description: '请求、provider、流式等常见症状、可能原因与下一步检查。' },
+  ]}
+/>

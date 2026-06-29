@@ -1,0 +1,81 @@
+---
+title: Zed Integration
+description: Connect Zed to a local ProxAI instance and debug Responses, streaming, and tool-call issues safely
+---
+
+import { DecisionCards, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Zed Integration
+
+Use this page when Zed should talk to ProxAI instead of a provider directly. ProxAI stays local, accepts OpenAI-compatible requests, and forwards them to the configured upstream provider.
+
+<ProxaiCallout type="note" title="Local proxy boundary">
+  Zed sends requests to ProxAI's local base URL. ProxAI then routes by inbound protocol, model, and provider configuration. Keep long-lived routing in `config.toml`, not in ad hoc client settings.
+</ProxaiCallout>
+
+## Connection checklist
+
+<TaskSteps
+  steps={[
+    {
+      title: 'Run ProxAI locally',
+      goal: 'Start the local proxy before configuring Zed.',
+      do: ['Run ProxAI with your chosen `config.toml`.', 'Confirm the configured local port from `[server]` or your temporary CLI override.'],
+      verify: 'A basic health/request check reaches the local listener rather than the upstream provider directly.',
+      docs: [{ label: 'Quick Start', href: '/en/using/quick-start' }, { label: 'CLI Reference', href: '/en/reference/cli' }],
+    },
+    {
+      title: 'Point Zed at the local base URL',
+      goal: 'Make Zed use ProxAI as the OpenAI-compatible endpoint.',
+      do: ['Use the ProxAI local base URL, usually `http://127.0.0.1:<port>/v1`.', 'Use a local client key if the client requires one; upstream provider keys belong in ProxAI provider configuration.'],
+      verify: 'ProxAI logs show the inbound request and the selected route/provider.',
+      docs: [{ label: 'Client Integration', href: '/en/using/client-integration' }, { label: 'Observability', href: '/en/using/observability' }],
+    },
+    {
+      title: 'Match the endpoint to the desired inbound protocol',
+      goal: 'Let ProxAI detect the actual request protocol from the request path.',
+      do: ['Use `/v1/responses` for `openai_responses` clients.', 'Use `/v1/chat/completions` for `openai_chat_completions` clients.', 'Only add route `request_protocol` when the same model pattern needs endpoint-specific behavior.'],
+      verify: 'Route selection uses the expected inbound protocol and does not silently fall through across explicit protocol guards.',
+      docs: [{ label: 'Protocols', href: '/en/reference/protocols' }, { label: 'Route Matching', href: '/en/reference/route-matching' }],
+    },
+    {
+      title: 'Debug streaming/tool-call symptoms narrowly',
+      goal: 'Capture only the phase needed to explain a Zed-visible issue.',
+      do: ['For stalled tool calls, start with `upstream_response` or `outbound_response` captures.', 'Do not share full captures without redaction; they may contain prompts, tool arguments, or provider output.'],
+      verify: 'The terminal event, stop reason, or stream translation error explains the client symptom.',
+      docs: [{ label: 'Streaming and Tools', href: '/en/using/streaming-and-tools' }, { label: 'Capture Phases', href: '/en/reference/capture-phases' }],
+    },
+  ]}
+/>
+
+## What to configure where
+
+<ReferenceTable
+  columns={['Concern', 'Where it belongs']}
+  rows={[
+    ['Zed base URL', 'Zed client settings, pointing to ProxAI local `/v1` base URL'],
+    ['Local client key requirement', 'Zed/client settings if required by the client integration'],
+    ['Provider API key', '`config.toml` provider config or supported environment expansion, never in docs or captures'],
+    ['Model-to-provider routing', '`[[routes]]` and `[routing.defaults]` in `config.toml`'],
+    ['Provider protocol behavior', '`providers.<name>.protocol`'],
+    ['Temporary port/upstream override', 'CLI flags for short-lived local tests'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Common Zed-facing decisions
+
+<DecisionCards
+  items={[
+    { title: 'Zed uses Responses', icon: 'protocol', when: 'The client sends `/v1/responses` requests.', choose: '`request_protocol = "openai_responses"` only for endpoint-specific routes; otherwise let path detection handle it.', why: 'Responses has richer output item semantics, tool events, and terminal status behavior.' },
+    { title: 'Provider speaks Anthropic Messages', icon: 'route', when: 'The upstream provider expects Anthropic Messages wire payloads.', choose: 'Set the selected provider `protocol = "anthropic_messages"`.', why: 'Provider protocol controls outbound wire behavior; provider names are just labels.' },
+    { title: 'Tool stream appears stuck', icon: 'timer', when: 'Zed waits while tool-call arguments or terminal events are incomplete.', choose: 'Inspect streaming/tool-call behavior and semantic timeout settings before changing routing.', why: 'Streaming regressions are user-visible and are often phase-specific.' },
+    { title: 'Error is hard to read', icon: 'alert', when: 'Zed surfaces a compact local error without enough detail.', choose: 'Temporarily use JSON error responses and a narrow capture phase.', why: 'This keeps the default readable while preserving structured diagnostics during debugging.' },
+  ]}
+/>
+
+## Privacy notes
+
+Zed integration can involve private prompts, tool calls, file snippets, and provider output. ProxAI should not log request bodies, `Authorization` headers, API keys, or private upstream URL details. Captures are local debugging artifacts and should be treated as sensitive.
+
+See [Privacy and Local Data](/en/using/privacy-and-local-data) and [Environment and Files](/en/reference/environment-and-files) before sharing logs or captures.

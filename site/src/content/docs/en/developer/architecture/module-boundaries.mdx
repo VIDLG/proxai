@@ -1,0 +1,71 @@
+---
+title: Module Boundaries
+description: Maintainer guide to where parsing, routing, translation, provider behavior, HTTP carriers, and observation belong
+robots: noindex
+---
+
+import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Module Boundaries
+
+This page is a maintainer map for deciding where code belongs. When in doubt, keep protocol conversion explicit and keep provider-specific behavior out of generic translation.
+
+<ProxaiCallout type="caution" title="Do not blur protocol and provider boundaries">
+  Provider names are user labels. Protocol names describe wire behavior. A provider module may adapt local provider quirks, but general protocol-to-protocol shape changes belong in `src/translation/`.
+</ProxaiCallout>
+
+## Ownership map
+
+<ModuleGrid
+  modules={[
+    { name: 'src/ingress/', icon: 'route', description: 'Detect inbound protocol from HTTP path, parse inbound body, normalize request carriers before routing.' },
+    { name: 'src/protocol/', icon: 'protocol', description: 'Wire structs, enums, and protocol-specific event payloads. No provider routing decisions.' },
+    { name: 'src/routing/', icon: 'route', description: 'Match request_protocol and model_pattern, select provider, enforce protocol guard errors.' },
+    { name: 'src/translation/', icon: 'flow', description: 'Pure request/response/stream conversion between protocol pairs.' },
+    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation: model rewrite, provider compatibility projection, serialization.' },
+    { name: 'src/provider/*/transport', icon: 'terminal', description: 'Upstream URL construction, provider-owned auth headers, HTTP send.' },
+    { name: 'src/upstream/', icon: 'timer', description: 'Read provider status, headers, non-streaming body, and streaming byte carriers.' },
+    { name: 'src/http_support/', icon: 'architecture', description: 'HTTP response reconstruction, content-type helpers, header filtering, byte stream carriers.' },
+    { name: 'src/error/', icon: 'alert', description: 'Domain error taxonomy and compact client-facing error projection.' },
+    { name: 'src/observe/', icon: 'gauge', description: 'Structured logs, capture phases, hints, and privacy-aware diagnostics.' },
+  ]}
+/>
+
+## Boundary decisions
+
+<ReferenceTable
+  columns={['Question', 'Put it in']}
+  rows={[
+    ['Does it parse a client request path or body?', '`src/ingress/`'],
+    ['Does it define protocol JSON wire shape?', '`src/protocol/`'],
+    ['Does it select a provider by protocol/model?', '`src/routing/` or pipeline routing step'],
+    ['Does it convert one protocol payload into another protocol payload?', '`src/translation/`'],
+    ['Does it rewrite provider model or provider-local request fields?', '`src/provider/*/request`'],
+    ['Does it add provider auth headers or build upstream URLs?', '`src/provider/*/transport`'],
+    ['Does it filter headers or rebuild an HTTP response?', '`src/http_support/`'],
+    ['Does it render client-facing errors?', '`src/error/`'],
+    ['Does it write logs or capture artifacts?', '`src/observe/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Anti-patterns
+
+<ReferenceTable
+  columns={['Avoid', 'Why']}
+  rows={[
+    ['Passing HTTP `Response` into `src/translation/`', 'Translation should stay pure at the carrier boundary.'],
+    ['Adding provider auth logic in translation', 'Auth is provider transport behavior, not protocol conversion.'],
+    ['Treating provider names as protocol values', 'Provider names are user labels and can be arbitrary.'],
+    ['Silently falling through after a protocol guard mismatch', 'A matching route with mismatched `request_protocol` is a configuration error.'],
+    ['Logging request bodies for convenience', 'Prompts, tool arguments, and outputs are private data.'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Related docs
+
+- [Request Lifecycle](/en/developer/architecture/request-lifecycle)
+- [Protocol Conversion](/en/developer/protocol-conversion)
+- [Behavior Contracts](/en/reference/behavior-contracts)
+- [Capture Phases](/en/reference/capture-phases)

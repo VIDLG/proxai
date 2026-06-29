@@ -43,3 +43,18 @@ fn rejects_anthropic_messages_request_without_model() {
 
     assert!(error.to_string().contains("model"));
 }
+
+#[test]
+fn accepts_legacy_enabled_thinking_budget() {
+    let body = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 256,
+        "messages": [{"role": "user", "content": "hello"}],
+        "thinking": {"type": "enabled", "budget_tokens": 1024}
+    })
+    .to_string();
+
+    let prepared = prepare_anthropic_messages_request(body.as_bytes()).unwrap();
+
+    assert_eq!(prepared.model, "claude-sonnet-4-5");
+}
