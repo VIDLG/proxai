@@ -21,9 +21,10 @@ use crate::translation::streaming::{
     StreamingEventTranslator, encode_sse_json,
 };
 
-use super::types::{
-    OutputItemIdAllocator, incomplete_details_from_stop_reason, response_id, text_block_annotations,
-};
+use super::citations::text_block_annotations;
+use super::ids::OutputItemIdAllocator;
+use super::incomplete_details_from_stop_reason;
+use super::response_id;
 
 #[derive(Debug, Default)]
 pub(super) struct ResponsesStreamTranslator {
