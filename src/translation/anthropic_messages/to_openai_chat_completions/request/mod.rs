@@ -97,3 +97,7 @@ impl TryFrom<anthropic::MessageCreateParamsBase> for chat::CreateChatCompletionR
         })
     }
 }
+
+#[cfg(test)]
+#[path = "../request_tests.rs"]
+mod tests;

@@ -73,6 +73,8 @@ Do not pass HTTP `Response`, `Body`, route/model rewrite details, or provider re
 
 Prefer pair-oriented conversion names such as `openai_responses -> anthropic_messages`. For protocol-specific request/response data, prefer top-level enums keyed by protocol over parallel fields that can drift into impossible states.
 
+When a target protocol cannot represent a source field or block, skip it explicitly with a `tracing::trace!` call that records the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`, the trace log only makes the drop observable.
+
 ## Logging / Errors / Streaming
 
 Logs should be compact, structured, stable, and useful for real debugging. Do not log request bodies, Authorization headers, API keys, private prompts, or unnecessary private upstream URL details.
@@ -92,6 +94,17 @@ Use domain-specific errors rather than broad catch-all conversions:
 Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
 
 SSE/streaming regressions are user-visible. Preserve SSE bytes and `text/event-stream`, detect terminal events, handle stalled tool-call argument streams, and avoid Unicode chunk slicing panics. Keep semantic tool-call timeout configurable via `[tool_calls].timeout_secs`. Provider streaming internals are documented in `site/src/content/docs/zh/developer/streaming-internals.mdx`; user-facing streaming behavior is in `site/src/content/docs/zh/protocol/streaming-behavior.mdx`.
+
+## Derive Macros
+
+Prefer derive macros over hand-written boilerplate. They keep structural intent visible at a glance and reduce drift between a type and its trait impls.
+
+- `delegate` — `delegate! { to self.field { ... } }` for field delegation instead of one-line wrapper methods. Use it whenever a struct owns a helper type and forwards a subset of its API.
+- `derive_more` — `Display`, `From`, `Into` for newtypes and conversions instead of manual `impl` blocks.
+- `strum` — `EnumIter`, `EnumString`, `Display` etc. for enums that need iteration or string conversion instead of match-by-match translation tables.
+- `getset` — generated accessors when a type needs many `pub` getters/setters with no custom logic, instead of hand-writing them.
+
+Rule of thumb: if a code block only forwards to a field, converts to/from another type, enumerates enum variants, or exposes accessors, it should be a derive. Reserve hand-written `impl` blocks for behavior that has real logic.
 
 ## Tests
 

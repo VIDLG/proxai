@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::translate_request_payload;
+use super::super::translate_request_payload;
 
 #[test]
 fn translates_basic_anthropic_request_to_responses() {

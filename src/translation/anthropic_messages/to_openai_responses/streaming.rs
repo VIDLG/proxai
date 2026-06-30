@@ -1,6 +1,5 @@
 use axum::body::Bytes;
 use delegate::delegate;
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
@@ -15,6 +14,9 @@ use crate::protocol::openai_responses::{
     ResponseStreamEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseUsage, Status,
 };
 use crate::sse::SseEvent;
+use crate::translation::anthropic_messages::stream_lifecycle::{
+    AnthropicInboundLifecycle, AnthropicStreamState, ensure_anthropic_stream_event,
+};
 use crate::translation::streaming::{
     EmittedContentTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
     StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
@@ -27,16 +29,7 @@ use super::types::{
 #[derive(Debug, Default)]
 pub(super) struct ResponsesStreamTranslator {
     sequence_number: u64,
-    lifecycle: StreamLifecycle,
-}
-
-#[derive(Debug, Default)]
-enum StreamLifecycle {
-    #[default]
-    WaitingForMessageStart,
-    Streaming(StreamingState),
-    ReceivedTerminalDelta(StreamingState),
-    Stopped,
+    lifecycle: AnthropicInboundLifecycle<StreamingState>,
 }
 
 #[derive(Debug)]
@@ -115,7 +108,6 @@ impl StreamingState {
     delegate! {
         to self.output {
             fn mark_tool_use(&mut self);
-            fn emitted_any(&self) -> bool;
         }
     }
 
@@ -389,71 +381,13 @@ impl StreamingState {
     }
 }
 
-impl StreamLifecycle {
-    fn ensure_event_allowed(&self, event: &MessageStreamEvent) -> StreamTranslationResult<()> {
-        if matches!(event, MessageStreamEvent::Ping(_)) {
-            return Ok(());
-        }
-
-        match self {
-            Self::WaitingForMessageStart => {
-                if matches!(event, MessageStreamEvent::MessageStart(_)) {
-                    Ok(())
-                } else {
-                    Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted semantic event before message_start".to_string(),
-                    ))
-                }
-            }
-            Self::Streaming(_) => {
-                if matches!(event, MessageStreamEvent::MessageStop(_)) {
-                    Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted message_stop before terminal message_delta"
-                            .to_string(),
-                    ))
-                } else {
-                    Ok(())
-                }
-            }
-            Self::ReceivedTerminalDelta(_) => {
-                if matches!(event, MessageStreamEvent::MessageStop(_)) {
-                    Ok(())
-                } else {
-                    Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted semantic event after terminal message_delta before message_stop"
-                            .to_string(),
-                    ))
-                }
-            }
-            Self::Stopped => Err(StreamTranslationError::Semantic(
-                "Anthropic stream emitted semantic event after message_stop".to_string(),
-            )),
-        }
+impl AnthropicStreamState for StreamingState {
+    fn emitted_any(&self) -> bool {
+        self.output.emitted_any()
     }
 
-    fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
-        let end_label = match end {
-            SseStreamEnd::DoneSentinel => "[DONE]",
-            SseStreamEnd::Eof => "EOF",
-        };
-
-        let message = match self {
-            Self::Stopped => return StreamTranslationError::Semantic(String::new()),
-            Self::WaitingForMessageStart => {
-                format!("Anthropic stream reached {end_label} before message_start")
-            }
-            Self::ReceivedTerminalDelta(_) => {
-                format!(
-                    "Anthropic stream reached {end_label} after terminal message_delta but before message_stop"
-                )
-            }
-            Self::Streaming(state) if state.emitted_any() => {
-                format!("Anthropic stream reached {end_label} before terminal message_delta")
-            }
-            Self::Streaming(_) => "Anthropic stream completed without Responses-representable content, thinking, or tool_use blocks"
-                .to_string(),
-        };
-        StreamTranslationError::Semantic(message)
+    fn target_protocol_label() -> &'static str {
+        "Responses"
     }
 }
 
@@ -530,7 +464,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
-                if !matches!(self.lifecycle, StreamLifecycle::WaitingForMessageStart) {
+                if !matches!(
+                    self.lifecycle,
+                    AnthropicInboundLifecycle::WaitingForMessageStart
+                ) {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted duplicate message_start".to_string(),
                     ));
@@ -538,7 +475,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 let response_id = response_id(&event.message.id);
                 let identity = StreamIdentity::new(response_id, event.message.model);
                 let state = StreamingState::new(identity, event.message.usage);
-                self.lifecycle = StreamLifecycle::Streaming(state);
+                self.lifecycle = AnthropicInboundLifecycle::Streaming(state);
                 let sequence_number = self.next_sequence_number();
                 let response = self
                     .streaming_state()?
@@ -889,14 +826,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 }
                 state.usage.output_tokens_details = event.usage.output_tokens_details;
                 state.stop_reason = Some(stop_reason);
-                self.lifecycle = StreamLifecycle::ReceivedTerminalDelta(state);
+                self.lifecycle = AnthropicInboundLifecycle::ReceivedTerminalDelta(state);
             }
             MessageStreamEvent::MessageStop(_) => {
-                let state = self.take_terminal_state()?;
+                let state = self.lifecycle.take_terminal_state()?;
                 let status = state.terminal_response_status();
                 let sequence_number = self.next_sequence_number();
                 let response = state.response_snapshot(status);
-                self.lifecycle = StreamLifecycle::Stopped;
+                self.lifecycle = AnthropicInboundLifecycle::Stopped;
                 let event = match status {
                     Status::Incomplete => {
                         ResponseStreamEvent::ResponseIncomplete(ResponseIncompleteEvent {
@@ -921,31 +858,11 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
     }
 
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
-        if matches!(self.lifecycle, StreamLifecycle::Stopped) {
+        if self.lifecycle.is_stopped() {
             return Ok(Vec::new());
         }
 
         Err(self.lifecycle.unexpected_stream_end_error(end))
-    }
-}
-
-fn ensure_anthropic_stream_event(payload: &Value) -> StreamTranslationResult<()> {
-    match payload.get("type").and_then(Value::as_str) {
-        Some(
-            "ping"
-            | "message_start"
-            | "content_block_start"
-            | "content_block_delta"
-            | "content_block_stop"
-            | "message_delta"
-            | "message_stop",
-        ) => Ok(()),
-        Some(event_type) => Err(StreamTranslationError::Semantic(format!(
-            "Anthropic stream emitted unsupported event type `{event_type}`"
-        ))),
-        None => Err(StreamTranslationError::Semantic(
-            "Anthropic stream event is missing `type`".to_string(),
-        )),
     }
 }
 
@@ -956,47 +873,18 @@ impl ResponsesStreamTranslator {
     }
 
     fn streaming_state(&self) -> StreamTranslationResult<&StreamingState> {
-        match &self.lifecycle {
-            StreamLifecycle::Streaming(state) => Ok(state),
-            _ => Err(StreamTranslationError::Semantic(
-                "Anthropic stream active content event occurred outside streaming state"
-                    .to_string(),
-            )),
-        }
+        self.lifecycle.streaming_state()
     }
 
     fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut StreamingState> {
-        match &mut self.lifecycle {
-            StreamLifecycle::Streaming(state) => Ok(state),
-            _ => Err(StreamTranslationError::Semantic(
-                "Anthropic stream active content event occurred outside streaming state"
-                    .to_string(),
-            )),
-        }
+        self.lifecycle.streaming_state_mut()
     }
 
     fn take_streaming_state(&mut self) -> StreamTranslationResult<StreamingState> {
-        match std::mem::take(&mut self.lifecycle) {
-            StreamLifecycle::Streaming(state) => Ok(state),
-            other => {
-                self.lifecycle = other;
-                Err(StreamTranslationError::Semantic(
-                    "Anthropic stream terminal event occurred outside streaming state".to_string(),
-                ))
-            }
-        }
-    }
-
-    fn take_terminal_state(&mut self) -> StreamTranslationResult<StreamingState> {
-        match std::mem::take(&mut self.lifecycle) {
-            StreamLifecycle::ReceivedTerminalDelta(state) => Ok(state),
-            other => {
-                self.lifecycle = other;
-                Err(StreamTranslationError::Semantic(
-                    "Anthropic stream message_stop occurred before terminal message_delta"
-                        .to_string(),
-                ))
-            }
-        }
+        self.lifecycle.take_streaming_state()
     }
 }
+
+#[cfg(test)]
+#[path = "streaming_tests.rs"]
+mod tests;

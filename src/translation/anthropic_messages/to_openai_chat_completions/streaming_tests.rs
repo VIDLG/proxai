@@ -4,7 +4,7 @@ use serde_json::json;
 
 use crate::http_support::into_byte_stream;
 
-use super::translate_streaming_stream;
+use super::super::translate_streaming_stream;
 
 #[tokio::test]
 async fn translates_anthropic_stream_to_chat_completion_sse() {

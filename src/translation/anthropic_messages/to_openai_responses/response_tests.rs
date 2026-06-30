@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::protocol::anthropic::messages::Message;
 use crate::protocol::openai::responses::Response as OpenaiResponse;
 
-use super::translate_non_streaming_payload;
+use super::super::translate_non_streaming_payload;
 
 #[test]
 fn translates_anthropic_message_to_openai_responses_shape() {

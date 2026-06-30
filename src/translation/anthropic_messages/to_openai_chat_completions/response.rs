@@ -24,10 +24,17 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
                     text_parts.push(block.text.clone());
                 }
                 ContentBlock::ToolUse(block) => tool_calls.push(block.try_into()?),
-                // OpenAI Chat response messages only expose `content` plus `tool_calls`.
-                // Other Anthropic response blocks, such as thinking or server-tool
-                // artifacts, have no safe Chat message field here.
-                _ => {}
+                // OpenAI Chat response messages only expose `content` plus
+                // `tool_calls`. Other Anthropic response blocks (thinking,
+                // redacted thinking, server-tool artifacts) have no safe Chat
+                // message field, so they are skipped with a trace log to keep
+                // silent drops observable.
+                skipped => {
+                    tracing::trace!(
+                        discriminant = ?std::mem::discriminant(skipped),
+                        "skipping Anthropic response block with no Chat-representable field"
+                    );
+                }
             }
         }
 
@@ -101,3 +108,7 @@ fn message_refusal(message: &Message, content: &str) -> Option<String> {
                 .and_then(|details| details.explanation.clone())
         })
 }
+
+#[cfg(test)]
+#[path = "response_tests.rs"]
+mod tests;

@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::translate_non_streaming_payload;
+use super::super::translate_non_streaming_payload;
 
 #[tokio::test]
 async fn translates_anthropic_message_to_chat_completion_shape() {

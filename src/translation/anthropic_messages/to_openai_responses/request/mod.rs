@@ -77,3 +77,7 @@ impl TryFrom<anthropic::MessageCreateParamsBase> for responses::ResponseCreatePa
         })
     }
 }
+
+#[cfg(test)]
+#[path = "../request_tests.rs"]
+mod tests;

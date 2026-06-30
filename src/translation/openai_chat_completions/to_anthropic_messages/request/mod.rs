@@ -60,3 +60,7 @@ impl TryFrom<&chat::CreateChatCompletionRequest> for anthropic::MessageCreatePar
         })
     }
 }
+
+#[cfg(test)]
+#[path = "../request_tests.rs"]
+mod tests;

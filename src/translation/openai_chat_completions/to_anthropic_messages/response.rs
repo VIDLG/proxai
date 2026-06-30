@@ -169,3 +169,7 @@ pub(super) fn chat_stop_state(
         sequence: None,
     }
 }
+
+#[cfg(test)]
+#[path = "response_tests.rs"]
+mod tests;

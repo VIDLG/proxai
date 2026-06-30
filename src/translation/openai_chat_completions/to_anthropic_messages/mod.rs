@@ -33,8 +33,3 @@ pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
         streaming::MessagesStreamTranslator::default(),
     )
 }
-
-#[cfg(test)]
-mod request_tests;
-#[cfg(test)]
-mod response_tests;

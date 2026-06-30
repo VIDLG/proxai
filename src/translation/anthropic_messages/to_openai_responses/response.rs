@@ -145,3 +145,7 @@ fn tool_result_output_item(id: String, block: &ToolResultBlock) -> TranslationRe
         },
     ))
 }
+
+#[cfg(test)]
+#[path = "response_tests.rs"]
+mod tests;

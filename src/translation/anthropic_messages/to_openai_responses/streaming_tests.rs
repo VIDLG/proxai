@@ -5,7 +5,7 @@ use crate::sse::SseEventScanner;
 use axum::body::{Body, to_bytes};
 use axum::http::{Response, header};
 
-use super::translate_streaming_stream;
+use super::super::translate_streaming_stream;
 
 fn assert_openai_response_stream_events_deserialize(body: &str) {
     let mut scanner = SseEventScanner::default();

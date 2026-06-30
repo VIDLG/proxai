@@ -479,3 +479,7 @@ impl MessagesStreamTranslator {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "streaming_tests.rs"]
+mod tests;

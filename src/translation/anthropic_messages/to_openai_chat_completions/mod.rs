@@ -31,10 +31,3 @@ pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResu
     let translated: CreateChatCompletionResponse = (&message).try_into()?;
     Ok(serde_json::to_value(translated)?)
 }
-
-#[cfg(test)]
-mod request_tests;
-#[cfg(test)]
-mod response_tests;
-#[cfg(test)]
-mod streaming_tests;
