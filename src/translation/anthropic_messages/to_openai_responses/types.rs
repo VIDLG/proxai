@@ -8,10 +8,37 @@ use crate::protocol::anthropic::messages::{
     RedactedThinkingBlock, ResponseServiceTier, StopReason, ThinkingBlock, ToolUseBlock, Usage,
 };
 use crate::protocol::openai_responses::{
-    FunctionToolCall, InputTokenDetails, OutputStatus, OutputTokenDetails, ReasoningItem,
-    ReasoningItemContent, ReasoningTextContent, ResponseUsage, ServiceTier, Status,
+    FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputStatus, OutputTokenDetails,
+    ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseUsage, ServiceTier, Status,
 };
 use crate::translation::TranslationResult;
+
+/// Normalize an Anthropic message id into a Responses-shaped id.
+///
+/// Pair-local naming convention, not a protocol conversion: it just makes
+/// sure the id starts with `resp_` so downstream consumers recognize it.
+pub(super) fn response_id(message_id: &str) -> String {
+    if message_id.starts_with("resp_") {
+        message_id.to_string()
+    } else {
+        format!("resp_{message_id}")
+    }
+}
+
+/// Pair-local Responses `incomplete_details.reason` convention.
+///
+/// The string `"max_output_tokens"` is this pair's chosen wording (matching
+/// OpenAI Responses API guidance), not an Anthropic protocol value.
+pub(super) fn incomplete_details_from_stop_reason(
+    stop_reason: Option<StopReason>,
+) -> Option<IncompleteDetails> {
+    match stop_reason {
+        Some(StopReason::MaxTokens) => Some(IncompleteDetails {
+            reason: "max_output_tokens".to_string(),
+        }),
+        _ => None,
+    }
+}
 
 impl From<&Usage> for ResponseUsage {
     fn from(usage: &Usage) -> Self {
