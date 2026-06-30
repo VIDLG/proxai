@@ -1,5 +1,4 @@
 use axum::body::Bytes;
-use delegate::delegate;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
@@ -13,11 +12,11 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::sse::{SseEvent, done_sentinel_bytes};
 use crate::translation::anthropic_messages::stream_lifecycle::{
-    AnthropicInboundLifecycle, AnthropicStreamState, ensure_anthropic_stream_event,
+    AnthropicInboundLifecycle, ensure_anthropic_stream_event,
 };
 use crate::translation::streaming::{
-    EmittedContentTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
-    StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
+    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator, encode_sse_json,
 };
 
 #[derive(Debug, Default)]
@@ -28,19 +27,8 @@ pub(super) struct ChatCompletionStreamTranslator {
 #[derive(Debug)]
 struct StreamingState {
     identity: StreamIdentity,
-    output: EmittedContentTracker,
     blocks: BTreeMap<u32, StreamBlock>,
     next_tool_call_index: u32,
-}
-
-impl AnthropicStreamState for StreamingState {
-    fn emitted_any(&self) -> bool {
-        self.output.emitted_any()
-    }
-
-    fn target_protocol_label() -> &'static str {
-        "Chat"
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +43,6 @@ impl StreamingState {
     fn new(identity: StreamIdentity) -> Self {
         Self {
             identity,
-            output: EmittedContentTracker::default(),
             blocks: BTreeMap::new(),
             next_tool_call_index: 0,
         }
@@ -63,16 +50,6 @@ impl StreamingState {
 
     fn identity(&self) -> &StreamIdentity {
         &self.identity
-    }
-
-    delegate! {
-        to self.output {
-            fn mark_text(&mut self);
-            fn mark_refusal(&mut self);
-            fn mark_tool_use(&mut self);
-            fn mark_reasoning(&mut self);
-            fn emitted_text(&self) -> bool;
-        }
     }
 
     fn register_tool_use_block(&mut self, block_index: u32) -> StreamTranslationResult<u32> {
@@ -83,7 +60,6 @@ impl StreamingState {
                 chat_tool_index: tool_call_index,
             },
         )?;
-        self.mark_tool_use();
         Ok(tool_call_index)
     }
 
@@ -200,10 +176,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
-                if !matches!(
-                    self.lifecycle,
-                    AnthropicInboundLifecycle::WaitingForMessageStart
-                ) {
+                if !self.lifecycle.is_waiting_for_message_start() {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted duplicate message_start".to_string(),
                     ));
@@ -213,9 +186,11 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     format!("chatcmpl_{}", event.message.id),
                     event.message.model,
                 );
-                self.lifecycle =
-                    AnthropicInboundLifecycle::Streaming(StreamingState::new(identity.clone()));
-                chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(&identity, delta)));
+                self.lifecycle
+                    .begin_streaming(StreamingState::new(identity.clone()));
+                chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                    &identity, delta, None,
+                )));
             }
             MessageStreamEvent::Ping(_) => {}
 
@@ -223,40 +198,48 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let index = event.index;
                 match event.content_block {
                     ContentBlock::Text(block) => {
-                        self.streaming_state_mut()?.register_text_block(index)?;
+                        self.lifecycle
+                            .streaming_state_mut()?
+                            .register_text_block(index)?;
                         if !block.text.is_empty() {
-                            self.streaming_state_mut()?.mark_text();
-                            let identity = self.streaming_state()?.identity();
-                            chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            self.lifecycle.streaming_phase_mut()?.mark_text();
+                            let identity = self.lifecycle.streaming_state()?.identity();
+                            chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                                 identity,
                                 block.into(),
+                                None,
                             )));
                         }
                     }
                     ContentBlock::ToolUse(block) => {
                         let tool_call_index = {
-                            let state = self.streaming_state_mut()?;
+                            let state = self.lifecycle.streaming_state_mut()?;
                             state.register_tool_use_block(index)?
                         };
-                        let identity = self.streaming_state()?.identity();
-                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                        self.lifecycle.streaming_phase_mut()?.mark_tool_use();
+                        let identity = self.lifecycle.streaming_state()?.identity();
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             ToolStartDelta {
                                 index: tool_call_index,
                                 block,
                             }
                             .into(),
+                            None,
                         )));
                     }
 
                     ContentBlock::Thinking(block) => {
-                        self.streaming_state_mut()?.register_thinking_block(index)?;
+                        self.lifecycle
+                            .streaming_state_mut()?
+                            .register_thinking_block(index)?;
                         if !block.thinking.is_empty() {
-                            self.streaming_state_mut()?.mark_reasoning();
-                            let identity = self.streaming_state()?.identity();
-                            chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                            self.lifecycle.streaming_phase_mut()?.mark_reasoning();
+                            let identity = self.lifecycle.streaming_state()?.identity();
+                            chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                                 identity,
                                 block.into(),
+                                None,
                             )));
                         }
                     }
@@ -265,7 +248,9 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             block_index = index,
                             "skipping Anthropic redacted_thinking block with no Chat-representable field"
                         );
-                        self.streaming_state_mut()?.register_ignored_block(index)?;
+                        self.lifecycle
+                            .streaming_state_mut()?
+                            .register_ignored_block(index)?;
                     }
 
                     ContentBlock::ToolResult(_)
@@ -286,52 +271,58 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
             }
             MessageStreamEvent::ContentBlockDelta(event) => match event.delta {
                 ContentBlockDelta::TextDelta(delta) => {
-                    self.streaming_state()?.require_block(
+                    self.lifecycle.streaming_state()?.require_block(
                         event.index,
                         StreamBlock::Text,
                         "text_delta",
                     )?;
                     if !delta.text.is_empty() {
-                        self.streaming_state_mut()?.mark_text();
-                        let identity = self.streaming_state()?.identity();
-                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                        self.lifecycle.streaming_phase_mut()?.mark_text();
+                        let identity = self.lifecycle.streaming_state()?.identity();
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             delta.into(),
+                            None,
                         )));
                     }
                 }
                 ContentBlockDelta::InputJsonDelta(delta) => {
-                    let tool_call_index =
-                        self.streaming_state()?.get_tool_call_index(event.index)?;
+                    let tool_call_index = self
+                        .lifecycle
+                        .streaming_state()?
+                        .get_tool_call_index(event.index)?;
 
-                    let identity = self.streaming_state()?.identity();
-                    chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                    let identity = self.lifecycle.streaming_state()?.identity();
+                    chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                         identity,
                         ToolArgumentsDelta {
                             index: tool_call_index,
                             delta,
                         }
                         .into(),
+                        None,
                     )));
                 }
 
                 ContentBlockDelta::ThinkingDelta(delta) => {
-                    self.streaming_state()?.require_block(
+                    self.lifecycle.streaming_state()?.require_block(
                         event.index,
                         StreamBlock::Thinking,
                         "thinking_delta",
                     )?;
                     if !delta.thinking.is_empty() {
-                        self.streaming_state_mut()?.mark_reasoning();
-                        let identity = self.streaming_state()?.identity();
-                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                        self.lifecycle.streaming_phase_mut()?.mark_reasoning();
+                        let identity = self.lifecycle.streaming_state()?.identity();
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             delta.into(),
+                            None,
                         )));
                     }
                 }
                 ContentBlockDelta::SignatureDelta(_) => {
-                    self.streaming_state()?
+                    self.lifecycle
+                        .streaming_state()?
                         .require_reasoning_signature_block(event.index)?;
                 }
 
@@ -349,26 +340,28 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     ));
                 };
 
-                let mut state = self.take_streaming_state()?;
-                let emitted_text = state.emitted_text();
-                let emitted_representable_content = state.emitted_any();
+                let mut phase = self.lifecycle.take_streaming_phase()?;
+                let emitted_text = phase.emitted_text();
+                let emitted_representable_content = phase.emitted_any();
                 let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
-                let identity = state.identity().clone();
+                let identity = phase.state().identity().clone();
                 let finish_reason = stop_reason.into();
 
                 match terminal_delta {
                     ChatTerminalDelta::Refusal(refusal) => {
-                        state.mark_refusal();
-                        chunks.push(ChatStreamOutput::Chunk(chat_delta_chunk(
+                        phase.mark_refusal();
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             &identity,
                             ChatCompletionStreamResponseDelta {
                                 refusal: Some(refusal),
                                 ..Default::default()
                             },
+                            None,
                         )));
-                        chunks.push(ChatStreamOutput::Chunk(chat_finish_chunk(
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             &identity,
-                            finish_reason,
+                            ChatCompletionStreamResponseDelta::default(),
+                            Some(finish_reason),
                         )));
                     }
                     ChatTerminalDelta::Empty => {
@@ -378,9 +371,10 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                                     .to_string(),
                             ));
                         }
-                        chunks.push(ChatStreamOutput::Chunk(chat_finish_chunk(
+                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             &identity,
-                            finish_reason,
+                            ChatCompletionStreamResponseDelta::default(),
+                            Some(finish_reason),
                         )));
                     }
                 }
@@ -394,15 +388,17 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     event.usage.into(),
                 )));
 
-                self.lifecycle = AnthropicInboundLifecycle::ReceivedTerminalDelta(state);
+                self.lifecycle.receive_terminal_delta(phase);
             }
             MessageStreamEvent::MessageStop(_) => {
-                let _state = self.lifecycle.take_terminal_state()?;
-                self.lifecycle = AnthropicInboundLifecycle::Stopped;
+                let _phase = self.lifecycle.take_terminal_phase()?;
+                self.lifecycle.stop();
                 chunks.push(ChatStreamOutput::DoneSentinel);
             }
             MessageStreamEvent::ContentBlockStop(event) => {
-                self.streaming_state_mut()?.stop_block(event.index)?;
+                self.lifecycle
+                    .streaming_state_mut()?
+                    .stop_block(event.index)?;
             }
         }
 
@@ -417,43 +413,11 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
             return Ok(Vec::new());
         }
 
-        Err(self.lifecycle.unexpected_stream_end_error(end))
+        Err(self.lifecycle.unexpected_stream_end_error(end, "Chat"))
     }
 }
 
-impl ChatCompletionStreamTranslator {
-    fn streaming_state(&self) -> StreamTranslationResult<&StreamingState> {
-        self.lifecycle.streaming_state()
-    }
-
-    fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut StreamingState> {
-        self.lifecycle.streaming_state_mut()
-    }
-
-    fn take_streaming_state(&mut self) -> StreamTranslationResult<StreamingState> {
-        self.lifecycle.take_streaming_state()
-    }
-}
-
-fn chat_delta_chunk(
-    identity: &StreamIdentity,
-    delta: ChatCompletionStreamResponseDelta,
-) -> CreateChatCompletionStreamResponse {
-    chat_content_chunk(identity, delta, None)
-}
-
-fn chat_finish_chunk(
-    identity: &StreamIdentity,
-    finish_reason: FinishReason,
-) -> CreateChatCompletionStreamResponse {
-    chat_content_chunk(
-        identity,
-        ChatCompletionStreamResponseDelta::default(),
-        Some(finish_reason),
-    )
-}
-
-fn chat_content_chunk(
+fn chat_choice_chunk(
     identity: &StreamIdentity,
     delta: ChatCompletionStreamResponseDelta,
     finish_reason: Option<FinishReason>,

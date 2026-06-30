@@ -1,5 +1,4 @@
 use axum::body::Bytes;
-use delegate::delegate;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
@@ -15,11 +14,11 @@ use crate::protocol::openai_responses::{
 };
 use crate::sse::SseEvent;
 use crate::translation::anthropic_messages::stream_lifecycle::{
-    AnthropicInboundLifecycle, AnthropicStreamState, ensure_anthropic_stream_event,
+    AnthropicInboundLifecycle, ensure_anthropic_stream_event,
 };
 use crate::translation::streaming::{
-    EmittedContentTracker, SseStreamEnd, StreamIdentity, StreamTranslationError,
-    StreamTranslationResult, StreamingEventTranslator, encode_sse_json,
+    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator, encode_sse_json,
 };
 
 use super::types::{
@@ -38,14 +37,6 @@ struct StreamingState {
     usage: Usage,
     item_ids: OutputItemIdAllocator,
     stop_reason: Option<StopReason>,
-    // Tracks whether the stream has produced any Responses-representable
-    // content so far. `mark_*` is called at the moment a block's
-    // representable payload is first guaranteed to be non-empty (see
-    // `register_*_block` and `append_*_delta` for the per-block-type
-    // rationale). `emitted_any()` / `emitted_text()` are consumed by
-    // `MessageDelta` translation and `unexpected_stream_end_error` to reject
-    // empty streams and tailor error messages.
-    output: EmittedContentTracker,
     blocks: BTreeMap<u32, StreamBlock>,
     output_items: Vec<OutputItem>,
     // Cumulative character count of all completed text items so far. Used as
@@ -98,16 +89,9 @@ impl StreamingState {
             usage,
             item_ids,
             stop_reason: None,
-            output: EmittedContentTracker::default(),
             blocks: BTreeMap::new(),
             output_items: Vec::new(),
             text_char_offset: 0,
-        }
-    }
-
-    delegate! {
-        to self.output {
-            fn mark_tool_use(&mut self);
         }
     }
 
@@ -185,8 +169,8 @@ impl StreamingState {
     ///
     /// `mark_text` is NOT called here: `content_block_start.text` may be
     /// empty, and the representable-output tracker must only flip when the
-    /// stream has actually produced Responses-representable text. The mark
-    /// happens inside `append_text_delta` once a non-empty delta is seen.
+    /// stream has actually produced Responses-representable text. The caller
+    /// marks the phase output when appending a non-empty text delta.
     fn register_text_block(
         &mut self,
         block_index: u32,
@@ -204,8 +188,8 @@ impl StreamingState {
     }
 
     /// Open a thinking block slot. See `register_text_block` for why `text`
-    /// starts empty and why `mark_reasoning` is deferred to
-    /// `append_thinking_delta`.
+    /// starts empty and why `mark_reasoning` is deferred until the caller
+    /// appends a non-empty thinking delta.
     fn register_thinking_block(
         &mut self,
         block_index: u32,
@@ -228,10 +212,8 @@ impl StreamingState {
     /// blob arrives on `content_block_start` and never changes afterwards.
     /// There is therefore no `append_redacted_thinking_delta` companion, and
     /// `data` is attached here rather than accumulated. Because the payload
-    /// is non-empty by construction at registration time, marking reasoning
-    /// here (rather than deferring) correctly reflects that the stream has
-    /// produced Responses-representable reasoning content (the eventual
-    /// `encrypted_content` field).
+    /// The caller marks reasoning immediately after registration because the
+    /// payload is non-empty by construction at registration time.
     fn register_redacted_thinking_block(
         &mut self,
         block_index: u32,
@@ -239,7 +221,6 @@ impl StreamingState {
         data: String,
     ) -> StreamTranslationResult<()> {
         self.register_block(block_index, StreamBlock::RedactedThinking { item_id, data })?;
-        self.output.mark_reasoning();
         Ok(())
     }
 
@@ -248,12 +229,8 @@ impl StreamingState {
     /// `arguments` starts empty: the JSON argument string is built up by
     /// subsequent `input_json_delta` events via `append_tool_arguments_delta`.
     ///
-    /// `mark_tool_use` is called here rather than in the append path because
-    /// `id` and `name` are mandatory and always present on
-    /// `content_block_start`, so the slot is already Responses-representable
-    /// the moment it opens — the caller emits `output_item.added`
-    /// immediately after this returns. Subsequent argument deltas refine the
-    /// item but do not change the fact that a tool call exists.
+    /// The caller marks tool use immediately after registration because `id`
+    /// and `name` are mandatory and always present on `content_block_start`.
     fn register_tool_use_block(
         &mut self,
         block_index: u32,
@@ -268,7 +245,6 @@ impl StreamingState {
                 arguments: String::new(),
             },
         )?;
-        self.mark_tool_use();
         Ok(())
     }
 
@@ -293,7 +269,6 @@ impl StreamingState {
         match self.blocks.get_mut(&block_index) {
             Some(StreamBlock::Text { item_id, text, .. }) => {
                 text.push_str(delta);
-                self.output.mark_text();
                 Ok(item_id.clone())
             }
             Some(
@@ -317,7 +292,6 @@ impl StreamingState {
         match self.blocks.get_mut(&block_index) {
             Some(StreamBlock::Thinking { item_id, text }) => {
                 text.push_str(delta);
-                self.output.mark_reasoning();
                 Ok(item_id.clone())
             }
             Some(
@@ -378,16 +352,6 @@ impl StreamingState {
                 "Anthropic stream emitted content_block_stop for unopened content block index {block_index}"
             ))
         })
-    }
-}
-
-impl AnthropicStreamState for StreamingState {
-    fn emitted_any(&self) -> bool {
-        self.output.emitted_any()
-    }
-
-    fn target_protocol_label() -> &'static str {
-        "Responses"
     }
 }
 
@@ -475,9 +439,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 let response_id = response_id(&event.message.id);
                 let identity = StreamIdentity::new(response_id, event.message.model);
                 let state = StreamingState::new(identity, event.message.usage);
-                self.lifecycle = AnthropicInboundLifecycle::Streaming(state);
+                self.lifecycle.begin_streaming(state);
                 let sequence_number = self.next_sequence_number();
                 let response = self
+                    .lifecycle
                     .streaming_state()?
                     .response_snapshot(Status::InProgress);
                 chunks.push(ResponseStreamEvent::ResponseCreated(ResponseCreatedEvent {
@@ -489,8 +454,8 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 let index = event.index;
                 match event.content_block {
                     ContentBlock::Text(block) => {
-                        let item_id = self.streaming_state_mut()?.next_message_item_id();
-                        self.streaming_state_mut()?.register_text_block(
+                        let item_id = self.lifecycle.streaming_state_mut()?.next_message_item_id();
+                        self.lifecycle.streaming_state_mut()?.register_text_block(
                             index,
                             item_id.clone(),
                             block.citations.clone(),
@@ -511,8 +476,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         ));
                         if !block.text.is_empty() {
                             let item_id = self
+                                .lifecycle
                                 .streaming_state_mut()?
                                 .append_text_delta(index, &block.text)?;
+                            self.lifecycle.streaming_phase_mut()?.mark_text();
                             let sequence_number = self.next_sequence_number();
                             chunks.push(output_text_delta_event(
                                 sequence_number,
@@ -523,7 +490,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         }
                     }
                     ContentBlock::Thinking(block) => {
-                        let item_id = self.streaming_state_mut()?.next_reasoning_item_id();
+                        let item_id = self
+                            .lifecycle
+                            .streaming_state_mut()?
+                            .next_reasoning_item_id();
                         let sequence_number = self.next_sequence_number();
                         chunks.push(ResponseStreamEvent::ResponseOutputItemAdded(
                             ResponseOutputItemAddedEvent {
@@ -538,12 +508,15 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                                 }),
                             },
                         ));
-                        self.streaming_state_mut()?
+                        self.lifecycle
+                            .streaming_state_mut()?
                             .register_thinking_block(index, item_id)?;
                         if !block.thinking.is_empty() {
                             let item_id = self
+                                .lifecycle
                                 .streaming_state_mut()?
                                 .append_thinking_delta(index, &block.thinking)?;
+                            self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                             let sequence_number = self.next_sequence_number();
                             chunks.push(reasoning_text_delta_event(
                                 sequence_number,
@@ -554,7 +527,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         }
                     }
                     ContentBlock::RedactedThinking(block) => {
-                        let item_id = self.streaming_state_mut()?.next_reasoning_item_id();
+                        let item_id = self
+                            .lifecycle
+                            .streaming_state_mut()?
+                            .next_reasoning_item_id();
                         let sequence_number = self.next_sequence_number();
                         chunks.push(ResponseStreamEvent::ResponseOutputItemAdded(
                             ResponseOutputItemAddedEvent {
@@ -570,17 +546,18 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                                 }),
                             },
                         ));
-                        self.streaming_state_mut()?
+                        self.lifecycle
+                            .streaming_state_mut()?
                             .register_redacted_thinking_block(index, item_id, block.data.clone())?;
+                        self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                     }
                     ContentBlock::ToolUse(block) => {
                         let item_id = block.id;
                         let name = block.name;
-                        self.streaming_state_mut()?.register_tool_use_block(
-                            index,
-                            item_id.clone(),
-                            name.clone(),
-                        )?;
+                        self.lifecycle
+                            .streaming_state_mut()?
+                            .register_tool_use_block(index, item_id.clone(), name.clone())?;
+                        self.lifecycle.streaming_phase_mut()?.mark_tool_use();
                         let sequence_number = self.next_sequence_number();
                         chunks.push(ResponseStreamEvent::ResponseOutputItemAdded(
                             ResponseOutputItemAddedEvent {
@@ -617,8 +594,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 ContentBlockDelta::TextDelta(delta) => {
                     if !delta.text.is_empty() {
                         let item_id = self
+                            .lifecycle
                             .streaming_state_mut()?
                             .append_text_delta(event.index, &delta.text)?;
+                        self.lifecycle.streaming_phase_mut()?.mark_text();
                         let sequence_number = self.next_sequence_number();
                         chunks.push(output_text_delta_event(
                             sequence_number,
@@ -627,15 +606,18 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             delta.text,
                         ));
                     } else {
-                        self.streaming_state_mut()?
+                        self.lifecycle
+                            .streaming_state_mut()?
                             .append_text_delta(event.index, "")?;
                     }
                 }
                 ContentBlockDelta::ThinkingDelta(delta) => {
                     if !delta.thinking.is_empty() {
                         let item_id = self
+                            .lifecycle
                             .streaming_state_mut()?
                             .append_thinking_delta(event.index, &delta.thinking)?;
+                        self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                         let sequence_number = self.next_sequence_number();
                         chunks.push(reasoning_text_delta_event(
                             sequence_number,
@@ -644,12 +626,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             delta.thinking,
                         ));
                     } else {
-                        self.streaming_state_mut()?
+                        self.lifecycle
+                            .streaming_state_mut()?
                             .append_thinking_delta(event.index, "")?;
                     }
                 }
                 ContentBlockDelta::InputJsonDelta(delta) => {
                     let item_id = self
+                        .lifecycle
                         .streaming_state_mut()?
                         .append_tool_arguments_delta(event.index, &delta.partial_json)?;
                     let sequence_number = self.next_sequence_number();
@@ -663,7 +647,8 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                     ));
                 }
                 ContentBlockDelta::SignatureDelta(_) => {
-                    self.streaming_state()?
+                    self.lifecycle
+                        .streaming_state()?
                         .require_reasoning_signature_block(event.index)?;
                 }
                 ContentBlockDelta::CitationsDelta(_) => {
@@ -676,6 +661,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
             MessageStreamEvent::ContentBlockStop(event) => {
                 let index = event.index;
                 let (item, content_done_chunks) = match self
+                    .lifecycle
                     .streaming_state_mut()?
                     .stop_block(index)?
                 {
@@ -702,7 +688,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             text: text.clone(),
                             citations,
                         };
-                        let state = self.streaming_state_mut()?;
+                        let state = self.lifecycle.streaming_state_mut()?;
                         let annotations =
                             text_block_annotations(&synthetic_block, state.text_char_offset);
                         state.text_char_offset =
@@ -794,7 +780,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         output_index: index,
                         item: item.clone(),
                     });
-                self.streaming_state_mut()?.output_items.push(item);
+                self.lifecycle
+                    .streaming_state_mut()?
+                    .output_items
+                    .push(item);
                 chunks.extend(content_done_chunks);
                 chunks.push(done_event);
             }
@@ -804,13 +793,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         "Anthropic stream emitted message_delta without stop_reason".to_string(),
                     )
                 })?;
-                let mut state = self.take_streaming_state()?;
-                if !state.emitted_any() {
+                let mut phase = self.lifecycle.take_streaming_phase()?;
+                if !phase.emitted_any() {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream completed without Responses-representable content, thinking, or tool_use blocks"
                             .to_string(),
                     ));
                 }
+                let state = phase.state_mut();
                 // MessageDelta carries an updated usage snapshot for the whole
                 // message. Some fields are nullable in the wire model and may
                 // be omitted; keep the last non-null value we already had.
@@ -826,14 +816,15 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 }
                 state.usage.output_tokens_details = event.usage.output_tokens_details;
                 state.stop_reason = Some(stop_reason);
-                self.lifecycle = AnthropicInboundLifecycle::ReceivedTerminalDelta(state);
+                self.lifecycle.receive_terminal_delta(phase);
             }
             MessageStreamEvent::MessageStop(_) => {
-                let state = self.lifecycle.take_terminal_state()?;
+                let phase = self.lifecycle.take_terminal_phase()?;
+                let state = phase.state();
                 let status = state.terminal_response_status();
                 let sequence_number = self.next_sequence_number();
                 let response = state.response_snapshot(status);
-                self.lifecycle = AnthropicInboundLifecycle::Stopped;
+                self.lifecycle.stop();
                 let event = match status {
                     Status::Incomplete => {
                         ResponseStreamEvent::ResponseIncomplete(ResponseIncompleteEvent {
@@ -862,7 +853,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
             return Ok(Vec::new());
         }
 
-        Err(self.lifecycle.unexpected_stream_end_error(end))
+        Err(self.lifecycle.unexpected_stream_end_error(end, "Responses"))
     }
 }
 
@@ -870,18 +861,6 @@ impl ResponsesStreamTranslator {
     fn next_sequence_number(&mut self) -> u64 {
         self.sequence_number += 1;
         self.sequence_number
-    }
-
-    fn streaming_state(&self) -> StreamTranslationResult<&StreamingState> {
-        self.lifecycle.streaming_state()
-    }
-
-    fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut StreamingState> {
-        self.lifecycle.streaming_state_mut()
-    }
-
-    fn take_streaming_state(&mut self) -> StreamTranslationResult<StreamingState> {
-        self.lifecycle.take_streaming_state()
     }
 }
 

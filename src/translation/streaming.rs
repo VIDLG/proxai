@@ -1,6 +1,8 @@
 use async_stream::try_stream;
 use axum::body::Bytes;
+use delegate::delegate;
 use futures_util::StreamExt;
+use getset::{Getters, MutGetters};
 
 use crate::error::ErrorResponseFields;
 use crate::http_support::{ByteStream, into_byte_stream};
@@ -147,6 +149,34 @@ impl StreamIdentity {
 
     pub(crate) fn model(&self) -> &str {
         &self.model
+    }
+}
+
+#[derive(Debug, Getters, MutGetters)]
+pub(crate) struct StreamingPhase<S> {
+    #[getset(get = "pub(crate)", get_mut = "pub(crate)")]
+    state: S,
+    #[getset(get = "pub(crate)", get_mut = "pub(crate)")]
+    output: EmittedContentTracker,
+}
+
+impl<S> StreamingPhase<S> {
+    pub(crate) fn new(state: S) -> Self {
+        Self {
+            state,
+            output: EmittedContentTracker::default(),
+        }
+    }
+
+    delegate! {
+        to self.output {
+            pub(crate) fn mark_text(&mut self);
+            pub(crate) fn mark_refusal(&mut self);
+            pub(crate) fn mark_tool_use(&mut self);
+            pub(crate) fn mark_reasoning(&mut self);
+            pub(crate) fn emitted_text(&self) -> bool;
+            pub(crate) fn emitted_any(&self) -> bool;
+        }
     }
 }
 
