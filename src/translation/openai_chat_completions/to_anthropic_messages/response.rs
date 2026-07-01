@@ -5,49 +5,23 @@ use crate::protocol::anthropic::messages::{
     Role as AnthropicRole, StopReason, TextBlock, ToolCaller, ToolUseBlock,
 };
 use crate::protocol::openai::chat_completions::{
-    ChatChoice, ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
-    Role as ChatRole,
+    ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
-fn single_representable_response_choice(choices: &[ChatChoice]) -> TranslationResult<&ChatChoice> {
-    let choice = match choices {
-        [] => {
-            return Err(TranslationError::InvalidPayload(
-                "Chat completion response has no choices to translate to Anthropic message"
-                    .to_string(),
-            ));
-        }
-        [choice] => choice,
-        choices => {
-            return Err(TranslationError::InvalidPayload(format!(
-                "Chat completion response has {} choices; Anthropic message responses can represent exactly one assistant message",
-                choices.len()
-            )));
-        }
-    };
-
-    if choice.logprobs.is_some() {
-        return Err(TranslationError::InvalidPayload(
-            "Chat completion response choice logprobs cannot be represented in Anthropic Messages"
-                .to_string(),
-        ));
-    }
-    if choice.message.role != ChatRole::Assistant {
-        return Err(TranslationError::InvalidPayload(format!(
-            "Chat completion response role {} cannot be represented as an Anthropic assistant message",
-            choice.message.role
-        )));
-    }
-
-    Ok(choice)
-}
+use super::super::response::single_assistant_choice;
 
 impl TryFrom<&CreateChatCompletionResponse> for Message {
     type Error = TranslationError;
 
     fn try_from(chat: &CreateChatCompletionResponse) -> TranslationResult<Self> {
-        let choice = single_representable_response_choice(&chat.choices)?;
+        let choice = single_assistant_choice(&chat.choices)?;
+        if choice.logprobs.is_some() {
+            return Err(TranslationError::InvalidPayload(
+                "Chat completion response choice logprobs cannot be represented in Anthropic Messages"
+                    .to_string(),
+            ));
+        }
 
         let message = &choice.message;
         let mut content = Vec::new();
