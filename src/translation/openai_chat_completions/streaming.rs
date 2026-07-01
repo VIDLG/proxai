@@ -25,7 +25,7 @@ use crate::translation::streaming::{
 };
 
 #[derive(Debug)]
-pub(crate) struct ChatInboundLifecycle<S, T> {
+pub(super) struct ChatInboundLifecycle<S, T> {
     inner: InboundStreamLifecycle<S, T>,
 }
 
@@ -41,24 +41,22 @@ impl<S, T> ChatInboundLifecycle<S, T> {
     delegate! {
         to self.inner {
             #[call(receive_terminal)]
-            pub(crate) fn receive_terminal_finish(&mut self, terminal: T);
-            pub(crate) fn stop(&mut self);
+            pub(super) fn receive_terminal_finish(&mut self, terminal: T);
+            pub(super) fn stop(&mut self);
             #[call(is_waiting)]
-            pub(crate) fn is_waiting_for_first_chunk(&self) -> bool;
-            pub(crate) fn is_stopped(&self) -> bool;
-            pub(crate) fn is_terminal(&self) -> bool;
-            pub(crate) fn terminal(&self) -> Option<&T>;
-            pub(crate) fn terminal_mut(&mut self) -> Option<&mut T>;
-            pub(crate) fn streaming_phase(&self) -> Option<&StreamingPhase<S>>;
+            pub(super) fn is_waiting_for_first_chunk(&self) -> bool;
+            pub(super) fn is_stopped(&self) -> bool;
+            pub(super) fn terminal(&self) -> Option<&T>;
+            pub(super) fn terminal_mut(&mut self) -> Option<&mut T>;
             #[call(take_terminal)]
-            pub(crate) fn take_terminal_finish(
+            pub(super) fn take_terminal_finish(
                 &mut self,
                 error: impl FnOnce() -> StreamTranslationError,
             ) -> StreamTranslationResult<T>;
         }
     }
 
-    pub(crate) fn parse_stream_event(
+    pub(super) fn parse_stream_event(
         &self,
         event: SseEvent,
     ) -> StreamTranslationResult<(Value, CreateChatCompletionStreamResponse)> {
@@ -67,21 +65,21 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         Ok((payload, chunk))
     }
 
-    pub(crate) fn begin_chunk_stream(
+    pub(super) fn register_chunk_stream(
         &mut self,
         identity: StreamIdentity,
         state: S,
-    ) -> StreamTranslationResult<()> {
-        if !self.inner.is_waiting() {
-            return Err(StreamTranslationError::Semantic(
-                "Chat stream emitted duplicate assistant message chunk".to_string(),
-            ));
+    ) -> StreamTranslationResult<Option<StreamIdentity>> {
+        if self.is_waiting_for_first_chunk() {
+            self.inner.begin_streaming(identity.clone(), state);
+            Ok(Some(identity))
+        } else {
+            self.ensure_same_stream_identity(&identity)?;
+            Ok(None)
         }
-        self.inner.begin_streaming(identity, state);
-        Ok(())
     }
 
-    pub(crate) fn streaming_phase_mut(
+    pub(super) fn streaming_phase_mut(
         &mut self,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
         self.inner
@@ -91,18 +89,14 @@ impl<S, T> ChatInboundLifecycle<S, T> {
             })
     }
 
-    pub(crate) fn take_streaming_phase(
+    pub(super) fn take_streaming_phase(
         &mut self,
         error: impl FnOnce() -> StreamTranslationError,
     ) -> StreamTranslationResult<StreamingPhase<S>> {
         self.inner.take_streaming_phase(error)
     }
 
-    pub(crate) fn unexpected_stream_end_error(
-        &self,
-        end: SseStreamEnd,
-        target_protocol_label: &'static str,
-    ) -> StreamTranslationError {
+    pub(super) fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
         let message = match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
                 format!("Chat stream reached {end} before any assistant message chunk")
@@ -122,9 +116,8 @@ impl<S, T> ChatInboundLifecycle<S, T> {
                         }
                     }
                 } else {
-                    format!(
-                        "Chat stream completed without {target_protocol_label}-representable content, refusal, or function tool calls"
-                    )
+                    "Chat stream completed without target-representable content, refusal, or function tool calls"
+                        .to_string()
                 }
             }
             InboundStreamLifecyclePhase::Terminal | InboundStreamLifecyclePhase::Stopped => {
@@ -134,16 +127,16 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         StreamTranslationError::Semantic(message)
     }
 
-    pub(crate) fn ensure_same_stream_identity(
+    pub(super) fn ensure_same_stream_identity(
         &self,
-        chunk: &CreateChatCompletionStreamResponse,
-        id_prefix: &str,
-        uninitialized_message: &'static str,
+        chunk_identity: &StreamIdentity,
     ) -> StreamTranslationResult<()> {
         let identity = self.inner.require_identity(|| {
-            StreamTranslationError::Semantic(uninitialized_message.to_string())
+            StreamTranslationError::Semantic(
+                "Chat stream identity is not initialized before assistant message chunk"
+                    .to_string(),
+            )
         })?;
-        let chunk_identity = stream_identity(chunk, id_prefix);
         if identity.id() != chunk_identity.id() {
             return Err(StreamTranslationError::Semantic(format!(
                 "Chat stream changed id from {} to {}",
@@ -162,7 +155,7 @@ impl<S, T> ChatInboundLifecycle<S, T> {
     }
 }
 
-pub(crate) fn stream_identity(
+pub(super) fn stream_identity(
     chunk: &CreateChatCompletionStreamResponse,
     id_prefix: &str,
 ) -> StreamIdentity {

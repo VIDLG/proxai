@@ -224,10 +224,6 @@ fn message_delta(
     })
 }
 
-fn chat_choice_stream_identity(chunk: &CreateChatCompletionStreamResponse) -> StreamIdentity {
-    stream_identity(chunk, "msg_")
-}
-
 fn single_representable_stream_choice(
     mut choices: Vec<ChatChoiceStream>,
 ) -> StreamTranslationResult<ChatChoiceStream> {
@@ -272,17 +268,17 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
 
         let mut outputs = Vec::new();
 
-        if self.lifecycle.is_waiting_for_first_chunk() {
-            let identity = chat_choice_stream_identity(&chunk);
-            outputs.push(message_start(&identity));
-            self.lifecycle
-                .begin_chunk_stream(identity, ChatStreamingState::new())?;
-        } else {
-            self.lifecycle.ensure_same_stream_identity(
-                &chunk,
-                "msg_",
-                "Chat stream emitted chunk before any assistant message chunk",
-            )?;
+        let identity = stream_identity(&chunk, "msg_");
+        if let Some(identity) = self
+            .lifecycle
+            .register_chunk_stream(identity, ChatStreamingState::new())?
+        {
+            outputs.push(MessageStreamEvent::MessageStart(
+                MessageStartEvent::new_empty_message(
+                    identity.id().to_string(),
+                    identity.model().to_string(),
+                ),
+            ));
         }
 
         let choice = single_representable_stream_choice(chunk.choices)?;
@@ -339,7 +335,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
 
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
         if self.lifecycle.is_waiting_for_first_chunk() {
-            Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
+            Err(self.lifecycle.unexpected_stream_end_error(end))
         } else if let Some(terminal) = self.lifecycle.terminal() {
             let outputs = vec![
                 message_delta(terminal, None),
@@ -350,7 +346,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
         } else if self.lifecycle.is_stopped() {
             Ok(Vec::new())
         } else {
-            Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
+            Err(self.lifecycle.unexpected_stream_end_error(end))
         }
     }
 }
@@ -366,11 +362,8 @@ impl MessagesStreamTranslator {
                     .to_string(),
             ));
         };
-        self.lifecycle.ensure_same_stream_identity(
-            chunk,
-            "msg_",
-            "Chat stream emitted a usage-only chunk before any assistant message chunk",
-        )?;
+        let identity = stream_identity(chunk, "msg_");
+        self.lifecycle.ensure_same_stream_identity(&identity)?;
 
         let outputs = if let Some(terminal) = self.lifecycle.terminal() {
             vec![
@@ -397,13 +390,6 @@ impl MessagesStreamTranslator {
         self.lifecycle.stop();
         Ok(outputs)
     }
-}
-
-fn message_start(identity: &StreamIdentity) -> MessageStreamEvent {
-    MessageStreamEvent::MessageStart(MessageStartEvent::new_empty_message(
-        identity.id().to_string(),
-        identity.model().to_string(),
-    ))
 }
 
 #[cfg(test)]

@@ -351,38 +351,6 @@ impl StreamingState {
     }
 }
 
-/// Encode a `ResponseStreamEvent` into SSE bytes.
-///
-/// The match acts as an explicit allowlist: only the variants proxai's
-/// translators actually emit are supported. If a future translator change
-/// starts emitting a previously-unsupported variant, encoding fails with a
-/// semantic error instead of silently leaking the event onto the wire.
-fn encode_response_stream_event(event: ResponseStreamEvent) -> StreamTranslationResult<Bytes> {
-    let event_type: &'static str = match event {
-        ResponseStreamEvent::ResponseCreated(_) => "response.created",
-        ResponseStreamEvent::ResponseCompleted(_) => "response.completed",
-        ResponseStreamEvent::ResponseIncomplete(_) => "response.incomplete",
-        ResponseStreamEvent::ResponseOutputItemAdded(_) => "response.output_item.added",
-        ResponseStreamEvent::ResponseOutputItemDone(_) => "response.output_item.done",
-        ResponseStreamEvent::ResponseOutputTextDelta(_) => "response.output_text.delta",
-        ResponseStreamEvent::ResponseOutputTextDone(_) => "response.output_text.done",
-        ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(_) => {
-            "response.function_call_arguments.delta"
-        }
-        ResponseStreamEvent::ResponseFunctionCallArgumentsDone(_) => {
-            "response.function_call_arguments.done"
-        }
-        ResponseStreamEvent::ResponseReasoningTextDelta(_) => "response.reasoning_text.delta",
-        ResponseStreamEvent::ResponseReasoningTextDone(_) => "response.reasoning_text.done",
-        unsupported => {
-            return Err(StreamTranslationError::Semantic(format!(
-                "Responses stream translator emitted unsupported event variant: {unsupported:?}"
-            )));
-        }
-    };
-    Ok(encode_sse_json(event_type, &event)?)
-}
-
 fn output_text_delta_event(
     sequence_number: u64,
     item_id: String,
@@ -831,7 +799,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
 
         chunks
             .into_iter()
-            .map(encode_response_stream_event)
+            .map(|event| Ok(encode_sse_json(event.as_ref(), &event)?))
             .collect::<StreamTranslationResult<Vec<_>>>()
     }
 
@@ -840,7 +808,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
             return Ok(Vec::new());
         }
 
-        Err(self.lifecycle.unexpected_stream_end_error(end, "Responses"))
+        Err(self.lifecycle.unexpected_stream_end_error(end))
     }
 }
 

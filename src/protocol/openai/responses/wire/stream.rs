@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use strum::AsRefStr;
 
 use super::{OutputContent, OutputItem, Response, ResponseLogProb, SummaryPart};
 
@@ -385,106 +386,155 @@ pub struct ResponseErrorEvent {
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses stream event variant names."
 )]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, AsRefStr, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResponseStreamEvent {
     #[serde(rename = "response.created")]
+    #[strum(serialize = "response.created")]
     ResponseCreated(ResponseCreatedEvent),
     #[serde(rename = "response.in_progress")]
+    #[strum(serialize = "response.in_progress")]
     ResponseInProgress(ResponseInProgressEvent),
     #[serde(rename = "response.completed")]
+    #[strum(serialize = "response.completed")]
     ResponseCompleted(ResponseCompletedEvent),
     #[serde(rename = "response.failed")]
+    #[strum(serialize = "response.failed")]
     ResponseFailed(ResponseFailedEvent),
     #[serde(rename = "response.incomplete")]
+    #[strum(serialize = "response.incomplete")]
     ResponseIncomplete(ResponseIncompleteEvent),
     #[serde(rename = "response.output_item.added")]
+    #[strum(serialize = "response.output_item.added")]
     ResponseOutputItemAdded(ResponseOutputItemAddedEvent),
     #[serde(rename = "response.output_item.done")]
+    #[strum(serialize = "response.output_item.done")]
     ResponseOutputItemDone(ResponseOutputItemDoneEvent),
     #[serde(rename = "response.content_part.added")]
+    #[strum(serialize = "response.content_part.added")]
     ResponseContentPartAdded(ResponseContentPartAddedEvent),
     #[serde(rename = "response.content_part.done")]
+    #[strum(serialize = "response.content_part.done")]
     ResponseContentPartDone(ResponseContentPartDoneEvent),
     #[serde(rename = "response.output_text.delta")]
+    #[strum(serialize = "response.output_text.delta")]
     ResponseOutputTextDelta(ResponseTextDeltaEvent),
     #[serde(rename = "response.output_text.done")]
+    #[strum(serialize = "response.output_text.done")]
     ResponseOutputTextDone(ResponseTextDoneEvent),
     #[serde(rename = "response.refusal.delta")]
+    #[strum(serialize = "response.refusal.delta")]
     ResponseRefusalDelta(ResponseRefusalDeltaEvent),
     #[serde(rename = "response.refusal.done")]
+    #[strum(serialize = "response.refusal.done")]
     ResponseRefusalDone(ResponseRefusalDoneEvent),
     #[serde(rename = "response.function_call_arguments.delta")]
+    #[strum(serialize = "response.function_call_arguments.delta")]
     ResponseFunctionCallArgumentsDelta(ResponseFunctionCallArgumentsDeltaEvent),
     #[serde(rename = "response.function_call_arguments.done")]
+    #[strum(serialize = "response.function_call_arguments.done")]
     ResponseFunctionCallArgumentsDone(ResponseFunctionCallArgumentsDoneEvent),
     #[serde(rename = "response.file_search_call.in_progress")]
+    #[strum(serialize = "response.file_search_call.in_progress")]
     ResponseFileSearchCallInProgress(ResponseFileSearchCallInProgressEvent),
     #[serde(rename = "response.file_search_call.searching")]
+    #[strum(serialize = "response.file_search_call.searching")]
     ResponseFileSearchCallSearching(ResponseFileSearchCallSearchingEvent),
     #[serde(rename = "response.file_search_call.completed")]
+    #[strum(serialize = "response.file_search_call.completed")]
     ResponseFileSearchCallCompleted(ResponseFileSearchCallCompletedEvent),
     #[serde(rename = "response.web_search_call.in_progress")]
+    #[strum(serialize = "response.web_search_call.in_progress")]
     ResponseWebSearchCallInProgress(ResponseWebSearchCallInProgressEvent),
     #[serde(rename = "response.web_search_call.searching")]
+    #[strum(serialize = "response.web_search_call.searching")]
     ResponseWebSearchCallSearching(ResponseWebSearchCallSearchingEvent),
     #[serde(rename = "response.web_search_call.completed")]
+    #[strum(serialize = "response.web_search_call.completed")]
     ResponseWebSearchCallCompleted(ResponseWebSearchCallCompletedEvent),
     #[serde(rename = "response.reasoning_summary_part.added")]
+    #[strum(serialize = "response.reasoning_summary_part.added")]
     ResponseReasoningSummaryPartAdded(ResponseReasoningSummaryPartAddedEvent),
     #[serde(rename = "response.reasoning_summary_part.done")]
+    #[strum(serialize = "response.reasoning_summary_part.done")]
     ResponseReasoningSummaryPartDone(ResponseReasoningSummaryPartDoneEvent),
     #[serde(rename = "response.reasoning_summary_text.delta")]
+    #[strum(serialize = "response.reasoning_summary_text.delta")]
     ResponseReasoningSummaryTextDelta(ResponseReasoningSummaryTextDeltaEvent),
     #[serde(rename = "response.reasoning_summary_text.done")]
+    #[strum(serialize = "response.reasoning_summary_text.done")]
     ResponseReasoningSummaryTextDone(ResponseReasoningSummaryTextDoneEvent),
     #[serde(rename = "response.reasoning_text.delta")]
+    #[strum(serialize = "response.reasoning_text.delta")]
     ResponseReasoningTextDelta(ResponseReasoningTextDeltaEvent),
     #[serde(rename = "response.reasoning_text.done")]
+    #[strum(serialize = "response.reasoning_text.done")]
     ResponseReasoningTextDone(ResponseReasoningTextDoneEvent),
     #[serde(rename = "response.image_generation_call.completed")]
+    #[strum(serialize = "response.image_generation_call.completed")]
     ResponseImageGenerationCallCompleted(ResponseImageGenCallCompletedEvent),
     #[serde(rename = "response.image_generation_call.generating")]
+    #[strum(serialize = "response.image_generation_call.generating")]
     ResponseImageGenerationCallGenerating(ResponseImageGenCallGeneratingEvent),
     #[serde(rename = "response.image_generation_call.in_progress")]
+    #[strum(serialize = "response.image_generation_call.in_progress")]
     ResponseImageGenerationCallInProgress(ResponseImageGenCallInProgressEvent),
     #[serde(rename = "response.image_generation_call.partial_image")]
+    #[strum(serialize = "response.image_generation_call.partial_image")]
     ResponseImageGenerationCallPartialImage(ResponseImageGenCallPartialImageEvent),
     #[serde(rename = "response.mcp_call.arguments_delta")]
+    #[strum(serialize = "response.mcp_call.arguments_delta")]
     ResponseMCPCallArgumentsDelta(ResponseMCPCallArgumentsDeltaEvent),
     #[serde(rename = "response.mcp_call.arguments_done")]
+    #[strum(serialize = "response.mcp_call.arguments_done")]
     ResponseMCPCallArgumentsDone(ResponseMCPCallArgumentsDoneEvent),
     #[serde(rename = "response.mcp_call.completed")]
+    #[strum(serialize = "response.mcp_call.completed")]
     ResponseMCPCallCompleted(ResponseMCPCallCompletedEvent),
     #[serde(rename = "response.mcp_call.failed")]
+    #[strum(serialize = "response.mcp_call.failed")]
     ResponseMCPCallFailed(ResponseMCPCallFailedEvent),
     #[serde(rename = "response.mcp_call.in_progress")]
+    #[strum(serialize = "response.mcp_call.in_progress")]
     ResponseMCPCallInProgress(ResponseMCPCallInProgressEvent),
     #[serde(rename = "response.mcp_list_tools.completed")]
+    #[strum(serialize = "response.mcp_list_tools.completed")]
     ResponseMCPListToolsCompleted(ResponseMCPListToolsCompletedEvent),
     #[serde(rename = "response.mcp_list_tools.failed")]
+    #[strum(serialize = "response.mcp_list_tools.failed")]
     ResponseMCPListToolsFailed(ResponseMCPListToolsFailedEvent),
     #[serde(rename = "response.mcp_list_tools.in_progress")]
+    #[strum(serialize = "response.mcp_list_tools.in_progress")]
     ResponseMCPListToolsInProgress(ResponseMCPListToolsInProgressEvent),
     #[serde(rename = "response.code_interpreter_call.in_progress")]
+    #[strum(serialize = "response.code_interpreter_call.in_progress")]
     ResponseCodeInterpreterCallInProgress(ResponseCodeInterpreterCallInProgressEvent),
     #[serde(rename = "response.code_interpreter_call.interpreting")]
+    #[strum(serialize = "response.code_interpreter_call.interpreting")]
     ResponseCodeInterpreterCallInterpreting(ResponseCodeInterpreterCallInterpretingEvent),
     #[serde(rename = "response.code_interpreter_call.completed")]
+    #[strum(serialize = "response.code_interpreter_call.completed")]
     ResponseCodeInterpreterCallCompleted(ResponseCodeInterpreterCallCompletedEvent),
     #[serde(rename = "response.code_interpreter_call.code_delta")]
+    #[strum(serialize = "response.code_interpreter_call.code_delta")]
     ResponseCodeInterpreterCallCodeDelta(ResponseCodeInterpreterCallCodeDeltaEvent),
     #[serde(rename = "response.code_interpreter_call.code_done")]
+    #[strum(serialize = "response.code_interpreter_call.code_done")]
     ResponseCodeInterpreterCallCodeDone(ResponseCodeInterpreterCallCodeDoneEvent),
     #[serde(rename = "response.output_text_annotation.added")]
+    #[strum(serialize = "response.output_text_annotation.added")]
     ResponseOutputTextAnnotationAdded(ResponseOutputTextAnnotationAddedEvent),
     #[serde(rename = "response.queued")]
+    #[strum(serialize = "response.queued")]
     ResponseQueued(ResponseQueuedEvent),
     #[serde(rename = "response.custom_tool_call_input.delta")]
+    #[strum(serialize = "response.custom_tool_call_input.delta")]
     ResponseCustomToolCallInputDelta(ResponseCustomToolCallInputDeltaEvent),
     #[serde(rename = "response.custom_tool_call_input.done")]
+    #[strum(serialize = "response.custom_tool_call_input.done")]
     ResponseCustomToolCallInputDone(ResponseCustomToolCallInputDoneEvent),
     #[serde(rename = "response.error")]
+    #[strum(serialize = "response.error")]
     ResponseError(ResponseErrorEvent),
 }
 

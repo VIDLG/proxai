@@ -397,7 +397,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
             return Ok(Vec::new());
         }
 
-        Err(self.lifecycle.unexpected_stream_end_error(end, "Chat"))
+        Err(self.lifecycle.unexpected_stream_end_error(end))
     }
 }
 

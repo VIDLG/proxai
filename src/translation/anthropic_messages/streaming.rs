@@ -166,11 +166,7 @@ impl<S> AnthropicInboundLifecycle<S> {
         })
     }
 
-    pub(crate) fn unexpected_stream_end_error(
-        &self,
-        end: SseStreamEnd,
-        target_protocol_label: &'static str,
-    ) -> StreamTranslationError {
+    pub(crate) fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
         let message = match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
                 format!("Anthropic stream reached {end} before message_start")
@@ -188,9 +184,8 @@ impl<S> AnthropicInboundLifecycle<S> {
                 if phase.emitted_any() {
                     format!("Anthropic stream reached {end} before terminal message_delta")
                 } else {
-                    format!(
-                        "Anthropic stream completed without {target_protocol_label}-representable content, thinking, refusal, or tool_use blocks"
-                    )
+                    "Anthropic stream completed without target-representable content, thinking, refusal, or tool_use blocks"
+                        .to_string()
                 }
             }
             InboundStreamLifecyclePhase::Stopped => String::new(),
