@@ -12,7 +12,7 @@ use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::sse::SseEvent;
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
-    SseStreamEnd, StreamTranslationError, StreamTranslationResult, StreamingPhase,
+    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
 
 #[derive(Debug)]
@@ -102,14 +102,26 @@ impl<S> AnthropicInboundLifecycle<S> {
         Ok(parsed)
     }
 
-    pub(crate) fn begin_message_stream(&mut self, state: S) -> StreamTranslationResult<()> {
+    pub(crate) fn begin_message_stream(
+        &mut self,
+        identity: StreamIdentity,
+        state: S,
+    ) -> StreamTranslationResult<()> {
         if !self.inner.is_waiting() {
             return Err(StreamTranslationError::Semantic(
                 "Anthropic stream emitted duplicate message_start".to_string(),
             ));
         }
-        self.inner.begin_streaming(state);
+        self.inner.begin_streaming(identity, state);
         Ok(())
+    }
+
+    pub(crate) fn stream_identity(&self) -> StreamTranslationResult<&StreamIdentity> {
+        self.inner.require_identity(|| {
+            StreamTranslationError::Semantic(
+                "Anthropic stream identity is not initialized before message_start".to_string(),
+            )
+        })
     }
 
     pub(crate) fn streaming_state(&self) -> StreamTranslationResult<&S> {

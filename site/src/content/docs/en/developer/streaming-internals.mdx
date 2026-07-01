@@ -126,6 +126,20 @@ Cross-protocol streaming translation uses a protocol-neutral four-phase carrier 
 
 Protocol wrappers such as `anthropic_messages::streaming` and `openai_chat_completions::streaming` keep source-specific event ordering and error wording. Pair translators remain responsible for target representability checks, output item/block emission, and terminal flush behavior.
 
+### Stream identity ownership
+
+Streaming identity (`StreamIdentity`) belongs to the protocol-neutral inbound lifecycle carrier, while source-protocol wrappers decide when to initialize or validate it.
+
+<ReferenceTable
+  columns={['Inbound source', 'Where identity comes from', 'Why it is handled this way']}
+  rows={[
+    ['Anthropic Messages', '`message_start.message.id` and `message_start.message.model`', 'Anthropic emits identity once at the explicit `message_start` semantic boundary. Later `content_block_*`, `message_delta`, and `message_stop` events do not repeat `id`/`model`, so the Anthropic wrapper initializes lifecycle identity at `message_start` and then relies on lifecycle ordering to prevent duplicate starts.'],
+    ['OpenAI Chat Completions', 'Every `chat.completion.chunk` repeats `id` and `model`', 'Chat has no separate `message_start` event. The first semantic chunk initializes lifecycle identity, and later chunks are checked against it so pieces from different upstream responses are never merged into one translated message/response.'],
+  ]}
+/>
+
+`InboundStreamLifecycle` stores identity outside the phase enum because identity is stream-envelope metadata that remains stable across `Streaming`, `Terminal`, and `Stopped`. Pair-local stream state should keep only target-conversion state or derived identifiers, not another copy of the full source identity.
+
 ## BodyAction
 
 ```rust

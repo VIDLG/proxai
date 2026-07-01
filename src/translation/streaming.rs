@@ -178,6 +178,10 @@ impl<S> StreamingPhase<S> {
         }
     }
 
+    pub(crate) fn into_state(self) -> S {
+        self.state
+    }
+
     delegate! {
         to self.output {
             pub(crate) fn mark_text(&mut self);
@@ -245,72 +249,84 @@ impl EmittedContentTracker {
 
 /// Protocol-neutral inbound stream lifecycle carrier.
 ///
-/// This type intentionally models only the mechanical four-phase shape shared
-/// by source protocols:
-///
-/// - `Waiting`: no semantic message/chunk has initialized the stream yet.
-/// - `Streaming`: semantic deltas are active and target-representable output is
-///   tracked in `StreamingPhase<S>`.
-/// - `Terminal(T)`: the source protocol has emitted its semantic terminal
-///   signal, but the carrier/source stop has not been fully consumed yet.
-/// - `Stopped`: the target translator has completed its final stream output.
-///
-/// The terminal payload is deliberately generic. Anthropic inbound streams keep
-/// the full `StreamingPhase<S>` as `T` because `message_delta` is followed by a
-/// required `message_stop`. Chat inbound streams use pair-specific terminal
-/// summaries because `finish_reason` ends semantic deltas and later chunks are
-/// carrier/usage handling rather than more source content.
+/// This type owns the mechanical four-phase shape shared by source protocols
+/// plus the stream envelope identity once the source stream has started. The
+/// identity is stored outside the phase enum because it remains stable across
+/// `Streaming`, `Terminal`, and `Stopped`.
 #[derive(Debug)]
-pub(crate) enum InboundStreamLifecycle<S, T> {
+pub(crate) struct InboundStreamLifecycle<S, T> {
+    identity: Option<StreamIdentity>,
+    phase: InboundStreamPhase<S, T>,
+}
+
+#[derive(Debug)]
+enum InboundStreamPhase<S, T> {
     Waiting,
     Streaming(StreamingPhase<S>),
     Terminal(T),
     Stopped,
 }
 
-impl<S, T> Default for InboundStreamLifecycle<S, T> {
+impl<S, T> Default for InboundStreamPhase<S, T> {
     fn default() -> Self {
         Self::Waiting
     }
 }
 
+impl<S, T> Default for InboundStreamLifecycle<S, T> {
+    fn default() -> Self {
+        Self {
+            identity: None,
+            phase: InboundStreamPhase::Waiting,
+        }
+    }
+}
+
 impl<S, T> InboundStreamLifecycle<S, T> {
-    pub(crate) fn begin_streaming(&mut self, state: S) {
-        *self = Self::Streaming(StreamingPhase::new(state));
+    pub(crate) fn begin_streaming(&mut self, identity: StreamIdentity, state: S) {
+        self.identity = Some(identity);
+        self.phase = InboundStreamPhase::Streaming(StreamingPhase::new(state));
     }
 
     pub(crate) fn receive_terminal(&mut self, terminal: T) {
-        *self = Self::Terminal(terminal);
+        self.phase = InboundStreamPhase::Terminal(terminal);
     }
 
     pub(crate) fn stop(&mut self) {
-        *self = Self::Stopped;
+        self.phase = InboundStreamPhase::Stopped;
+    }
+
+    pub(crate) fn require_identity(
+        &self,
+        error: impl FnOnce() -> StreamTranslationError,
+    ) -> StreamTranslationResult<&StreamIdentity> {
+        self.identity.as_ref().ok_or_else(error)
     }
 
     pub(crate) fn is_waiting(&self) -> bool {
-        matches!(self, Self::Waiting)
+        matches!(self.phase, InboundStreamPhase::Waiting)
     }
 
     pub(crate) fn is_terminal(&self) -> bool {
-        matches!(self, Self::Terminal(_))
+        matches!(self.phase, InboundStreamPhase::Terminal(_))
     }
 
     pub(crate) fn is_stopped(&self) -> bool {
-        matches!(self, Self::Stopped)
+        matches!(self.phase, InboundStreamPhase::Stopped)
     }
 
     pub(crate) fn phase_kind(&self) -> InboundStreamLifecyclePhase {
-        match self {
-            Self::Waiting => InboundStreamLifecyclePhase::Waiting,
-            Self::Streaming(_) => InboundStreamLifecyclePhase::Streaming,
-            Self::Terminal(_) => InboundStreamLifecyclePhase::Terminal,
-            Self::Stopped => InboundStreamLifecyclePhase::Stopped,
+        match self.phase {
+            InboundStreamPhase::Waiting => InboundStreamLifecyclePhase::Waiting,
+            InboundStreamPhase::Streaming(_) => InboundStreamLifecyclePhase::Streaming,
+            InboundStreamPhase::Terminal(_) => InboundStreamLifecyclePhase::Terminal,
+            InboundStreamPhase::Stopped => InboundStreamLifecyclePhase::Stopped,
         }
     }
 
     pub(crate) fn streaming_phase(&self) -> Option<&StreamingPhase<S>> {
-        match self {
-            Self::Streaming(phase) => Some(phase),
+        match &self.phase {
+            InboundStreamPhase::Streaming(phase) => Some(phase),
             _ => None,
         }
     }
@@ -320,8 +336,8 @@ impl<S, T> InboundStreamLifecycle<S, T> {
         context: RequireStreamingPhaseContext,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
         let phase_kind = self.phase_kind();
-        match self {
-            Self::Streaming(phase) => Ok(phase),
+        match &mut self.phase {
+            InboundStreamPhase::Streaming(phase) => Ok(phase),
             _ => Err(StreamTranslationError::Semantic(format!(
                 "{} stream emitted {} while lifecycle was {}; expected streaming",
                 context.source, context.event, phase_kind
@@ -330,8 +346,15 @@ impl<S, T> InboundStreamLifecycle<S, T> {
     }
 
     pub(crate) fn terminal(&self) -> Option<&T> {
-        match self {
-            Self::Terminal(terminal) => Some(terminal),
+        match &self.phase {
+            InboundStreamPhase::Terminal(terminal) => Some(terminal),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn terminal_mut(&mut self) -> Option<&mut T> {
+        match &mut self.phase {
+            InboundStreamPhase::Terminal(terminal) => Some(terminal),
             _ => None,
         }
     }
@@ -340,10 +363,10 @@ impl<S, T> InboundStreamLifecycle<S, T> {
         &mut self,
         error: impl FnOnce() -> StreamTranslationError,
     ) -> StreamTranslationResult<StreamingPhase<S>> {
-        match std::mem::take(self) {
-            Self::Streaming(phase) => Ok(phase),
+        match std::mem::take(&mut self.phase) {
+            InboundStreamPhase::Streaming(phase) => Ok(phase),
             other => {
-                *self = other;
+                self.phase = other;
                 Err(error())
             }
         }
@@ -353,10 +376,10 @@ impl<S, T> InboundStreamLifecycle<S, T> {
         &mut self,
         error: impl FnOnce() -> StreamTranslationError,
     ) -> StreamTranslationResult<T> {
-        match std::mem::take(self) {
-            Self::Terminal(terminal) => Ok(terminal),
+        match std::mem::take(&mut self.phase) {
+            InboundStreamPhase::Terminal(terminal) => Ok(terminal),
             other => {
-                *self = other;
+                self.phase = other;
                 Err(error())
             }
         }

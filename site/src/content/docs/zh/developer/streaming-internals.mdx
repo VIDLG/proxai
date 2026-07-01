@@ -187,6 +187,20 @@ state.rs
 
 `anthropic_messages::streaming` 和 `openai_chat_completions::streaming` 这类协议 wrapper 负责保留 source-specific event ordering 和错误文案。pair translator 仍然负责目标协议是否可表达、output item/block emission，以及 terminal flush 行为。
 
+### Stream identity 归属
+
+Streaming identity（`StreamIdentity`）属于协议无关的 inbound lifecycle carrier；source-protocol wrapper 负责决定何时初始化或校验它。
+
+<ReferenceTable
+  columns={['Inbound source', 'identity 来源', '处理原因']}
+  rows={[
+    ['Anthropic Messages', '`message_start.message.id` 和 `message_start.message.model`', 'Anthropic 在显式的 `message_start` 语义边界一次性给出 identity。后续 `content_block_*`、`message_delta`、`message_stop` 不再重复 `id`/`model`，所以 Anthropic wrapper 在 `message_start` 时初始化 lifecycle identity，并依赖 lifecycle ordering 防止重复 start。'],
+    ['OpenAI Chat Completions', '每个 `chat.completion.chunk` 都重复携带 `id` 和 `model`', 'Chat 没有单独的 `message_start` 事件。第一条语义 chunk 初始化 lifecycle identity；后续 chunk 必须与该 identity 校验一致，避免把不同 upstream response 的片段合并到同一个 translated message/response。'],
+  ]}
+/>
+
+`InboundStreamLifecycle` 把 identity 放在 phase enum 外层，因为 identity 是整条 stream 的 envelope metadata，会稳定横跨 `Streaming`、`Terminal` 和 `Stopped`。pair-local stream state 应只保存目标转换状态或派生 id，不再保存完整 source identity 的副本。
+
 
 ## OpenAI Responses observer
 

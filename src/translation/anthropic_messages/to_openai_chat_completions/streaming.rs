@@ -24,7 +24,6 @@ pub(super) struct ChatCompletionStreamTranslator {
 
 #[derive(Debug)]
 struct StreamingState {
-    identity: StreamIdentity,
     blocks: BTreeMap<u32, StreamBlock>,
     next_tool_call_index: u32,
 }
@@ -38,16 +37,11 @@ enum StreamBlock {
 }
 
 impl StreamingState {
-    fn new(identity: StreamIdentity) -> Self {
+    fn new() -> Self {
         Self {
-            identity,
             blocks: BTreeMap::new(),
             next_tool_call_index: 0,
         }
-    }
-
-    fn identity(&self) -> &StreamIdentity {
-        &self.identity
     }
 
     fn register_tool_use_block(&mut self, block_index: u32) -> StreamTranslationResult<u32> {
@@ -177,7 +171,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     event.message.model,
                 );
                 self.lifecycle
-                    .begin_message_stream(StreamingState::new(identity.clone()))?;
+                    .begin_message_stream(identity.clone(), StreamingState::new())?;
                 chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                     &identity, delta, None,
                 )));
@@ -193,7 +187,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             .register_text_block(index)?;
                         if !block.text.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_text();
-                            let identity = self.lifecycle.streaming_state()?.identity();
+                            let identity = self.lifecycle.stream_identity()?;
                             chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                                 identity,
                                 block.into(),
@@ -207,7 +201,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             state.register_tool_use_block(index)?
                         };
                         self.lifecycle.streaming_phase_mut()?.mark_tool_use();
-                        let identity = self.lifecycle.streaming_state()?.identity();
+                        let identity = self.lifecycle.stream_identity()?;
                         chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             ToolStartDelta {
@@ -225,7 +219,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             .register_thinking_block(index)?;
                         if !block.thinking.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_reasoning();
-                            let identity = self.lifecycle.streaming_state()?.identity();
+                            let identity = self.lifecycle.stream_identity()?;
                             chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                                 identity,
                                 block.into(),
@@ -268,7 +262,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     )?;
                     if !delta.text.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_text();
-                        let identity = self.lifecycle.streaming_state()?.identity();
+                        let identity = self.lifecycle.stream_identity()?;
                         chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             delta.into(),
@@ -282,7 +276,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         .streaming_state()?
                         .get_tool_call_index(event.index)?;
 
-                    let identity = self.lifecycle.streaming_state()?.identity();
+                    let identity = self.lifecycle.stream_identity()?;
                     chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                         identity,
                         ToolArgumentsDelta {
@@ -302,7 +296,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     )?;
                     if !delta.thinking.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_reasoning();
-                        let identity = self.lifecycle.streaming_state()?.identity();
+                        let identity = self.lifecycle.stream_identity()?;
                         chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                             identity,
                             delta.into(),
@@ -334,7 +328,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let emitted_text = phase.emitted_text();
                 let emitted_representable_content = phase.emitted_any();
                 let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
-                let identity = phase.state().identity().clone();
+                let identity = self.lifecycle.stream_identity()?.clone();
                 let finish_reason = stop_reason.into();
 
                 match terminal_delta {

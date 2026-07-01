@@ -14,7 +14,7 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::sse::SseEvent;
 use crate::translation::openai_chat_completions::streaming::{
-    ChatInboundLifecycle, ensure_same_stream_identity, stream_identity,
+    ChatInboundLifecycle, stream_identity,
 };
 use crate::translation::streaming::{
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
@@ -25,7 +25,6 @@ use super::response::chat_stop_state;
 
 #[derive(Debug, Default)]
 pub(super) struct MessagesStreamTranslator {
-    identity: Option<StreamIdentity>,
     lifecycle: ChatInboundLifecycle<ChatStreamingState, ChatTerminalState>,
 }
 
@@ -36,7 +35,7 @@ struct ChatToAnthropicBlockState {
     tool_block_indexes: BTreeMap<u32, u32>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct ChatStreamingState {
     blocks: ChatToAnthropicBlockState,
     refusal: String,
@@ -44,6 +43,14 @@ struct ChatStreamingState {
 }
 
 impl ChatStreamingState {
+    fn new() -> Self {
+        Self {
+            blocks: ChatToAnthropicBlockState::default(),
+            refusal: String::new(),
+            choice_index: None,
+        }
+    }
+
     fn text_delta(&mut self, text: String) -> Vec<MessageStreamEvent> {
         match self.blocks.text_block_index {
             Some(index) => vec![MessageStreamEvent::ContentBlockDelta(
@@ -257,8 +264,7 @@ fn single_representable_stream_choice(
 
 impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let payload = event.payload_with_type()?;
-        let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload)?;
+        let (_payload, chunk) = self.lifecycle.parse_stream_event(event)?;
 
         if chunk.choices.is_empty() {
             return encode_outputs(self.translate_usage_only_chunk(&chunk)?);
@@ -266,13 +272,17 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
 
         let mut outputs = Vec::new();
 
-        if let Some(identity) = self.identity.as_ref() {
-            ensure_same_stream_identity(identity, &chunk, "msg_")?;
-        } else {
-            self.identity = Some(chat_choice_stream_identity(&chunk));
-            outputs.push(self.message_start()?);
+        if self.lifecycle.is_waiting_for_first_chunk() {
+            let identity = chat_choice_stream_identity(&chunk);
+            outputs.push(message_start(&identity));
             self.lifecycle
-                .begin_streaming(ChatStreamingState::default());
+                .begin_chunk_stream(identity, ChatStreamingState::new())?;
+        } else {
+            self.lifecycle.ensure_same_stream_identity(
+                &chunk,
+                "msg_",
+                "Chat stream emitted chunk before any assistant message chunk",
+            )?;
         }
 
         let choice = single_representable_stream_choice(chunk.choices)?;
@@ -356,13 +366,11 @@ impl MessagesStreamTranslator {
                     .to_string(),
             ));
         };
-        let Some(identity) = self.identity.as_ref() else {
-            return Err(StreamTranslationError::Semantic(
-                "Chat stream emitted a usage-only chunk before any assistant message chunk"
-                    .to_string(),
-            ));
-        };
-        ensure_same_stream_identity(identity, chunk, "msg_")?;
+        self.lifecycle.ensure_same_stream_identity(
+            chunk,
+            "msg_",
+            "Chat stream emitted a usage-only chunk before any assistant message chunk",
+        )?;
 
         let outputs = if let Some(terminal) = self.lifecycle.terminal() {
             vec![
@@ -389,25 +397,13 @@ impl MessagesStreamTranslator {
         self.lifecycle.stop();
         Ok(outputs)
     }
+}
 
-    fn message_start(&self) -> StreamTranslationResult<MessageStreamEvent> {
-        let identity = self.identity()?;
-        Ok(MessageStreamEvent::MessageStart(
-            MessageStartEvent::new_empty_message(
-                identity.id().to_string(),
-                identity.model().to_string(),
-            ),
-        ))
-    }
-
-    fn identity(&self) -> StreamTranslationResult<&StreamIdentity> {
-        self.identity.as_ref().ok_or_else(|| {
-            StreamTranslationError::Semantic(
-                "Chat stream chunk cannot be encoded before the Anthropic message identity is initialized"
-                    .to_string(),
-            )
-        })
-    }
+fn message_start(identity: &StreamIdentity) -> MessageStreamEvent {
+    MessageStreamEvent::MessageStart(MessageStartEvent::new_empty_message(
+        identity.id().to_string(),
+        identity.model().to_string(),
+    ))
 }
 
 #[cfg(test)]

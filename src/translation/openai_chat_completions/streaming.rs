@@ -15,8 +15,10 @@
 //! shared across target protocols.
 
 use delegate::delegate;
+use serde_json::Value;
 
 use crate::protocol::openai::chat_completions::CreateChatCompletionStreamResponse;
+use crate::sse::SseEvent;
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
@@ -38,7 +40,6 @@ impl<S, T> Default for ChatInboundLifecycle<S, T> {
 impl<S, T> ChatInboundLifecycle<S, T> {
     delegate! {
         to self.inner {
-            pub(crate) fn begin_streaming(&mut self, state: S);
             #[call(receive_terminal)]
             pub(crate) fn receive_terminal_finish(&mut self, terminal: T);
             pub(crate) fn stop(&mut self);
@@ -47,7 +48,37 @@ impl<S, T> ChatInboundLifecycle<S, T> {
             pub(crate) fn is_stopped(&self) -> bool;
             pub(crate) fn is_terminal(&self) -> bool;
             pub(crate) fn terminal(&self) -> Option<&T>;
+            pub(crate) fn terminal_mut(&mut self) -> Option<&mut T>;
+            pub(crate) fn streaming_phase(&self) -> Option<&StreamingPhase<S>>;
+            #[call(take_terminal)]
+            pub(crate) fn take_terminal_finish(
+                &mut self,
+                error: impl FnOnce() -> StreamTranslationError,
+            ) -> StreamTranslationResult<T>;
         }
+    }
+
+    pub(crate) fn parse_stream_event(
+        &self,
+        event: SseEvent,
+    ) -> StreamTranslationResult<(Value, CreateChatCompletionStreamResponse)> {
+        let payload = event.payload_with_type()?;
+        let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload.clone())?;
+        Ok((payload, chunk))
+    }
+
+    pub(crate) fn begin_chunk_stream(
+        &mut self,
+        identity: StreamIdentity,
+        state: S,
+    ) -> StreamTranslationResult<()> {
+        if !self.inner.is_waiting() {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream emitted duplicate assistant message chunk".to_string(),
+            ));
+        }
+        self.inner.begin_streaming(identity, state);
+        Ok(())
     }
 
     pub(crate) fn streaming_phase_mut(
@@ -58,6 +89,13 @@ impl<S, T> ChatInboundLifecycle<S, T> {
                 source: "Chat",
                 event: "choice deltas",
             })
+    }
+
+    pub(crate) fn take_streaming_phase(
+        &mut self,
+        error: impl FnOnce() -> StreamTranslationError,
+    ) -> StreamTranslationResult<StreamingPhase<S>> {
+        self.inner.take_streaming_phase(error)
     }
 
     pub(crate) fn unexpected_stream_end_error(
@@ -95,6 +133,33 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         };
         StreamTranslationError::Semantic(message)
     }
+
+    pub(crate) fn ensure_same_stream_identity(
+        &self,
+        chunk: &CreateChatCompletionStreamResponse,
+        id_prefix: &str,
+        uninitialized_message: &'static str,
+    ) -> StreamTranslationResult<()> {
+        let identity = self.inner.require_identity(|| {
+            StreamTranslationError::Semantic(uninitialized_message.to_string())
+        })?;
+        let chunk_identity = stream_identity(chunk, id_prefix);
+        if identity.id() != chunk_identity.id() {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Chat stream changed id from {} to {}",
+                identity.id(),
+                chunk_identity.id()
+            )));
+        }
+        if identity.model() != chunk_identity.model() {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Chat stream changed model from {} to {}",
+                identity.model(),
+                chunk_identity.model()
+            )));
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn stream_identity(
@@ -102,27 +167,4 @@ pub(crate) fn stream_identity(
     id_prefix: &str,
 ) -> StreamIdentity {
     StreamIdentity::new(format!("{id_prefix}{}", chunk.id), chunk.model.clone())
-}
-
-pub(crate) fn ensure_same_stream_identity(
-    identity: &StreamIdentity,
-    chunk: &CreateChatCompletionStreamResponse,
-    id_prefix: &str,
-) -> StreamTranslationResult<()> {
-    let chunk_identity = stream_identity(chunk, id_prefix);
-    if identity.id() != chunk_identity.id() {
-        return Err(StreamTranslationError::Semantic(format!(
-            "Chat stream changed id from {} to {}",
-            identity.id(),
-            chunk_identity.id()
-        )));
-    }
-    if identity.model() != chunk_identity.model() {
-        return Err(StreamTranslationError::Semantic(format!(
-            "Chat stream changed model from {} to {}",
-            identity.model(),
-            chunk_identity.model()
-        )));
-    }
-    Ok(())
 }

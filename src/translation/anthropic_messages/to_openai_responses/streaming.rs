@@ -31,7 +31,6 @@ pub(super) struct ResponsesStreamTranslator {
 
 #[derive(Debug)]
 struct StreamingState {
-    identity: StreamIdentity,
     usage: Usage,
     item_ids: OutputItemIdAllocator,
     stop_reason: Option<StopReason>,
@@ -80,10 +79,9 @@ enum StreamBlock {
 }
 
 impl StreamingState {
-    fn new(identity: StreamIdentity, usage: Usage) -> Self {
+    fn new(identity: &StreamIdentity, usage: Usage) -> Self {
         let item_ids = OutputItemIdAllocator::new(identity.id().to_string());
         Self {
-            identity,
             usage,
             item_ids,
             stop_reason: None,
@@ -111,7 +109,7 @@ impl StreamingState {
             .unwrap_or(Status::Completed)
     }
 
-    fn response_snapshot(&self, status: Status) -> Response {
+    fn response_snapshot(&self, identity: &StreamIdentity, status: Status) -> Response {
         let incomplete_details = incomplete_details_from_stop_reason(self.stop_reason);
         Response {
             background: None,
@@ -120,12 +118,12 @@ impl StreamingState {
             created_at: 0,
             completed_at: None,
             error: None,
-            id: self.identity.id().to_string(),
+            id: identity.id().to_string(),
             incomplete_details,
             instructions: None,
             max_output_tokens: None,
             metadata: None,
-            model: self.identity.model().to_string(),
+            model: identity.model().to_string(),
             object: "response".to_string(),
             output: self.output_items.clone(),
             parallel_tool_calls: None,
@@ -425,13 +423,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
             MessageStreamEvent::MessageStart(event) => {
                 let response_id = response_id(&event.message.id);
                 let identity = StreamIdentity::new(response_id, event.message.model);
-                let state = StreamingState::new(identity, event.message.usage);
-                self.lifecycle.begin_message_stream(state)?;
+                let state = StreamingState::new(&identity, event.message.usage);
+                self.lifecycle.begin_message_stream(identity, state)?;
                 let sequence_number = self.next_sequence_number();
+                let identity = self.lifecycle.stream_identity()?;
                 let response = self
                     .lifecycle
                     .streaming_state()?
-                    .response_snapshot(Status::InProgress);
+                    .response_snapshot(identity, Status::InProgress);
                 chunks.push(ResponseStreamEvent::ResponseCreated(ResponseCreatedEvent {
                     sequence_number,
                     response,
@@ -810,7 +809,8 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 let state = phase.state();
                 let status = state.terminal_response_status();
                 let sequence_number = self.next_sequence_number();
-                let response = state.response_snapshot(status);
+                let identity = self.lifecycle.stream_identity()?;
+                let response = state.response_snapshot(identity, status);
                 self.lifecycle.stop();
                 let event = match status {
                     Status::Incomplete => {
