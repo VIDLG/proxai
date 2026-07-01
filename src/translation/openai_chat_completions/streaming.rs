@@ -18,7 +18,6 @@ use delegate::delegate;
 use serde_json::Value;
 
 use crate::protocol::openai::chat_completions::CreateChatCompletionStreamResponse;
-use crate::sse::SseEvent;
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
@@ -58,11 +57,9 @@ impl<S, T> ChatInboundLifecycle<S, T> {
 
     pub(super) fn parse_stream_event(
         &self,
-        event: SseEvent,
-    ) -> StreamTranslationResult<(Value, CreateChatCompletionStreamResponse)> {
-        let payload = event.payload_with_type()?;
-        let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload.clone())?;
-        Ok((payload, chunk))
+        payload: Value,
+    ) -> StreamTranslationResult<CreateChatCompletionStreamResponse> {
+        serde_json::from_value::<CreateChatCompletionStreamResponse>(payload).map_err(Into::into)
     }
 
     pub(super) fn register_chunk_stream(

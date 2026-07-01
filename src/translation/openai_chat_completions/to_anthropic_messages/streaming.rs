@@ -1,4 +1,3 @@
-use axum::body::Bytes;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -12,13 +11,13 @@ use crate::protocol::openai::chat_completions::{
     ChatChoiceStream, ChatCompletionMessageToolCallChunk, CompletionUsage,
     CreateChatCompletionStreamResponse, FinishReason, Role,
 };
-use crate::sse::SseEvent;
+
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
 use crate::translation::streaming::{
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, encode_sse_json,
+    SseStreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator,
 };
 
 use super::response::chat_stop_state;
@@ -190,10 +189,13 @@ struct ChatTerminalState {
     refusal: String,
 }
 
-fn encode_outputs(outputs: Vec<MessageStreamEvent>) -> StreamTranslationResult<Vec<Bytes>> {
+fn encode_outputs(outputs: Vec<MessageStreamEvent>) -> StreamTranslationResult<Vec<StreamEvent>> {
     outputs
         .into_iter()
-        .map(|event| Ok(encode_sse_json(event.as_ref(), &event)?))
+        .map(|event| {
+            let event_type = event.as_ref().to_string();
+            StreamEvent::json(event_type, event)
+        })
         .collect()
 }
 
@@ -259,8 +261,8 @@ fn single_representable_stream_choice(
 }
 
 impl StreamingEventTranslator for MessagesStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let (_payload, chunk) = self.lifecycle.parse_stream_event(event)?;
+    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let chunk = self.lifecycle.parse_stream_event(event.data)?;
 
         if chunk.choices.is_empty() {
             return encode_outputs(self.translate_usage_only_chunk(&chunk)?);
@@ -333,7 +335,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
         encode_outputs(outputs)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
+    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_waiting_for_first_chunk() {
             Err(self.lifecycle.unexpected_stream_end_error(end))
         } else if let Some(terminal) = self.lifecycle.terminal() {

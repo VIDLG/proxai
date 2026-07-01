@@ -3,13 +3,16 @@ use axum::body::Bytes;
 use delegate::delegate;
 use futures_util::StreamExt;
 use getset::{Getters, MutGetters};
+
+use serde::Serialize;
+use serde_json::Value;
 use strum::Display;
 
 use crate::error::ErrorResponseFields;
 use crate::http_support::{ByteStream, into_byte_stream};
 
 pub(crate) use crate::sse::encode_sse_json;
-use crate::sse::{SseError, SseEvent, SseEventScanner};
+use crate::sse::{DONE_SENTINEL_DATA, SseError, SseEvent, SseEventScanner};
 
 pub(crate) type StreamTranslationResult<T> = Result<T, StreamTranslationError>;
 
@@ -55,10 +58,67 @@ impl std::fmt::Display for SseStreamEnd {
     }
 }
 
-pub(crate) trait StreamingEventTranslator: Send + 'static {
-    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>>;
+/// A parsed SSE event with its JSON payload, serving as the I/O unit for
+/// stream translators.
+///
+/// Translators receive and produce `StreamEvent` values; they never touch
+/// raw `Bytes` or `SseEvent`. The carrier layer (`translate_sse_stream`)
+/// is responsible for parsing `SseEvent` → `StreamEvent` on input and
+/// encoding `StreamEvent` → `Bytes` on output.
+#[derive(Debug, Clone)]
+pub(crate) struct StreamEvent {
+    pub event_type: String,
+    pub data: Value,
+}
 
-    fn finish_stream(&mut self, _end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
+impl StreamEvent {
+    pub(crate) fn new(event_type: impl Into<String>, data: Value) -> Self {
+        Self {
+            event_type: event_type.into(),
+            data,
+        }
+    }
+
+    pub(crate) fn json(
+        event_type: impl Into<String>,
+        payload: impl Serialize,
+    ) -> StreamTranslationResult<Self> {
+        Ok(Self::new(event_type, serde_json::to_value(payload)?))
+    }
+
+    pub(crate) fn message(payload: impl Serialize) -> StreamTranslationResult<Self> {
+        Self::json(SseEvent::DEFAULT_EVENT_TYPE, payload)
+    }
+
+    /// Chat Completions `[DONE]` sentinel, expressed as a `StreamEvent`.
+    ///
+    /// The carrier layer recognizes this combination (`event_type` = `message`
+    /// and `data` = string `"[DONE]"`) and emits the raw `data: [DONE]` frame
+    /// instead of JSON-serializing the payload.
+    pub(crate) fn done() -> Self {
+        Self {
+            event_type: SseEvent::DEFAULT_EVENT_TYPE.to_string(),
+            data: Value::String(DONE_SENTINEL_DATA.to_string()),
+        }
+    }
+
+    fn is_done_sentinel(&self) -> bool {
+        self.event_type == SseEvent::DEFAULT_EVENT_TYPE
+            && self.data == Value::String(DONE_SENTINEL_DATA.to_string())
+    }
+
+    fn encode(&self) -> serde_json::Result<Bytes> {
+        if self.is_done_sentinel() {
+            return Ok(crate::sse::done_sentinel_bytes());
+        }
+        encode_sse_json(&self.event_type, &self.data)
+    }
+}
+
+pub(crate) trait StreamingEventTranslator: Send + 'static {
+    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>>;
+
+    fn finish_stream(&mut self, _end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         Ok(Vec::new())
     }
 }
@@ -87,8 +147,8 @@ where
 
             for event in scanner.scan(&chunk) {
                 if event.is_done_sentinel() {
-                    let chunks = match translator.finish_stream(SseStreamEnd::DoneSentinel) {
-                        Ok(chunks) => chunks,
+                    let events = match translator.finish_stream(SseStreamEnd::DoneSentinel) {
+                        Ok(events) => events,
                         Err(error) => {
                             let event = ErrorResponseFields::stream_translation(format!(
                                 "{}: {error}",
@@ -99,14 +159,19 @@ where
                             return;
                         }
                     };
-                    for translated in chunks {
-                        yield translated;
+                    for translated in events {
+                        yield translated.encode()?;
                     }
                     return;
                 }
 
-                let chunks = match translator.translate_event(event) {
-                    Ok(chunks) => chunks,
+                let data = event.payload_with_type()?;
+                let stream_event = StreamEvent {
+                    event_type: event.event_type,
+                    data,
+                };
+                let events = match translator.translate_event(stream_event) {
+                    Ok(events) => events,
                     Err(error) => {
                         let event = ErrorResponseFields::stream_translation(format!(
                             "{}: {error}",
@@ -117,14 +182,14 @@ where
                         return;
                     }
                 };
-                for translated in chunks {
-                    yield translated;
+                for translated in events {
+                    yield translated.encode()?;
                 }
             }
         }
 
-        let chunks = match translator.finish_stream(SseStreamEnd::Eof) {
-            Ok(chunks) => chunks,
+        let events = match translator.finish_stream(SseStreamEnd::Eof) {
+            Ok(events) => events,
             Err(error) => {
                 let event = ErrorResponseFields::stream_translation(format!(
                     "{}: {error}",
@@ -135,11 +200,11 @@ where
                 return;
             }
         };
-        for translated in chunks {
-            yield translated;
+        for translated in events {
+            yield translated.encode()?;
         }
     };
-    into_byte_stream(stream.map(|chunk: serde_json::Result<Bytes>| chunk))
+    into_byte_stream(stream.map(|chunk: StreamTranslationResult<Bytes>| chunk))
 }
 
 #[derive(Debug, Clone)]

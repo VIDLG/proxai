@@ -1,4 +1,3 @@
-use axum::body::Bytes;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
@@ -12,11 +11,11 @@ use crate::protocol::openai_responses::{
     ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent, ResponseReasoningTextDoneEvent,
     ResponseStreamEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseUsage, Status,
 };
-use crate::sse::SseEvent;
+
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::streaming::{
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, encode_sse_json,
+    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator,
 };
 
 use super::citations::text_block_annotations;
@@ -351,40 +350,9 @@ impl StreamingState {
     }
 }
 
-fn output_text_delta_event(
-    sequence_number: u64,
-    item_id: String,
-    output_index: u32,
-    delta: String,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
-        sequence_number,
-        item_id,
-        output_index,
-        content_index: 0,
-        delta,
-        logprobs: None,
-    })
-}
-
-fn reasoning_text_delta_event(
-    sequence_number: u64,
-    item_id: String,
-    output_index: u32,
-    delta: String,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseReasoningTextDelta(ResponseReasoningTextDeltaEvent {
-        sequence_number,
-        item_id,
-        output_index,
-        content_index: 0,
-        delta,
-    })
-}
-
 impl StreamingEventTranslator for ResponsesStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let parsed = self.lifecycle.parse_allowed_stream_event(event)?;
+    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let parsed = self.lifecycle.parse_allowed_stream_event(event.data)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -435,11 +403,15 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                                 .append_text_delta(index, &block.text)?;
                             self.lifecycle.streaming_phase_mut()?.mark_text();
                             let sequence_number = self.next_sequence_number();
-                            chunks.push(output_text_delta_event(
-                                sequence_number,
-                                item_id,
-                                index,
-                                block.text,
+                            chunks.push(ResponseStreamEvent::ResponseOutputTextDelta(
+                                ResponseTextDeltaEvent {
+                                    sequence_number,
+                                    item_id,
+                                    output_index: index,
+                                    content_index: 0,
+                                    delta: block.text,
+                                    logprobs: None,
+                                },
                             ));
                         }
                     }
@@ -472,11 +444,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                                 .append_thinking_delta(index, &block.thinking)?;
                             self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                             let sequence_number = self.next_sequence_number();
-                            chunks.push(reasoning_text_delta_event(
-                                sequence_number,
-                                item_id,
-                                index,
-                                block.thinking,
+                            chunks.push(ResponseStreamEvent::ResponseReasoningTextDelta(
+                                ResponseReasoningTextDeltaEvent {
+                                    sequence_number,
+                                    item_id,
+                                    output_index: index,
+                                    content_index: 0,
+                                    delta: block.thinking,
+                                },
                             ));
                         }
                     }
@@ -553,11 +528,15 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             .append_text_delta(event.index, &delta.text)?;
                         self.lifecycle.streaming_phase_mut()?.mark_text();
                         let sequence_number = self.next_sequence_number();
-                        chunks.push(output_text_delta_event(
-                            sequence_number,
-                            item_id,
-                            event.index,
-                            delta.text,
+                        chunks.push(ResponseStreamEvent::ResponseOutputTextDelta(
+                            ResponseTextDeltaEvent {
+                                sequence_number,
+                                item_id,
+                                output_index: event.index,
+                                content_index: 0,
+                                delta: delta.text,
+                                logprobs: None,
+                            },
                         ));
                     } else {
                         self.lifecycle
@@ -573,11 +552,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             .append_thinking_delta(event.index, &delta.thinking)?;
                         self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                         let sequence_number = self.next_sequence_number();
-                        chunks.push(reasoning_text_delta_event(
-                            sequence_number,
-                            item_id,
-                            event.index,
-                            delta.thinking,
+                        chunks.push(ResponseStreamEvent::ResponseReasoningTextDelta(
+                            ResponseReasoningTextDeltaEvent {
+                                sequence_number,
+                                item_id,
+                                output_index: event.index,
+                                content_index: 0,
+                                delta: delta.thinking,
+                            },
                         ));
                     } else {
                         self.lifecycle
@@ -799,11 +781,14 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
 
         chunks
             .into_iter()
-            .map(|event| Ok(encode_sse_json(event.as_ref(), &event)?))
+            .map(|event| {
+                let event_type = event.as_ref().to_string();
+                StreamEvent::json(event_type, event)
+            })
             .collect::<StreamTranslationResult<Vec<_>>>()
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
+    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_stopped() {
             return Ok(Vec::new());
         }

@@ -9,7 +9,6 @@ use delegate::delegate;
 use serde_json::Value;
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
-use crate::sse::SseEvent;
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
@@ -40,9 +39,8 @@ impl<S> AnthropicInboundLifecycle<S> {
 
     pub(crate) fn parse_allowed_stream_event(
         &self,
-        event: SseEvent,
+        payload: Value,
     ) -> StreamTranslationResult<MessageStreamEvent> {
-        let payload = event.payload_with_type()?;
         match payload.get("type").and_then(Value::as_str) {
             Some(
                 "ping"

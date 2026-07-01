@@ -5,7 +5,6 @@
 
 mod types;
 
-use axum::body::Bytes;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,11 +16,9 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::translation::{TranslationError, TranslationResult};
 
-use crate::sse::SseEvent;
-
 use crate::http_support::ByteStream;
 use crate::translation::streaming::{
-    StreamTranslationResult, StreamingEventTranslator, encode_sse_json, translate_sse_stream,
+    StreamEvent, StreamTranslationResult, StreamingEventTranslator, translate_sse_stream,
 };
 
 const DEFAULT_MAX_TOKENS: u32 = 4096;
@@ -229,8 +226,8 @@ enum OpenaiStreamOutputItem {
 }
 
 impl StreamingEventTranslator for MessagesStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.payload_with_type()?)?;
+    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let parsed = serde_json::from_value::<OpenaiStreamEvent>(event.data)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -428,7 +425,7 @@ impl MessagesStreamTranslator {
     fn ensure_text_block(
         &mut self,
         index: u32,
-        chunks: &mut Vec<Bytes>,
+        chunks: &mut Vec<StreamEvent>,
     ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
@@ -448,7 +445,7 @@ impl MessagesStreamTranslator {
     fn ensure_thinking_block(
         &mut self,
         index: u32,
-        chunks: &mut Vec<Bytes>,
+        chunks: &mut Vec<StreamEvent>,
     ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
@@ -470,7 +467,7 @@ impl MessagesStreamTranslator {
         index: u32,
         item_id: Option<String>,
         name: Option<String>,
-        chunks: &mut Vec<Bytes>,
+        chunks: &mut Vec<StreamEvent>,
     ) -> StreamTranslationResult<()> {
         if self.blocks.contains_key(&index) {
             return Ok(());
@@ -496,7 +493,11 @@ impl MessagesStreamTranslator {
         Ok(())
     }
 
-    fn stop_block(&mut self, index: u32, chunks: &mut Vec<Bytes>) -> StreamTranslationResult<()> {
+    fn stop_block(
+        &mut self,
+        index: u32,
+        chunks: &mut Vec<StreamEvent>,
+    ) -> StreamTranslationResult<()> {
         if self.stopped_blocks.insert(index) {
             chunks.push(self.anthropic_event(
                 "content_block_stop",
@@ -509,7 +510,7 @@ impl MessagesStreamTranslator {
     fn complete(
         &mut self,
         stop_reason: StopReason,
-        chunks: &mut Vec<Bytes>,
+        chunks: &mut Vec<StreamEvent>,
     ) -> StreamTranslationResult<()> {
         if self.completed {
             return Ok(());
@@ -563,11 +564,15 @@ impl MessagesStreamTranslator {
         })
     }
 
-    fn anthropic_event<T>(&self, event_type: &str, payload: T) -> StreamTranslationResult<Bytes>
+    fn anthropic_event<T>(
+        &self,
+        event_type: &str,
+        payload: T,
+    ) -> StreamTranslationResult<StreamEvent>
     where
         T: Serialize,
     {
-        Ok(encode_sse_json(event_type, &payload)?)
+        StreamEvent::json(event_type, payload)
     }
 }
 

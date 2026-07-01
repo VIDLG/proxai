@@ -1,4 +1,3 @@
-use axum::body::Bytes;
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
@@ -10,11 +9,11 @@ use crate::protocol::openai::chat_completions::{
     CompletionUsage, CreateChatCompletionStreamResponse, FinishReason, FunctionCallStream,
     FunctionType, Role,
 };
-use crate::sse::{SseEvent, done_sentinel_bytes};
+
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::streaming::{
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, encode_sse_json,
+    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator,
 };
 
 #[derive(Debug, Default)]
@@ -143,25 +142,11 @@ impl StreamingState {
     }
 }
 
-#[derive(Debug)]
-enum ChatStreamOutput {
-    Chunk(CreateChatCompletionStreamResponse),
-    DoneSentinel,
-}
-
-impl ChatStreamOutput {
-    fn encode(self) -> StreamTranslationResult<Bytes> {
-        match self {
-            Self::Chunk(payload) => Ok(encode_sse_json("message", &payload)?),
-            Self::DoneSentinel => Ok(done_sentinel_bytes()),
-        }
-    }
-}
-
 impl StreamingEventTranslator for ChatCompletionStreamTranslator {
-    fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let parsed = self.lifecycle.parse_allowed_stream_event(event)?;
+    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let parsed = self.lifecycle.parse_allowed_stream_event(event.data)?;
         let mut chunks = Vec::new();
+        let mut done = false;
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
@@ -172,9 +157,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 );
                 self.lifecycle
                     .begin_message_stream(identity.clone(), StreamingState::new())?;
-                chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
-                    &identity, delta, None,
-                )));
+                chunks.push(chat_choice_chunk(&identity, delta, None));
             }
             MessageStreamEvent::Ping(_) => {}
 
@@ -188,11 +171,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         if !block.text.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_text();
                             let identity = self.lifecycle.stream_identity()?;
-                            chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
-                                identity,
-                                block.into(),
-                                None,
-                            )));
+                            chunks.push(chat_choice_chunk(identity, block.into(), None));
                         }
                     }
                     ContentBlock::ToolUse(block) => {
@@ -202,7 +181,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         };
                         self.lifecycle.streaming_phase_mut()?.mark_tool_use();
                         let identity = self.lifecycle.stream_identity()?;
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                        chunks.push(chat_choice_chunk(
                             identity,
                             ToolStartDelta {
                                 index: tool_call_index,
@@ -210,7 +189,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             }
                             .into(),
                             None,
-                        )));
+                        ));
                     }
 
                     ContentBlock::Thinking(block) => {
@@ -220,11 +199,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         if !block.thinking.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                             let identity = self.lifecycle.stream_identity()?;
-                            chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
-                                identity,
-                                block.into(),
-                                None,
-                            )));
+                            chunks.push(chat_choice_chunk(identity, block.into(), None));
                         }
                     }
                     ContentBlock::RedactedThinking(_) => {
@@ -263,11 +238,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     if !delta.text.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_text();
                         let identity = self.lifecycle.stream_identity()?;
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
-                            identity,
-                            delta.into(),
-                            None,
-                        )));
+                        chunks.push(chat_choice_chunk(identity, delta.into(), None));
                     }
                 }
                 ContentBlockDelta::InputJsonDelta(delta) => {
@@ -277,7 +248,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         .get_tool_call_index(event.index)?;
 
                     let identity = self.lifecycle.stream_identity()?;
-                    chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                    chunks.push(chat_choice_chunk(
                         identity,
                         ToolArgumentsDelta {
                             index: tool_call_index,
@@ -285,7 +256,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         }
                         .into(),
                         None,
-                    )));
+                    ));
                 }
 
                 ContentBlockDelta::ThinkingDelta(delta) => {
@@ -297,11 +268,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     if !delta.thinking.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                         let identity = self.lifecycle.stream_identity()?;
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
-                            identity,
-                            delta.into(),
-                            None,
-                        )));
+                        chunks.push(chat_choice_chunk(identity, delta.into(), None));
                     }
                 }
                 ContentBlockDelta::SignatureDelta(_) => {
@@ -334,19 +301,19 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 match terminal_delta {
                     ChatTerminalDelta::Refusal(refusal) => {
                         phase.mark_refusal();
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                        chunks.push(chat_choice_chunk(
                             &identity,
                             ChatCompletionStreamResponseDelta {
                                 refusal: Some(refusal),
                                 ..Default::default()
                             },
                             None,
-                        )));
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                        ));
+                        chunks.push(chat_choice_chunk(
                             &identity,
                             ChatCompletionStreamResponseDelta::default(),
                             Some(finish_reason),
-                        )));
+                        ));
                     }
                     ChatTerminalDelta::Empty => {
                         if !emitted_representable_content {
@@ -355,11 +322,11 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                                     .to_string(),
                             ));
                         }
-                        chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
+                        chunks.push(chat_choice_chunk(
                             &identity,
                             ChatCompletionStreamResponseDelta::default(),
                             Some(finish_reason),
-                        )));
+                        ));
                     }
                 }
 
@@ -367,17 +334,14 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 // in a separate `choices: []` chunk, matching OpenAI's
                 // `stream_options.include_usage` shape, instead of merging it
                 // into a content or terminal choice chunk.
-                chunks.push(ChatStreamOutput::Chunk(chat_usage_chunk(
-                    &identity,
-                    event.usage.into(),
-                )));
+                chunks.push(chat_usage_chunk(&identity, event.usage.into()));
 
                 self.lifecycle.receive_terminal_delta(phase);
             }
             MessageStreamEvent::MessageStop(_) => {
                 let _phase = self.lifecycle.take_terminal_phase()?;
                 self.lifecycle.stop();
-                chunks.push(ChatStreamOutput::DoneSentinel);
+                done = true;
             }
             MessageStreamEvent::ContentBlockStop(event) => {
                 self.lifecycle
@@ -386,13 +350,17 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
             }
         }
 
-        chunks
+        let mut events = chunks
             .into_iter()
-            .map(ChatStreamOutput::encode)
-            .collect::<StreamTranslationResult<Vec<_>>>()
+            .map(StreamEvent::message)
+            .collect::<StreamTranslationResult<Vec<_>>>()?;
+        if done {
+            events.push(StreamEvent::done());
+        }
+        Ok(events)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
+    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_stopped() {
             return Ok(Vec::new());
         }
