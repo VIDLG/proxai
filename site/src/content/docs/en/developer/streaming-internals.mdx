@@ -151,6 +151,58 @@ pub(crate) enum BodyAction {
 
 Most observers return `Continue`. `InjectAndClose` is reserved for cases where ProxAI can produce a better client-facing stream failure than silently hanging or closing without context.
 
+## Translation pair internals
+
+Each translation direction's streaming implementation (e.g. `anthropic_messages -> openai_responses`) is split into three submodules under a `streaming/` directory:
+
+```text
+streaming/
+├── mod.rs       # translator: drives state + calls output, owns lifecycle and timing
+├── state.rs     # accumulation state machine: fields + register/append/stop/snapshot
+└── output.rs    # pure constructors: take data, return events; hold no streaming state
+```
+
+### Responsibility boundaries
+
+- **state** only accumulates and queries state; it does not know about the event loop.
+- **output** only constructs events/items; it holds no streaming state (no `&mut State`).
+- **mod** drives state, calls output, and manages lifecycle.
+
+Rule of thumb: if a function needs `&mut State` (advance counter, push items, read accumulated fields), it is state behavior and stays in state.rs; if it only takes data and returns an event, it is output construction and belongs in output.rs.
+
+### When `types.rs` is needed
+
+When state and output share the same internal data structure, a `streaming/types.rs` is the neutral home to avoid state ↔ output circular dependencies.
+
+Whether it is needed depends on the accumulation model:
+
+<ReferenceTable
+  columns={['Pair', 'Accumulation model', 'Finalize model', 'Needs types.rs?']}
+  rows={[
+    ['ant → responses', 'each content_block accumulates independently', '`stop_block` returns owned data; output consumes it', 'No (`StreamBlock` flows through output once, move semantics)'],
+    ['chat → responses', 'whole stream accumulates text/tool items', '`finish_completed_stream` is a state method that reads state fields multiple times', 'Yes (`StreamTextItem`/`StreamToolItem` are held by state and read repeatedly by output)'],
+  ]}
+/>
+
+Root cause: Anthropic's accumulation unit is the content_block (explicit open/close lifecycle, moved away on stop), while Chat's is the whole stream (finalized all at once at stream end, so state must retain data for repeated reads and terminal snapshot). The latter "state holds + output reads repeatedly" pattern naturally requires a neutral home for shared types.
+
+### Terminal state type choice
+
+`InboundStreamLifecycle<S, T>` has two type parameters: `S` is the streaming-phase state type, `T` is the terminal-phase state type. They may be the same or different, depending on how much data the terminal events need.
+
+<ReferenceTable
+  columns={['Pair', 'S (streaming)', 'T (terminal)', 'Why']}
+  rows={[
+    ['chat → ant', 'ChatStreamingState', 'ChatTerminalState (lightweight snapshot)', 'Terminal events are constructed on the spot by the translator; only finish_reason + refusal are needed. All blocks were closed during streaming.'],
+    ['chat → responses', 'StreamingState', 'StreamingState (same type)', 'Terminal events (`*.done` × N + `response.completed`) need the full accumulated data (text/tool items/usage), constructed by the state method `finish_completed_stream`.'],
+  ]}
+/>
+
+Root cause is the timing and data requirements of terminal event construction:
+
+- **Anthropic target** has an explicit block lifecycle (`content_block_stop`); each block is closed and emitted during streaming, so by `finish_reason` only a few snapshot values remain — a lightweight terminal type suffices.
+- **Responses target** has no block-close equivalent; text deltas and tool arguments stream until `finish_reason`, when `*.done` + `response.completed` are emitted all at once. Data must stay in state until the end, so terminal must be the full streaming state.
+
 ## Related docs
 
 <FeatureGrid

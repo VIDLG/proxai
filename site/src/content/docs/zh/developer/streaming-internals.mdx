@@ -420,6 +420,58 @@ ProviderStreamOutcome::UnfinishedTool(...)
   codeFirstColumn={false}
 />
 
+## Translation pair 内部结构
+
+每个翻译方向（例如 `anthropic_messages -> openai_responses`）的 streaming 实现统一拆为 `streaming/` 目录下的三个子模块：
+
+```text
+streaming/
+├── mod.rs       # translator：驱动 state + 调 output，唯一拥有 lifecycle 和时序知识
+├── state.rs     # 累积状态机：字段 + register/append/stop/snapshot 方法
+└── output.rs    # 纯构造器：接收数据返回事件，不持有 streaming 状态
+```
+
+### 职责边界
+
+- **state** 只做累积和状态查询，不关心事件循环。
+- **output** 只做事件/Item 构造，不持有 streaming 状态（不接 `&mut State`）。
+- **mod** 驱动 state、调 output、管理 lifecycle。
+
+判据：如果一个函数需要 `&mut State`（advance counter、push items、读累积字段），它是 state 行为，留在 state.rs；如果只接收数据返回事件，它是 output 构造，放 output.rs。
+
+### 何时需要 `types.rs`
+
+当 state 和 output 共享同一个内部数据结构时，需要 `streaming/types.rs` 作为中立归属，避免 state ↔ output 互相依赖。
+
+是否需要取决于累积模型：
+
+<ReferenceTable
+  columns={['Pair', '累积模型', 'finalize 模型', '是否需要 types.rs']}
+  rows={[
+    ['ant → responses', '每个 content_block 独立累积', '`stop_block` 返回 owned 数据，output 消耗它', '否（`StreamBlock` 单向流过 output，move 语义）'],
+    ['chat → responses', '整条流累积 text/tool items', '`finish_completed_stream` 是 state 方法，多次读 state 字段', '是（`StreamTextItem`/`StreamToolItem` 被 state 持有 + output 多次读）'],
+  ]}
+/>
+
+根本原因：ant 的累积单位是 content_block（明确的开/关生命周期，stop 后 move 走），chat 的累积单位是整条流（流结束才统一 finalize，state 需要一直持有数据供多次读取和 terminal snapshot）。后者的“state 持有 + output 反复读”模式，自然让共享类型需要中立归属。
+
+### Terminal state 类型选择
+
+`InboundStreamLifecycle<S, T>` 有两个类型参数：`S` 是 streaming phase 的 state 类型，`T` 是 terminal phase 的 state 类型。它们可以相同也可以不同，取决于终止事件需要多少数据。
+
+<ReferenceTable
+  columns={['Pair', 'S（streaming）', 'T（terminal）', '为什么']}
+  rows={[
+    ['chat → ant', 'ChatStreamingState', 'ChatTerminalState（轻量快照）', '终止事件在 translator 当场构造，只需要 finish_reason + refusal。所有 blocks 在 streaming 阶段已 close。'],
+    ['chat → responses', 'StreamingState', 'StreamingState（同一类型）', '终止事件（`*.done` × N + `response.completed`）需要完整累积数据（text/tool items/usage），由 state 方法 `finish_completed_stream` 构造。'],
+  ]}
+/>
+
+根因是终止事件的构造时机和数据需求：
+
+- **ant 目标**有明确的 block 生命周期（`content_block_stop`），每个 block 在 streaming 阶段就关闭并发出，到 `finish_reason` 时 streaming state 里只剩少量快照值，可以用轻量 terminal 类型。
+- **responses 目标**没有 block close 的对等物，text delta 和 tool arguments 一直流到 `finish_reason` 才统一发 `*.done` + `response.completed`。数据必须留在 state 里等到最后，所以 terminal 必须是完整的 streaming state。
+
 ## 设计原则
 
 这块代码遵循以下原则：

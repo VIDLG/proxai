@@ -235,8 +235,28 @@ Do not merge multiple Chat choices into one Anthropic `content[]` array and do
 not silently keep only the first choice. Both approaches lose protocol
 semantics: per-choice `index`, independent `finish_reason`, and the fact that
 the choices are alternatives rather than one assistant turn. When translating a
-Chat response to Anthropic Messages, require exactly one choice and reject
-multi-choice responses.
+Chat response to Anthropic Messages or OpenAI Responses, require exactly one
+choice and reject multi-choice responses.
+
+### Chat -> Responses output placement
+
+OpenAI Responses represents returned model work as `response.output[]`, a
+sequence of typed output items. A Chat assistant message maps into that sequence
+by layer:
+
+<ProtocolCompare
+  columns={['Chat response field', 'Responses placement', 'Ordering']}
+  rows={[
+    ['`choices[0].message.content`', '`OutputItem::Message(OutputMessage { content: [...] })` with `OutputMessageContent::OutputText`', 'First, when non-empty.'],
+    ['`choices[0].message.refusal`', 'Same `OutputMessage.content[]`, as `OutputMessageContent::Refusal`', 'Alongside message content; Responses has no message-level refusal field.'],
+    ['`choices[0].message.tool_calls[]`', 'Separate `function_call` / `custom_tool_call` output items', 'After the assistant message content item.'],
+  ]}
+/>
+
+Do not put tool calls inside `OutputMessage.content[]`: Responses models tool
+calls as sibling output items, while `OutputMessage.content[]` holds the message
+content parts such as text and refusal. If a Chat response has only tool calls,
+the translated Responses output contains only those tool-call items.
 
 ### Chat -> Anthropic response and stream semantics
 

@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-use super::{TranslationError, TranslationResult};
+use super::TranslationResult;
 
 pub(crate) fn translate_request(
     request_protocol: RequestProtocol,
@@ -35,10 +35,7 @@ pub(crate) fn translate_request(
             )
         }
         (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses) => {
-            Err(TranslationError::UnsupportedRequestPair {
-                from: request_protocol,
-                to: provider_protocol,
-            })
+            super::openai_chat_completions::to_openai_responses::translate_request_payload(payload)
         }
     }
 }

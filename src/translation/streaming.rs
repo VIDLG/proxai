@@ -372,10 +372,6 @@ impl<S, T> InboundStreamLifecycle<S, T> {
         matches!(self.phase, InboundStreamPhase::Waiting)
     }
 
-    pub(crate) fn is_terminal(&self) -> bool {
-        matches!(self.phase, InboundStreamPhase::Terminal(_))
-    }
-
     pub(crate) fn is_stopped(&self) -> bool {
         matches!(self.phase, InboundStreamPhase::Stopped)
     }
