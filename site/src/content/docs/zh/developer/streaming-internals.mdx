@@ -72,16 +72,6 @@ import { EventTimeline, FeatureGrid, PipelineStrip, ProxaiCallout, ReferenceTabl
   ]}
 />
 
-## 相关文档
-
-<FeatureGrid
-  items={[
-    { title: '架构', href: '/zh/developer/architecture', icon: 'architecture', description: '流式处理在类型化 pipeline 中的位置。' },
-    { title: '协议转换', href: '/zh/developer/protocol-conversion', icon: 'flow', description: '流式转换如何在 carrier 边界保持纯函数。' },
-    { title: '流式行为', href: '/zh/protocol/streaming-behavior', icon: 'rocket', description: '面向用户的流式行为与 terminal event 预期。' },
-  ]}
-/>
-
 ## 总体分层
 
 streaming response 的处理大致分为三层：
@@ -170,6 +160,33 @@ state.rs
 - `state.rs` 负责协议事件到状态的归纳。
 - `SseEventScanner` 只在 observer 中持有，chunk 只扫描一次。
 - 不再有额外的 `tracker.rs` wrapper。
+
+## Translation stream 生命周期
+
+跨协议 streaming translation 在 `translation/streaming.rs` 中使用协议无关的四阶段 carrier：
+
+<ReferenceTable
+  columns={['阶段', '含义']}
+  rows={[
+    ['`Waiting`', '还没有语义 source message/chunk 初始化 translated stream。'],
+    ['`Streaming(StreamingPhase<S>)`', 'source delta 正在进行；pair-private state 和目标协议可表达 output 的 emitted tracker 都在 `StreamingPhase<S>` 中。'],
+    ['`Terminal(T)`', 'source protocol 已经发出语义终止信号，但 carrier/source stop 还没有完全消费。'],
+    ['`Stopped`', 'translator 已经发出最终的目标协议 stream 输出。'],
+  ]}
+/>
+
+`Terminal(T)` 有意保持泛型，因为不同 source protocol 的终止方式不同：
+
+<ReferenceTable
+  columns={['Inbound source', 'Terminal payload', '原因']}
+  rows={[
+    ['Anthropic Messages', '`StreamingPhase<S>`', '`message_delta` 携带 stop/usage 终态语义，但后面仍然必须出现 `message_stop`。translator 需要保留完整 phase，直到 `message_stop` 消费它。'],
+    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` 已经结束语义 delta。之后的 `[DONE]`、EOF 或 usage-only chunk 只需要目标协议专属的 terminal summary，例如输出 Anthropic 时的 `ChatTerminalState`，或输出 Responses 时的 `()`。'],
+  ]}
+/>
+
+`anthropic_messages::streaming` 和 `openai_chat_completions::streaming` 这类协议 wrapper 负责保留 source-specific event ordering 和错误文案。pair translator 仍然负责目标协议是否可表达、output item/block emission，以及 terminal flush 行为。
+
 
 ## OpenAI Responses observer
 
@@ -413,3 +430,13 @@ ProviderStreamOutcome::UnfinishedTool(...)
 5. **诊断数据就近拥有**
    - OpenAI Responses recent tail 由 Responses observer 维护。
    - snapshot 携带诊断所需 tail，diagnostics 只负责写报告。
+
+## 相关文档
+
+<FeatureGrid
+  items={[
+    { title: '架构', href: '/zh/developer/architecture', icon: 'architecture', description: '流式处理在类型化 pipeline 中的位置。' },
+    { title: '协议转换', href: '/zh/developer/protocol-conversion', icon: 'flow', description: '流式转换如何在 carrier 边界保持纯函数。' },
+    { title: '流式行为', href: '/zh/protocol/streaming-behavior', icon: 'rocket', description: '面向用户的流式行为与 terminal event 预期。' },
+  ]}
+/>

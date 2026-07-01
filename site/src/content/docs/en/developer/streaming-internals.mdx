@@ -100,6 +100,32 @@ OpenAI Responses has extra tool-call semantics. If tool-call arguments start but
   ]}
 />
 
+## Translation stream lifecycle
+
+Cross-protocol streaming translation uses a protocol-neutral four-phase carrier in `translation/streaming.rs`:
+
+<ReferenceTable
+  columns={['Phase', 'Meaning']}
+  rows={[
+    ['`Waiting`', 'No semantic source message/chunk has initialized the translated stream yet.'],
+    ['`Streaming(StreamingPhase<S>)`', 'Source deltas are active; pair-private state and target-representable output tracking live in `StreamingPhase<S>`.'],
+    ['`Terminal(T)`', 'The source protocol has emitted its semantic terminal signal, but the carrier/source stop has not been fully consumed.'],
+    ['`Stopped`', 'The translator has emitted its final target stream output.'],
+  ]}
+/>
+
+`Terminal(T)` is intentionally generic because source protocols terminate differently:
+
+<ReferenceTable
+  columns={['Inbound source', 'Terminal payload', 'Reason']}
+  rows={[
+    ['Anthropic Messages', '`StreamingPhase<S>`', '`message_delta` carries terminal stop/usage semantics, but `message_stop` is still required. The translator keeps the full phase until `message_stop` consumes it.'],
+    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` ends semantic deltas. Later `[DONE]`, EOF, or usage-only chunks need only a target-specific terminal summary, such as `ChatTerminalState` for Anthropic output or `()` for Responses output.'],
+  ]}
+/>
+
+Protocol wrappers such as `anthropic_messages::streaming` and `openai_chat_completions::streaming` keep source-specific event ordering and error wording. Pair translators remain responsible for target representability checks, output item/block emission, and terminal flush behavior.
+
 ## BodyAction
 
 ```rust

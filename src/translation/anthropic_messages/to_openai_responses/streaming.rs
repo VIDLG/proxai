@@ -13,7 +13,7 @@ use crate::protocol::openai_responses::{
     ResponseStreamEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseUsage, Status,
 };
 use crate::sse::SseEvent;
-use crate::translation::anthropic_messages::stream_lifecycle::{
+use crate::translation::anthropic_messages::streaming::{
     AnthropicInboundLifecycle, ensure_anthropic_stream_event,
 };
 use crate::translation::streaming::{
@@ -428,10 +428,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
-                if !matches!(
-                    self.lifecycle,
-                    AnthropicInboundLifecycle::WaitingForMessageStart
-                ) {
+                if !self.lifecycle.is_waiting_for_message_start() {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted duplicate message_start".to_string(),
                     ));

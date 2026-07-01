@@ -5,37 +5,39 @@
 //! inbound event allowlisting, and the common tracker for target-representable
 //! output progress while a semantic stream is active.
 
+use delegate::delegate;
 use serde_json::Value;
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::translation::streaming::{
+    InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
 
-#[derive(Debug, Default)]
-pub(crate) enum AnthropicInboundLifecycle<S> {
-    #[default]
-    WaitingForMessageStart,
-    Streaming(StreamingPhase<S>),
-    ReceivedTerminalDelta(StreamingPhase<S>),
-    Stopped,
+#[derive(Debug)]
+pub(crate) struct AnthropicInboundLifecycle<S> {
+    inner: InboundStreamLifecycle<S, StreamingPhase<S>>,
+}
+
+impl<S> Default for AnthropicInboundLifecycle<S> {
+    fn default() -> Self {
+        Self {
+            inner: InboundStreamLifecycle::default(),
+        }
+    }
 }
 
 impl<S> AnthropicInboundLifecycle<S> {
-    pub(crate) fn begin_streaming(&mut self, state: S) {
-        *self = Self::Streaming(StreamingPhase::new(state));
-    }
-
-    pub(crate) fn receive_terminal_delta(&mut self, phase: StreamingPhase<S>) {
-        *self = Self::ReceivedTerminalDelta(phase);
-    }
-
-    pub(crate) fn stop(&mut self) {
-        *self = Self::Stopped;
-    }
-
-    pub(crate) fn is_waiting_for_message_start(&self) -> bool {
-        matches!(self, Self::WaitingForMessageStart)
+    delegate! {
+        to self.inner {
+            pub(crate) fn begin_streaming(&mut self, state: S);
+            #[call(receive_terminal)]
+            pub(crate) fn receive_terminal_delta(&mut self, phase: StreamingPhase<S>);
+            pub(crate) fn stop(&mut self);
+            #[call(is_waiting)]
+            pub(crate) fn is_waiting_for_message_start(&self) -> bool;
+            pub(crate) fn is_stopped(&self) -> bool;
+        }
     }
 
     pub(crate) fn ensure_event_allowed(
@@ -46,8 +48,8 @@ impl<S> AnthropicInboundLifecycle<S> {
             return Ok(());
         }
 
-        match self {
-            Self::WaitingForMessageStart => {
+        match self.inner.phase_kind() {
+            InboundStreamLifecyclePhase::Waiting => {
                 if matches!(event, MessageStreamEvent::MessageStart(_)) {
                     Ok(())
                 } else {
@@ -56,7 +58,7 @@ impl<S> AnthropicInboundLifecycle<S> {
                     ))
                 }
             }
-            Self::Streaming(_) => {
+            InboundStreamLifecyclePhase::Streaming => {
                 if matches!(event, MessageStreamEvent::MessageStop(_)) {
                     Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted message_stop before terminal message_delta"
@@ -66,7 +68,7 @@ impl<S> AnthropicInboundLifecycle<S> {
                     Ok(())
                 }
             }
-            Self::ReceivedTerminalDelta(_) => {
+            InboundStreamLifecyclePhase::Terminal => {
                 if matches!(event, MessageStreamEvent::MessageStop(_)) {
                     Ok(())
                 } else {
@@ -76,32 +78,32 @@ impl<S> AnthropicInboundLifecycle<S> {
                     ))
                 }
             }
-            Self::Stopped => Err(StreamTranslationError::Semantic(
+            InboundStreamLifecyclePhase::Stopped => Err(StreamTranslationError::Semantic(
                 "Anthropic stream emitted semantic event after message_stop".to_string(),
             )),
         }
     }
 
     pub(crate) fn streaming_state(&self) -> StreamTranslationResult<&S> {
-        match self {
-            Self::Streaming(phase) => Ok(phase.state()),
-            _ => Err(StreamTranslationError::Semantic(
-                "Anthropic stream active content event occurred outside streaming state"
-                    .to_string(),
-            )),
-        }
+        self.inner
+            .streaming_phase()
+            .map(StreamingPhase::state)
+            .ok_or_else(|| {
+                StreamTranslationError::Semantic(
+                    "Anthropic stream active content event occurred outside streaming state"
+                        .to_string(),
+                )
+            })
     }
 
     pub(crate) fn streaming_phase_mut(
         &mut self,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
-        match self {
-            Self::Streaming(phase) => Ok(phase),
-            _ => Err(StreamTranslationError::Semantic(
-                "Anthropic stream active content event occurred outside streaming state"
-                    .to_string(),
-            )),
-        }
+        self.inner
+            .require_streaming_phase_mut(RequireStreamingPhaseContext {
+                source: "Anthropic",
+                event: "active content event",
+            })
     }
 
     pub(crate) fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut S> {
@@ -109,32 +111,19 @@ impl<S> AnthropicInboundLifecycle<S> {
     }
 
     pub(crate) fn take_streaming_phase(&mut self) -> StreamTranslationResult<StreamingPhase<S>> {
-        match std::mem::take(self) {
-            Self::Streaming(phase) => Ok(phase),
-            other => {
-                *self = other;
-                Err(StreamTranslationError::Semantic(
-                    "Anthropic stream terminal event occurred outside streaming state".to_string(),
-                ))
-            }
-        }
+        self.inner.take_streaming_phase(|| {
+            StreamTranslationError::Semantic(
+                "Anthropic stream terminal event occurred outside streaming state".to_string(),
+            )
+        })
     }
 
     pub(crate) fn take_terminal_phase(&mut self) -> StreamTranslationResult<StreamingPhase<S>> {
-        match std::mem::take(self) {
-            Self::ReceivedTerminalDelta(phase) => Ok(phase),
-            other => {
-                *self = other;
-                Err(StreamTranslationError::Semantic(
-                    "Anthropic stream message_stop occurred before terminal message_delta"
-                        .to_string(),
-                ))
-            }
-        }
-    }
-
-    pub(crate) fn is_stopped(&self) -> bool {
-        matches!(self, Self::Stopped)
+        self.inner.take_terminal(|| {
+            StreamTranslationError::Semantic(
+                "Anthropic stream message_stop occurred before terminal message_delta".to_string(),
+            )
+        })
     }
 
     pub(crate) fn unexpected_stream_end_error(
@@ -142,27 +131,29 @@ impl<S> AnthropicInboundLifecycle<S> {
         end: SseStreamEnd,
         target_protocol_label: &'static str,
     ) -> StreamTranslationError {
-        let end_label = match end {
-            SseStreamEnd::DoneSentinel => "[DONE]",
-            SseStreamEnd::Eof => "EOF",
-        };
-
-        let message = match self {
-            Self::WaitingForMessageStart => {
-                format!("Anthropic stream reached {end_label} before message_start")
+        let message = match self.inner.phase_kind() {
+            InboundStreamLifecyclePhase::Waiting => {
+                format!("Anthropic stream reached {end} before message_start")
             }
-            Self::ReceivedTerminalDelta(_) => {
+            InboundStreamLifecyclePhase::Terminal => {
                 format!(
-                    "Anthropic stream reached {end_label} after terminal message_delta but before message_stop"
+                    "Anthropic stream reached {end} after terminal message_delta but before message_stop"
                 )
             }
-            Self::Streaming(phase) if phase.emitted_any() => {
-                format!("Anthropic stream reached {end_label} before terminal message_delta")
+            InboundStreamLifecyclePhase::Streaming => {
+                let phase = self
+                    .inner
+                    .streaming_phase()
+                    .expect("streaming phase exists");
+                if phase.emitted_any() {
+                    format!("Anthropic stream reached {end} before terminal message_delta")
+                } else {
+                    format!(
+                        "Anthropic stream completed without {target_protocol_label}-representable content, thinking, refusal, or tool_use blocks"
+                    )
+                }
             }
-            Self::Streaming(_) => format!(
-                "Anthropic stream completed without {target_protocol_label}-representable content, thinking, refusal, or tool_use blocks"
-            ),
-            Self::Stopped => String::new(),
+            InboundStreamLifecyclePhase::Stopped => String::new(),
         };
         StreamTranslationError::Semantic(message)
     }

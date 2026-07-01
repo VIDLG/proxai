@@ -3,6 +3,7 @@ use axum::body::Bytes;
 use delegate::delegate;
 use futures_util::StreamExt;
 use getset::{Getters, MutGetters};
+use strum::Display;
 
 use crate::error::ErrorResponseFields;
 use crate::http_support::{ByteStream, into_byte_stream};
@@ -43,6 +44,15 @@ impl StreamTranslatorErrorStage {
 pub(crate) enum SseStreamEnd {
     DoneSentinel,
     Eof,
+}
+
+impl std::fmt::Display for SseStreamEnd {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DoneSentinel => formatter.write_str("[DONE]"),
+            Self::Eof => formatter.write_str("EOF"),
+        }
+    }
 }
 
 pub(crate) trait StreamingEventTranslator: Send + 'static {
@@ -231,4 +241,139 @@ impl EmittedContentTracker {
     pub(crate) fn emitted_any(&self) -> bool {
         self.emitted_text || self.emitted_refusal || self.emitted_tool_use || self.emitted_reasoning
     }
+}
+
+/// Protocol-neutral inbound stream lifecycle carrier.
+///
+/// This type intentionally models only the mechanical four-phase shape shared
+/// by source protocols:
+///
+/// - `Waiting`: no semantic message/chunk has initialized the stream yet.
+/// - `Streaming`: semantic deltas are active and target-representable output is
+///   tracked in `StreamingPhase<S>`.
+/// - `Terminal(T)`: the source protocol has emitted its semantic terminal
+///   signal, but the carrier/source stop has not been fully consumed yet.
+/// - `Stopped`: the target translator has completed its final stream output.
+///
+/// The terminal payload is deliberately generic. Anthropic inbound streams keep
+/// the full `StreamingPhase<S>` as `T` because `message_delta` is followed by a
+/// required `message_stop`. Chat inbound streams use pair-specific terminal
+/// summaries because `finish_reason` ends semantic deltas and later chunks are
+/// carrier/usage handling rather than more source content.
+#[derive(Debug)]
+pub(crate) enum InboundStreamLifecycle<S, T> {
+    Waiting,
+    Streaming(StreamingPhase<S>),
+    Terminal(T),
+    Stopped,
+}
+
+impl<S, T> Default for InboundStreamLifecycle<S, T> {
+    fn default() -> Self {
+        Self::Waiting
+    }
+}
+
+impl<S, T> InboundStreamLifecycle<S, T> {
+    pub(crate) fn begin_streaming(&mut self, state: S) {
+        *self = Self::Streaming(StreamingPhase::new(state));
+    }
+
+    pub(crate) fn receive_terminal(&mut self, terminal: T) {
+        *self = Self::Terminal(terminal);
+    }
+
+    pub(crate) fn stop(&mut self) {
+        *self = Self::Stopped;
+    }
+
+    pub(crate) fn is_waiting(&self) -> bool {
+        matches!(self, Self::Waiting)
+    }
+
+    pub(crate) fn is_terminal(&self) -> bool {
+        matches!(self, Self::Terminal(_))
+    }
+
+    pub(crate) fn is_stopped(&self) -> bool {
+        matches!(self, Self::Stopped)
+    }
+
+    pub(crate) fn phase_kind(&self) -> InboundStreamLifecyclePhase {
+        match self {
+            Self::Waiting => InboundStreamLifecyclePhase::Waiting,
+            Self::Streaming(_) => InboundStreamLifecyclePhase::Streaming,
+            Self::Terminal(_) => InboundStreamLifecyclePhase::Terminal,
+            Self::Stopped => InboundStreamLifecyclePhase::Stopped,
+        }
+    }
+
+    pub(crate) fn streaming_phase(&self) -> Option<&StreamingPhase<S>> {
+        match self {
+            Self::Streaming(phase) => Some(phase),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn require_streaming_phase_mut(
+        &mut self,
+        context: RequireStreamingPhaseContext,
+    ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
+        let phase_kind = self.phase_kind();
+        match self {
+            Self::Streaming(phase) => Ok(phase),
+            _ => Err(StreamTranslationError::Semantic(format!(
+                "{} stream emitted {} while lifecycle was {}; expected streaming",
+                context.source, context.event, phase_kind
+            ))),
+        }
+    }
+
+    pub(crate) fn terminal(&self) -> Option<&T> {
+        match self {
+            Self::Terminal(terminal) => Some(terminal),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn take_streaming_phase(
+        &mut self,
+        error: impl FnOnce() -> StreamTranslationError,
+    ) -> StreamTranslationResult<StreamingPhase<S>> {
+        match std::mem::take(self) {
+            Self::Streaming(phase) => Ok(phase),
+            other => {
+                *self = other;
+                Err(error())
+            }
+        }
+    }
+
+    pub(crate) fn take_terminal(
+        &mut self,
+        error: impl FnOnce() -> StreamTranslationError,
+    ) -> StreamTranslationResult<T> {
+        match std::mem::take(self) {
+            Self::Terminal(terminal) => Ok(terminal),
+            other => {
+                *self = other;
+                Err(error())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[strum(serialize_all = "snake_case")]
+pub(crate) enum InboundStreamLifecyclePhase {
+    Waiting,
+    Streaming,
+    Terminal,
+    Stopped,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RequireStreamingPhaseContext {
+    pub(crate) source: &'static str,
+    pub(crate) event: &'static str,
 }

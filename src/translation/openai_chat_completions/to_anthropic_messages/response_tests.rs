@@ -576,7 +576,9 @@ data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"cre
     let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
 
     assert!(text.contains("stream translation error"));
-    assert!(text.contains("after the Anthropic message was stopped"));
+    assert!(text.contains(
+        "Chat stream emitted choice deltas while lifecycle was stopped; expected streaming"
+    ));
 }
 
 #[tokio::test]

@@ -13,7 +13,7 @@ use crate::protocol::openai::chat_completions::{
     CreateChatCompletionStreamResponse, FinishReason, Role,
 };
 use crate::sse::SseEvent;
-use crate::translation::openai_chat_completions::stream_lifecycle::{
+use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, ensure_same_stream_identity, stream_identity,
 };
 use crate::translation::streaming::{
@@ -277,7 +277,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
 
         let choice = single_representable_stream_choice(chunk.choices)?;
 
-        let phase = self.lifecycle.streaming_phase_mut("Anthropic")?;
+        let phase = self.lifecycle.streaming_phase_mut()?;
         phase.state_mut().register_choice_index(choice.index)?;
 
         if let Some(content) = choice.delta.content.filter(|content| !content.is_empty()) {
@@ -321,29 +321,26 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                 finish_reason,
                 refusal: std::mem::take(&mut phase.state_mut().refusal),
             };
-            self.lifecycle = ChatInboundLifecycle::ReceivedTerminalFinish(terminal);
+            self.lifecycle.receive_terminal_finish(terminal);
         }
 
         encode_outputs(outputs)
     }
 
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<Bytes>> {
-        match &self.lifecycle {
-            ChatInboundLifecycle::WaitingForFirstChunk => {
-                Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
-            }
-            ChatInboundLifecycle::Streaming(_) => {
-                Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
-            }
-            ChatInboundLifecycle::ReceivedTerminalFinish(terminal) => {
-                let outputs = vec![
-                    message_delta(terminal, None),
-                    MessageStreamEvent::MessageStop(MessageStopEvent),
-                ];
-                self.lifecycle = ChatInboundLifecycle::Stopped;
-                encode_outputs(outputs)
-            }
-            ChatInboundLifecycle::Stopped => Ok(Vec::new()),
+        if self.lifecycle.is_waiting_for_first_chunk() {
+            Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
+        } else if let Some(terminal) = self.lifecycle.terminal() {
+            let outputs = vec![
+                message_delta(terminal, None),
+                MessageStreamEvent::MessageStop(MessageStopEvent),
+            ];
+            self.lifecycle.stop();
+            encode_outputs(outputs)
+        } else if self.lifecycle.is_stopped() {
+            Ok(Vec::new())
+        } else {
+            Err(self.lifecycle.unexpected_stream_end_error(end, "Anthropic"))
         }
     }
 }
@@ -367,32 +364,29 @@ impl MessagesStreamTranslator {
         };
         ensure_same_stream_identity(identity, chunk, "msg_")?;
 
-        let outputs = match &self.lifecycle {
-            ChatInboundLifecycle::ReceivedTerminalFinish(terminal) => vec![
+        let outputs = if let Some(terminal) = self.lifecycle.terminal() {
+            vec![
                 message_delta(terminal, Some(usage)),
                 MessageStreamEvent::MessageStop(MessageStopEvent),
-            ],
-            ChatInboundLifecycle::WaitingForFirstChunk => {
-                return Err(StreamTranslationError::Semantic(
-                    "Chat stream emitted a usage-only chunk before any assistant message chunk"
-                        .to_string(),
-                ));
-            }
-            ChatInboundLifecycle::Streaming(_) => {
-                return Err(StreamTranslationError::Semantic(
-                    "Chat stream emitted a usage-only chunk before a terminal finish_reason"
-                        .to_string(),
-                ));
-            }
-            ChatInboundLifecycle::Stopped => {
-                return Err(StreamTranslationError::Semantic(
-                    "Chat stream emitted a usage-only chunk after the Anthropic message was stopped"
-                        .to_string(),
-                ));
-            }
+            ]
+        } else if self.lifecycle.is_waiting_for_first_chunk() {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream emitted a usage-only chunk before any assistant message chunk"
+                    .to_string(),
+            ));
+        } else if self.lifecycle.is_stopped() {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream emitted a usage-only chunk after the Anthropic message was stopped"
+                    .to_string(),
+            ));
+        } else {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream emitted a usage-only chunk before a terminal finish_reason"
+                    .to_string(),
+            ));
         };
 
-        self.lifecycle = ChatInboundLifecycle::Stopped;
+        self.lifecycle.stop();
         Ok(outputs)
     }
 

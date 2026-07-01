@@ -11,7 +11,7 @@ use crate::protocol::openai::chat_completions::{
     FunctionType, Role,
 };
 use crate::sse::{SseEvent, done_sentinel_bytes};
-use crate::translation::anthropic_messages::stream_lifecycle::{
+use crate::translation::anthropic_messages::streaming::{
     AnthropicInboundLifecycle, ensure_anthropic_stream_event,
 };
 use crate::translation::streaming::{

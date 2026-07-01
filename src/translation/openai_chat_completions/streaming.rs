@@ -14,41 +14,50 @@
 //! the lifecycle wraps it in `StreamingPhase` so output-progress tracking is
 //! shared across target protocols.
 
+use delegate::delegate;
+
 use crate::protocol::openai::chat_completions::CreateChatCompletionStreamResponse;
 use crate::translation::streaming::{
+    InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
 
-#[derive(Debug, Default)]
-pub(crate) enum ChatInboundLifecycle<S, T> {
-    #[default]
-    WaitingForFirstChunk,
-    Streaming(StreamingPhase<S>),
-    ReceivedTerminalFinish(T),
-    Stopped,
+#[derive(Debug)]
+pub(crate) struct ChatInboundLifecycle<S, T> {
+    inner: InboundStreamLifecycle<S, T>,
+}
+
+impl<S, T> Default for ChatInboundLifecycle<S, T> {
+    fn default() -> Self {
+        Self {
+            inner: InboundStreamLifecycle::default(),
+        }
+    }
 }
 
 impl<S, T> ChatInboundLifecycle<S, T> {
-    pub(crate) fn begin_streaming(&mut self, state: S) {
-        *self = Self::Streaming(StreamingPhase::new(state));
+    delegate! {
+        to self.inner {
+            pub(crate) fn begin_streaming(&mut self, state: S);
+            #[call(receive_terminal)]
+            pub(crate) fn receive_terminal_finish(&mut self, terminal: T);
+            pub(crate) fn stop(&mut self);
+            #[call(is_waiting)]
+            pub(crate) fn is_waiting_for_first_chunk(&self) -> bool;
+            pub(crate) fn is_stopped(&self) -> bool;
+            pub(crate) fn is_terminal(&self) -> bool;
+            pub(crate) fn terminal(&self) -> Option<&T>;
+        }
     }
 
     pub(crate) fn streaming_phase_mut(
         &mut self,
-        target_protocol_label: &'static str,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
-        match self {
-            Self::Streaming(phase) => Ok(phase),
-            Self::WaitingForFirstChunk => Err(StreamTranslationError::Semantic(format!(
-                "Chat stream emitted choice deltas before the {target_protocol_label} message was initialized"
-            ))),
-            Self::ReceivedTerminalFinish(_) => Err(StreamTranslationError::Semantic(
-                "Chat stream emitted choice deltas after a terminal finish_reason".to_string(),
-            )),
-            Self::Stopped => Err(StreamTranslationError::Semantic(format!(
-                "Chat stream emitted choice deltas after the {target_protocol_label} message was stopped"
-            ))),
-        }
+        self.inner
+            .require_streaming_phase_mut(RequireStreamingPhaseContext {
+                source: "Chat",
+                event: "choice deltas",
+            })
     }
 
     pub(crate) fn unexpected_stream_end_error(
@@ -56,29 +65,33 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         end: SseStreamEnd,
         target_protocol_label: &'static str,
     ) -> StreamTranslationError {
-        let end_label = match end {
-            SseStreamEnd::DoneSentinel => "[DONE]",
-            SseStreamEnd::Eof => "EOF",
-        };
-
-        let message = match self {
-            Self::WaitingForFirstChunk => {
-                format!("Chat stream reached {end_label} before any assistant message chunk")
+        let message = match self.inner.phase_kind() {
+            InboundStreamLifecyclePhase::Waiting => {
+                format!("Chat stream reached {end} before any assistant message chunk")
             }
-            Self::Streaming(phase) if phase.emitted_any() => match end {
-                SseStreamEnd::DoneSentinel => {
-                    "Chat stream emitted [DONE] before a terminal finish_reason".to_string()
+            InboundStreamLifecyclePhase::Streaming => {
+                let phase = self
+                    .inner
+                    .streaming_phase()
+                    .expect("streaming phase exists");
+                if phase.emitted_any() {
+                    match end {
+                        SseStreamEnd::DoneSentinel => {
+                            "Chat stream emitted [DONE] before a terminal finish_reason".to_string()
+                        }
+                        SseStreamEnd::Eof => {
+                            "Chat stream reached EOF before a terminal finish_reason".to_string()
+                        }
+                    }
+                } else {
+                    format!(
+                        "Chat stream completed without {target_protocol_label}-representable content, refusal, or function tool calls"
+                    )
                 }
-                SseStreamEnd::Eof => {
-                    "Chat stream reached EOF before a terminal finish_reason".to_string()
-                }
-            },
-            Self::Streaming(_) => format!(
-                "Chat stream completed without {}-representable content, refusal, or function tool calls",
-                target_protocol_label
-            ),
-            Self::ReceivedTerminalFinish(_) => String::new(),
-            Self::Stopped => String::new(),
+            }
+            InboundStreamLifecyclePhase::Terminal | InboundStreamLifecyclePhase::Stopped => {
+                String::new()
+            }
         };
         StreamTranslationError::Semantic(message)
     }
