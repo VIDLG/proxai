@@ -11,9 +11,7 @@ use crate::protocol::openai::chat_completions::{
     FunctionType, Role,
 };
 use crate::sse::{SseEvent, done_sentinel_bytes};
-use crate::translation::anthropic_messages::streaming::{
-    AnthropicInboundLifecycle, ensure_anthropic_stream_event,
-};
+use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::streaming::{
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
     StreamingEventTranslator, encode_sse_json,
@@ -168,26 +166,18 @@ impl ChatStreamOutput {
 
 impl StreamingEventTranslator for ChatCompletionStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let payload = event.payload_with_type()?;
-        ensure_anthropic_stream_event(&payload)?;
-        let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
-        self.lifecycle.ensure_event_allowed(&parsed)?;
+        let parsed = self.lifecycle.parse_allowed_stream_event(event)?;
         let mut chunks = Vec::new();
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
-                if !self.lifecycle.is_waiting_for_message_start() {
-                    return Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted duplicate message_start".to_string(),
-                    ));
-                }
                 let delta: ChatCompletionStreamResponseDelta = (&event).into();
                 let identity = StreamIdentity::new(
                     format!("chatcmpl_{}", event.message.id),
                     event.message.model,
                 );
                 self.lifecycle
-                    .begin_streaming(StreamingState::new(identity.clone()));
+                    .begin_message_stream(StreamingState::new(identity.clone()))?;
                 chunks.push(ChatStreamOutput::Chunk(chat_choice_chunk(
                     &identity, delta, None,
                 )));

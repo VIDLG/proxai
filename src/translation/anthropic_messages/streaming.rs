@@ -9,6 +9,7 @@ use delegate::delegate;
 use serde_json::Value;
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
+use crate::sse::SseEvent;
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamTranslationError, StreamTranslationResult, StreamingPhase,
@@ -30,58 +31,85 @@ impl<S> Default for AnthropicInboundLifecycle<S> {
 impl<S> AnthropicInboundLifecycle<S> {
     delegate! {
         to self.inner {
-            pub(crate) fn begin_streaming(&mut self, state: S);
             #[call(receive_terminal)]
             pub(crate) fn receive_terminal_delta(&mut self, phase: StreamingPhase<S>);
             pub(crate) fn stop(&mut self);
-            #[call(is_waiting)]
-            pub(crate) fn is_waiting_for_message_start(&self) -> bool;
             pub(crate) fn is_stopped(&self) -> bool;
         }
     }
 
-    pub(crate) fn ensure_event_allowed(
+    pub(crate) fn parse_allowed_stream_event(
         &self,
-        event: &MessageStreamEvent,
-    ) -> StreamTranslationResult<()> {
-        if matches!(event, MessageStreamEvent::Ping(_)) {
-            return Ok(());
+        event: SseEvent,
+    ) -> StreamTranslationResult<MessageStreamEvent> {
+        let payload = event.payload_with_type()?;
+        match payload.get("type").and_then(Value::as_str) {
+            Some(
+                "ping"
+                | "message_start"
+                | "content_block_start"
+                | "content_block_delta"
+                | "content_block_stop"
+                | "message_delta"
+                | "message_stop",
+            ) => {}
+            Some(event_type) => {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Anthropic stream emitted unsupported event type `{event_type}`"
+                )));
+            }
+            None => {
+                return Err(StreamTranslationError::Semantic(
+                    "Anthropic stream event is missing `type`".to_string(),
+                ));
+            }
+        }
+        let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
+        if matches!(parsed, MessageStreamEvent::Ping(_)) {
+            return Ok(parsed);
         }
 
         match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
-                if matches!(event, MessageStreamEvent::MessageStart(_)) {
-                    Ok(())
-                } else {
-                    Err(StreamTranslationError::Semantic(
+                if !matches!(parsed, MessageStreamEvent::MessageStart(_)) {
+                    return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted semantic event before message_start".to_string(),
-                    ))
+                    ));
                 }
             }
             InboundStreamLifecyclePhase::Streaming => {
-                if matches!(event, MessageStreamEvent::MessageStop(_)) {
-                    Err(StreamTranslationError::Semantic(
+                if matches!(parsed, MessageStreamEvent::MessageStop(_)) {
+                    return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted message_stop before terminal message_delta"
                             .to_string(),
-                    ))
-                } else {
-                    Ok(())
+                    ));
                 }
             }
             InboundStreamLifecyclePhase::Terminal => {
-                if matches!(event, MessageStreamEvent::MessageStop(_)) {
-                    Ok(())
-                } else {
-                    Err(StreamTranslationError::Semantic(
+                if !matches!(parsed, MessageStreamEvent::MessageStop(_)) {
+                    return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted semantic event after terminal message_delta before message_stop"
                             .to_string(),
-                    ))
+                    ));
                 }
             }
-            InboundStreamLifecyclePhase::Stopped => Err(StreamTranslationError::Semantic(
-                "Anthropic stream emitted semantic event after message_stop".to_string(),
-            )),
+            InboundStreamLifecyclePhase::Stopped => {
+                return Err(StreamTranslationError::Semantic(
+                    "Anthropic stream emitted semantic event after message_stop".to_string(),
+                ));
+            }
         }
+        Ok(parsed)
+    }
+
+    pub(crate) fn begin_message_stream(&mut self, state: S) -> StreamTranslationResult<()> {
+        if !self.inner.is_waiting() {
+            return Err(StreamTranslationError::Semantic(
+                "Anthropic stream emitted duplicate message_start".to_string(),
+            ));
+        }
+        self.inner.begin_streaming(state);
+        Ok(())
     }
 
     pub(crate) fn streaming_state(&self) -> StreamTranslationResult<&S> {
@@ -156,25 +184,5 @@ impl<S> AnthropicInboundLifecycle<S> {
             InboundStreamLifecyclePhase::Stopped => String::new(),
         };
         StreamTranslationError::Semantic(message)
-    }
-}
-
-pub(crate) fn ensure_anthropic_stream_event(payload: &Value) -> StreamTranslationResult<()> {
-    match payload.get("type").and_then(Value::as_str) {
-        Some(
-            "ping"
-            | "message_start"
-            | "content_block_start"
-            | "content_block_delta"
-            | "content_block_stop"
-            | "message_delta"
-            | "message_stop",
-        ) => Ok(()),
-        Some(event_type) => Err(StreamTranslationError::Semantic(format!(
-            "Anthropic stream emitted unsupported event type `{event_type}`"
-        ))),
-        None => Err(StreamTranslationError::Semantic(
-            "Anthropic stream event is missing `type`".to_string(),
-        )),
     }
 }

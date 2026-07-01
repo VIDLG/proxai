@@ -13,9 +13,7 @@ use crate::protocol::openai_responses::{
     ResponseStreamEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseUsage, Status,
 };
 use crate::sse::SseEvent;
-use crate::translation::anthropic_messages::streaming::{
-    AnthropicInboundLifecycle, ensure_anthropic_stream_event,
-};
+use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::streaming::{
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
     StreamingEventTranslator, encode_sse_json,
@@ -420,23 +418,15 @@ fn reasoning_text_delta_event(
 
 impl StreamingEventTranslator for ResponsesStreamTranslator {
     fn translate_event(&mut self, event: SseEvent) -> StreamTranslationResult<Vec<Bytes>> {
-        let payload = event.payload_with_type()?;
-        ensure_anthropic_stream_event(&payload)?;
-        let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
-        self.lifecycle.ensure_event_allowed(&parsed)?;
+        let parsed = self.lifecycle.parse_allowed_stream_event(event)?;
         let mut chunks = Vec::new();
 
         match parsed {
             MessageStreamEvent::MessageStart(event) => {
-                if !self.lifecycle.is_waiting_for_message_start() {
-                    return Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted duplicate message_start".to_string(),
-                    ));
-                }
                 let response_id = response_id(&event.message.id);
                 let identity = StreamIdentity::new(response_id, event.message.model);
                 let state = StreamingState::new(identity, event.message.usage);
-                self.lifecycle.begin_streaming(state);
+                self.lifecycle.begin_message_stream(state)?;
                 let sequence_number = self.next_sequence_number();
                 let response = self
                     .lifecycle
