@@ -31,6 +31,7 @@ pub struct FilePath {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Annotation {
     FileCitation(FileCitationBody),
     UrlCitation(UrlCitationBody),

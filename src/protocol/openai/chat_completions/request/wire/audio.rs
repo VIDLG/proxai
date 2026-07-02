@@ -6,8 +6,8 @@ use strum::Display;
     reason = "Retained for full request schema projection coverage."
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum ChatCompletionAudioVoice {
     Alloy,
     Ash,
@@ -19,6 +19,7 @@ pub enum ChatCompletionAudioVoice {
     Onyx,
     Sage,
     Shimmer,
+    #[serde(untagged)]
     Other(String),
 }
 

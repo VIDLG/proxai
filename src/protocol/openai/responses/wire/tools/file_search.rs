@@ -18,6 +18,7 @@ pub struct HybridSearch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum RankVersionType {
+    #[serde(rename = "auto")]
     Auto,
     #[serde(rename = "default-2024-11-15")]
     #[strum(to_string = "default-2024-11-15")]

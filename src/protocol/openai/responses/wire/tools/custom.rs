@@ -33,7 +33,7 @@ pub struct CustomGrammarFormatParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum CustomToolParamFormat {
     #[default]
     Text,

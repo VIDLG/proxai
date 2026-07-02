@@ -11,6 +11,7 @@ pub use self::tools::*;
 pub use self::web_search::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ResponseModalities {
     Text,
     Audio,
@@ -77,7 +78,7 @@ pub enum PredictionContentContent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "lowercase", content = "content")]
 pub enum PredictionContent {
     Content(PredictionContentContent),
 }

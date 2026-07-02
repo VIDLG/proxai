@@ -102,6 +102,7 @@ pub struct TypeParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ComputerAction {
     Click(ClickParam),
     DoubleClick(DoubleClickAction),

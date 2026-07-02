@@ -23,6 +23,7 @@ pub struct MCPToolFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum MCPToolAllowedTools {
     List(Vec<String>),
     Filter(MCPToolFilter),
@@ -61,6 +62,7 @@ pub struct MCPToolApprovalFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum MCPToolRequireApproval {
     Filter(MCPToolApprovalFilter),
     ApprovalSetting(MCPToolApprovalSetting),

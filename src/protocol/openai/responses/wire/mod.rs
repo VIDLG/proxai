@@ -99,3 +99,7 @@ pub use self::tool_choice::*;
 pub use self::tools::*;
 // Re-export for compare script scanning
 pub use crate::protocol::ErrorObject;
+
+#[cfg(test)]
+#[path = "serde_tests.rs"]
+mod serde_tests;

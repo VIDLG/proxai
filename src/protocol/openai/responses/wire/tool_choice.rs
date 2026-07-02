@@ -20,7 +20,7 @@ pub struct ToolChoiceAllowed {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolChoiceTypes {
     FileSearch,
     WebSearchPreview,
@@ -44,7 +44,7 @@ pub enum ToolChoiceOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolChoiceParam {
     AllowedTools(ToolChoiceAllowed),
     Function(ToolChoiceFunction),
@@ -52,6 +52,8 @@ pub enum ToolChoiceParam {
     Custom(ToolChoiceCustom),
     ApplyPatch,
     Shell,
+    #[serde(untagged)]
     Hosted(ToolChoiceTypes),
+    #[serde(untagged)]
     Mode(ToolChoiceOptions),
 }

@@ -5,6 +5,7 @@ use strum::Display;
 use super::InputContent;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum ResponsePromptVariables {
     String(String),
     Content(InputContent),

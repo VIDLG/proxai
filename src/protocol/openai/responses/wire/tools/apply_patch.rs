@@ -43,6 +43,7 @@ pub struct ApplyPatchUpdateFileOperationParam {
     reason = "Mirrors OpenAI Responses apply-patch operation variant names."
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ApplyPatchOperationParam {
     CreateFile(ApplyPatchCreateFileOperationParam),
     DeleteFile(ApplyPatchDeleteFileOperationParam),
@@ -111,6 +112,7 @@ pub struct ApplyPatchUpdateFileOperation {
     reason = "Mirrors OpenAI Responses apply-patch operation variant names."
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ApplyPatchOperation {
     CreateFile(ApplyPatchCreateFileOperation),
     DeleteFile(ApplyPatchDeleteFileOperation),

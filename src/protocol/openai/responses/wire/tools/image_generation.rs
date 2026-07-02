@@ -61,6 +61,7 @@ pub enum ImageGenToolQuality {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ImageGenToolSize {
     #[default]
     Auto,

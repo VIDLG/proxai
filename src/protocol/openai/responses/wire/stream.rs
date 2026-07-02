@@ -482,11 +482,11 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "response.image_generation_call.partial_image")]
     #[strum(serialize = "response.image_generation_call.partial_image")]
     ResponseImageGenerationCallPartialImage(ResponseImageGenCallPartialImageEvent),
-    #[serde(rename = "response.mcp_call.arguments_delta")]
-    #[strum(serialize = "response.mcp_call.arguments_delta")]
+    #[serde(rename = "response.mcp_call_arguments.delta")]
+    #[strum(serialize = "response.mcp_call_arguments.delta")]
     ResponseMCPCallArgumentsDelta(ResponseMCPCallArgumentsDeltaEvent),
-    #[serde(rename = "response.mcp_call.arguments_done")]
-    #[strum(serialize = "response.mcp_call.arguments_done")]
+    #[serde(rename = "response.mcp_call_arguments.done")]
+    #[strum(serialize = "response.mcp_call_arguments.done")]
     ResponseMCPCallArgumentsDone(ResponseMCPCallArgumentsDoneEvent),
     #[serde(rename = "response.mcp_call.completed")]
     #[strum(serialize = "response.mcp_call.completed")]
@@ -515,14 +515,14 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "response.code_interpreter_call.completed")]
     #[strum(serialize = "response.code_interpreter_call.completed")]
     ResponseCodeInterpreterCallCompleted(ResponseCodeInterpreterCallCompletedEvent),
-    #[serde(rename = "response.code_interpreter_call.code_delta")]
-    #[strum(serialize = "response.code_interpreter_call.code_delta")]
+    #[serde(rename = "response.code_interpreter_call_code.delta")]
+    #[strum(serialize = "response.code_interpreter_call_code.delta")]
     ResponseCodeInterpreterCallCodeDelta(ResponseCodeInterpreterCallCodeDeltaEvent),
-    #[serde(rename = "response.code_interpreter_call.code_done")]
-    #[strum(serialize = "response.code_interpreter_call.code_done")]
+    #[serde(rename = "response.code_interpreter_call_code.done")]
+    #[strum(serialize = "response.code_interpreter_call_code.done")]
     ResponseCodeInterpreterCallCodeDone(ResponseCodeInterpreterCallCodeDoneEvent),
-    #[serde(rename = "response.output_text_annotation.added")]
-    #[strum(serialize = "response.output_text_annotation.added")]
+    #[serde(rename = "response.output_text.annotation.added")]
+    #[strum(serialize = "response.output_text.annotation.added")]
     ResponseOutputTextAnnotationAdded(ResponseOutputTextAnnotationAddedEvent),
     #[serde(rename = "response.queued")]
     #[strum(serialize = "response.queued")]
@@ -533,8 +533,8 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "response.custom_tool_call_input.done")]
     #[strum(serialize = "response.custom_tool_call_input.done")]
     ResponseCustomToolCallInputDone(ResponseCustomToolCallInputDoneEvent),
-    #[serde(rename = "response.error")]
-    #[strum(serialize = "response.error")]
+    #[serde(rename = "error")]
+    #[strum(serialize = "error")]
     ResponseError(ResponseErrorEvent),
 }
 

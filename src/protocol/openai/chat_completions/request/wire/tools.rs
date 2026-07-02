@@ -17,6 +17,7 @@ pub struct ChatCompletionTool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum GrammarSyntax {
     Lark,
     #[default]
@@ -30,6 +31,7 @@ pub struct CustomGrammarFormatParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CustomToolPropertiesFormat {
     #[default]
     Text,
@@ -82,6 +84,7 @@ pub struct ChatCompletionNamedToolChoiceCustom {
 // Allowed-tools choices.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ToolChoiceAllowedMode {
     Auto,
     Required,
@@ -109,10 +112,11 @@ pub enum ToolChoiceOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ChatCompletionToolChoiceOption {
     AllowedTools(ChatCompletionAllowedToolsChoice),
     Function(ChatCompletionNamedToolChoice),
     Custom(ChatCompletionNamedToolChoiceCustom),
+    #[serde(untagged)]
     Mode(ToolChoiceOptions),
 }

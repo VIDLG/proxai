@@ -386,6 +386,8 @@ def _index_sdk_types(node, buf, index, rel):
                     index[name] = dict(
                         kind="enum",
                         variants=variants,
+                        enum_serde=_enum_serde_summary(child),
+                        variant_serde=_enum_variant_serde_summary(child),
                         line=child.start_point[0] + 1,
                         file=rel,
                     )
@@ -440,6 +442,82 @@ def _enum_variants_ast(enum_node):
     return variants
 
 
+def _attributes_before(node):
+    attrs = []
+    cursor = node.prev_named_sibling
+    while cursor and cursor.type in ("attribute_item", "line_comment", "block_comment"):
+        if cursor.type == "attribute_item":
+            attrs.append(cursor.text.decode("utf-8", errors="replace"))
+        cursor = cursor.prev_named_sibling
+    return list(reversed(attrs))
+
+
+def _serde_attrs_before(node):
+    return [attr for attr in _attributes_before(node) if attr.startswith("#[serde")]
+
+
+def _strum_attrs_before(node):
+    return [attr for attr in _attributes_before(node) if attr.startswith("#[strum")]
+
+
+def _attr_value(attrs, key):
+    pattern = rf"\b{re.escape(key)}\s*=\s*\"([^\"]+)\""
+    for attr in attrs:
+        match = re.search(pattern, attr)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _serde_attr_value(attrs, key):
+    return _attr_value(attrs, key)
+
+
+def _serde_attr_has(attrs, key):
+    pattern = rf"(?:^|[^A-Za-z0-9_]){re.escape(key)}(?:[^A-Za-z0-9_]|$)"
+    return any(re.search(pattern, attr) for attr in attrs)
+
+
+def _enum_serde_summary(enum_node):
+    attrs = _serde_attrs_before(enum_node)
+    return {
+        "untagged": _serde_attr_has(attrs, "untagged"),
+        "tag": _serde_attr_value(attrs, "tag"),
+        "content": _serde_attr_value(attrs, "content"),
+        "rename_all": _serde_attr_value(attrs, "rename_all"),
+    }
+
+
+def _variant_serde_summary(variant_node):
+    attrs = _serde_attrs_before(variant_node)
+    strum_attrs = _strum_attrs_before(variant_node)
+    return {
+        "rename": _serde_attr_value(attrs, "rename"),
+        "alias": sorted(re.findall(r"\balias\s*=\s*\"([^\"]+)\"", " ".join(attrs))),
+        "untagged": _serde_attr_has(attrs, "untagged"),
+        "skip": _serde_attr_has(attrs, "skip") or _serde_attr_has(attrs, "skip_serializing"),
+        "strum_serialize": _attr_value(strum_attrs, "serialize") or _attr_value(strum_attrs, "to_string"),
+    }
+
+
+def _enum_variant_serde_summary(enum_node):
+    variants = {}
+    for child in enum_node.children:
+        if child.type != "enum_variant_list":
+            continue
+        for variant in child.children:
+            if variant.type != "enum_variant":
+                continue
+            name = None
+            for ident in variant.children:
+                if ident.type == "identifier":
+                    name = ident.text.decode()
+                    break
+            if name:
+                variants[name] = _variant_serde_summary(variant)
+    return variants
+
+
 # ── Proxai type extraction (full detail + convert annotations) ─
 
 
@@ -479,6 +557,8 @@ def _index_px_types(node, buf, index, rel):
                 if name:
                     info["kind"] = "enum"
                     info["variants"] = _enum_variants_ast(child)
+                    info["enum_serde"] = _enum_serde_summary(child)
+                    info["variant_serde"] = _enum_variant_serde_summary(child)
                     index[name] = info
             elif child.type == "type_item":
                 name = _type_name(child)
@@ -522,6 +602,89 @@ def _type_name(node):
 
 def norm(n):
     return n.lower().replace("_", "").replace("-", "")
+
+
+def _compact_serde_summary(summary):
+    parts = []
+    for key in ("untagged", "tag", "content", "rename_all", "rename", "alias", "skip"):
+        value = summary.get(key)
+        if value is True:
+            parts.append(key)
+        elif value:
+            parts.append(f"{key}={value}")
+    return "{" + ", ".join(parts) + "}" if parts else "{}"
+
+
+def _camel_to_snake(name):
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    s2 = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
+    return s2.lower()
+
+
+def _variant_wire_name(name, enum_summary, variant_summary):
+    if variant_summary.get("rename"):
+        return variant_summary["rename"]
+    rename_all = enum_summary.get("rename_all")
+    if rename_all == "snake_case":
+        return _camel_to_snake(name)
+    if rename_all == "lowercase":
+        return name.lower()
+    if rename_all == "kebab-case":
+        return _camel_to_snake(name).replace("_", "-")
+    if rename_all == "SCREAMING_SNAKE_CASE":
+        return _camel_to_snake(name).upper()
+    return name
+
+
+def _enum_repr_summary(summary):
+    return {
+        "untagged": summary.get("untagged", False),
+        "tag": summary.get("tag"),
+        "content": summary.get("content"),
+    }
+
+
+def _variant_repr_summary(summary):
+    return {
+        "alias": summary.get("alias", []),
+        "untagged": summary.get("untagged", False),
+        "skip": summary.get("skip", False),
+    }
+
+
+def _enum_serde_diffs(px_name, px_info, sdk_name, sdk_info):
+    messages = []
+    sdk_enum = sdk_info.get("enum_serde", {})
+    px_enum = px_info.get("enum_serde", {})
+    if _enum_repr_summary(sdk_enum) != _enum_repr_summary(px_enum):
+        messages.append(
+            "enum representation differs: "
+            f"SDK {_compact_serde_summary(sdk_enum)} vs ours {_compact_serde_summary(px_enum)}"
+        )
+
+    sdk_variants = sdk_info.get("variant_serde", {})
+    px_variants = px_info.get("variant_serde", {})
+    for variant in sorted(set(sdk_variants) & set(px_variants)):
+        sdk_variant = sdk_variants.get(variant, {})
+        px_variant = px_variants.get(variant, {})
+        sdk_wire = _variant_wire_name(variant, sdk_enum, sdk_variant)
+        px_wire = _variant_wire_name(variant, px_enum, px_variant)
+        if sdk_wire != px_wire:
+            messages.append(
+                f"variant `{variant}` wire name differs: SDK `{sdk_wire}` vs ours `{px_wire}`"
+            )
+        px_strum = px_variant.get("strum_serialize")
+        if px_strum and px_strum != px_wire:
+            messages.append(
+                f"variant `{variant}` strum serialize differs from serde wire name: "
+                f"strum `{px_strum}` vs serde `{px_wire}`"
+            )
+        if _variant_repr_summary(sdk_variant) != _variant_repr_summary(px_variant):
+            messages.append(
+                f"variant `{variant}` serde differs: "
+                f"SDK {_compact_serde_summary(sdk_variant)} vs ours {_compact_serde_summary(px_variant)}"
+            )
+    return messages
 
 
 # ── Output ─────────────────────────────────────────────────────
@@ -628,6 +791,7 @@ def _check_protocol(protocol, level=2):
     # ── Structural alignment by matched protocol type name ──────────
     struct_diffs = []  # list of (px_type, sdk_type, missing_fields, extra_fields)
     enum_diffs = []  # list of (px_type, sdk_type, missing_variants, extra_variants)
+    serde_diffs = []  # list of (px_type, sdk_type, messages)
     aligned_ok = 0
 
     for nk in sorted(sk & pk):
@@ -685,9 +849,13 @@ def _check_protocol(protocol, level=2):
             missing_v = sorted(sdk_variants - px_variants)
             extra_v = sorted(px_variants - sdk_variants)
 
+            messages = _enum_serde_diffs(px_name, px_info, sdk_name, sdk_info)
+            if messages:
+                serde_diffs.append((px_name, sdk_name, messages))
+
             if missing_v or extra_v:
                 enum_diffs.append((px_name, sdk_name, missing_v, extra_v))
-            else:
+            elif not messages:
                 aligned_ok += 1
         else:
             aligned_ok += 1
@@ -700,9 +868,9 @@ def _check_protocol(protocol, level=2):
         if not isinstance(m_f, str)  # skip kind-mismatch entries
     )
     has_struct_gaps = has_missing_fields
-    has_gaps = has_gaps or has_struct_gaps
+    has_gaps = has_gaps or has_struct_gaps or bool(serde_diffs)
 
-    structural_checked = aligned_ok + len(struct_diffs) + len(enum_diffs)
+    structural_checked = aligned_ok + len(struct_diffs) + len(enum_diffs) + len(serde_diffs)
 
     # ── Level 1: header + summary ──────────────────────────────────
     hr()
@@ -746,8 +914,9 @@ def _check_protocol(protocol, level=2):
         out()
 
         # Structural diffs
-        if struct_diffs or enum_diffs:
-            has_gaps = True
+        if struct_diffs or enum_diffs or serde_diffs:
+            if has_missing_fields or enum_diffs or serde_diffs:
+                has_gaps = True
             if has_missing_fields:
                 h2("Structural alignment (field-level)")
             else:
@@ -778,6 +947,13 @@ def _check_protocol(protocol, level=2):
                         out(f"          SDK: {', '.join(sdk_order)}")
                         out(f"          Ours: {', '.join(px_order)}")
 
+            if serde_diffs:
+                out(f"\n  ✗ Enum serde wire mismatches:")
+                for px_name, sdk_name, messages in serde_diffs:
+                    out(f"      {px_name} → {sdk_name}")
+                    for message in messages:
+                        out(f"        {message}")
+
             if enum_diffs and level >= 3:
                 out(f"\n  ✗ Enum variant mismatches:")
                 for px_name, sdk_name, missing_v, extra_v in enum_diffs:
@@ -787,8 +963,8 @@ def _check_protocol(protocol, level=2):
                     if extra_v:
                         out(f"        Extra variants:   {', '.join(extra_v)}")
 
-            if not struct_diffs and not enum_diffs:
-                out(f"  ✅  All struct fields and enum variants match")
+            if not struct_diffs and not enum_diffs and not serde_diffs:
+                out(f"  ✅  All struct fields, enum variants, and enum serde attrs match")
             out()
 
         # Intentional exclusions

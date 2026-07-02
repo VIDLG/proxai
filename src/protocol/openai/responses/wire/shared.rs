@@ -3,6 +3,7 @@ use serde_json::Value;
 use strum::Display;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Filter {
     Comparison(ComparisonFilter),
     Compound(CompoundFilter),

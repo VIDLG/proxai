@@ -341,6 +341,7 @@ pub struct UpdateChatCompletionRequest {
 // ============================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Prompt {
     String(String),
     StringArray(Vec<String>),

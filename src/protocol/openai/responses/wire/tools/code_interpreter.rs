@@ -12,8 +12,10 @@ pub struct CodeInterpreterContainerAuto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CodeInterpreterToolContainer {
     Auto(CodeInterpreterContainerAuto),
+    #[serde(untagged)]
     ContainerID(String),
 }
 
@@ -44,6 +46,7 @@ pub struct CodeInterpreterOutputImage {
 // `CodeInterpreterToolCallOutput` response shape here only exposes `Logs` and
 // `Image` variants, so we do not model a separate local file output type yet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum CodeInterpreterToolCallOutput {
     Logs(CodeInterpreterOutputLogs),
     Image(CodeInterpreterOutputImage),

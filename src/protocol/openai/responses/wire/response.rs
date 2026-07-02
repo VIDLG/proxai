@@ -11,6 +11,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Instructions {
     Text(String),
     Array(Vec<InputItem>),

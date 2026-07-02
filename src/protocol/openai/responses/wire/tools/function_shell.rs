@@ -19,6 +19,7 @@ pub struct ContainerNetworkPolicyAllowlistDetails {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContainerNetworkPolicy {
     Disabled,
     Allowlist(ContainerNetworkPolicyAllowlistDetails),
@@ -44,6 +45,7 @@ pub struct InlineSkillParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SkillParam {
     SkillReference(SkillReferenceParam),
     Inline(InlineSkillParam),
@@ -78,6 +80,7 @@ pub struct ContainerReferenceParam {
 // ============================================================
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FunctionShellEnvironment {
     ContainerAuto(ContainerAutoParam),
     Local(LocalEnvironmentParam),
@@ -110,6 +113,7 @@ pub enum FunctionShellCallItemStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FunctionShellCallItemEnvironment {
     Local(LocalEnvironmentParam),
     ContainerReference(ContainerReferenceParam),
@@ -121,6 +125,7 @@ pub struct FunctionShellCallOutputExitOutcomeParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FunctionShellCallOutputOutcomeParam {
     Timeout,
     Exit(FunctionShellCallOutputExitOutcomeParam),
@@ -199,6 +204,7 @@ pub struct ContainerReferenceResource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FunctionShellCallEnvironment {
     Local,
     ContainerReference(ContainerReferenceResource),
@@ -210,6 +216,7 @@ pub struct FunctionShellCallOutputExitOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum FunctionShellCallOutputOutcome {
     Timeout,
     Exit(FunctionShellCallOutputExitOutcome),
