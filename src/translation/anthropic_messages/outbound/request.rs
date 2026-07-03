@@ -138,18 +138,6 @@ pub(crate) fn tool_use_block_param(
     }
 }
 
-pub(crate) fn tool_result_text(
-    tool_use_id: impl Into<String>,
-    content: impl Into<String>,
-) -> anthropic::ToolResultBlockParam {
-    anthropic::ToolResultBlockParam {
-        tool_use_id: tool_use_id.into(),
-        content: Some(anthropic::ToolResultContentParam::Text(content.into())),
-        is_error: Some(false),
-        cache_control: None,
-    }
-}
-
 // ── Tools ────────────────────────────────────────────────────────────────
 
 /// Build an Anthropic `InputSchema` from a Chat/Responses-style JSON schema

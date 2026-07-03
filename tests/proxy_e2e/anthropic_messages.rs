@@ -239,7 +239,7 @@ async fn proxy_replays_incomplete_anthropic_messages_sse() {
 
 #[tokio::test]
 async fn proxy_translates_openai_responses_stream_to_anthropic_messages_stream() {
-    let upstream_address = spawn_complete_sse_upstream().await;
+    let upstream_address = spawn_typed_responses_sse_upstream().await;
     let shim_address = spawn_anthropic_to_responses_shim(upstream_address).await;
 
     let response = local_client()

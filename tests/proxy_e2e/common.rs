@@ -437,6 +437,103 @@ pub(super) async fn spawn_complete_sse_upstream() -> SocketAddr {
     address
 }
 
+fn typed_responses_sse_event(event: &str, data: Value) -> Result<Bytes, std::io::Error> {
+    Ok(Bytes::from(format!("event: {event}\ndata: {data}\n\n")))
+}
+
+fn typed_responses_response(status: &str, completed_at: Option<u64>, output_tokens: u32) -> Value {
+    json!({
+        "background": null,
+        "billing": null,
+        "conversation": null,
+        "created_at": 1,
+        "completed_at": completed_at,
+        "error": null,
+        "id": "resp_stream",
+        "incomplete_details": null,
+        "instructions": null,
+        "max_output_tokens": null,
+        "metadata": null,
+        "model": "gpt-5.5",
+        "object": "response",
+        "output": [],
+        "parallel_tool_calls": null,
+        "previous_response_id": null,
+        "prompt": null,
+        "prompt_cache_key": null,
+        "prompt_cache_retention": null,
+        "reasoning": null,
+        "safety_identifier": null,
+        "service_tier": null,
+        "status": status,
+        "temperature": null,
+        "text": null,
+        "tool_choice": null,
+        "tools": null,
+        "top_logprobs": null,
+        "top_p": null,
+        "truncation": null,
+        "usage": {
+            "input_tokens": 8,
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens": output_tokens,
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": 8 + output_tokens,
+        },
+    })
+}
+
+/// SSE upstream with protocol-complete Responses events (including `type` and
+/// `sequence_number`) for cross-protocol streaming tests that need to parse
+/// the stream into typed events.
+pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
+    async fn stream() -> Response<Body> {
+        let chunks = stream::iter([
+            typed_responses_sse_event(
+                "response.created",
+                json!({
+                    "type": "response.created",
+                    "sequence_number": 1,
+                    "response": typed_responses_response("in_progress", None, 0),
+                }),
+            ),
+            typed_responses_sse_event(
+                "response.output_text.delta",
+                json!({
+                    "type": "response.output_text.delta",
+                    "sequence_number": 2,
+                    "item_id": "msg_1",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "delta": "hello",
+                    "logprobs": null,
+                }),
+            ),
+            typed_responses_sse_event(
+                "response.completed",
+                json!({
+                    "type": "response.completed",
+                    "sequence_number": 3,
+                    "response": typed_responses_response("completed", Some(1), 2),
+                }),
+            ),
+        ]);
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/event-stream")
+            .body(Body::from_stream(chunks))
+            .unwrap()
+    }
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new().route("/v1/responses", post(stream));
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    address
+}
+
 pub(super) async fn spawn_incomplete_response_sse_upstream() -> SocketAddr {
     async fn incomplete() -> Response<Body> {
         let chunks = stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(

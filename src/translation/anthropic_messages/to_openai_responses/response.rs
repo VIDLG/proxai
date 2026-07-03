@@ -1,5 +1,5 @@
 use crate::protocol::anthropic::messages::{
-    ContentBlock, Message, TextBlock, ToolResultBlock, ToolResultContentParam,
+    ContentBlock, Message, ToolResultBlock, ToolResultContentParam,
 };
 use crate::protocol::openai::responses::{
     FunctionCallOutput, FunctionCallOutputStatusEnum, FunctionToolCallOutputResource, OutputItem,
