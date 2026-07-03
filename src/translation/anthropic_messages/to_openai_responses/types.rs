@@ -13,18 +13,6 @@ use crate::protocol::openai_responses::{
 };
 use crate::translation::TranslationResult;
 
-/// Normalize an Anthropic message id into a Responses-shaped id.
-///
-/// Pair-local naming convention, not a protocol conversion: it just makes
-/// sure the id starts with `resp_` so downstream consumers recognize it.
-pub(super) fn response_id(message_id: &str) -> String {
-    if message_id.starts_with("resp_") {
-        message_id.to_string()
-    } else {
-        format!("resp_{message_id}")
-    }
-}
-
 /// Pair-local Responses `incomplete_details.reason` convention.
 ///
 /// The string `"max_output_tokens"` is this pair's chosen wording (matching

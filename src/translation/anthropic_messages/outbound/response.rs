@@ -8,14 +8,14 @@ use serde_json::Value;
 
 use crate::protocol::anthropic::messages as anthropic;
 
-pub(crate) fn response_text_block(text: impl Into<String>) -> anthropic::TextBlock {
+pub(crate) fn text_block(text: impl Into<String>) -> anthropic::TextBlock {
     anthropic::TextBlock {
         text: text.into(),
         citations: None,
     }
 }
 
-pub(crate) fn response_tool_use_block(
+pub(crate) fn tool_use_block(
     id: impl Into<String>,
     name: impl Into<String>,
     input: Value,

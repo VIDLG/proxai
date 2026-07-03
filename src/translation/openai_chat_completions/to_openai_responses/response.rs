@@ -1,14 +1,13 @@
 use crate::protocol::openai::chat_completions::CreateChatCompletionResponse;
 use crate::protocol::openai::responses::{
-    AssistantRole, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
-    OutputTextContent, RefusalContent, Response, ResponseUsage,
+    AssistantRole, OutputItem, OutputMessage, OutputMessageContent, OutputStatus, RefusalContent,
+    Response, ResponseUsage,
 };
-
+use crate::translation::openai_responses::outbound::{output_text, response_id};
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::super::response::single_assistant_choice;
-
-use super::types::{incomplete_details_from_finish_reason, response_id};
+use super::types::incomplete_details_from_finish_reason;
 
 impl TryFrom<&CreateChatCompletionResponse> for Response {
     type Error = TranslationError;
@@ -29,11 +28,10 @@ impl TryFrom<&CreateChatCompletionResponse> for Response {
         {
             let mut content = Vec::new();
             if let Some(text) = message.content.as_ref().filter(|value| !value.is_empty()) {
-                content.push(OutputMessageContent::OutputText(OutputTextContent {
-                    text: text.clone(),
-                    annotations: Vec::new(),
-                    logprobs: None,
-                }));
+                content.push(OutputMessageContent::OutputText(output_text(
+                    text,
+                    Vec::new(),
+                )));
             }
             if let Some(refusal) = message.refusal.as_ref().filter(|value| !value.is_empty()) {
                 content.push(OutputMessageContent::Refusal(RefusalContent {

@@ -2,6 +2,7 @@
 
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
+use crate::translation::openai_responses::outbound::easy_message;
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) fn translate_message_param(
@@ -10,13 +11,9 @@ pub(super) fn translate_message_param(
     let role = message.role.into();
 
     match message.content {
-        anthropic::MessageParamContent::Text(text) => Ok(vec![responses::InputItem::EasyMessage(
-            responses::EasyInputMessage {
-                r#type: responses::MessageType::Message,
-                role,
-                content: responses::EasyInputContent::Text(text),
-                phase: None,
-            },
+        anthropic::MessageParamContent::Text(text) => Ok(vec![easy_message(
+            role,
+            responses::EasyInputContent::Text(text),
         )]),
         anthropic::MessageParamContent::Blocks(blocks) => {
             let mut items = Vec::new();
@@ -41,10 +38,14 @@ fn translate_content_block(
         anthropic::ContentBlockParam::ToolResult(tool_result) => {
             Ok(vec![responses::InputItem::Item(tool_result.try_into()?)])
         }
-        anthropic::ContentBlockParam::Text(block) => Ok(vec![easy_message(role, block.into())]),
-        anthropic::ContentBlockParam::Image(block) => Ok(vec![easy_message(role, block.into())]),
+        anthropic::ContentBlockParam::Text(block) => {
+            Ok(vec![easy_input_item(role, block.into())])
+        }
+        anthropic::ContentBlockParam::Image(block) => {
+            Ok(vec![easy_input_item(role, block.into())])
+        }
         anthropic::ContentBlockParam::Document(block) => {
-            Ok(vec![easy_message(role, block.try_into()?)])
+            Ok(vec![easy_input_item(role, block.try_into()?)])
         }
         anthropic::ContentBlockParam::ContainerUpload(_) => Err(TranslationError::InvalidPayload(
             "Anthropic container_upload content cannot be translated to OpenAI Responses input_file; container file IDs are provider-scoped and are not safely interchangeable with Responses file_id"
@@ -59,15 +60,13 @@ fn translate_content_block(
     }
 }
 
-fn easy_message(role: responses::Role, content: responses::InputContent) -> responses::InputItem {
+fn easy_input_item(
+    role: responses::Role,
+    content: responses::InputContent,
+) -> responses::InputItem {
     let content = match content {
         responses::InputContent::InputText(t) => responses::EasyInputContent::Text(t.text),
         other => responses::EasyInputContent::ContentList(vec![other]),
     };
-    responses::InputItem::EasyMessage(responses::EasyInputMessage {
-        r#type: responses::MessageType::Message,
-        role,
-        content,
-        phase: None,
-    })
+    easy_message(role, content)
 }

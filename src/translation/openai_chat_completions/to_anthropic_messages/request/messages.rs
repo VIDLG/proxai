@@ -4,7 +4,7 @@ use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
 use crate::translation::anthropic_messages::outbound::{
-    assistant_message, text_block, tool_use_block, user_message,
+    assistant_message, text_block_param, tool_use_block_param, user_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -140,7 +140,7 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContentPart> for anthropic::
     ) -> TranslationResult<Self> {
         match part {
             chat::ChatCompletionRequestUserMessageContentPart::Text(part) => {
-                Ok(anthropic::ContentBlockParam::Text(text_block(&part.text)))
+                Ok(anthropic::ContentBlockParam::Text(text_block_param(&part.text)))
             }
             chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(part) => Ok(
                 anthropic::ContentBlockParam::Image(anthropic::ImageBlockParam::try_from(
@@ -179,7 +179,7 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
             match content {
                 chat::ChatCompletionRequestAssistantMessageContent::Text(text) => {
                     if !text.is_empty() {
-                        blocks.push(anthropic::ContentBlockParam::Text(text_block(text)));
+                        blocks.push(anthropic::ContentBlockParam::Text(text_block_param(text)));
                     }
                 }
                 chat::ChatCompletionRequestAssistantMessageContent::Array(parts) => {
@@ -188,7 +188,7 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
                             chat::ChatCompletionRequestAssistantMessageContentPart::Text(part)
                                 if !part.text.is_empty() =>
                             {
-                                blocks.push(anthropic::ContentBlockParam::Text(text_block(
+                                blocks.push(anthropic::ContentBlockParam::Text(text_block_param(
                                     &part.text,
                                 )));
                             }
@@ -215,7 +215,7 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
                                 tool_call.id
                             ))
                         })?;
-                    blocks.push(anthropic::ContentBlockParam::ToolUse(tool_use_block(
+                    blocks.push(anthropic::ContentBlockParam::ToolUse(tool_use_block_param(
                         &tool_call.id,
                         &tool_call.function.name,
                         input,
@@ -264,7 +264,7 @@ impl From<&chat::ChatCompletionRequestToolMessage> for anthropic::ToolResultBloc
                             .iter()
                             .map(|part| match part {
                                 chat::ChatCompletionRequestToolMessageContentPart::Text(part) => {
-                                    anthropic::ToolResultContentBlockParam::Text(text_block(
+                                    anthropic::ToolResultContentBlockParam::Text(text_block_param(
                                         &part.text,
                                     ))
                                 }

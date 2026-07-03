@@ -10,7 +10,7 @@ use crate::translation::{TranslationError, TranslationResult};
 
 // ── Text blocks ───────────────────────────────────────────────────────────
 
-pub(crate) fn text_block(text: impl Into<String>) -> anthropic::TextBlockParam {
+pub(crate) fn text_block_param(text: impl Into<String>) -> anthropic::TextBlockParam {
     anthropic::TextBlockParam {
         text: text.into(),
         cache_control: None,
@@ -124,7 +124,7 @@ fn image_media_type(value: &str) -> TranslationResult<anthropic::ImageMediaType>
 
 // ── Tool use / tool result ───────────────────────────────────────────────
 
-pub(crate) fn tool_use_block(
+pub(crate) fn tool_use_block_param(
     id: impl Into<String>,
     name: impl Into<String>,
     input: Value,

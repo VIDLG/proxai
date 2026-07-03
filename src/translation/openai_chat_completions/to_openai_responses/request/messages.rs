@@ -1,6 +1,8 @@
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 use crate::protocol::openai_responses as responses;
+use crate::translation::openai_responses::outbound::{easy_message, function_call_output_item};
+use crate::translation::text::join_text_parts;
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) struct ResponsesInput {
@@ -32,14 +34,10 @@ pub(super) fn responses_input_from_messages(
                 items.extend(assistant_input_items(message, message_index)?);
             }
             chat::ChatCompletionRequestMessage::Tool(message) => {
-                items.push(responses::InputItem::Item(
-                    responses::Item::FunctionCallOutput(responses::FunctionCallOutputItemParam {
-                        call_id: message.tool_call_id.clone(),
-                        output: responses::FunctionCallOutput::try_from(&message.content)?,
-                        id: None,
-                        status: None,
-                    }),
-                ));
+                items.push(responses::InputItem::Item(function_call_output_item(
+                    &message.tool_call_id,
+                    responses::FunctionCallOutput::try_from(&message.content)?,
+                )));
             }
             chat::ChatCompletionRequestMessage::Function(message) => {
                 return Err(TranslationError::InvalidPayload(format!(
@@ -57,15 +55,8 @@ pub(super) fn responses_input_from_messages(
         ));
     }
 
-    let instructions = instruction_parts
-        .into_iter()
-        .map(|part| part.trim().to_string())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n");
-
     Ok(ResponsesInput {
-        instructions: (!instructions.is_empty()).then_some(instructions),
+        instructions: join_text_parts(instruction_parts),
         items,
     })
 }
@@ -100,18 +91,6 @@ fn system_text_parts(content: &chat::ChatCompletionRequestSystemMessageContent) 
     }
 }
 
-fn easy_message(
-    role: responses::Role,
-    content: responses::EasyInputContent,
-) -> responses::InputItem {
-    responses::InputItem::EasyMessage(responses::EasyInputMessage {
-        r#type: responses::MessageType::Message,
-        role,
-        content,
-        phase: None,
-    })
-}
-
 impl TryFrom<&chat::ChatCompletionRequestUserMessageContent> for responses::EasyInputContent {
     type Error = TranslationError;
 
@@ -134,6 +113,12 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContent> for responses::Easy
                         "Chat Completions user message content array cannot be empty when translating to OpenAI Responses input"
                             .to_string(),
                     ));
+                }
+                // Single-element text arrays become plain Text for cleaner wire output.
+                if let [chat::ChatCompletionRequestUserMessageContentPart::Text(t)] =
+                    parts.as_slice()
+                {
+                    return Ok(Self::Text(t.text.clone()));
                 }
                 Ok(Self::ContentList(
                     parts

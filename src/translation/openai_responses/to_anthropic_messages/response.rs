@@ -8,7 +8,7 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::{
-    redacted_thinking_block, response_text_block, response_tool_use_block, thinking_block,
+    redacted_thinking_block, text_block, thinking_block, tool_use_block,
 };
 use crate::translation::text::parse_json_or_string;
 
@@ -45,15 +45,17 @@ fn translate_response_output_item(item: &responses::OutputItem) -> Vec<ContentBl
             .map(translate_response_message_content)
             .collect(),
         responses::OutputItem::FunctionCall(call) => {
-            vec![ContentBlock::ToolUse(response_tool_use_block(
+            vec![ContentBlock::ToolUse(tool_use_block(
                 &call.call_id,
                 &call.name,
                 parse_json_or_string(&call.arguments),
             ))]
         }
-        responses::OutputItem::CustomToolCall(call) => vec![ContentBlock::ToolUse(
-            response_tool_use_block(&call.call_id, &call.name, parse_json_or_string(&call.input)),
-        )],
+        responses::OutputItem::CustomToolCall(call) => vec![ContentBlock::ToolUse(tool_use_block(
+            &call.call_id,
+            &call.name,
+            parse_json_or_string(&call.input),
+        ))],
         responses::OutputItem::Reasoning(reasoning) => translate_reasoning_item(reasoning),
         other => {
             tracing::trace!(
@@ -68,10 +70,10 @@ fn translate_response_output_item(item: &responses::OutputItem) -> Vec<ContentBl
 fn translate_response_message_content(content: &responses::OutputMessageContent) -> ContentBlock {
     match content {
         responses::OutputMessageContent::OutputText(text) => {
-            ContentBlock::Text(response_text_block(&text.text))
+            ContentBlock::Text(text_block(&text.text))
         }
         responses::OutputMessageContent::Refusal(refusal) => {
-            ContentBlock::Text(response_text_block(&refusal.refusal))
+            ContentBlock::Text(text_block(&refusal.refusal))
         }
     }
 }

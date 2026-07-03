@@ -7,9 +7,7 @@ use crate::protocol::anthropic::messages::{
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
-use crate::translation::anthropic_messages::outbound::{
-    response_text_block, response_tool_use_block,
-};
+use crate::translation::anthropic_messages::outbound::{text_block, tool_use_block};
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::super::response::single_assistant_choice;
@@ -45,10 +43,10 @@ impl TryFrom<&CreateChatCompletionResponse> for Message {
         }
 
         if let Some(text) = message.content.as_ref().filter(|text| !text.is_empty()) {
-            content.push(ContentBlock::Text(response_text_block(text)));
+            content.push(ContentBlock::Text(text_block(text)));
         }
         if let Some(refusal) = refusal {
-            content.push(ContentBlock::Text(response_text_block(refusal)));
+            content.push(ContentBlock::Text(text_block(refusal)));
         }
         if let Some(tool_calls) = message.tool_calls.as_ref() {
             for tool_call in tool_calls {
@@ -93,11 +91,7 @@ impl TryFrom<&ChatCompletionMessageToolCalls>
                         "Chat function tool call arguments are not valid JSON: {error}"
                     ))
                 })?;
-                Ok(response_tool_use_block(
-                    &call.id,
-                    &call.function.name,
-                    input,
-                ))
+                Ok(tool_use_block(&call.id, &call.function.name, input))
             }
             ChatCompletionMessageToolCalls::Custom(_) => Err(TranslationError::InvalidPayload(
                 "Chat custom tool calls cannot be translated to Anthropic tool_use blocks"

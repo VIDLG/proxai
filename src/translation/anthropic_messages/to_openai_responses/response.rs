@@ -1,16 +1,16 @@
 use crate::protocol::anthropic::messages::{
     ContentBlock, Message, TextBlock, ToolResultBlock, ToolResultContentParam,
 };
-use crate::protocol::openai_responses::{
-    AssistantRole, FunctionCallOutput, FunctionCallOutputStatusEnum,
-    FunctionToolCallOutputResource, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
-    OutputTextContent, ReasoningItem, Response, Status,
+use crate::protocol::openai::responses::{
+    FunctionCallOutput, FunctionCallOutputStatusEnum, FunctionToolCallOutputResource, OutputItem,
+    ReasoningItem, Response, Status,
 };
+use crate::translation::openai_responses::outbound::{response_id, text_message_item};
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::citations::text_block_annotations;
 use super::ids::OutputItemIdAllocator;
-use super::types::{incomplete_details_from_stop_reason, response_id};
+use super::types::incomplete_details_from_stop_reason;
 
 impl TryFrom<&Message> for Response {
     type Error = TranslationError;
@@ -68,7 +68,11 @@ fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
                 // `text_block_annotations` expects the offset of this block's
                 // first character within the full text output, i.e. the sum
                 // of all preceding text blocks' character counts.
-                output.push(text_message_item(ids.message(), block, text_char_offset));
+                output.push(text_message_item(
+                    ids.message(),
+                    &block.text,
+                    text_block_annotations(block, text_char_offset),
+                ));
                 text_char_offset = text_char_offset.saturating_add(block.text.chars().count());
             }
             ContentBlock::Thinking(block) => {
@@ -97,20 +101,6 @@ fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
     }
 
     Ok(output)
-}
-
-fn text_message_item(id: String, block: &TextBlock, base_char_offset: usize) -> OutputItem {
-    OutputItem::Message(OutputMessage {
-        id,
-        role: AssistantRole::Assistant,
-        status: OutputStatus::Completed,
-        content: vec![OutputMessageContent::OutputText(OutputTextContent {
-            text: block.text.clone(),
-            annotations: text_block_annotations(block, base_char_offset),
-            logprobs: None,
-        })],
-        phase: None,
-    })
 }
 
 fn tool_result_output_item(id: String, block: &ToolResultBlock) -> TranslationResult<OutputItem> {

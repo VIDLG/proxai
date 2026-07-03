@@ -6,7 +6,7 @@ use crate::protocol::openai_responses as responses;
 use crate::translation::TranslationResult;
 use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
 use crate::translation::anthropic_messages::outbound::{
-    text_block, tool_use_block, url_image_block,
+    text_block_param, tool_use_block_param, url_image_block,
 };
 use crate::translation::text::join_text_parts;
 
@@ -173,10 +173,10 @@ impl From<&responses::OutputMessageContent> for anthropic::ContentBlockParam {
     fn from(content: &responses::OutputMessageContent) -> Self {
         match content {
             responses::OutputMessageContent::OutputText(text) => {
-                Self::Text(text_block(text.text.clone()))
+                Self::Text(text_block_param(text.text.clone()))
             }
             responses::OutputMessageContent::Refusal(refusal) => {
-                Self::Text(text_block(refusal.refusal.clone()))
+                Self::Text(text_block_param(refusal.refusal.clone()))
             }
         }
     }
@@ -210,15 +210,15 @@ impl TryFrom<&responses::InputContent> for anthropic::ContentBlockParam {
     fn try_from(part: &responses::InputContent) -> TranslationResult<Self> {
         match part {
             responses::InputContent::InputText(text) => {
-                Ok(Self::Text(text_block(text.text.clone())))
+                Ok(Self::Text(text_block_param(text.text.clone())))
             }
             responses::InputContent::InputImage(image) => match image.image_url.as_deref() {
                 Some(url) => Ok(Self::Image(url_image_block(url))),
-                None => Ok(Self::Text(text_block(
+                None => Ok(Self::Text(text_block_param(
                     "[image omitted: only image_url is supported]".to_string(),
                 ))),
             },
-            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block(
+            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block_param(
                 "[file omitted during Anthropic translation]".to_string(),
             ))),
         }
@@ -229,13 +229,13 @@ impl From<&responses::FunctionToolCall> for anthropic::ContentBlockParam {
     fn from(call: &responses::FunctionToolCall) -> Self {
         let input = serde_json::from_str::<Value>(&call.arguments)
             .unwrap_or_else(|_| Value::String(call.arguments.clone()));
-        Self::ToolUse(tool_use_block(&call.call_id, &call.name, input))
+        Self::ToolUse(tool_use_block_param(&call.call_id, &call.name, input))
     }
 }
 
 impl From<&responses::CustomToolCall> for anthropic::ContentBlockParam {
     fn from(call: &responses::CustomToolCall) -> Self {
-        Self::ToolUse(tool_use_block(
+        Self::ToolUse(tool_use_block_param(
             &call.call_id,
             &call.name,
             Value::String(call.input.clone()),
@@ -277,15 +277,15 @@ impl TryFrom<&responses::InputContent> for anthropic::ToolResultContentBlockPara
     fn try_from(part: &responses::InputContent) -> TranslationResult<Self> {
         match part {
             responses::InputContent::InputText(text) => {
-                Ok(Self::Text(text_block(text.text.clone())))
+                Ok(Self::Text(text_block_param(text.text.clone())))
             }
             responses::InputContent::InputImage(image) => match image.image_url.as_deref() {
                 Some(url) => Ok(Self::Image(url_image_block(url))),
-                None => Ok(Self::Text(text_block(
+                None => Ok(Self::Text(text_block_param(
                     "[image omitted: only image_url is supported]".to_string(),
                 ))),
             },
-            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block(
+            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block_param(
                 "[file omitted during Anthropic translation]".to_string(),
             ))),
         }
@@ -337,7 +337,7 @@ fn append_message_content_block(
         anthropic::MessageParamContent::Text(text) => {
             let previous_text = std::mem::take(text);
             last.content = anthropic::MessageParamContent::Blocks(vec![
-                anthropic::ContentBlockParam::Text(text_block(previous_text)),
+                anthropic::ContentBlockParam::Text(text_block_param(previous_text)),
                 block,
             ]);
         }

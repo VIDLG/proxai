@@ -2,6 +2,9 @@
 
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
+use crate::translation::openai_responses::outbound::{
+    input_file_data, input_file_url, input_image_url, input_text, pending_function_tool_call,
+};
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) fn non_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
@@ -52,7 +55,7 @@ impl From<&anthropic::SystemPrompt> for String {
 
 impl From<anthropic::TextBlockParam> for responses::InputContent {
     fn from(block: anthropic::TextBlockParam) -> Self {
-        Self::InputText(responses::InputTextContent { text: block.text })
+        input_text(block.text)
     }
 }
 
@@ -64,11 +67,7 @@ impl From<anthropic::ImageBlockParam> for responses::InputContent {
             }
             anthropic::ImageBlockSource::Url(source) => source.url,
         };
-        Self::InputImage(responses::InputImageContent {
-            detail: None,
-            file_id: None,
-            image_url: Some(image_url),
-        })
+        input_image_url(image_url)
     }
 }
 
@@ -82,17 +81,15 @@ impl From<anthropic::ContentBlockSourceContent> for responses::InputContent {
 }
 
 impl TryFrom<anthropic::ToolUseBlockParam> for responses::Item {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(block: anthropic::ToolUseBlockParam) -> TranslationResult<Self> {
-        Ok(Self::FunctionCall(responses::FunctionToolCall {
-            call_id: block.id.clone(),
-            name: block.name.clone(),
-            arguments: serde_json::to_string(&block.input)?,
-            id: None,        // Responses item id; Anthropic has no equivalent.
-            namespace: None, // Responses custom tool namespace; Anthropic has no equivalent.
-            status: None,    // Tool has not been executed yet; status set by FunctionCallOutput.
-        }))
+        let arguments = serde_json::to_string(&block.input)?;
+        Ok(Self::FunctionCall(pending_function_tool_call(
+            &block.id,
+            &block.name,
+            arguments,
+        )))
     }
 }
 
@@ -134,50 +131,21 @@ impl TryFrom<anthropic::DocumentBlockParam> for responses::InputContent {
     fn try_from(doc_block: anthropic::DocumentBlockParam) -> TranslationResult<Self> {
         match doc_block.source {
             anthropic::DocumentBlockParamSource::Base64(source) => {
-                Ok(Self::InputFile(responses::InputFileContent {
-                    file_data: Some(format!(
-                        "data:{};base64,{}",
-                        source.media_type.as_ref(),
-                        source.data
-                    )),
-                    file_id: None,
-                    file_url: None,
-                    filename: doc_block.title,
-                    detail: None,
-                }))
+                let data = format!("data:{};base64,{}", source.media_type.as_ref(), source.data);
+                Ok(input_file_data(data, doc_block.title))
             }
             anthropic::DocumentBlockParamSource::Url(source) => {
-                Ok(Self::InputFile(responses::InputFileContent {
-                    file_data: None,
-                    file_id: None,
-                    file_url: Some(source.url),
-                    filename: doc_block.title,
-                    detail: None,
-                }))
+                Ok(input_file_url(source.url, doc_block.title))
             }
             anthropic::DocumentBlockParamSource::PlainText(source) => {
-                Ok(Self::InputFile(responses::InputFileContent {
-                    file_data: Some(format!(
-                        "data:{};base64,{}",
-                        source.media_type.as_ref(),
-                        source.data
-                    )),
-                    file_id: None,
-                    file_url: None,
-                    filename: doc_block.title,
-                    detail: None,
-                }))
+                let data = format!("data:{};base64,{}", source.media_type.as_ref(), source.data);
+                Ok(input_file_data(data, doc_block.title))
             }
             anthropic::DocumentBlockParamSource::Content(content) => match content.content {
-                anthropic::ContentBlockSourceContentUnion::Text(text) => {
-                    Ok(Self::InputFile(responses::InputFileContent {
-                        file_data: Some(format!("data:text/plain,{}", text)),
-                        file_id: None,
-                        file_url: None,
-                        filename: doc_block.title,
-                        detail: None,
-                    }))
-                }
+                anthropic::ContentBlockSourceContentUnion::Text(text) => Ok(input_file_data(
+                    format!("data:text/plain,{}", text),
+                    doc_block.title,
+                )),
                 anthropic::ContentBlockSourceContentUnion::Blocks(blocks) => {
                     if blocks.len() == 1 {
                         let content: responses::InputContent =

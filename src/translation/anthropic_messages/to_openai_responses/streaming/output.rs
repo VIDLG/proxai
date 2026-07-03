@@ -10,12 +10,15 @@
 
 use crate::protocol::anthropic::messages::TextBlock;
 use crate::protocol::openai_responses::{
-    AssistantRole, FunctionToolCall, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
-    OutputTextContent, ReasoningItem, ReasoningItemContent, ReasoningTextContent, Response,
-    ResponseCompletedEvent, ResponseCreatedEvent, ResponseFunctionCallArgumentsDeltaEvent,
-    ResponseFunctionCallArgumentsDoneEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-    ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent, ResponseReasoningTextDoneEvent,
-    ResponseStreamEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, Status,
+    AssistantRole, FunctionToolCall, OutputItem, OutputMessage, OutputStatus, ReasoningItem,
+    Response, ResponseCompletedEvent, ResponseCreatedEvent,
+    ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
+    ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
+    ResponseReasoningTextDeltaEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
+    ResponseTextDeltaEvent, ResponseTextDoneEvent, Status,
+};
+use crate::translation::openai_responses::outbound::{
+    reasoning_item, redacted_reasoning_item, text_message_item,
 };
 use crate::translation::streaming::StreamTranslationResult;
 
@@ -73,17 +76,7 @@ pub(super) fn finalize_block(
             };
             let annotations = text_block_annotations(&synthetic_block, *text_char_offset);
             *text_char_offset = text_char_offset.saturating_add(text.chars().count());
-            let item = OutputItem::Message(OutputMessage {
-                id: item_id,
-                role: AssistantRole::Assistant,
-                status: OutputStatus::Completed,
-                content: vec![OutputMessageContent::OutputText(OutputTextContent {
-                    text,
-                    annotations,
-                    logprobs: None,
-                })],
-                phase: None,
-            });
+            let item = text_message_item(item_id, text, annotations);
             (item, vec![done])
         }
         StreamBlock::Thinking { item_id, text } => {
@@ -95,29 +88,11 @@ pub(super) fn finalize_block(
                     content_index: 0,
                     text: text.clone(),
                 });
-            let item = OutputItem::Reasoning(ReasoningItem {
-                id: Some(item_id),
-                summary: Vec::new(),
-                content: Some(vec![ReasoningItemContent::ReasoningText(
-                    ReasoningTextContent { text },
-                )]),
-                encrypted_content: None,
-                status: Some(OutputStatus::Completed),
-            });
+            let item = reasoning_item(item_id, text);
             (item, vec![done])
         }
         StreamBlock::RedactedThinking { item_id, data } => {
-            // Redacted thinking has no streamed text deltas; only the
-            // lifecycle close events are emitted. The `encrypted_content`
-            // field carries the opaque payload that non-streaming
-            // translation also surfaces.
-            let item = OutputItem::Reasoning(ReasoningItem {
-                id: Some(item_id),
-                summary: Vec::new(),
-                content: None,
-                encrypted_content: Some(data),
-                status: Some(OutputStatus::Completed),
-            });
+            let item = redacted_reasoning_item(item_id, data);
             (item, Vec::new())
         }
         StreamBlock::ToolUse {

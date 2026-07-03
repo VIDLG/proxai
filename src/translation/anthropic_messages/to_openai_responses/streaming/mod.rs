@@ -14,7 +14,7 @@ use crate::translation::streaming::{
     StreamingEventTranslator,
 };
 
-use super::types::response_id;
+use crate::translation::openai_responses::outbound::response_id;
 
 mod output;
 mod state;

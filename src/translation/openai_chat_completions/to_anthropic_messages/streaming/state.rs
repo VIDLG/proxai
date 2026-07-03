@@ -15,9 +15,7 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::protocol::openai::chat_completions::{ChatCompletionMessageToolCallChunk, FinishReason};
 
-use crate::translation::anthropic_messages::outbound::{
-    response_text_block, response_tool_use_block,
-};
+use crate::translation::anthropic_messages::outbound::{text_block, tool_use_block};
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
 #[derive(Debug, Default)]
@@ -57,7 +55,7 @@ impl ChatStreamingState {
                 vec![MessageStreamEvent::ContentBlockStart(
                     ContentBlockStartEvent {
                         index,
-                        content_block: ContentBlock::Text(response_text_block(text)),
+                        content_block: ContentBlock::Text(text_block(text)),
                     },
                 )]
             }
@@ -120,7 +118,7 @@ impl ChatStreamingState {
                 outputs.push(MessageStreamEvent::ContentBlockStart(
                     ContentBlockStartEvent {
                         index,
-                        content_block: ContentBlock::ToolUse(response_tool_use_block(
+                        content_block: ContentBlock::ToolUse(tool_use_block(
                             id,
                             name,
                             Value::Object(Default::default()),

@@ -21,11 +21,11 @@ use crate::protocol::openai_responses::{
 };
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
-use super::super::types::response_id;
 use super::output::{
     output_item_done, output_text_done, text_output_item, tool_arguments_done, tool_output_item,
 };
 use super::types::{StreamTextItem, StreamToolItem};
+use crate::translation::openai_responses::outbound::response_id;
 
 #[derive(Debug)]
 pub(super) struct StreamingState {
