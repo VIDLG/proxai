@@ -1,6 +1,6 @@
 # ProxAI
 
-📚 **文档站**: [vidlg-proxai.netlify.app](https://vidlg-proxai.netlify.app)（基于 Astro / Starlight，源在 `site/`）
+📚 **文档站**: [vidlg.github.io/proxai](https://vidlg.github.io/proxai)（基于 Astro / Starlight，源在 `site/`）
 
 [English README](README.md)
 
@@ -27,7 +27,7 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 - 入站：`anthropic_messages` → 出站：`openai_responses`
 
 其他跨协议转换路径仍保持显式未支持，直到逐个实现。完整矩阵见
-[协议参考](https://vidlg-proxai.netlify.app/zh/reference/protocols)。
+[协议参考](https://vidlg.github.io/proxai/zh/reference/protocols)。
 
 ## 快速开始
 
@@ -36,7 +36,7 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 3. 编辑 `config.toml`（Windows 在 `%USERPROFILE%\.proxai\`，Linux/macOS 在 `~/.proxai/`），把 provider 的 `base_url` 和 `api_key` 配好。
 4. 把 OpenAI 兼容客户端指向 `http://127.0.0.1:18080/v1`。
 
-完整步骤见 [快速开始](https://vidlg-proxai.netlify.app/zh/using/quick-start)。
+完整步骤见 [快速开始](https://vidlg.github.io/proxai/zh/using/quick-start)。
 
 ## 默认端点
 
@@ -45,7 +45,7 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 | Proxy | `http://127.0.0.1:18080` |
 | MCP | `http://127.0.0.1:18081/mcp` |
 
-其他默认值与限制见 [默认值与限制](https://vidlg-proxai.netlify.app/zh/reference/defaults-and-limits)。
+其他默认值与限制见 [默认值与限制](https://vidlg.github.io/proxai/zh/reference/defaults-and-limits)。
 
 ## CLI
 
@@ -61,34 +61,34 @@ proxai --config <path> \
        --route-override ROUTE.FIELD=VALUE
 ```
 
-完整参考（含 `capture` 子命令）见 [CLI 参考](https://vidlg-proxai.netlify.app/zh/reference/cli)。
+完整参考（含 `capture` 子命令）见 [CLI 参考](https://vidlg.github.io/proxai/zh/reference/cli)。
 
 ## 文档
 
 完整文档位于 `site/src/content/docs/`，并发布到
-[vidlg-proxai.netlify.app](https://vidlg-proxai.netlify.app)。主要章节：
+[vidlg.github.io/proxai](https://vidlg.github.io/proxai)。主要章节：
 
-- [使用 ProxAI](https://vidlg-proxai.netlify.app/zh/using) —— 面向用户的任务指南
-- [配置说明](https://vidlg-proxai.netlify.app/zh/using/configuration) —— server、routing、providers、capture、logging、errors
-- [路由与 Provider](https://vidlg-proxai.netlify.app/zh/using/routing-and-providers) —— provider 如何被选中
-- [观测与诊断](https://vidlg-proxai.netlify.app/zh/using/observability) —— capture、日志、隐私边界
-- [常见排障](https://vidlg-proxai.netlify.app/zh/using/troubleshooting) —— 常见症状与下一步检查
-- [协议总览](https://vidlg-proxai.netlify.app/zh/protocol) —— phase 轴、protocol 轴、转换矩阵
-- [流式行为](https://vidlg-proxai.netlify.app/zh/protocol/streaming-behavior) —— terminal event、tool-call 超时
-- [架构](https://vidlg-proxai.netlify.app/zh/developer/architecture) —— 请求生命周期、模块边界
-- [行为契约](https://vidlg-proxai.netlify.app/zh/reference/behavior-contracts) —— ProxAI 跨版本承诺的稳定行为
+- [使用 ProxAI](https://vidlg.github.io/proxai/zh/using) —— 面向用户的任务指南
+- [配置说明](https://vidlg.github.io/proxai/zh/using/configuration) —— server、routing、providers、capture、logging、errors
+- [路由与 Provider](https://vidlg.github.io/proxai/zh/using/routing-and-providers) —— provider 如何被选中
+- [观测与诊断](https://vidlg.github.io/proxai/zh/using/observability) —— capture、日志、隐私边界
+- [常见排障](https://vidlg.github.io/proxai/zh/using/troubleshooting) —— 常见症状与下一步检查
+- [协议总览](https://vidlg.github.io/proxai/zh/protocol) —— phase 轴、protocol 轴、转换矩阵
+- [流式行为](https://vidlg.github.io/proxai/zh/protocol/streaming-behavior) —— terminal event、tool-call 超时
+- [架构](https://vidlg.github.io/proxai/zh/developer/architecture) —— 请求生命周期、模块边界
+- [行为契约](https://vidlg.github.io/proxai/zh/reference/behavior-contracts) —— ProxAI 跨版本承诺的稳定行为
 
 参考页：
 
-- [配置参考](https://vidlg-proxai.netlify.app/zh/reference/configuration) —— 完整 `config.example.toml`
-- [CLI](https://vidlg-proxai.netlify.app/zh/reference/cli) —— 运行 flag 与 capture 子命令
-- [默认值与限制](https://vidlg-proxai.netlify.app/zh/reference/defaults-and-limits)
-- [协议](https://vidlg-proxai.netlify.app/zh/reference/protocols) —— 取值、path、转换对
-- [路由匹配](https://vidlg-proxai.netlify.app/zh/reference/route-matching) —— route 结果、协议 guard 与 fallback 行为
-- [Capture Phases](https://vidlg-proxai.netlify.app/zh/reference/capture-phases) —— capture 边界与隐私风险
-- [环境与文件](https://vidlg-proxai.netlify.app/zh/reference/environment-and-files) —— app 目录和本地产物
-- [错误响应](https://vidlg-proxai.netlify.app/zh/reference/error-responses) —— payload、type 枚举、HTTP status
-- [术语表](https://vidlg-proxai.netlify.app/zh/reference/glossary) —— 共享术语
+- [配置参考](https://vidlg.github.io/proxai/zh/reference/configuration) —— 完整 `config.example.toml`
+- [CLI](https://vidlg.github.io/proxai/zh/reference/cli) —— 运行 flag 与 capture 子命令
+- [默认值与限制](https://vidlg.github.io/proxai/zh/reference/defaults-and-limits)
+- [协议](https://vidlg.github.io/proxai/zh/reference/protocols) —— 取值、path、转换对
+- [路由匹配](https://vidlg.github.io/proxai/zh/reference/route-matching) —— route 结果、协议 guard 与 fallback 行为
+- [Capture Phases](https://vidlg.github.io/proxai/zh/reference/capture-phases) —— capture 边界与隐私风险
+- [环境与文件](https://vidlg.github.io/proxai/zh/reference/environment-and-files) —— app 目录和本地产物
+- [错误响应](https://vidlg.github.io/proxai/zh/reference/error-responses) —— payload、type 枚举、HTTP status
+- [术语表](https://vidlg.github.io/proxai/zh/reference/glossary) —— 共享术语
 
 ## 开发
 
@@ -111,7 +111,7 @@ proxai --config <path> \
 - `contrib/anthropic-sdk-typescript`
 - `contrib/async-openai`
 
-这些脚本强制执行的对齐规则见 [协议转换](https://vidlg-proxai.netlify.app/zh/developer/protocol-conversion)。
+这些脚本强制执行的对齐规则见 [协议转换](https://vidlg.github.io/proxai/zh/developer/protocol-conversion)。
 
 ## 文档站
 

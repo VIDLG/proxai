@@ -1,6 +1,6 @@
 # ProxAI Site
 
-ProxAI's documentation site is built with **Astro + Starlight** and is intended to be deployed from `site/` on **Netlify**.
+ProxAI's documentation site is built with **Astro + Starlight** and is deployed from `site/` to **GitHub Pages** at <https://vidlg.github.io/proxai/>.
 
 `site/` is the single source for publishable documentation. Legacy Markdown docs under `docs/` have been removed to avoid dual-source drift.
 
@@ -43,19 +43,23 @@ just start
 
 `just site check` builds the site and runs documentation consistency checks. `just site start` previews the production build.
 
-## Deploy to Netlify
+## Deploy to GitHub Pages
 
-`site/netlify.toml` defines the site-local build settings:
+The site is built and deployed by the **Site** workflow at `.github/workflows/site.yml`. On every push to `main` that touches `site/**` or the workflow file itself, it:
 
-```toml
-[build]
-command = "pnpm run build"
-publish = "dist"
-```
+1. Installs pnpm + Node and runs `pnpm run build` from `site/`.
+2. Uploads `site/dist` as a GitHub Pages artifact.
+3. Deploys the artifact to GitHub Pages.
 
-When importing the repository in Netlify, set **Base directory** to `site`. Netlify will then read `site/netlify.toml`, run the build from `site/`, and publish `site/dist`.
+`astro.config.mjs` sets `site: "https://vidlg.github.io"` and `base: "/proxai/"` so all generated URLs are prefixed with the repo subpath. Pushes to other branches and pull requests do not deploy; use `workflow_dispatch` to trigger a manual deploy from a branch.
 
-Every push to the production branch can deploy the site, and pull requests can receive deploy previews.
+### One-time repository setup
+
+Before the first deployment, enable Pages in the repo settings:
+
+- **Settings → Pages → Build and deployment → Source**: `GitHub Actions`.
+
+No further configuration is needed; the workflow handles the rest.
 
 ## Structure
 
@@ -76,8 +80,7 @@ site/
 │               ├── protocol/
 │               ├── developer/
 │               └── reference/
-├── astro.config.mjs            # Starlight integration and navigation
-├── netlify.toml                # Netlify build config for site/ as base directory
+├── astro.config.mjs            # Starlight integration, navigation, site/base for Pages
 ├── package.json
 └── justfile
 ```

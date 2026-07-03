@@ -5,7 +5,11 @@ import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  site: "https://vidlg-proxai.netlify.app",
+  // GitHub Pages project site: served from https://vidlg.github.io/proxai/.
+  // `site` is the origin, `base` is the repo subpath Starlight/Astro must
+  // prefix onto every generated URL.
+  site: "https://vidlg.github.io",
+  base: "/proxai/",
   vite: {
     plugins: [tailwindcss()],
     resolve: {
