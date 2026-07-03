@@ -3,3 +3,27 @@
 @import "react-json-view-lite/dist/index.css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * React Flow edge SVG rescue.
+ *
+ * Starlight injects a global Markdown-content rule that forces media
+ * elements (including <svg>) to `max-width: 100%; height: auto; display:
+ * block;` so documentation SVGs scale responsively. React Flow renders
+ * each edge as its own <svg> inside `.react-flow__edges`, and that global
+ * rule collapses those edge SVG boxes to ~0 width — the edges still exist
+ * in the DOM but visually disappear.
+ *
+ * Scope the fix to React Flow's own containers so we do not weaken the
+ * responsive behavior of regular doc SVGs, images, or icons. Restore the
+ * fixed box React Flow expects (it computes the real geometry inside the
+ * SVG via viewBox/path) and allow visible overflow so arrowheads/marker
+ * tips are not clipped.
+ */
+.react-flow__edges svg,
+.react-flow__edge svg {
+    width: 300px;
+    height: 150px;
+    max-width: none;
+    overflow: visible;
+}
