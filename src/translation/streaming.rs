@@ -324,18 +324,13 @@ pub(crate) struct InboundStreamLifecycle<S, T> {
     phase: InboundStreamPhase<S, T>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum InboundStreamPhase<S, T> {
+    #[default]
     Waiting,
     Streaming(StreamingPhase<S>),
     Terminal(T),
     Stopped,
-}
-
-impl<S, T> Default for InboundStreamPhase<S, T> {
-    fn default() -> Self {
-        Self::Waiting
-    }
 }
 
 impl<S, T> Default for InboundStreamLifecycle<S, T> {

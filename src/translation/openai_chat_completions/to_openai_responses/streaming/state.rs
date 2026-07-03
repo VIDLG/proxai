@@ -133,10 +133,10 @@ impl StreamingState {
 
     pub(super) fn response_snapshot(&self, status: Status) -> Response {
         let usage = self.usage.as_ref();
-        let input_tokens = usage.map(|usage| usage.prompt_tokens).unwrap_or_default() as u32;
+        let input_tokens = usage.map(|usage| usage.prompt_tokens).unwrap_or_default();
         let output_tokens = usage
             .map(|usage| usage.completion_tokens)
-            .unwrap_or_default() as u32;
+            .unwrap_or_default();
         let total_tokens = usage
             .map(|usage| usage.total_tokens)
             .unwrap_or_else(|| input_tokens.saturating_add(output_tokens));

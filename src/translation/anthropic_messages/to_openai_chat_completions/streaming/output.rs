@@ -126,9 +126,6 @@ pub(super) fn chat_terminal_delta(delta: MessageDelta, emitted_text: bool) -> Op
         return None;
     }
 
-    let Some(stop_details) = delta.stop_details else {
-        return None;
-    };
-
+    let stop_details = delta.stop_details?;
     stop_details.explanation
 }
