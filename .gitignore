@@ -29,4 +29,3 @@ site/dist/
 site/.netlify/
 site/.turbo/
 site/.pnpm-store/
-site/pnpm-lock.yaml

@@ -90,7 +90,7 @@ site/
 - Node.js and pnpm are managed by root `pixi.toml`.
 - Root `justfile` declares `mod site`; run site tasks as `just site <recipe>`.
 - `site/justfile` owns site-local recipes and runs with `site/` as cwd.
-- `pnpm-lock.yaml` is intentionally ignored for now; regenerate it locally as needed.
+- `pnpm-lock.yaml` is committed so CI and local installs use identical dependencies. Update it with `pnpm install` whenever `package.json` changes.
 - `just check-docs` enforces paired pages, sidebar slugs, required frontmatter, internal links and anchors, hub coverage, heading quality, old-path regressions, Markdown table leftovers, and developer `noindex` rules.
 
 ## Documentation rules
