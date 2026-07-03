@@ -26,9 +26,6 @@ jobs:
   build:
     name: Build site
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: site
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,9 +43,11 @@ jobs:
           cache-dependency-path: site/pnpm-lock.yaml
 
       - name: Install deps
+        working-directory: site
         run: pnpm install --frozen-lockfile
 
       - name: Build
+        working-directory: site
         run: pnpm run build
 
       - name: Upload Pages artifact
