@@ -101,10 +101,11 @@ impl From<&ResponsesUpstreamStreamSnapshot> for DiagnosticUpstreamSection {
 
 #[derive(Serialize)]
 struct DiagnosticStreamSection {
-    duration_ms: u64,
+    duration_ms: u128,
     chunks: u64,
     bytes: u64,
     avg_chunk_bytes: u64,
+    max_chunk_gap_ms: u128,
     recent_tail_bytes: usize,
     recent_tail_utf8_lossy: String,
 }
@@ -120,6 +121,7 @@ impl DiagnosticStreamSection {
             chunks: metrics.chunks,
             bytes: metrics.bytes,
             avg_chunk_bytes: metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms: metrics.max_chunk_gap_ms(),
             recent_tail_bytes: recent_tail.len(),
             recent_tail_utf8_lossy,
         }

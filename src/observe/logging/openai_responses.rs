@@ -17,10 +17,10 @@ use super::counts::{
     merge_count_maps, source_count_maps, string_count_map,
 };
 use super::record::ValuableJson;
-use super::upstream::{stream_error_text, stream_error_token};
+use super::upstream::{stream_error_kind, stream_error_text, stream_error_token};
 use super::{
     active_log_format, emit_json_log, extend_json_object, optional_f64, optional_u64,
-    rename_json_field,
+    rename_json_field, u128_json,
 };
 
 #[derive(Debug, Clone, Default, Valuable)]
@@ -216,6 +216,7 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
             duration_ms = snapshot.metrics.duration_ms(),
             ct = head.content_type_text(),
             sse = head.is_sse(),
@@ -271,9 +272,10 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
                         JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
                     ),
                     (
-                        "duration_ms",
-                        JsonValue::from(snapshot.metrics.duration_ms()),
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
                     ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
                     ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
                     (
@@ -361,7 +363,7 @@ pub(crate) fn emit_stream_error_with_diagnostic(
     let rate_limit = limits.rate;
     let codex_limits = limits.codex;
     let (response_error_code, response_error_message) = match error {
-        UpstreamStreamError::Stream { message } => (None, Some(message.as_str())),
+        UpstreamStreamError::Stream { message, .. } => (None, Some(message.as_str())),
         UpstreamStreamError::UnfinishedTool { .. } => (None, None),
     };
     let sequence_number = match error {
@@ -383,11 +385,13 @@ pub(crate) fn emit_stream_error_with_diagnostic(
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = stream_error_token(error),
+            kind = stream_error_kind(error).as_ref(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
             duration_ms = snapshot.metrics.duration_ms(),
             ct = head.content_type_text(),
             sse = head.is_sse(),
@@ -446,9 +450,10 @@ pub(crate) fn emit_stream_error_with_diagnostic(
                         JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
                     ),
                     (
-                        "duration_ms",
-                        JsonValue::from(snapshot.metrics.duration_ms()),
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
                     ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
                     ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
                     ("error_code", JsonValue::String(error_code)),
@@ -519,6 +524,10 @@ pub(crate) fn emit_stream_error_with_diagnostic(
                     (
                         "codex_primary_over_secondary_percent",
                         optional_f64(codex_limits.primary_over_secondary_percent),
+                    ),
+                    (
+                        "kind",
+                        JsonValue::String(stream_error_kind(error).as_ref().to_string()),
                     ),
                     ("err", JsonValue::String(stream_error_text(error))),
                 ],

@@ -83,9 +83,7 @@ impl BodyObserver for AnthropicSseObserver {
     }
 
     fn on_stream_error(&mut self, error: &reqwest::Error) {
-        self.stream_error = Some(UpstreamStreamError::Stream {
-            message: error.to_string(),
-        });
+        self.stream_error = Some(UpstreamStreamError::from_reqwest(error));
     }
 
     fn on_stream_finished(&self, head: &UpstreamResponseHead, stats: UpstreamBodyStreamStats) {

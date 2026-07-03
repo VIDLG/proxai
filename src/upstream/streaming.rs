@@ -30,6 +30,9 @@ pub(crate) trait BodyObserver: Send + Unpin + 'static {
     fn on_chunk(&mut self, _chunk: &[u8]) -> BodyAction {
         BodyAction::Continue
     }
+    /// Called when the upstream byte stream returns a `reqwest::Error`.
+    /// Observers that need a stable failure category can classify it with
+    /// [`crate::upstream::UpstreamStreamErrorKind::from_reqwest`].
     fn on_stream_error(&mut self, error: &reqwest::Error);
     fn poll_pending_action(&mut self, _cx: &mut Context<'_>) -> BodyAction {
         BodyAction::Continue
@@ -104,14 +107,11 @@ where
         }
 
         let idle_ms = self.last_activity.elapsed().as_millis() as u64;
-        let duration_ms = self.stats.metrics().duration_ms();
-        let chunks = self.stats.chunks();
-        let down = self.stats.bytes();
         let progress = UpstreamStreamProgress {
             idle_ms,
-            duration_ms,
-            chunks,
-            down,
+            duration_ms: u64::try_from(self.stats.duration_ms()).unwrap_or(u64::MAX),
+            chunks: self.stats.chunks(),
+            down: self.stats.bytes(),
         };
         self.obs.observe_upstream_stream_wait(progress);
 

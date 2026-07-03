@@ -522,6 +522,17 @@ fn format_stream_end(
             )
         )?;
     }
+    if let Some(max_gap_ms) = fields.u64("max_chunk_gap_ms").filter(|value| *value != 0) {
+        write!(
+            writer,
+            " {}",
+            paint(
+                color,
+                format!("gap={}", format_millis(max_gap_ms)),
+                style(ColorToken::Meta)
+            )
+        )?;
+    }
     format_response_summary(writer, fields, color)?;
     format_rate_limits(writer, fields, color)?;
     format_codex_limits(writer, fields, color)?;

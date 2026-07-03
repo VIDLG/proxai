@@ -16,8 +16,8 @@ use super::counts::{
     source_count_maps, string_count_map,
 };
 use super::record::ValuableJson;
-use super::upstream::{stream_error_text, stream_error_token};
-use super::{active_log_format, emit_json_log, extend_json_object, rename_json_field};
+use super::upstream::{stream_error_kind, stream_error_text, stream_error_token};
+use super::{active_log_format, emit_json_log, extend_json_object, rename_json_field, u128_json};
 
 #[derive(Debug, Clone, Default, Valuable)]
 struct ChatResponseFields {
@@ -163,6 +163,7 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
             duration_ms = snapshot.metrics.duration_ms(),
             ct = head.content_type_text(),
             sse = head.is_sse(),
@@ -193,9 +194,10 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
                         JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
                     ),
                     (
-                        "duration_ms",
-                        JsonValue::from(snapshot.metrics.duration_ms()),
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
                     ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
                     ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
                 ],
@@ -215,11 +217,13 @@ pub(crate) fn emit_chat_stream_error(
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = stream_error_token(error),
+            kind = stream_error_kind(error).as_ref(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
             chunks = snapshot.metrics.chunks,
             avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
             duration_ms = snapshot.metrics.duration_ms(),
             ct = head.content_type_text(),
             sse = head.is_sse(),
@@ -251,11 +255,16 @@ pub(crate) fn emit_chat_stream_error(
                         JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
                     ),
                     (
-                        "duration_ms",
-                        JsonValue::from(snapshot.metrics.duration_ms()),
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
                     ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
                     ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
+                    (
+                        "kind",
+                        JsonValue::String(stream_error_kind(error).as_ref().to_string()),
+                    ),
                     ("err", JsonValue::String(stream_error_text(error))),
                 ],
             );

@@ -14,7 +14,7 @@ use super::point::{
     ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
 use axum::http::{Method, Uri};
-use serde_json::{Map as JsonMap, Value as JsonValue};
+use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 use std::io::Write;
 use std::sync::OnceLock;
 use tracing::info;
@@ -293,6 +293,12 @@ pub(crate) fn rename_json_field(value: &mut JsonValue, from: &str, to: &str) {
     {
         map.insert(to.to_string(), value);
     }
+}
+
+pub(crate) fn u128_json(value: u128) -> JsonValue {
+    JsonNumber::from_u128(value)
+        .map(JsonValue::Number)
+        .unwrap_or_else(|| JsonValue::String(value.to_string()))
 }
 
 pub(crate) fn optional_u64(value: Option<u64>) -> JsonValue {

@@ -7,7 +7,7 @@ use crate::config::LogOutputFormat;
 use crate::error::{UpstreamError, UpstreamResponseError};
 use crate::http_support::UpstreamResponseHead;
 use crate::request::RequestId;
-use crate::upstream::UpstreamStreamError;
+use crate::upstream::{UpstreamStreamError, UpstreamStreamErrorKind};
 
 use super::{active_log_format, emit_json_log, json_object};
 use crate::observe::point::UpstreamStreamProgress;
@@ -63,9 +63,20 @@ pub(crate) fn stream_error_token(error: &UpstreamStreamError) -> &'static str {
     }
 }
 
+pub(crate) fn stream_error_kind(error: &UpstreamStreamError) -> UpstreamStreamErrorKind {
+    match error {
+        UpstreamStreamError::Stream { kind, .. } => *kind,
+        // `UnfinishedTool` is detected at stream end (no pending reqwest error),
+        // so there is no transport classification to forward. `UpstreamOther`
+        // keeps it distinct from HTTP-layer timeouts and from locally
+        // synthesized tool-argument categories.
+        UpstreamStreamError::UnfinishedTool { .. } => UpstreamStreamErrorKind::UpstreamOther,
+    }
+}
+
 pub(crate) fn stream_error_text(error: &UpstreamStreamError) -> String {
     match error {
-        UpstreamStreamError::Stream { message } => message.clone(),
+        UpstreamStreamError::Stream { message, .. } => message.clone(),
         UpstreamStreamError::UnfinishedTool { .. } => error.to_string(),
     }
 }

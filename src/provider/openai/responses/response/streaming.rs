@@ -13,7 +13,8 @@ use crate::observe::{
 use crate::provider::ProviderStreamingResponsePolicy;
 use crate::sse::{SseEventScanner, encode_sse_json};
 use crate::upstream::{
-    BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
+    BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError,
+    UpstreamStreamErrorKind, prepare_response_stream,
 };
 
 use super::sse::is_terminal_event;
@@ -122,6 +123,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
             if let Err(message) = self.tool_arguments.observe_event(&event, self.timeout) {
                 self.record_stream_error(UpstreamStreamError::Stream {
                     message: message.clone(),
+                    kind: UpstreamStreamErrorKind::MalformedToolArgument,
                 });
                 return BodyAction::InjectAndClose(error_sse_chunk(
                     self.state.sequence_number,
@@ -133,9 +135,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
     }
 
     fn on_stream_error(&mut self, error: &reqwest::Error) {
-        self.record_stream_error(UpstreamStreamError::Stream {
-            message: error.to_string(),
-        });
+        self.record_stream_error(UpstreamStreamError::from_reqwest(error));
     }
 
     fn poll_pending_action(&mut self, cx: &mut Context<'_>) -> BodyAction {
@@ -152,6 +152,7 @@ impl BodyObserver for OpenaiResponsesUpstreamBodyObserver {
                 "{TOOL_ARGUMENT_STALL_MESSAGE} after {}s",
                 self.timeout.unwrap_or_default().as_secs()
             ),
+            kind: UpstreamStreamErrorKind::ToolArgumentStall,
         });
         BodyAction::InjectAndClose(error_sse_chunk(
             self.state.sequence_number,
