@@ -1,0 +1,201 @@
+---
+title: Zed Integration
+description: Connect Zed to a local ProxAI instance and debug Responses, streaming, and tool-call issues safely
+---
+
+import { DecisionCards, ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs.jsx';
+
+# Zed Integration
+
+Use this page when Zed should talk to ProxAI instead of a provider directly. ProxAI stays local, accepts OpenAI-compatible requests, and forwards them to the configured upstream provider.
+
+<ProxaiCallout type="note" title="Local proxy boundary">
+  Zed sends requests to ProxAI's local base URL. ProxAI then routes by inbound protocol, model, and provider configuration. Keep long-lived routing in `config.toml`, not in ad hoc client settings.
+</ProxaiCallout>
+
+## Connection checklist
+
+<TaskSteps
+  steps={[
+    {
+      title: 'Run ProxAI locally',
+      goal: 'Start the local proxy before configuring Zed.',
+      do: ['Run ProxAI with your chosen `config.toml`.', 'Confirm the configured local port from `[server]` or your temporary CLI override.'],
+      verify: 'A basic health/request check reaches the local listener rather than the upstream provider directly.',
+      docs: [{ label: 'Quick Start', href: '/using/quick-start' }, { label: 'CLI Reference', href: '/reference/cli' }],
+    },
+    {
+      title: 'Point Zed at the local base URL',
+      goal: 'Make Zed use ProxAI as the OpenAI-compatible endpoint.',
+      do: ['Use the ProxAI local base URL, usually `http://127.0.0.1:<port>/v1`.', 'Use a local client key if the client requires one; upstream provider keys belong in ProxAI provider configuration.'],
+      verify: 'ProxAI logs show the inbound request and the selected route/provider.',
+      docs: [{ label: 'Client Integration', href: '/using/client-integration' }, { label: 'Observability', href: '/using/observability' }],
+    },
+    {
+      title: 'Match the endpoint to the desired inbound protocol',
+      goal: 'Let ProxAI detect the actual request protocol from the request path.',
+      do: ['Use `/v1/responses` for `openai_responses` clients.', 'Use `/v1/chat/completions` for `openai_chat_completions` clients.', 'Only add route `request_protocol` when the same model pattern needs endpoint-specific behavior.'],
+      verify: 'Route selection uses the expected inbound protocol and does not silently fall through across explicit protocol guards.',
+      docs: [{ label: 'Protocols', href: '/reference/protocols' }, { label: 'Route Matching', href: '/reference/route-matching' }],
+    },
+    {
+      title: 'Debug streaming/tool-call symptoms narrowly',
+      goal: 'Capture only the phase needed to explain a Zed-visible issue.',
+      do: ['For stalled tool calls, start with `upstream_response` or `outbound_response` captures.', 'Do not share full captures without redaction; they may contain prompts, tool arguments, or provider output.'],
+      verify: 'The terminal event, stop reason, or stream translation error explains the client symptom.',
+      docs: [{ label: 'Streaming and Tools', href: '/using/streaming-and-tools' }, { label: 'Capture Phases', href: '/reference/capture-phases' }],
+    },
+  ]}
+/>
+
+## What to configure where
+
+<ReferenceTable
+  columns={['Concern', 'Where it belongs']}
+  rows={[
+    ['Zed base URL', 'Zed client settings, pointing to ProxAI local `/v1` base URL'],
+    ['Local client key requirement', 'Zed/client settings if required by the client integration'],
+    ['Provider API key', '`config.toml` provider config or supported environment expansion, never in docs or captures'],
+    ['Model-to-provider routing', '`[[routes]]` and `[routing.defaults]` in `config.toml`'],
+    ['Provider protocol behavior', '`providers.<name>.protocol`'],
+    ['Temporary port/upstream override', 'CLI flags for short-lived local tests'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Common Zed-facing decisions
+
+<DecisionCards
+  items={[
+    { title: 'Zed uses Responses', icon: 'protocol', when: 'The client sends `/v1/responses` requests.', choose: '`request_protocol = "openai_responses"` only for endpoint-specific routes; otherwise let path detection handle it.', why: 'Responses has richer output item semantics, tool events, and terminal status behavior.' },
+    { title: 'Provider speaks Anthropic Messages', icon: 'route', when: 'The upstream provider expects Anthropic Messages wire payloads.', choose: 'Set the selected provider `protocol = "anthropic_messages"`.', why: 'Provider protocol controls outbound wire behavior; provider names are just labels.' },
+    { title: 'Tool stream appears stuck', icon: 'timer', when: 'Zed waits while tool-call arguments or terminal events are incomplete.', choose: 'Inspect streaming/tool-call behavior and semantic timeout settings before changing routing.', why: 'Streaming regressions are user-visible and are often phase-specific.' },
+    { title: 'Error is hard to read', icon: 'alert', when: 'Zed surfaces a compact local error without enough detail.', choose: 'Temporarily use JSON error responses and a narrow capture phase.', why: 'This keeps the default readable while preserving structured diagnostics during debugging.' },
+  ]}
+/>
+
+## Zed thinking settings and model variants
+
+<ProxaiCallout type="warning" title="Version-sensitive Zed behavior">
+  This section reflects Zed behavior observed in `zed-industries/zed` main after PR `#59213` was merged on 2026-06-23. Zed settings and OpenAI-compatible reasoning behavior may change in later Zed releases; re-check the Zed source or default settings when upgrading.
+</ProxaiCallout>
+
+Zed uses two related but different setting layers for OpenAI-compatible reasoning models:
+
+<ReferenceTable
+  columns={['Layer', 'Fields', 'Meaning']}
+  rows={[
+    ['`language_models.openai_compatible.<provider>.available_models[]`', '`name`, `display_name`, `reasoning_effort`, `capabilities`', 'Defines the model exposed by the OpenAI-compatible provider. `reasoning_effort` here is the provider-model default and makes the model support thinking when it is not `none`.'],
+    ['`agent.default_model` and `agent.favorite_models[]`', '`provider`, `model`, `enable_thinking`, `effort`', 'Selects a model for the Agent UI. Use `effort`, not `reasoning_effort`, to choose the default thinking effort for that selection.'],
+  ]}
+/>
+
+For a single model, configure both layers explicitly:
+
+```json
+{
+  "language_models": {
+    "openai_compatible": {
+      "proxai": {
+        "api_url": "http://127.0.0.1:18080/v1",
+        "available_models": [
+          {
+            "name": "gpt-5.5",
+            "display_name": "GPT-5.5",
+            "reasoning_effort": "high",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": {
+              "tools": true,
+              "images": true,
+              "parallel_tool_calls": true,
+              "prompt_cache_key": true,
+              "chat_completions": false,
+              "interleaved_reasoning": true
+            }
+          }
+        ]
+      }
+    }
+  },
+  "agent": {
+    "default_model": {
+      "provider": "proxai",
+      "model": "gpt-5.5",
+      "enable_thinking": true,
+      "effort": "high"
+    }
+  }
+}
+```
+
+The effective effort order is:
+
+1. The current thread/UI-selected effort.
+2. `agent.default_model.effort` or the matching `agent.favorite_models[].effort`.
+3. `language_models.openai_compatible.<provider>.available_models[].reasoning_effort`.
+
+The model must still advertise thinking support at the provider-model layer: for OpenAI-compatible models, that means `reasoning_effort` is present and not `none`.
+
+### Multiple Zed entries for one upstream model
+
+Zed identifies Agent models by `provider/model`, where `model` is the provider model `name`. `display_name`, `enable_thinking`, `effort`, and `reasoning_effort` do not participate in model identity or favorite-model de-duplication. Therefore, do not create multiple `favorite_models` entries with the same `provider` and `model` just to vary effort.
+
+Instead, expose distinct provider model names and let ProxAI rewrite those aliases to the same upstream model:
+
+```json
+{
+  "language_models": {
+    "openai_compatible": {
+      "proxai": {
+        "api_url": "http://127.0.0.1:18080/v1",
+        "available_models": [
+          {
+            "name": "gpt-5.5-low",
+            "display_name": "GPT-5.5 Low",
+            "reasoning_effort": "low",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": { "tools": true, "chat_completions": false }
+          },
+          {
+            "name": "gpt-5.5-high",
+            "display_name": "GPT-5.5 High",
+            "reasoning_effort": "high",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": { "tools": true, "chat_completions": false }
+          }
+        ]
+      }
+    }
+  },
+  "agent": {
+    "favorite_models": [
+      {
+        "provider": "proxai",
+        "model": "gpt-5.5-low",
+        "enable_thinking": true,
+        "effort": "low"
+      },
+      {
+        "provider": "proxai",
+        "model": "gpt-5.5-high",
+        "enable_thinking": true,
+        "effort": "high"
+      }
+    ]
+  }
+}
+```
+
+Then route or rewrite `gpt-5.5-low` and `gpt-5.5-high` to the real upstream model in `config.toml`. This keeps Zed's model selector unambiguous while keeping upstream routing centralized in ProxAI.
+
+## Privacy notes
+
+Zed integration can involve private prompts, tool calls, file snippets, and provider output. ProxAI should not log request bodies, `Authorization` headers, API keys, or private upstream URL details. Captures are local debugging artifacts and should be treated as sensitive.
+
+See [Privacy and Local Data](/using/privacy-and-local-data) and [Environment and Files](/reference/environment-and-files) before sharing logs or captures.

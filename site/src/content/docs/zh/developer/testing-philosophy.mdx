@@ -1,0 +1,93 @@
+---
+title: 测试哲学
+description: 为什么 proxai 把真实回归测试和合成测试分开，以及构建失败时如何阅读信号
+robots: noindex
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# 测试哲学
+
+本页解释测试树*为什么*这样组织，以及构建失败时*如何阅读信号*。关于"跑哪个命令"的实操指南，见[测试地图](/zh/developer/test-map)。
+
+## 两类测试，价值密度天差地别
+
+proxai 区分两类测试：
+
+- **合成测试**（`*_tests.rs`）：开发者或 AI 合成一个 payload 来覆盖某个代码分支或断言一种序列化形状。写得快、增长快，尤其 AI 辅助下可以批量生成。
+- **真实回归测试**（`*_regression_tests.rs`，命名 `regression_<来源>_<症状>`）：在生产、自家试用或上游协议漂移中真实观察到的、让 proxy 出问题的 payload。每一条都承载一个具体的历史故障和修复它的补丁。
+
+这两类测试被物理隔离到相邻文件（`foo_tests.rs` + `foo_regression_tests.rs`），而不是混在一起。这不只是整洁问题，而是一个刻意做出的"信号噪声比"决策。
+
+### 为什么物理分离
+
+- **稀缺性必须可见。** 一个模块有 `foo_tests.rs`（60 个合成用例）+ `foo_regression_tests.rs`（3 个真实回归），一眼就能看出项目最难积累的知识在哪里。混在一起会把稀缺的高价值用例淹没在容易生成的批量里。
+- **Review 注意力可以分流。** 审查 PR 时，`*_regression_tests.rs` 的改动是高优先级（每条断言都是契约）；`*_tests.rs` 的改动可以快速扫过。
+- **AI 协作的护栏。** AI 助手生成合成测试非常快。如果不物理隔离，一波 `translates_xxx` 新增就能淹没那两个真正重要的 `regression_*` 测试。分离让高价值区域保持人工策展。
+
+<ProxaiCallout type="note" title="AGENTS.md 承载操作规则">
+完整的写作规则（命名、来源注释、fixture、脱敏）写在 `AGENTS.md` 的 "Real-world regression tests" 和 "Failure trust gradient" 两节里。本页解释这些规则背后的推理。
+</ProxaiCallout>
+
+## 失败可信度梯度（TDD 反演）
+
+测试失败时不一定都同样可信。测试的价值密度决定了它失败时应该被信任的程度——而这个梯度的方向**和 TDD 教科书讲的相反**。
+
+### `regression_*` 失败 → 假设代码真的坏了
+
+payload 是真实的（在生产/自家试用/上游漂移中观察到），断言锁住了一个具体的过往修复，测试承载项目记忆。任何失败都应该当作真实回归处理，除非证明不是。
+
+**默认动作：** 修代码。只有当原来的行为本身就是错的时候才动测试，而且即使那样也要用一个新的回归测试替换它，保留来源注释链。
+
+### 合成 `*_tests` 失败 → 测试自己可能有问题
+
+payload 是手工合成来打某个分支的，断言编码的是开发者对目标形状的假设，而 AI 生成的测试尤其容易和实现细节过度耦合。失败时三种可能的原因概率相当：
+
+1. 代码真的回归了（中等概率），
+2. 测试和重构后的内部实现耦合太紧（高概率，尤其 AI 写的测试），
+3. 合成的 payload 本来就和真实上游形状不符（中等概率）。
+
+**默认动作：** 简单调查后，要么修代码，要么不客气地重写/删除测试。不要为了让 brittle 的合成测试通过而扭曲生产代码。
+
+### 为什么这反直觉
+
+TDD 教科书讲"测试失败 → 信任测试 → 修代码"。现实是低价值测试容易成倍增加，每一条都是更嘈杂的信号。一个有 200 个合成测试 + 3 个回归测试的模块，CI 挂了反而比 30 个合成 + 3 个回归的模块**更难调试**，因为稀缺的高可信失败被 brittle 断言的噪声淹没了。
+
+物理分离保留了信号：`*_regression_tests.rs` 失败是高优先级警报；`*_tests.rs` 失败是低优先级提示，可能只是测试需要重写。
+
+## 写作规则（摘要）
+
+新增一个真实回归测试时，三件事是必须的：
+
+1. **`regression_<来源>_<症状>` 命名前缀** —— `grep regression_` 列出树里每一条真实数据回归。
+   - `<来源>`：触发它的上游或客户端（`zed_`、`glm_`、`anthropic_`、`opus_`、...）。
+   - `<症状>`：失败现象的简短描述（`reasoning_dropped`、`tool_call_stall`、`unicode_panic`、...）。
+2. **来源注释**写在 `#[test]` 上方，说明触发条件、观察到的症状、数据来源、脱敏说明。
+3. **Fixture 文件**用于大 payload（>~30 行 JSON / 多事件 SSE），提交到 `tests/fixtures/regression/` 下，必须脱敏。
+
+合成测试保持正常命名（`translates_xxx`、`rejects_xxx`、...）。不要回溯性地把它们改名为 `regression_*`，除非 payload 确实来自观察到的故障。
+
+## Review 和 CI 分流
+
+构建失败时，先用文件路径作为第一个分流信号：
+
+<ReferenceTable
+  columns={['失败文件', '默认解读', '优先级']}
+  rows={[
+    ['`*_regression_tests.rs`', '真实回归，除非证明不是', '**立刻调查**'],
+    ['`*_tests.rs`', '可能是 brittle 测试，也可能是真 bug', '快速调查，允许重写测试'],
+    ['`tests/proxy_e2e/`', 'Mock 上游 e2e', '中等 —— 检查协议形状假设是否变了'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Review 时用 `just regression-touched` 查看当前 diff 是否碰到回归文件——这些改动值得最多的审查注意力。
+
+## 本地 recipes
+
+```sh
+just regression-list       # 列出所有 regression_* 测试
+just regression-run        # 跑所有 regression_* 测试
+just regression-run <name> # 按名字片段跑单个回归测试
+just regression-touched    # 显示当前 diff 碰到的回归文件
+```

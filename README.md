@@ -28,7 +28,7 @@ The current stable forwarding and translation paths are:
 - inbound: `anthropic_messages` → outbound: `openai_responses`
 
 Other cross-protocol translation paths remain intentionally unsupported until
-they are implemented explicitly. See [Protocols Reference](https://vidlg.github.io/proxai/en/reference/protocols)
+they are implemented explicitly. See [Protocols Reference](https://vidlg.github.io/proxai/reference/protocols)
 for the full matrix.
 
 ## Quick Start
@@ -39,7 +39,7 @@ for the full matrix.
    `~/.proxai/` on Linux/macOS) to set provider `base_url` and `api_key`.
 4. Point your OpenAI-compatible client at `http://127.0.0.1:18080/v1`.
 
-For the full walkthrough, see [Quick Start](https://vidlg.github.io/proxai/en/using/quick-start).
+For the full walkthrough, see [Quick Start](https://vidlg.github.io/proxai/using/quick-start).
 
 ## Default Endpoints
 
@@ -48,7 +48,7 @@ For the full walkthrough, see [Quick Start](https://vidlg.github.io/proxai/en/us
 | Proxy | `http://127.0.0.1:18080` |
 | MCP | `http://127.0.0.1:18081/mcp` |
 
-For all other defaults and limits, see [Defaults and Limits](https://vidlg.github.io/proxai/en/reference/defaults-and-limits).
+For all other defaults and limits, see [Defaults and Limits](https://vidlg.github.io/proxai/reference/defaults-and-limits).
 
 ## CLI
 
@@ -64,34 +64,34 @@ proxai --config <path> \
        --route-override ROUTE.FIELD=VALUE
 ```
 
-For the full reference (including the `capture` subcommand), see [CLI Reference](https://vidlg.github.io/proxai/en/reference/cli).
+For the full reference (including the `capture` subcommand), see [CLI Reference](https://vidlg.github.io/proxai/reference/cli).
 
 ## Documentation
 
 The complete documentation lives in `site/src/content/docs/` and is published to
 [vidlg.github.io/proxai](https://vidlg.github.io/proxai). Key sections:
 
-- [Using ProxAI](https://vidlg.github.io/proxai/en/using) — user-facing task guide
-- [Configuration](https://vidlg.github.io/proxai/en/using/configuration) — runtime settings, routes, providers, capture, logging, errors
-- [Routing and Providers](https://vidlg.github.io/proxai/en/using/routing-and-providers) — how providers are selected
-- [Observability](https://vidlg.github.io/proxai/en/using/observability) — capture, logs, privacy boundaries
-- [Troubleshooting](https://vidlg.github.io/proxai/en/using/troubleshooting) — common symptoms and next checks
-- [Protocol Overview](https://vidlg.github.io/proxai/en/protocol) — phase axis, protocol axis, conversion matrix
-- [Streaming Behavior](https://vidlg.github.io/proxai/en/protocol/streaming-behavior) — terminal events, tool-call timeouts
-- [Architecture](https://vidlg.github.io/proxai/en/developer/architecture) — request lifecycle, module boundaries
-- [Behavior Contracts](https://vidlg.github.io/proxai/en/reference/behavior-contracts) — stable promises ProxAI commits to
+- [Using ProxAI](https://vidlg.github.io/proxai/using) — user-facing task guide
+- [Configuration](https://vidlg.github.io/proxai/using/configuration) — runtime settings, routes, providers, capture, logging, errors
+- [Routing and Providers](https://vidlg.github.io/proxai/using/routing-and-providers) — how providers are selected
+- [Observability](https://vidlg.github.io/proxai/using/observability) — capture, logs, privacy boundaries
+- [Troubleshooting](https://vidlg.github.io/proxai/using/troubleshooting) — common symptoms and next checks
+- [Protocol Overview](https://vidlg.github.io/proxai/protocol) — phase axis, protocol axis, conversion matrix
+- [Streaming Behavior](https://vidlg.github.io/proxai/protocol/streaming-behavior) — terminal events, tool-call timeouts
+- [Architecture](https://vidlg.github.io/proxai/developer/architecture) — request lifecycle, module boundaries
+- [Behavior Contracts](https://vidlg.github.io/proxai/reference/behavior-contracts) — stable promises ProxAI commits to
 
 Reference pages:
 
-- [Configuration Reference](https://vidlg.github.io/proxai/en/reference/configuration) — full `config.example.toml`
-- [CLI](https://vidlg.github.io/proxai/en/reference/cli) — runtime flags and capture subcommands
-- [Defaults and Limits](https://vidlg.github.io/proxai/en/reference/defaults-and-limits)
-- [Protocols](https://vidlg.github.io/proxai/en/reference/protocols) — values, paths, conversion pairs
-- [Route Matching](https://vidlg.github.io/proxai/en/reference/route-matching) — route outcomes, protocol guards, and fallback behavior
-- [Capture Phases](https://vidlg.github.io/proxai/en/reference/capture-phases) — capture boundaries and privacy risk
-- [Environment and Files](https://vidlg.github.io/proxai/en/reference/environment-and-files) — app directories and local artifacts
-- [Error Responses](https://vidlg.github.io/proxai/en/reference/error-responses) — payload, type enum, HTTP status
-- [Glossary](https://vidlg.github.io/proxai/en/reference/glossary) — shared terminology
+- [Configuration Reference](https://vidlg.github.io/proxai/reference/configuration) — full `config.example.toml`
+- [CLI](https://vidlg.github.io/proxai/reference/cli) — runtime flags and capture subcommands
+- [Defaults and Limits](https://vidlg.github.io/proxai/reference/defaults-and-limits)
+- [Protocols](https://vidlg.github.io/proxai/reference/protocols) — values, paths, conversion pairs
+- [Route Matching](https://vidlg.github.io/proxai/reference/route-matching) — route outcomes, protocol guards, and fallback behavior
+- [Capture Phases](https://vidlg.github.io/proxai/reference/capture-phases) — capture boundaries and privacy risk
+- [Environment and Files](https://vidlg.github.io/proxai/reference/environment-and-files) — app directories and local artifacts
+- [Error Responses](https://vidlg.github.io/proxai/reference/error-responses) — payload, type enum, HTTP status
+- [Glossary](https://vidlg.github.io/proxai/reference/glossary) — shared terminology
 
 ## Development
 
@@ -115,7 +115,7 @@ The referenced SDK checkouts are git submodules under `contrib/`:
 - `contrib/async-openai`
 
 For the alignment rules enforced by these scripts, see
-[Protocol Conversion](https://vidlg.github.io/proxai/en/developer/protocol-conversion).
+[Protocol Conversion](https://vidlg.github.io/proxai/developer/protocol-conversion).
 
 ## Documentation Site
 

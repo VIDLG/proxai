@@ -15,6 +15,11 @@ export default defineConfig({
     resolve: {
       alias: {
         "@components": new URL("./src/components", import.meta.url).pathname,
+        // `@root` points at the repository root (parent of `site/`) so that
+        // MDX files can import repo-level files (e.g. config.example.toml)
+        // without depending on the MDX file's directory depth. Without this,
+        // moving a doc between directories would silently break the import.
+        "@root": new URL("..", import.meta.url).pathname,
       },
     },
   },
@@ -27,9 +32,12 @@ export default defineConfig({
     }),
     starlight({
       title: "ProxAI",
-      defaultLocale: "en",
+      // English is the root locale: served at / without an /en/ prefix.
+      // Chinese stays under /zh/. Per Starlight i18n guide, this is the
+      // recommended pattern when one language is the primary content source.
+      defaultLocale: "root",
       locales: {
-        en: { label: "English", lang: "en" },
+        root: { label: "English", lang: "en" },
         zh: { label: "中文", lang: "zh-CN" },
       },
       customCss: ["./src/styles/proxai.css"],

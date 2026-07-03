@@ -10,6 +10,10 @@ import { ProxaiCallout, ReferenceTable, TaskSteps } from '@components/ProxaiDocs
 
 先用 [该改哪里](/zh/developer/where-to-change-code) 定位源码边界，再用本页选择覆盖该变更的最小验证；只有必要时再扩大范围。
 
+<ProxaiCallout type="note" title="为什么有些测试比另一些更“可信”">
+  CI 挂了的时候，不是每个失败的测试都同等重要。真实回归测试（`*_regression_tests.rs`）是高可信信号；合成测试（`*_tests.rs`）可能是测试本身错了。阅读 [测试哲学](/zh/developer/testing-philosophy) 了解失败可信度梯度和分流方法。
+</ProxaiCallout>
+
 <ProxaiCallout type="note" title="Windows 上优先使用 just recipes">
   在 Windows 上，如果本地 proxy 可能正在运行，优先使用项目 `just` recipes。它们可以避免被锁定的 `target/debug/proxai.exe` 导致 target 目录冲突。
 </ProxaiCallout>

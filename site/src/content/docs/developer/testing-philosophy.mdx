@@ -1,0 +1,93 @@
+---
+title: Testing Philosophy
+description: Why proxai separates real-world regression tests from synthetic tests, and how to read failures when they break
+robots: noindex
+---
+
+import { ProxaiCallout, ReferenceTable } from '@components/ProxaiDocs.jsx';
+
+# Testing Philosophy
+
+This page explains *why* the test tree is organized the way it is, and *how to read failures* when a build breaks. For the practical "which command to run" guide, see [Test Map](/developer/test-map).
+
+## Two populations, very different value density
+
+proxai distinguishes two kinds of tests:
+
+- **Synthetic tests** (`*_tests.rs`): a developer or AI synthesized a payload to exercise a code branch or assert a serialization shape. Easy to write, easy to multiply, especially with AI assistance.
+- **Real-world regression tests** (`*_regression_tests.rs`, named `regression_<source>_<symptom>`): a real payload observed in production, dogfooding, or upstream protocol drift that broke the proxy. Each one carries a concrete past failure and the fix that closed it.
+
+The two populations are physically isolated into adjacent files (`foo_tests.rs` + `foo_regression_tests.rs`) rather than mixed. This is not just tidiness — it is a deliberate signal-to-noise decision.
+
+### Why physical separation
+
+- **Scarcity must be visible.** A module with `foo_tests.rs` (60 synthetic cases) + `foo_regression_tests.rs` (3 real regressions) tells you at a glance where the project's hard-won knowledge lives. Mixing them buries the rare high-value cases under easily-generated bulk.
+- **Review attention splits cleanly.** When reviewing a PR, `*_regression_tests.rs` changes are high-priority (every assertion is a contract); `*_tests.rs` changes can be scanned quickly.
+- **AI authorship guardrail.** AI assistants generate synthetic tests rapidly. Without physical isolation, a burst of `translates_xxx` additions can drown the two `regression_*` tests that actually matter. The split keeps the high-value zone human-curated.
+
+<ProxaiCallout type="note" title="AGENTS.md carries the operative rules">
+  The full authoring rules (naming, source comments, fixtures, sanitization) live in `AGENTS.md` under "Real-world regression tests" and "Failure trust gradient". This page explains the reasoning behind those rules.
+</ProxaiCallout>
+
+## Failure trust gradient (TDD inverted)
+
+Tests are not equally trustworthy when they fail. A test's value density decides how much a failure should be trusted — and the gradient runs the **opposite** of what naive TDD assumes.
+
+### `regression_*` fails → assume the code is broken
+
+The payload is real (observed in production / dogfooding / upstream drift), the assertions lock a concrete past fix, and the test carries project memory. Treat any failure as a real regression until proven otherwise.
+
+**Default action:** fix the code. Only edit the test if the original behavior was genuinely wrong, and even then replace it with a new regression test that preserves the source comment trail.
+
+### Synthetic `*_tests` fails → the test itself may be wrong
+
+The payload was handcrafted to hit a branch, the assertions encode a developer's assumption about target shape, and AI-generated tests in particular tend to over-couple to implementation details. Three equally plausible causes when they fail:
+
+1. real code regression (medium likelihood),
+2. brittle test coupled to refactored internals (high likelihood, especially for AI-written tests),
+3. the synthesized payload never matched real upstream shape (medium likelihood).
+
+**Default action:** investigate briefly, then either fix the code or rewrite/delete the test without ceremony. Do not contort production code to satisfy a brittle synthetic test.
+
+### Why this is counter-intuitive
+
+TDD textbooks say "test fails → trust the test → fix the code". The reality is that low-value tests multiply easily, and each one is a noisier signal. A module with 200 synthetic tests + 3 regression tests is *less* debuggable when CI breaks than one with 30 synthetic + 3 regression, because the rare high-confidence failure gets drowned in noise from brittle assertions.
+
+Physical separation preserves the signal: a `*_regression_tests.rs` failure is a high-priority alarm; a `*_tests.rs` failure is a lower-priority hint that may just need the test rewritten.
+
+## Authoring rules (summary)
+
+When adding a real-world regression test, three things are required:
+
+1. **`regression_<source>_<symptom>` name prefix** — `grep regression_` lists every real-data regression in the tree.
+   - `<source>`: the upstream or client that triggered it (`zed_`, `glm_`, `anthropic_`, `opus_`, ...).
+   - `<symptom>`: short description of what failed (`reasoning_dropped`, `tool_call_stall`, `unicode_panic`, ...).
+2. **Source comment** above `#[test]` stating trigger condition, observed symptom, data provenance, and a sanitization note.
+3. **Fixture file** for large payloads (>~30 lines JSON / multi-event SSE), committed under `tests/fixtures/regression/`, sanitized.
+
+Synthetic tests keep their normal names (`translates_xxx`, `rejects_xxx`, ...). Do not retroactively rename them to `regression_*` unless the payload genuinely came from an observed failure.
+
+## Review and CI triage
+
+When a build breaks, use the file path as the first triage signal:
+
+<ReferenceTable
+  columns={['Failing file', 'Default interpretation', 'Priority']}
+  rows={[
+    ['`*_regression_tests.rs`', 'Real regression until proven otherwise', '**Investigate immediately**'],
+    ['`*_tests.rs`', 'Possibly brittle test, possibly real bug', 'Quick investigation, rewrite test is acceptable'],
+    ['`tests/proxy_e2e/`', 'Mock-upstream e2e', 'Medium — check whether protocol shape assumptions shifted'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+Use `just regression-touched` during review to see whether the working diff touches any regression files — those changes deserve the most scrutiny.
+
+## Local recipes
+
+```sh
+just regression-list      # list every regression_* test
+just regression-run       # run every regression_* test
+just regression-run <name> # run a single regression test by name fragment
+just regression-touched   # show which regression files the current diff touches
+```

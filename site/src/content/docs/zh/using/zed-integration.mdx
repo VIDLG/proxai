@@ -76,6 +76,126 @@ import { DecisionCards, ProxaiCallout, ReferenceTable, TaskSteps } from '@compon
   ]}
 />
 
+## Zed thinking 设置与模型变体
+
+<ProxaiCallout type="warning" title="与 Zed 版本相关">
+  本节基于 `zed-industries/zed` main 在 2026-06-23 合并 PR `#59213` 之后的行为。Zed 后续版本可能调整 settings schema 或 OpenAI-compatible reasoning 行为；升级 Zed 时应重新核对 Zed 源码或默认设置。
+</ProxaiCallout>
+
+Zed 对 OpenAI-compatible reasoning 模型有两层相关但不同的配置：
+
+<ReferenceTable
+  columns={['层级', '字段', '含义']}
+  rows={[
+    ['`language_models.openai_compatible.<provider>.available_models[]`', '`name`, `display_name`, `reasoning_effort`, `capabilities`', '定义 OpenAI-compatible provider 暴露的模型。这里的 `reasoning_effort` 是 provider-model 默认值；只要不是 `none`，Zed 就认为该模型支持 thinking。'],
+    ['`agent.default_model` 和 `agent.favorite_models[]`', '`provider`, `model`, `enable_thinking`, `effort`', '定义 Agent UI 选择哪个模型。这里要用 `effort`，不是 `reasoning_effort`，来指定该选择的默认 thinking effort。'],
+  ]}
+/>
+
+单个模型建议两层都显式配置：
+
+```json
+{
+  "language_models": {
+    "openai_compatible": {
+      "proxai": {
+        "api_url": "http://127.0.0.1:18080/v1",
+        "available_models": [
+          {
+            "name": "gpt-5.5",
+            "display_name": "GPT-5.5",
+            "reasoning_effort": "high",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": {
+              "tools": true,
+              "images": true,
+              "parallel_tool_calls": true,
+              "prompt_cache_key": true,
+              "chat_completions": false,
+              "interleaved_reasoning": true
+            }
+          }
+        ]
+      }
+    }
+  },
+  "agent": {
+    "default_model": {
+      "provider": "proxai",
+      "model": "gpt-5.5",
+      "enable_thinking": true,
+      "effort": "high"
+    }
+  }
+}
+```
+
+最终 effort 的优先级是：
+
+1. 当前 thread/UI 选择的 effort。
+2. `agent.default_model.effort` 或匹配的 `agent.favorite_models[].effort`。
+3. `language_models.openai_compatible.<provider>.available_models[].reasoning_effort`。
+
+模型本身仍必须在 provider-model 层声明支持 thinking：对 OpenAI-compatible 模型来说，就是配置了非 `none` 的 `reasoning_effort`。
+
+### 给同一个上游模型提供多个 Zed 入口
+
+Zed 的 Agent 模型身份是 `provider/model`，其中 `model` 来自 provider model 的 `name`。`display_name`、`enable_thinking`、`effort`、`reasoning_effort` 都不参与模型身份或 favorite-model 去重。因此，不要试图用多个相同 `provider` 和 `model` 的 `favorite_models` 条目仅靠不同 effort 做变体。
+
+正确做法是暴露不同的 provider model `name`，再让 ProxAI 把这些 alias rewrite 到同一个真实上游模型：
+
+```json
+{
+  "language_models": {
+    "openai_compatible": {
+      "proxai": {
+        "api_url": "http://127.0.0.1:18080/v1",
+        "available_models": [
+          {
+            "name": "gpt-5.5-low",
+            "display_name": "GPT-5.5 Low",
+            "reasoning_effort": "low",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": { "tools": true, "chat_completions": false }
+          },
+          {
+            "name": "gpt-5.5-high",
+            "display_name": "GPT-5.5 High",
+            "reasoning_effort": "high",
+            "max_tokens": 400000,
+            "max_output_tokens": 128000,
+            "max_completion_tokens": 128000,
+            "capabilities": { "tools": true, "chat_completions": false }
+          }
+        ]
+      }
+    }
+  },
+  "agent": {
+    "favorite_models": [
+      {
+        "provider": "proxai",
+        "model": "gpt-5.5-low",
+        "enable_thinking": true,
+        "effort": "low"
+      },
+      {
+        "provider": "proxai",
+        "model": "gpt-5.5-high",
+        "enable_thinking": true,
+        "effort": "high"
+      }
+    ]
+  }
+}
+```
+
+然后在 `config.toml` 里将 `gpt-5.5-low` 和 `gpt-5.5-high` 路由或 rewrite 到真实上游模型。这样 Zed 模型选择器里不会混淆，长期路由仍集中在 ProxAI 管理。
+
 ## 隐私提示
 
 Zed 接入可能包含私有 prompt、工具调用、文件片段和 provider 输出。ProxAI 不应记录 request bodies、`Authorization` headers、API keys 或不必要的私有上游 URL 细节。Capture 是本地调试产物，应视为敏感数据。

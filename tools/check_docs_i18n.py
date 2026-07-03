@@ -8,7 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 DOCS = SITE / "src" / "content" / "docs"
-EN = DOCS / "en"
+# English is the root locale: files live directly under DOCS/, not under
+# DOCS/en/. The variable name `EN` is kept as a stable label for the
+# English locale throughout this script.
+EN = DOCS
 ZH = DOCS / "zh"
 ASTRO_CONFIG = SITE / "astro.config.mjs"
 
@@ -32,6 +35,9 @@ OLD_PATTERNS = [
     r"protocol-openai-chat-completions",
     r"/protocol-anthropic-messages",
     r"protocol-anthropic-messages",
+    # English is the root locale: any /en/ link is stale.
+    r"\]\(/en/",
+    r"href=[\"']/en/",
     r"/en/(quick-start|recipes|configuration|routing-and-providers|observability|troubleshooting)([#\)\"'\s]|$)",
     r"/zh/(quick-start|recipes|configuration|routing-and-providers|observability|troubleshooting)([#\)\"'\s]|$)",
     r"/en/(architecture|protocol-conversion|streaming-internals|error-handling-internals)([#\)\"'\s]|$)",
@@ -39,7 +45,7 @@ OLD_PATTERNS = [
     r"site/src/content/docs/zh/streaming-internals\.mdx",
     r"\]/error-handling\)",
     r"/error-handling\s",
-    r"/error-handling$",
+    r"/error-handling\s$",
     r"/error-handling\.",
     r"/reference/conversion-pairs",
     r"/reference/protocol-values",
@@ -79,8 +85,13 @@ ERROR_TYPES = {
 errors: list[str] = []
 
 
-def mdx_files(path: Path) -> set[str]:
-    return {p.relative_to(path).as_posix() for p in path.rglob("*.mdx")}
+def mdx_files(path: Path, exclude: Path | None = None) -> set[str]:
+    files: set[str] = set()
+    for p in path.rglob("*.mdx"):
+        if exclude is not None and p.is_relative_to(exclude):
+            continue
+        files.add(p.relative_to(path).as_posix())
+    return files
 
 
 def read_text(path: Path) -> str:
@@ -101,9 +112,9 @@ def without_code(text: str) -> str:
     return FENCED_CODE_RE.sub("\n", text)
 
 
-def page_slugs(locale_dir: Path) -> set[str]:
+def page_slugs(locale_dir: Path, exclude: Path | None = None) -> set[str]:
     slugs: set[str] = set()
-    for rel in mdx_files(locale_dir):
+    for rel in mdx_files(locale_dir, exclude):
         if rel == "index.mdx":
             slugs.add("")
         elif rel.endswith("/index.mdx"):
@@ -221,7 +232,7 @@ def check_hub_coverage(locale_dir: Path, locale: str) -> None:
             if rel.endswith("/index.mdx"):
                 slug = rel.removesuffix("/index.mdx")
                 # Nested topic index pages are represented by their directory route.
-                expected = f"/{locale}/{group}/{slug}"
+                expected = _hub_link(locale, group, slug)
             else:
                 slug = rel.removesuffix(".mdx")
                 # Deep topic pages are covered by their own nested index pages.
@@ -229,9 +240,15 @@ def check_hub_coverage(locale_dir: Path, locale: str) -> None:
                     continue
                 if group == "using" and slug.startswith("recipes/"):
                     continue
-                expected = f"/{locale}/{group}/{slug}"
+                expected = _hub_link(locale, group, slug)
             if expected not in index_text:
                 errors.append(f"missing hub link `{expected}` in {index_path.relative_to(ROOT)}")
+
+
+def _hub_link(locale: str, group: str, slug: str) -> str:
+    # Root locale (English) has no locale prefix; /zh/ retains its prefix.
+    prefix = "" if locale == "en" else f"/{locale}"
+    return f"{prefix}/{group}/{slug}"
 
 
 def check_sidebar_slugs(en_slugs: set[str], zh_slugs: set[str]) -> None:
@@ -362,7 +379,7 @@ def check_mdx_file(path: Path, en_slugs: set[str], zh_slugs: set[str]) -> None:
             continue
         check_anchor_link(link, anchor, path, en_slugs, zh_slugs)
 
-    locale_root = EN if "site/src/content/docs/en" in path.as_posix() else ZH
+    locale_root = EN if path.is_relative_to(EN) else ZH
     page_rel = path.relative_to(locale_root).as_posix()
     fm = frontmatter_block(path)
     if requires_noindex(page_rel) and "robots: noindex" not in fm:
@@ -400,9 +417,12 @@ def check_heading_parity(en_files: set[str], zh_files: set[str]) -> None:
 
 
 def main() -> int:
-    en = mdx_files(EN)
+    # English is the root locale: scan DOCS/ but skip the zh/ subtree,
+    # otherwise every zh page would appear as an "English" file and break
+    # the parity check below.
+    en = mdx_files(EN, exclude=ZH)
     zh = mdx_files(ZH)
-    en_slugs = page_slugs(EN)
+    en_slugs = page_slugs(EN, exclude=ZH)
     zh_slugs = page_slugs(ZH)
 
     for name in sorted(en - zh):
