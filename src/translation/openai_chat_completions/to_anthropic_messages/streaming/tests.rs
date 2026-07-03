@@ -4,10 +4,10 @@ use serde_json::json;
 
 use crate::http_support::into_byte_stream;
 
-use super::super::translate_streaming_stream;
+use super::super::translate_streaming_response;
 
 /// Translate a Chat Completions SSE stream into the Anthropic Messages SSE
-/// stream produced by `translate_streaming_stream`, returning the parsed
+/// stream produced by `translate_streaming_response`, returning the parsed
 /// Anthropic event payloads (one per `data:` line, in order).
 fn anthropic_message_payloads(body: &str) -> Vec<serde_json::Value> {
     body.lines()
@@ -25,7 +25,7 @@ async fn run_translation(stream: String) -> String {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();

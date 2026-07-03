@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::super::translate_non_streaming_payload;
+use super::super::translate_non_streaming_response;
 
 #[tokio::test]
 async fn translates_anthropic_message_to_chat_completion_shape() {
@@ -19,7 +19,7 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 5}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(translated["object"], "chat.completion");
     assert_eq!(translated["id"], "chatcmpl_msg_123");
@@ -65,7 +65,7 @@ async fn translates_parallel_anthropic_tool_uses_to_chat_tool_calls() {
         "container": null,
         "usage": {"input_tokens": 4, "output_tokens": 6}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["choices"][0]["message"]["content"],
@@ -113,7 +113,7 @@ async fn translates_anthropic_web_citations_to_chat_url_annotations() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["choices"][0]["message"]["annotations"][0],
@@ -153,7 +153,7 @@ async fn skips_unmatched_anthropic_web_citations() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert!(translated["choices"][0]["message"]["annotations"].is_null());
 }
@@ -185,7 +185,7 @@ async fn translates_citation_offsets_across_joined_unicode_text_blocks() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["choices"][0]["message"]["content"],
@@ -235,7 +235,7 @@ async fn maps_repeated_cited_text_to_later_occurrences_in_order() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["choices"][0]["message"]["annotations"][0]["url_citation"],
@@ -272,7 +272,7 @@ async fn rejects_anthropic_response_without_chat_representable_content() {
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
 
-    let error = translate_non_streaming_payload(upstream)
+    let error = translate_non_streaming_response(upstream)
         .unwrap_err()
         .to_string();
 
@@ -297,7 +297,7 @@ async fn translates_anthropic_cache_read_usage_to_chat_prompt_details() {
             "cache_read_input_tokens": 7
         }
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["usage"]["prompt_tokens_details"],
@@ -324,7 +324,7 @@ async fn prefers_refusal_content_over_refusal_details_explanation() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(translated["choices"][0]["finish_reason"], "stop");
     assert!(translated["choices"][0]["message"]["content"].is_null());
@@ -352,7 +352,7 @@ async fn uses_refusal_details_explanation_when_refusal_content_is_empty() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 0}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert!(translated["choices"][0]["message"]["content"].is_null());
     assert_eq!(
@@ -379,7 +379,7 @@ async fn uses_refusal_text_when_refusal_details_have_no_explanation() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert!(translated["choices"][0]["message"]["content"].is_null());
     assert_eq!(
@@ -402,7 +402,7 @@ async fn translates_anthropic_refusal_stop_reason_to_chat_stop() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(translated["choices"][0]["finish_reason"], "stop");
     assert!(translated["choices"][0]["message"]["tool_calls"].is_null());

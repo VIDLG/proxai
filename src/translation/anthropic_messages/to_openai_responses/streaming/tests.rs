@@ -5,7 +5,7 @@ use crate::sse::SseEventScanner;
 use axum::body::{Body, to_bytes};
 use axum::http::{Response, header};
 
-use super::super::translate_streaming_stream;
+use super::super::translate_streaming_response;
 
 fn assert_openai_response_stream_events_deserialize(body: &str) {
     let mut scanner = SseEventScanner::default();
@@ -45,7 +45,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -81,7 +81,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -122,7 +122,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -157,7 +157,7 @@ data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -200,7 +200,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -244,7 +244,7 @@ data: {\"type\":\"message_stop\"}\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();
@@ -270,7 +270,7 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_d
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();

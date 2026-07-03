@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::protocol::anthropic::messages::Message;
 use crate::protocol::openai::responses::Response as OpenaiResponse;
 
-use super::super::translate_non_streaming_payload;
+use super::super::translate_non_streaming_response;
 
 #[test]
 fn translates_anthropic_message_to_openai_responses_shape() {
@@ -261,7 +261,7 @@ fn translates_anthropic_message_payload_to_openai_responses() {
                 }
     });
 
-    let value = translate_non_streaming_payload(provider_payload).unwrap();
+    let value = translate_non_streaming_response(provider_payload).unwrap();
     let _: OpenaiResponse = serde_json::from_value(value.clone())
         .expect("translated compat response should deserialize as OpenAI Responses");
 
@@ -295,7 +295,7 @@ fn translates_anthropic_web_citations_to_responses_url_annotations() {
         "container": null,
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
-    let translated = translate_non_streaming_payload(upstream).unwrap();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         translated["output"][0]["content"][0]["annotations"][0],

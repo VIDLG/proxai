@@ -8,7 +8,7 @@ use axum::http::{Response, header};
 
 use super::{
     OpenaiResponseBody, translate_request_payload, translate_response_payload,
-    translate_streaming_stream,
+    translate_streaming_response,
 };
 
 #[test]
@@ -352,7 +352,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .unwrap();

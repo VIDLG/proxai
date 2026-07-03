@@ -4,7 +4,7 @@ use serde_json::json;
 
 use crate::http_support::into_byte_stream;
 
-use super::super::translate_streaming_stream;
+use super::super::translate_streaming_response;
 
 #[tokio::test]
 async fn translates_anthropic_stream_to_chat_completion_sse() {
@@ -27,7 +27,7 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -71,7 +71,7 @@ async fn translates_anthropic_stream_refusal_details_to_chat_refusal_delta() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -127,7 +127,7 @@ async fn translates_anthropic_stream_with_only_thinking_blocks() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -171,7 +171,7 @@ async fn translates_anthropic_thinking_blocks_before_text() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -211,7 +211,7 @@ async fn maps_anthropic_tool_block_indexes_to_chat_tool_call_indexes() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -247,7 +247,7 @@ async fn rejects_anthropic_stream_eof_after_terminal_delta_before_message_stop()
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -273,7 +273,7 @@ async fn rejects_anthropic_stream_eof_before_terminal_delta() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -297,7 +297,7 @@ async fn rejects_anthropic_message_stop_before_terminal_delta() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -327,7 +327,7 @@ async fn rejects_anthropic_event_after_terminal_delta_before_message_stop() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();
@@ -359,7 +359,7 @@ async fn rejects_anthropic_event_after_message_stop() {
     );
 
     let response =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(response), usize::MAX)
         .await
         .unwrap();

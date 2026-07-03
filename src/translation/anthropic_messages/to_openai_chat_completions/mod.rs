@@ -22,11 +22,11 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
     Ok(serde_json::to_value(translated)?)
 }
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+pub(crate) fn translate_streaming_response(input: ByteStream) -> ByteStream {
     translate_sse_stream(input, streaming::ChatCompletionStreamTranslator::default())
 }
 
-pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
+pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
     let message = serde_json::from_value::<Message>(payload)?;
     let translated: CreateChatCompletionResponse = (&message).try_into()?;
     Ok(serde_json::to_value(translated)?)

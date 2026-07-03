@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::{Message, MessageStreamEvent};
 use crate::translation::openai_chat_completions::to_anthropic_messages::{
-    translate_non_streaming_payload, translate_streaming_stream,
+    translate_non_streaming_response, translate_streaming_response,
 };
 
 #[test]
@@ -40,7 +40,7 @@ fn translates_chat_response_to_anthropic_message() {
         "service_tier": null
     });
 
-    let translated = translate_non_streaming_payload(payload).expect("translation should succeed");
+    let translated = translate_non_streaming_response(payload).expect("translation should succeed");
     let message: Message = serde_json::from_value(translated.clone()).unwrap_or_else(|error| {
         panic!("translated response should deserialize: {error}; payload={translated}")
     });
@@ -93,7 +93,7 @@ fn translates_chat_function_tool_call_to_anthropic_tool_use() {
         "service_tier": null
     });
 
-    let translated = translate_non_streaming_payload(payload).expect("translation should succeed");
+    let translated = translate_non_streaming_response(payload).expect("translation should succeed");
     assert_eq!(
         translated["content"][0],
         json!({
@@ -131,7 +131,7 @@ fn translates_chat_refusal_to_anthropic_refusal_stop_reason() {
         "service_tier": null
     });
 
-    let translated = translate_non_streaming_payload(payload).expect("translation should succeed");
+    let translated = translate_non_streaming_response(payload).expect("translation should succeed");
     assert_eq!(translated["stop_reason"], "refusal");
     assert_eq!(
         translated["stop_details"],
@@ -177,7 +177,7 @@ fn rejects_chat_response_with_both_content_and_refusal() {
     });
 
     let error =
-        translate_non_streaming_payload(payload).expect_err("mixed content/refusal should fail");
+        translate_non_streaming_response(payload).expect_err("mixed content/refusal should fail");
     assert!(
         error
             .to_string()
@@ -209,7 +209,7 @@ fn rejects_chat_response_without_anthropic_representable_content() {
         "service_tier": null
     });
 
-    let error = translate_non_streaming_payload(payload).expect_err("empty response should fail");
+    let error = translate_non_streaming_response(payload).expect_err("empty response should fail");
     assert!(
         error
             .to_string()
@@ -257,7 +257,7 @@ fn rejects_chat_response_with_multiple_choices() {
     });
 
     let error =
-        translate_non_streaming_payload(payload).expect_err("multi-choice response should fail");
+        translate_non_streaming_response(payload).expect_err("multi-choice response should fail");
     assert!(error.to_string().contains("has 2 choices"));
     assert!(
         error
@@ -290,7 +290,7 @@ fn rejects_chat_response_non_assistant_role() {
         "service_tier": null
     });
 
-    let error = translate_non_streaming_payload(payload).expect_err("role should fail");
+    let error = translate_non_streaming_response(payload).expect_err("role should fail");
     assert!(
         error
             .to_string()
@@ -322,7 +322,7 @@ fn rejects_chat_response_choice_logprobs() {
         "service_tier": null
     });
 
-    let error = translate_non_streaming_payload(payload).expect_err("logprobs should fail");
+    let error = translate_non_streaming_response(payload).expect_err("logprobs should fail");
     assert!(
         error
             .to_string()
@@ -343,7 +343,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("stream should translate");
@@ -386,7 +386,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("stream should translate");
@@ -419,7 +419,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("stream should translate");
@@ -443,7 +443,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -463,7 +463,7 @@ async fn rejects_chat_stream_eof_before_finish_reason() {
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -483,7 +483,7 @@ async fn rejects_chat_stream_chunk_with_multiple_choices() {
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -505,7 +505,7 @@ data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -526,7 +526,7 @@ data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -547,7 +547,7 @@ data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -569,7 +569,7 @@ data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"cre
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -592,7 +592,7 @@ data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"c
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -612,7 +612,7 @@ async fn rejects_chat_stream_without_anthropic_representable_content() {
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -635,7 +635,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("stream should translate");
@@ -668,7 +668,7 @@ data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -688,7 +688,7 @@ async fn rejects_chat_stream_choice_logprobs() {
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -708,7 +708,7 @@ async fn rejects_chat_stream_non_assistant_delta_role() {
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("translation errors are encoded as SSE error events");
@@ -731,7 +731,7 @@ data: [DONE]\n\n",
         .unwrap();
 
     let translated =
-        translate_streaming_stream(into_byte_stream(response.into_body().into_data_stream()));
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
         .expect("stream should translate");

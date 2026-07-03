@@ -4,13 +4,13 @@ use crate::http_support::into_byte_stream;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::TranslationError;
 
-use super::{translate_non_streaming_payload, translate_streaming_stream};
+use super::{translate_non_streaming_response, translate_streaming_response};
 
 #[test]
 fn passes_through_self_protocol_non_streaming_payload() {
     let payload = json!({"error": "upstream failed"});
 
-    let translated = translate_non_streaming_payload(
+    let translated = translate_non_streaming_response(
         RequestProtocol::OpenaiResponses,
         ProviderProtocol::OpenaiResponses,
         payload.clone(),
@@ -22,7 +22,7 @@ fn passes_through_self_protocol_non_streaming_payload() {
 
 #[test]
 fn rejects_unsupported_success_non_streaming_response_translation() {
-    let error = translate_non_streaming_payload(
+    let error = translate_non_streaming_response(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
         json!({"object": "chat.completion"}),
@@ -40,7 +40,7 @@ fn rejects_unsupported_success_non_streaming_response_translation() {
 
 #[test]
 fn rejects_unsupported_success_streaming_response_translation() {
-    let error = match translate_streaming_stream(
+    let error = match translate_streaming_response(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
         into_byte_stream(axum::body::Body::empty().into_data_stream()),

@@ -103,11 +103,11 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
     Ok(serde_json::to_value(typed)?)
 }
 
-pub(crate) fn translate_streaming_stream(input: ByteStream) -> ByteStream {
+pub(crate) fn translate_streaming_response(input: ByteStream) -> ByteStream {
     translate_sse_stream(input, MessagesStreamTranslator::default())
 }
 
-pub(crate) fn translate_non_streaming_payload(payload: Value) -> TranslationResult<Value> {
+pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
     let value = serde_json::from_value::<OpenaiResponseBody>(payload)?;
     let translated = translate_response_payload(&value);
     Ok(serde_json::to_value(translated)?)

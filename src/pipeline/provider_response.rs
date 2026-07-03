@@ -5,7 +5,7 @@ use crate::error::{InternalError, Result};
 use crate::http_support::{into_byte_stream, json_response_from_parts, sse_response_from_parts};
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::translation::{translate_non_streaming_payload, translate_streaming_stream};
+use crate::translation::{translate_non_streaming_response, translate_streaming_response};
 
 use super::ProxyFlow;
 
@@ -51,7 +51,7 @@ impl ProviderStreamingHttpFlow {
         } = self;
 
         let (parts, body) = response.into_parts();
-        let stream = translate_streaming_stream(
+        let stream = translate_streaming_response(
             inbound_protocol,
             provider_protocol,
             into_byte_stream(body.into_data_stream()),
@@ -81,7 +81,7 @@ impl ProviderNonStreamingHttpFlow {
         }
         let payload = serde_json::from_slice(&body)?;
         let translated =
-            translate_non_streaming_payload(inbound_protocol, provider_protocol, payload)?;
+            translate_non_streaming_response(inbound_protocol, provider_protocol, payload)?;
         Ok(json_response_from_parts(
             parts,
             serde_json::to_vec(&translated)?,
