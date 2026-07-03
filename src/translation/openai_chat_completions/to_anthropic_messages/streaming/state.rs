@@ -11,11 +11,13 @@ use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{
     ContentBlock, ContentBlockDelta, ContentBlockDeltaEvent, ContentBlockStartEvent,
-    ContentBlockStopEvent, DirectCaller, InputJsonDelta, MessageStreamEvent, TextBlock, TextDelta,
-    ToolCaller, ToolUseBlock,
+    ContentBlockStopEvent, InputJsonDelta, MessageStreamEvent, TextDelta,
 };
 use crate::protocol::openai::chat_completions::{ChatCompletionMessageToolCallChunk, FinishReason};
 
+use crate::translation::anthropic_messages::outbound::{
+    response_text_block, response_tool_use_block,
+};
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
 #[derive(Debug, Default)]
@@ -55,10 +57,7 @@ impl ChatStreamingState {
                 vec![MessageStreamEvent::ContentBlockStart(
                     ContentBlockStartEvent {
                         index,
-                        content_block: ContentBlock::Text(TextBlock {
-                            citations: None,
-                            text,
-                        }),
+                        content_block: ContentBlock::Text(response_text_block(text)),
                     },
                 )]
             }
@@ -121,12 +120,11 @@ impl ChatStreamingState {
                 outputs.push(MessageStreamEvent::ContentBlockStart(
                     ContentBlockStartEvent {
                         index,
-                        content_block: ContentBlock::ToolUse(ToolUseBlock {
+                        content_block: ContentBlock::ToolUse(response_tool_use_block(
                             id,
-                            caller: ToolCaller::Direct(DirectCaller),
-                            input: Value::Object(Default::default()),
                             name,
-                        }),
+                            Value::Object(Default::default()),
+                        )),
                     },
                 ));
                 index

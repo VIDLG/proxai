@@ -19,6 +19,7 @@ pub(crate) mod openai_responses;
 mod request;
 mod response;
 mod streaming;
+pub(crate) mod text;
 
 pub(crate) use error::{Result as TranslationResult, TranslationError};
 pub(crate) use request::translate_request;

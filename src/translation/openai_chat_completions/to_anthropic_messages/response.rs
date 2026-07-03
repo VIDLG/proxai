@@ -1,11 +1,14 @@
 //! Non-streaming response conversion for `openai_chat_completions -> anthropic_messages`.
 
 use crate::protocol::anthropic::messages::{
-    ContentBlock, DirectCaller, Message, MessageRole as AnthropicMessageRole, MessageType,
-    RefusalStopDetails, RefusalStopDetailsType, StopReason, TextBlock, ToolCaller, ToolUseBlock,
+    ContentBlock, Message, MessageRole as AnthropicMessageRole, MessageType, RefusalStopDetails,
+    RefusalStopDetailsType, StopReason,
 };
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
+};
+use crate::translation::anthropic_messages::outbound::{
+    response_text_block, response_tool_use_block,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -42,16 +45,10 @@ impl TryFrom<&CreateChatCompletionResponse> for Message {
         }
 
         if let Some(text) = message.content.as_ref().filter(|text| !text.is_empty()) {
-            content.push(ContentBlock::Text(TextBlock {
-                citations: None,
-                text: text.clone(),
-            }));
+            content.push(ContentBlock::Text(response_text_block(text)));
         }
         if let Some(refusal) = refusal {
-            content.push(ContentBlock::Text(TextBlock {
-                citations: None,
-                text: refusal.to_string(),
-            }));
+            content.push(ContentBlock::Text(response_text_block(refusal)));
         }
         if let Some(tool_calls) = message.tool_calls.as_ref() {
             for tool_call in tool_calls {
@@ -83,21 +80,25 @@ impl TryFrom<&CreateChatCompletionResponse> for Message {
     }
 }
 
-impl TryFrom<&ChatCompletionMessageToolCalls> for ToolUseBlock {
+impl TryFrom<&ChatCompletionMessageToolCalls>
+    for crate::protocol::anthropic::messages::ToolUseBlock
+{
     type Error = TranslationError;
 
     fn try_from(tool_call: &ChatCompletionMessageToolCalls) -> TranslationResult<Self> {
         match tool_call {
-            ChatCompletionMessageToolCalls::Function(call) => Ok(Self {
-                id: call.id.clone(),
-                caller: ToolCaller::Direct(DirectCaller),
-                input: serde_json::from_str(&call.function.arguments).map_err(|error| {
+            ChatCompletionMessageToolCalls::Function(call) => {
+                let input = serde_json::from_str(&call.function.arguments).map_err(|error| {
                     TranslationError::InvalidPayload(format!(
                         "Chat function tool call arguments are not valid JSON: {error}"
                     ))
-                })?,
-                name: call.function.name.clone(),
-            }),
+                })?;
+                Ok(response_tool_use_block(
+                    &call.id,
+                    &call.function.name,
+                    input,
+                ))
+            }
             ChatCompletionMessageToolCalls::Custom(_) => Err(TranslationError::InvalidPayload(
                 "Chat custom tool calls cannot be translated to Anthropic tool_use blocks"
                     .to_string(),
