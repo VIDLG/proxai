@@ -300,12 +300,11 @@ fn translates_anthropic_web_citations_to_responses_url_annotations() {
     assert_eq!(
         translated["output"][0]["content"][0]["annotations"][0],
         json!({
-            "UrlCitation": {
-                "start_index": 4,
-                "end_index": 15,
-                "title": "ProxAI",
-                "url": "https://example.com/proxai"
-            }
+            "type": "url_citation",
+            "start_index": 4,
+            "end_index": 15,
+            "title": "ProxAI",
+            "url": "https://example.com/proxai"
         })
     );
 }

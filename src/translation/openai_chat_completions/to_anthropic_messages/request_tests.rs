@@ -346,7 +346,7 @@ fn rejects_chat_custom_tools_for_anthropic_messages() {
             "custom": {
                 "name": "shell",
                 "description": "Run shell commands",
-                "format": "Text"
+                "format": {"type": "text"}
             }
         }]
     });
@@ -379,8 +379,9 @@ fn rejects_chat_allowed_tools_choice_for_anthropic_messages() {
         "model": "glm-5.1",
         "messages": [{"role": "user", "content": "hello"}],
         "tool_choice": {
+            "type": "allowed_tools",
             "allowed_tools": [{
-                "mode": "Auto",
+                "mode": "auto",
                 "tools": [{"type": "function", "function": {"name": "lookup"}}]
             }]
         }

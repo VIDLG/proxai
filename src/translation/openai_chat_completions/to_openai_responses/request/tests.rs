@@ -169,9 +169,10 @@ fn flattens_same_mode_allowed_tools_tool_choice_for_request_translation() {
         "model": "gpt-5.1",
         "messages": [{"role": "user", "content": "hi"}],
         "tool_choice": {
+            "type": "allowed_tools",
             "allowed_tools": [
-                {"mode": "Auto", "tools": [{"type": "function", "name": "a"}]},
-                                {"mode": "Auto", "tools": [{"type": "function", "name": "b"}]}
+                {"mode": "auto", "tools": [{"type": "function", "name": "a"}]},
+                {"mode": "auto", "tools": [{"type": "function", "name": "b"}]}
             ]
         }
     });
@@ -189,9 +190,10 @@ fn rejects_mixed_mode_allowed_tools_tool_choice_for_request_translation() {
         "model": "gpt-5.1",
         "messages": [{"role": "user", "content": "hi"}],
         "tool_choice": {
+            "type": "allowed_tools",
             "allowed_tools": [
-                {"mode": "Auto", "tools": [{"type": "function", "name": "a"}]},
-                                {"mode": "Required", "tools": [{"type": "function", "name": "b"}]}
+                {"mode": "auto", "tools": [{"type": "function", "name": "a"}]},
+                {"mode": "required", "tools": [{"type": "function", "name": "b"}]}
             ]
         }
     });

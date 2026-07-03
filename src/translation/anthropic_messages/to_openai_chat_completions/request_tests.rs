@@ -79,7 +79,7 @@ fn translates_anthropic_request_to_chat_completion_shape() {
     );
     assert_eq!(
         translated["tool_choice"],
-        json!({"function": {"name": "lookup"}})
+        json!({"type": "function", "function": {"name": "lookup"}})
     );
     assert_eq!(translated["parallel_tool_calls"], false);
     assert_eq!(translated["metadata"]["user_id"], "user_123");
