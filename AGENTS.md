@@ -124,6 +124,71 @@ For Rust module tests, prefer adjacent `*_tests.rs` files included from the owni
 mod tests;
 ```
 
+### Real-world regression tests
+
+Distinguish tests that **synthesize a payload to exercise a code branch** from tests that **reproduce a real-world failure observed in production / dogfooding / upstream protocol drift**. The second category is far more valuable: it is the project's memory of concretely observed bugs and stays in the tree forever.
+
+Mark a real-world regression test with three things:
+
+1. **`regression_<source>_<symptom>` name prefix** — so `grep regression_` lists every real-data regression in the tree.
+   - `<source>`: the upstream or client that triggered it (`zed_`, `glm_`, `anthropic_`, `opus_`, ...).
+   - `<symptom>`: short description of what failed (`reasoning_dropped`, `tool_call_stall`, `unicode_panic`, ...).
+   - Example: `regression_glm_interleaved_reasoning_dropped_before_assistant_turn`.
+2. **A source comment** directly above `#[test]` stating:
+   - the trigger condition (what payload / upstream behavior caused it),
+   - the observed symptom (panic / silent drop / wrong shape / stall),
+   - the data provenance (`capture 2025-06-15 req_7f3a...`, `Zed 0.180.0`, `GLM Responses 2025-Q2`) and a sanitization note when the original prompt was redacted.
+3. **Fixture file** when the real payload is large (>~30 lines JSON / multi-event SSE):
+   - committed under `tests/fixtures/regression/`, named in correspondence with the test (`regression_glm_reasoning_dropped` ↔ `glm-reasoning-interleaved-request.json`).
+   - must be sanitized (no API keys, no private prompt text) — this is already required by the privacy rules below.
+
+Synthetic tests keep their normal names (`translates_xxx`, `rejects_xxx`, ...). Do not retroactively rename them to `regression_*` unless the payload genuinely came from an observed failure.
+
+**Isolate regression tests into a separate `*_regression_tests.rs` file** adjacent to the regular test file. The two test populations have very different value density and lifecycle:
+
+- Synthetic tests are easy to write and grow fast (AI assistants in particular generate them quickly); mixing them with real-world regressions buries the rare, high-value cases.
+- Regression tests are scarce, carry project memory, and must survive refactors. Physical isolation makes that scarcity visible at a glance — a module with `foo_tests.rs` (60 synthetic cases) + `foo_regression_tests.rs` (3 real regressions) tells you immediately where the project's hard-won knowledge lives.
+
+Recommended layout for a module that owns both kinds of tests:
+
+```rust
+// src/translation/foo.rs
+#[cfg(test)]
+#[path = "foo_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "foo_regression_tests.rs"]
+mod regression_tests;
+```
+
+Both modules still discover via `#[cfg(test)]`, so `cargo test`, `grep regression_`, and `just regression-run` work uniformly across the tree.
+
+A regression test is a contract — **do not delete or relax its assertions when refactoring the surrounding code**. If the original behavior was actually wrong, replace the regression test with a new one that captures the corrected behavior, preserving the source comment trail.
+
+### Failure trust gradient (TDD inverted)
+
+Tests are not equally trustworthy when they fail. A test's value density decides how much a failure should be trusted — and the gradient runs the opposite of what naive TDD assumes.
+
+**`regression_*` test fails → assume the code is broken.** The payload is real (observed in production / dogfooding / upstream drift), the assertions lock a concrete past fix, and the test carries project memory. Treat any failure as a real regression until proven otherwise. Resolve by fixing the code. Only edit the test if the original behavior was genuinely wrong, and even then replace it with a new regression test that preserves the source comment trail.
+
+**Synthetic `*_tests` fails → assume the test may itself be wrong.** The payload was handcrafted to hit a branch, the assertions encode a developer's assumption about target shape, and AI-generated tests in particular tend to over-couple to implementation details. Three equally plausible causes:
+1. real code regression (medium likelihood),
+2. brittle test coupled to refactored internals (high likelihood for AI-written tests),
+3. the synthesized payload never matched real upstream shape (medium likelihood).
+
+Default action for synthetic test failures: investigate briefly, then either fix the code or rewrite/delete the test without ceremony. Do not contort production code to satisfy a brittle synthetic test.
+
+This is why physical file separation matters for review attention and CI triage: when a build breaks, `*_regression_tests.rs` failing is a high-priority signal that demands investigation, while `*_tests.rs` failing is a lower-priority signal that may just need the test rewritten. Mixing them flattens the trust gradient and drowns the rare high-confidence failures in noise from brittle synthetic tests.
+
+Recommended local recipes:
+
+- `just regression-run` runs every `regression_*` test (see `justfile`).
+- `just regression-list` lists them by name.
+- `just regression-touched` shows which regression test files a working diff touches — use it during review to focus attention.
+
+
+
 ## Documentation / Privacy
 
 When changing user-facing behavior, update both `README.md` and `README_CN.md`. If release packaging changes, also update `.github/workflows/release.yml` and matching README release-build references.

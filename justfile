@@ -40,8 +40,20 @@ fmt_check:
 clippy:
     {{ pixi }} run -- rtk cargo clippy --all-targets -- -D warnings
 
-test_lib:
-    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --lib
+test_lib *args:
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --lib {{ args }}
+
+# List every `regression_*` test in the tree (real-world payload / observed-bug tests).
+regression-list:
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --lib -- --list 2>&1 | grep regression || true
+
+# Run every `regression_*` test (real-world payload / observed-bug tests).
+regression-run *args:
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --lib regression {{ args }}
+
+# Show which regression test files the working diff touches — review attention signal.
+regression-touched:
+    @git diff --name-only HEAD | grep "_regression_tests.rs" || echo "no regression tests touched"
 
 check_release_tag_version:
     {{ pixi }} run -- python scripts/check_release_tag_version.py
@@ -69,8 +81,8 @@ zed-probe *args:
 build:
     {{ pixi }} run -- rtk cargo build --release
 
-test-e2e:
-    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --test proxy_e2e -- --nocapture
+test-e2e *args:
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --test proxy_e2e -- --nocapture {{ args }}
 
 hooks-install:
     {{ pixi }} run -- lefthook install
