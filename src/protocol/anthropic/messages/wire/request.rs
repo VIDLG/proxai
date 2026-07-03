@@ -70,6 +70,7 @@ pub enum OutputEffort {
 }
 
 /// OutputConfig.format wrapper for `JSONOutputFormat`.
+/// @sdk(proxai_internal = "union_wrapper")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputFormat {
@@ -113,6 +114,7 @@ pub struct MessageTokensCount {
     pub input_tokens: u32,
 }
 
+/// @sdk(field_suppress = "user_profile_id")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageCountTokensParams {
     pub messages: Vec<MessageParam>,
@@ -182,6 +184,7 @@ pub enum RequestServiceTier {
     StandardOnly,
 }
 
+/// @sdk(field_suppress = "user_profile_id")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageCreateParamsBase {
     pub max_tokens: u32,

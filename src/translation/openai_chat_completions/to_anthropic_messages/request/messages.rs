@@ -28,19 +28,19 @@ impl TryFrom<&[chat::ChatCompletionRequestMessage]> for AnthropicMessages {
                 }
                 chat::ChatCompletionRequestMessage::User(message) => {
                     messages.push(anthropic::MessageParam {
-                        role: anthropic::Role::User,
+                        role: anthropic::MessageParamRole::User,
                         content: anthropic::MessageParamContent::try_from(&message.content)?,
                     });
                 }
                 chat::ChatCompletionRequestMessage::Assistant(message) => {
                     messages.push(anthropic::MessageParam {
-                        role: anthropic::Role::Assistant,
+                        role: anthropic::MessageParamRole::Assistant,
                         content: anthropic::MessageParamContent::try_from(message)?,
                     });
                 }
                 chat::ChatCompletionRequestMessage::Tool(message) => {
                     messages.push(anthropic::MessageParam {
-                        role: anthropic::Role::User,
+                        role: anthropic::MessageParamRole::User,
                         content: anthropic::MessageParamContent::Blocks(vec![
                             anthropic::ContentBlockParam::ToolResult(message.into()),
                         ]),

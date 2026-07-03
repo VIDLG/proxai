@@ -14,10 +14,16 @@ use super::{
 };
 
 /// Message.role: `'assistant'`.
-/// MessageParam.role: `'user' | 'assistant' | 'system'`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Role {
+pub enum MessageRole {
+    Assistant,
+}
+
+/// MessageParam.role: `'user' | 'assistant' | 'system'`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageParamRole {
     User,
     Assistant,
     System,
@@ -51,7 +57,7 @@ pub struct Message {
     pub container: Option<Container>,
     pub content: Vec<ContentBlock>,
     pub model: String,
-    pub role: Role,
+    pub role: MessageRole,
     #[serde(rename = "type")]
     pub type_: MessageType,
     /// @sdk(required_nullable_accepts_missing)
@@ -68,5 +74,5 @@ pub struct Message {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageParam {
     pub content: MessageParamContent,
-    pub role: Role,
+    pub role: MessageParamRole,
 }

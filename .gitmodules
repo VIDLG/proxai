@@ -1,12 +1,12 @@
 [submodule "contrib/async-openai"]
 	path = contrib/async-openai
 	url = https://github.com/64bit/async-openai.git
-	tag = async-openai-v0.40.2
+	tag = async-openai-v0.41.1
 [submodule "contrib/anthropic-sdk-typescript"]
 	path = contrib/anthropic-sdk-typescript
 	url = https://github.com/anthropics/anthropic-sdk-typescript
-	tag = sdk-v0.98.0
+	tag = sdk-v0.109.1
 [submodule "contrib/zed"]
 	path = contrib/zed
 	url = https://github.com/zed-industries/zed.git
-	tag = v1.4.4
+	tag = v1.9.0

@@ -136,6 +136,7 @@ pub enum ToolResultContentParam {
     Blocks(Vec<ToolResultContentBlockParam>),
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(tag = "type", rename_all = "snake_case")]

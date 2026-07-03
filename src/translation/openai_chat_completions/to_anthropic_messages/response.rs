@@ -1,8 +1,8 @@
 //! Non-streaming response conversion for `openai_chat_completions -> anthropic_messages`.
 
 use crate::protocol::anthropic::messages::{
-    ContentBlock, DirectCaller, Message, MessageType, RefusalStopDetails, RefusalStopDetailsType,
-    Role as AnthropicRole, StopReason, TextBlock, ToolCaller, ToolUseBlock,
+    ContentBlock, DirectCaller, Message, MessageRole as AnthropicMessageRole, MessageType,
+    RefusalStopDetails, RefusalStopDetailsType, StopReason, TextBlock, ToolCaller, ToolUseBlock,
 };
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
@@ -73,7 +73,7 @@ impl TryFrom<&CreateChatCompletionResponse> for Message {
             container: None,
             content,
             model: chat.model.clone(),
-            role: AnthropicRole::Assistant,
+            role: AnthropicMessageRole::Assistant,
             type_: MessageType::Message,
             stop_details: stop.details,
             stop_reason: stop.reason,

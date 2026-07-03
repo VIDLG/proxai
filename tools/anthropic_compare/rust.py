@@ -367,7 +367,12 @@ def rust_serde_items():
 
 
 def _serde_attr_has(attrs, needle):
-    return needle in " ".join(attrs)
+    joined = " ".join(attrs)
+    if needle == 'serde(tag = "type")':
+        return re.search(r'#\[serde\([^\]]*\btag\s*=\s*"type"', joined) is not None
+    if needle == "serde(untagged)":
+        return re.search(r'#\[serde\([^\]]*\buntagged\b', joined) is not None
+    return needle in joined
 
 
 def _serde_rename(attrs):
@@ -472,9 +477,11 @@ def rust_tagged_variant_literals():
                                         payload_type = sorted(payload_names)[0]
                             if not variant_name or not payload_type:
                                 continue
-                            literal = _serde_rename(
-                                _item_attributes(variant)
-                            ) or _snake_case(variant_name)
+                            literal = _rust_variant_wire_name(
+                                variant_name,
+                                {"attrs": _item_attributes(variant)},
+                                {"attrs": enum_attrs},
+                            )
                             refs.setdefault(payload_type, set()).add(literal)
                 visit(child)
 

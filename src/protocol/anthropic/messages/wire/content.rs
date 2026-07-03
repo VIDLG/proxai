@@ -145,5 +145,7 @@ pub enum ContentBlockParam {
     TextEditorCodeExecutionToolResult(TextEditorCodeExecutionToolResultBlockParam),
     ToolSearchToolResult(ToolSearchToolResultBlockParam),
     ContainerUpload(ContainerUploadBlockParam),
+    #[strum(serialize = "mid_conv_system")]
+    #[serde(rename = "mid_conv_system")]
     MidConversationSystem(MidConversationSystemBlockParam),
 }

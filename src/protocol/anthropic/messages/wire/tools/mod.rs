@@ -24,13 +24,14 @@ use strum::AsRefStr;
 use super::citations::CitationsConfigParam;
 use super::common::CacheControlEphemeral;
 
-/// Tool.allowed_callers: `Array<'direct' | 'code_execution_20250825' | 'code_execution_20260120'>`.
+/// Tool.allowed_callers: `Array< 'direct' | 'code_execution_20250825' | 'code_execution_20260120' | 'code_execution_20260521' >`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AllowedCaller {
     Direct,
     CodeExecution20250825,
     CodeExecution20260120,
+    CodeExecution20260521,
 }
 
 // Private imports for ToolUnion enum variants.
@@ -96,6 +97,7 @@ pub struct Tool {
 /// @sdk(alias = "CodeExecutionTool20250522")
 /// @sdk(alias = "CodeExecutionTool20250825")
 /// @sdk(alias = "CodeExecutionTool20260120")
+/// @sdk(alias = "CodeExecutionTool20260521")
 /// @sdk(alias = "MemoryTool20250818")
 /// @sdk(alias = "ToolTextEditor20250124")
 /// @sdk(alias = "ToolTextEditor20250429")
@@ -131,6 +133,14 @@ pub enum ApproximateType {
     Approximate,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseInclusion {
+    Full,
+    Excluded,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserLocation {
     #[serde(rename = "type")]
@@ -151,6 +161,8 @@ pub struct UserLocation {
 /// @sdk(alias = "WebFetchTool20250910")
 /// @sdk(alias = "WebFetchTool20260209")
 /// @sdk(alias = "WebFetchTool20260309")
+/// @sdk(alias = "WebFetchTool20260318")
+/// @sdk(alias = "WebSearchTool20260318")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebToolDef {
     #[serde(rename = "name", skip_deserializing)]
@@ -179,6 +191,8 @@ pub struct WebToolDef {
     pub max_content_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_cache: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_inclusion: Option<ResponseInclusion>,
 }
 
 /// 🎯 @use: union of all built-in and custom tool definitions supported by the API.
@@ -207,6 +221,9 @@ pub enum ToolUnion {
     #[strum(serialize = "code_execution_20260120")]
     #[serde(rename = "code_execution_20260120")]
     CodeExecutionTool20260120(ServerToolDef),
+    #[strum(serialize = "code_execution_20260521")]
+    #[serde(rename = "code_execution_20260521")]
+    CodeExecutionTool20260521(ServerToolDef),
     #[strum(serialize = "memory_20250818")]
     #[serde(rename = "memory_20250818")]
     MemoryTool20250818(ServerToolDef),
@@ -234,6 +251,12 @@ pub enum ToolUnion {
     #[strum(serialize = "web_fetch_20260309")]
     #[serde(rename = "web_fetch_20260309")]
     WebFetchTool20260309(WebToolDef),
+    #[strum(serialize = "web_fetch_20260318")]
+    #[serde(rename = "web_fetch_20260318")]
+    WebFetchTool20260318(WebToolDef),
+    #[strum(serialize = "web_search_20260318")]
+    #[serde(rename = "web_search_20260318")]
+    WebSearchTool20260318(WebToolDef),
     #[strum(serialize = "tool_search_tool_bm25_20251119")]
     #[serde(rename = "tool_search_tool_bm25_20251119")]
     ToolSearchToolBm25_20251119(ServerToolDef),

@@ -26,7 +26,7 @@ fn deserializes_basic_message_response_from_api_shape() {
 
     assert_eq!(message.id, "msg_01XFDUDYJgAACzvnptvVoYEL");
     assert_eq!(message.type_, MessageType::Message);
-    assert_eq!(message.role, Role::Assistant);
+    assert_eq!(message.role, MessageRole::Assistant);
     assert_eq!(message.stop_reason, Some(StopReason::EndTurn));
     assert_eq!(message.usage.input_tokens, 12);
     assert_eq!(message.usage.output_tokens, 6);

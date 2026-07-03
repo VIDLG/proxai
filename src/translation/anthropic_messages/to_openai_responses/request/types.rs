@@ -222,12 +222,12 @@ impl TryFrom<anthropic::ToolResultContentBlockParam> for responses::InputContent
     }
 }
 
-impl From<anthropic::Role> for responses::Role {
-    fn from(role: anthropic::Role) -> Self {
+impl From<anthropic::MessageParamRole> for responses::Role {
+    fn from(role: anthropic::MessageParamRole) -> Self {
         match role {
-            anthropic::Role::Assistant => Self::Assistant,
-            anthropic::Role::User => Self::User,
-            anthropic::Role::System => Self::System,
+            anthropic::MessageParamRole::Assistant => Self::Assistant,
+            anthropic::MessageParamRole::User => Self::User,
+            anthropic::MessageParamRole::System => Self::System,
         }
     }
 }

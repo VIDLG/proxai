@@ -78,17 +78,19 @@ fn tool_category(tool: &ToolUnion) -> ToolCategory {
         ToolUnion::ToolBash20250124(_) => ToolCategory::Bash,
         ToolUnion::CodeExecutionTool20250522(_)
         | ToolUnion::CodeExecutionTool20250825(_)
-        | ToolUnion::CodeExecutionTool20260120(_) => ToolCategory::CodeExecution,
+        | ToolUnion::CodeExecutionTool20260120(_)
+        | ToolUnion::CodeExecutionTool20260521(_) => ToolCategory::CodeExecution,
         ToolUnion::MemoryTool20250818(_) => ToolCategory::Memory,
         ToolUnion::ToolTextEditor20250124(_)
         | ToolUnion::ToolTextEditor20250429(_)
         | ToolUnion::ToolTextEditor20250728(_) => ToolCategory::TextEditor,
         ToolUnion::WebFetchTool20250910(_)
         | ToolUnion::WebFetchTool20260209(_)
-        | ToolUnion::WebFetchTool20260309(_) => ToolCategory::WebFetch,
-        ToolUnion::WebSearchTool20250305(_) | ToolUnion::WebSearchTool20260209(_) => {
-            ToolCategory::WebSearch
-        }
+        | ToolUnion::WebFetchTool20260309(_)
+        | ToolUnion::WebFetchTool20260318(_) => ToolCategory::WebFetch,
+        ToolUnion::WebSearchTool20250305(_)
+        | ToolUnion::WebSearchTool20260209(_)
+        | ToolUnion::WebSearchTool20260318(_) => ToolCategory::WebSearch,
         ToolUnion::ToolSearchToolBm25_20251119(_) | ToolUnion::ToolSearchToolRegex20251119(_) => {
             ToolCategory::ToolSearch
         }

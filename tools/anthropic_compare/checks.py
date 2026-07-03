@@ -77,8 +77,7 @@ def serde_wire_diffs(sdk_text, only_marked=False):
                 break
         if not type_field:
             continue
-        item_attrs = " ".join(item.get("attrs", []))
-        has_tag = 'serde(tag = "type")' in item_attrs
+        has_tag = _serde_attr_has(item.get("attrs", []), 'serde(tag = "type")')
         rust_type_field_name, field = _field_by_wire_name(item, "type")
         has_renamed_field = False
         field_literal = None

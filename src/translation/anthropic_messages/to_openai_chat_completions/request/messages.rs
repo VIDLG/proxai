@@ -9,13 +9,15 @@ pub(super) fn chat_messages(
     message: anthropic::MessageParam,
 ) -> TranslationResult<Vec<chat::ChatCompletionRequestMessage>> {
     Ok(match (message.role, message.content) {
-        (anthropic::Role::User, anthropic::MessageParamContent::Text(text)) if text.is_empty() => {
+        (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Text(text))
+            if text.is_empty() =>
+        {
             return Err(TranslationError::InvalidPayload(
                 "Anthropic user message without content cannot be translated to Chat Completions"
                     .to_string(),
             ));
         }
-        (anthropic::Role::User, anthropic::MessageParamContent::Text(text)) => {
+        (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Text(text)) => {
             vec![chat::ChatCompletionRequestMessage::User(
                 chat::ChatCompletionRequestUserMessage {
                     content: chat::ChatCompletionRequestUserMessageContent::Text(text),
@@ -23,10 +25,10 @@ pub(super) fn chat_messages(
                 },
             )]
         }
-        (anthropic::Role::User, anthropic::MessageParamContent::Blocks(blocks)) => {
+        (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Blocks(blocks)) => {
             user_block_messages(blocks)?
         }
-        (anthropic::Role::Assistant, anthropic::MessageParamContent::Text(text))
+        (anthropic::MessageParamRole::Assistant, anthropic::MessageParamContent::Text(text))
             if text.is_empty() =>
         {
             return Err(TranslationError::InvalidPayload(
@@ -34,7 +36,7 @@ pub(super) fn chat_messages(
                     .to_string(),
             ));
         }
-        (anthropic::Role::Assistant, anthropic::MessageParamContent::Text(text)) => {
+        (anthropic::MessageParamRole::Assistant, anthropic::MessageParamContent::Text(text)) => {
             vec![chat::ChatCompletionRequestMessage::Assistant(
                 chat::ChatCompletionRequestAssistantMessage {
                     content: Some(chat::ChatCompletionRequestAssistantMessageContent::Text(
@@ -47,13 +49,16 @@ pub(super) fn chat_messages(
                 },
             )]
         }
-        (anthropic::Role::Assistant, anthropic::MessageParamContent::Blocks(blocks)) => {
+        (
+            anthropic::MessageParamRole::Assistant,
+            anthropic::MessageParamContent::Blocks(blocks),
+        ) => {
             vec![assistant_blocks_message(blocks)?]
         }
-        (anthropic::Role::System, anthropic::MessageParamContent::Text(text)) => {
+        (anthropic::MessageParamRole::System, anthropic::MessageParamContent::Text(text)) => {
             vec![chat::ChatCompletionRequestSystemMessageContent::Text(text).into()]
         }
-        (anthropic::Role::System, anthropic::MessageParamContent::Blocks(blocks)) => {
+        (anthropic::MessageParamRole::System, anthropic::MessageParamContent::Blocks(blocks)) => {
             vec![system_blocks_message(blocks)?]
         }
     })

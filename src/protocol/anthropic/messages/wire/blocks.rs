@@ -90,6 +90,7 @@ pub struct UrlPdfSource {
 }
 
 /// ImageBlockParam.source: `Base64ImageSource | URLImageSource`.
+/// @sdk(proxai_internal = "union_wrapper")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ImageBlockSource {

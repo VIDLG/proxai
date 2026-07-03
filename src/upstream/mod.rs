@@ -122,8 +122,6 @@ impl UpstreamBodyStreamStats {
     delegate! {
         to self.metrics() {
             pub(crate) fn duration_ms(self) -> u128;
-            pub(crate) fn max_chunk_gap_ms(self) -> u128;
-            pub(crate) fn avg_chunk_bytes(self) -> u64;
         }
     }
 

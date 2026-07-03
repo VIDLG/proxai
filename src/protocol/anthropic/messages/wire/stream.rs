@@ -22,7 +22,7 @@ use super::{
         Container, OutputTokensDetails, RefusalStopDetails, ServerToolUsage, StopReason, Usage,
     },
     content::ContentBlock,
-    message::{Message, MessageType, Role},
+    message::{Message, MessageRole, MessageType},
 };
 
 /// Text chunk emitted while streaming a `text` content block.
@@ -163,7 +163,7 @@ impl MessageStartEvent {
                 container: None,
                 content: Vec::new(),
                 model: model.into(),
-                role: Role::Assistant,
+                role: MessageRole::Assistant,
                 type_: MessageType::Message,
                 stop_details: None,
                 stop_reason: None,
