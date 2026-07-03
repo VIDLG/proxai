@@ -105,10 +105,11 @@ def serde_wire_diffs(sdk_text, only_marked=False):
             )
             continue
         if field_literal and field_literal != expected_literal:
+            line = field["line"] if field else item["line"]
             diffs.append(
                 (
                     binding["item"],
-                    f"{item['file']}:{field['line']}",
+                    f"{item['file']}:{line}",
                     [
                         f"Rust discriminator literal `{field_literal}` differs from SDK `{expected_literal}`"
                     ],
