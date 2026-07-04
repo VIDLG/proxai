@@ -65,6 +65,11 @@ struct ErrorSseEvent {
 }
 
 impl ErrorResponsePayload {
+    fn text_body(self) -> String {
+        serde_json::to_string_pretty(&ErrorJsonResponse { error: self })
+            .unwrap_or_else(|_| "error response serialization failed".to_string())
+    }
+
     fn encode_sse_event(self) -> serde_json::Result<Bytes> {
         encode_sse_json(
             "error",
@@ -296,7 +301,7 @@ fn render_http_error_response(
             response_with_headers(
                 fields.http_status,
                 headers,
-                Body::from(fields.payload.message),
+                Body::from(fields.payload.text_body()),
             )
         }
         ErrorResponseFormat::Json => {

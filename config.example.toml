@@ -113,8 +113,8 @@ warn_ms = 5000
 error_ms = 15000
 
 [error_responses]
-# text: concise text body, best for raw-string clients
-# json: OpenAI-style JSON error body
+# text: readable pretty-printed error JSON, returned as text/plain
+# json: compact OpenAI-style JSON error body
 format = "text"
 
 [capture]

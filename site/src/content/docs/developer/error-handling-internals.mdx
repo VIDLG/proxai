@@ -59,7 +59,7 @@ JSON format wraps a compact error payload:
 
 <JsonExample data={upstreamErrorPayload} />
 
-Text format returns only the human-readable message, which is the default for Zed readability.
+Text format returns the same compact error object as pretty-printed JSON with `text/plain`, which keeps raw clients readable while preserving upstream `code` and `param` details.
 
 ## Preserved upstream details
 

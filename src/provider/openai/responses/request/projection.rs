@@ -8,6 +8,8 @@ pub(crate) fn project_payload(payload: &Value) -> Result<RequestProjection, serd
 }
 
 pub(super) fn adapt_payload_for_projection(payload: &Value) -> Value {
+    // Projection is for compact diagnostics only; this adapted clone must never
+    // become the provider wire body.
     let mut payload = payload.clone();
 
     if let Some(text) = payload.get_mut("text").and_then(Value::as_object_mut) {

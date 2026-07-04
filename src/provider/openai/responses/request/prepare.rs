@@ -14,6 +14,18 @@ pub(crate) struct PreparedProviderRequest {
     pub(crate) summary: RequestSummary,
 }
 
+pub(crate) fn sanitize_provider_payload(mut payload: Value) -> Value {
+    let sanitized = sanitize_response_output_fields_from_input(&mut payload);
+    if sanitized.status_removed > 0 || sanitized.reasoning_content_removed > 0 {
+        tracing::trace!(
+            status_removed = sanitized.status_removed,
+            reasoning_content_removed = sanitized.reasoning_content_removed,
+            "removed Responses output-only input fields for upstream compatibility"
+        );
+    }
+    payload
+}
+
 pub(crate) fn prepare_provider_request(
     payload: &Value,
     body: Vec<u8>,
@@ -27,6 +39,37 @@ pub(crate) fn prepare_provider_request(
         projection,
         summary,
     })
+}
+
+#[derive(Debug, Default)]
+struct SanitizedInputFields {
+    status_removed: usize,
+    reasoning_content_removed: usize,
+}
+
+fn sanitize_response_output_fields_from_input(payload: &mut Value) -> SanitizedInputFields {
+    let Some(items) = payload.get_mut("input").and_then(Value::as_array_mut) else {
+        return SanitizedInputFields::default();
+    };
+
+    let mut sanitized = SanitizedInputFields::default();
+    for item in items {
+        let Some(object) = item.as_object_mut() else {
+            continue;
+        };
+        let Some(item_type) = object.get("type").and_then(Value::as_str) else {
+            continue;
+        };
+        let is_message_or_reasoning = matches!(item_type, "message" | "reasoning");
+        let is_reasoning = item_type == "reasoning";
+        if is_message_or_reasoning && object.remove("status").is_some() {
+            sanitized.status_removed += 1;
+        }
+        if is_reasoning && object.remove("content").is_some() {
+            sanitized.reasoning_content_removed += 1;
+        }
+    }
+    sanitized
 }
 
 fn project_payload_observed(payload: &Value, obs: &ObserveContext) -> RequestProjection {

@@ -49,6 +49,30 @@ fn upstream_error_payload_preserves_code_and_param() {
 }
 
 #[test]
+fn text_upstream_error_payload_preserves_code_and_param_as_json() {
+    let fields = upstream_response_error_fields(
+        StatusCode::BAD_GATEWAY,
+        &UpstreamResponseError::Upstream {
+            code: Some("array_above_max_length".to_string()),
+            message: "Invalid 'input[3].content': array too long.".to_string(),
+            param: Some(json!("input[3].content")),
+        },
+    );
+
+    let body = fields.payload.text_body();
+    let parsed = serde_json::from_str::<serde_json::Value>(&body).unwrap();
+
+    assert_eq!(
+        parsed["error"]["message"],
+        "Invalid 'input[3].content': array too long."
+    );
+    assert_eq!(parsed["error"]["type"], "upstream_error");
+    assert_eq!(parsed["error"]["status"], 502);
+    assert_eq!(parsed["error"]["code"], "array_above_max_length");
+    assert_eq!(parsed["error"]["param"], "input[3].content");
+}
+
+#[test]
 fn generic_sse_error_matches_zed_chat_completions_error_shape() {
     let frame = ErrorResponseFields::stream_translation("translation failed")
         .encode_sse_event()

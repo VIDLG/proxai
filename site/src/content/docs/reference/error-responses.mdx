@@ -96,8 +96,8 @@ The `[error_responses]` config selects how this payload is rendered:
 format = "text"   # or "json"
 ```
 
-- `text`: only `payload.message` is returned, as `text/plain`. Default for Zed readability.
-- `json`: the full wrapped JSON above is returned.
+- `text`: the full error object is returned as readable pretty-printed JSON with `text/plain`. Default for Zed readability while preserving upstream `code`/`param` details.
+- `json`: the full wrapped JSON above is returned as compact `application/json`.
 
 ## HTTP status semantics
 

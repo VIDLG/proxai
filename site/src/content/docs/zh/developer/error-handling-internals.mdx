@@ -281,10 +281,18 @@ HTTP 错误响应由 `render_http_error_response(...)` 渲染。
 ```http
 Content-Type: text/plain; charset=utf-8
 
-quota exhausted
+{
+  "error": {
+    "message": "quota exhausted",
+    "type": "upstream_error",
+    "code": "rate_limit_exceeded",
+    "param": "input",
+    "status": 429
+  }
+}
 ```
 
-body 只输出 `payload.message`。
+body 输出完整错误对象的 pretty-printed JSON，但仍使用 `text/plain`，便于裸客户端阅读并保留上游 `code`/`param` 细节。
 
 ### JSON 格式
 

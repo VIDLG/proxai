@@ -15,10 +15,13 @@ pub(crate) fn prepare_request(
     upstream_model: &str,
     obs: &ObserveContext,
 ) -> Result<ProviderRequest, InternalError> {
-    let (provider_payload, body) = body_with_upstream_model(&payload, upstream_model)?;
+    let provider_payload = payload_with_upstream_model(&payload, upstream_model);
 
     match protocol {
         ProviderProtocol::OpenaiResponses => {
+            let provider_payload =
+                responses_provider::request::sanitize_provider_payload(provider_payload);
+            let body = serde_json::to_vec(&provider_payload)?;
             let prepared = responses_provider::request::prepare_provider_request(
                 &provider_payload,
                 body,
@@ -30,6 +33,7 @@ pub(crate) fn prepare_request(
             ))
         }
         ProviderProtocol::OpenaiChatCompletions => {
+            let body = serde_json::to_vec(&provider_payload)?;
             let prepared =
                 chat_provider::request::prepare_provider_request(&provider_payload, body)?;
             Ok(ProviderRequest::openai_chat_completions(
@@ -38,6 +42,7 @@ pub(crate) fn prepare_request(
             ))
         }
         ProviderProtocol::AnthropicMessages => {
+            let body = serde_json::to_vec(&provider_payload)?;
             let prepared =
                 anthropic_provider::request::prepare_provider_request(&provider_payload, body)?;
             Ok(ProviderRequest::anthropic_messages(
@@ -57,15 +62,6 @@ pub(in crate::provider) fn payload_with_upstream_model(
         *model = Value::String(upstream_model.to_string());
     }
     payload
-}
-
-fn body_with_upstream_model(
-    payload: &Value,
-    upstream_model: &str,
-) -> Result<(Value, Vec<u8>), InternalError> {
-    let payload = payload_with_upstream_model(payload, upstream_model);
-    let body = serde_json::to_vec(&payload)?;
-    Ok((payload, body))
 }
 
 #[derive(Debug, Clone)]
@@ -185,3 +181,7 @@ impl ProviderRequest {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "request_regression_tests.rs"]
+mod regression_tests;

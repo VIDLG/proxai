@@ -29,6 +29,43 @@ fn request_adaptation_defaults_missing_input_image_detail() {
 }
 
 #[test]
+fn request_projection_adapts_assistant_replay_without_mutating_wire_payload_contract() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "annotations": [],
+                        "logprobs": [],
+                        "text": "previous answer"
+                    }
+                ]
+            }
+        ]
+    });
+
+    let adapted = adapt_payload_for_projection(&payload);
+
+    assert_eq!(payload["input"][0]["content"][0]["type"], "output_text");
+    assert_eq!(adapted["input"][0]["content"][0]["type"], "input_text");
+    assert!(
+        adapted["input"][0]["content"][0]
+            .get("annotations")
+            .is_none()
+    );
+    assert!(adapted["input"][0]["content"][0].get("logprobs").is_none());
+    assert_eq!(adapted["input"][0]["status"], "completed");
+
+    let projection = project_payload(&payload).expect("project request payload");
+    assert_eq!(projection.model.as_deref(), Some("gpt-5.5"));
+}
+
+#[test]
 fn project_payload_ignores_unknown_input_items() {
     let payload = json!({
         "model": "glm-5.1",

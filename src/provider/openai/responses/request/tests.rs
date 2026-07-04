@@ -182,6 +182,44 @@ fn request_projection_accepts_zed_assistant_output_text_history() {
 }
 
 #[test]
+fn sanitize_provider_payload_removes_response_output_fields_from_input_items() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "status": "completed",
+        "input": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": "previous answer"}]
+            },
+            {
+                "type": "reasoning",
+                "id": "rs_123",
+                "status": "completed",
+                "content": [{"type": "reasoning_text", "text": "chain of thought"}],
+                "summary": []
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_123",
+                "status": "failed",
+                "output": "tool failed"
+            }
+        ]
+    });
+
+    let sanitized = super::sanitize_provider_payload(payload);
+
+    assert_eq!(sanitized["status"], "completed");
+    assert!(sanitized["input"][0].get("status").is_none());
+    assert!(sanitized["input"][1].get("status").is_none());
+    assert!(sanitized["input"][1].get("content").is_none());
+    assert_eq!(sanitized["input"][1]["summary"], json!([]));
+    assert_eq!(sanitized["input"][2]["status"], "failed");
+}
+
+#[test]
 fn prepare_provider_request_preserves_model_when_route_keeps_it() {
     let payload = json!({
         "model": "gpt-5.5",

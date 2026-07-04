@@ -96,8 +96,8 @@ ProxAI 不会把内部强类型 error taxonomy 原样暴露。上面这些 `type
 format = "text"   # 或 "json"
 ```
 
-- `text`：只返回 `payload.message`，`text/plain`，适合 Zed 阅读，默认值。
-- `json`：返回完整的上述 JSON 包装。
+- `text`：返回完整错误对象的 pretty-printed JSON，`Content-Type` 为 `text/plain`。这是默认值，兼顾 Zed 可读性并保留上游 `code`/`param` 细节。
+- `json`：返回紧凑的完整 JSON 包装，`Content-Type` 为 `application/json`。
 
 ## HTTP status 语义
 

@@ -1,23 +1,67 @@
+use std::fmt;
+
 use axum::body::Bytes;
 use serde_json::Value;
 
 use crate::http_support::UpstreamResponseHead;
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone)]
 pub enum UpstreamResponseError {
-    #[error("upstream response error: {message}")]
     Upstream {
         code: Option<String>,
         message: String,
         param: Option<Value>,
     },
-    #[error("proxy could not parse upstream error response: empty body")]
     EmptyBody,
-    #[error("proxy could not parse upstream error response as json: {text}")]
-    NonJsonBody { text: String },
-    #[error("proxy could not normalize upstream error response shape: {text}")]
-    UnknownBodyShape { text: String },
+    NonJsonBody {
+        text: String,
+    },
+    UnknownBodyShape {
+        text: String,
+    },
 }
+
+impl fmt::Display for UpstreamResponseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Upstream {
+                code,
+                message,
+                param,
+            } => {
+                write!(f, "upstream response error: {message}")?;
+                if let Some(code) = code {
+                    write!(f, " code={code}")?;
+                }
+                if let Some(param) = param {
+                    match param {
+                        Value::String(value) => write!(f, " param={value}"),
+                        value => write!(f, " param={value}"),
+                    }?;
+                }
+                Ok(())
+            }
+            Self::EmptyBody => write!(
+                f,
+                "proxy could not parse upstream error response: empty body"
+            ),
+            Self::NonJsonBody { text } => {
+                write!(
+                    f,
+                    "proxy could not parse upstream error response as json: {text}"
+                )
+            }
+            Self::UnknownBodyShape { text } => {
+                write!(
+                    f,
+                    "proxy could not normalize upstream error response shape: {text}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for UpstreamResponseError {}
 
 impl UpstreamResponseError {
     pub(crate) fn parse_body(bytes: &[u8]) -> Self {
@@ -124,3 +168,7 @@ pub enum UpstreamError {
         source: reqwest::Error,
     },
 }
+
+#[cfg(test)]
+#[path = "upstream_tests.rs"]
+mod tests;
