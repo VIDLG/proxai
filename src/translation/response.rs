@@ -2,7 +2,7 @@ use serde_json::Value;
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-use super::{TranslationError, TranslationResult};
+use super::TranslationResult;
 use crate::http_support::ByteStream;
 
 pub(crate) fn translate_streaming_response(
@@ -13,6 +13,11 @@ pub(crate) fn translate_streaming_response(
     match (request_protocol, provider_protocol) {
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => Ok(
             super::openai_chat_completions::to_openai_responses::translate_streaming_response(
+                input,
+            ),
+        ),
+        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses) => Ok(
+            super::openai_responses::to_openai_chat_completions::translate_streaming_response(
                 input,
             ),
         ),
@@ -32,13 +37,8 @@ pub(crate) fn translate_streaming_response(
                 input,
             ),
         ),
-        (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiResponses)
-        | (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiChatCompletions)
-        | (RequestProtocol::AnthropicMessages, ProviderProtocol::AnthropicMessages) => Ok(input),
-        (request_protocol, provider_protocol) => Err(TranslationError::UnsupportedResponsePair {
-            from: provider_protocol,
-            to: request_protocol,
-        }),
+        // Identity passthrough: no translation needed.
+        _ => Ok(input),
     }
 }
 
@@ -66,6 +66,11 @@ pub(crate) fn translate_non_streaming_response(
                 payload,
             )
         }
+        (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses) => {
+            super::openai_responses::to_openai_chat_completions::translate_non_streaming_response(
+                payload,
+            )
+        }
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
             super::openai_responses::to_anthropic_messages::translate_non_streaming_response(
                 payload,
@@ -76,10 +81,6 @@ pub(crate) fn translate_non_streaming_response(
                 payload,
             )
         }
-        (request_protocol, provider_protocol) => Err(TranslationError::UnsupportedResponsePair {
-            from: provider_protocol,
-            to: request_protocol,
-        }),
     }
 }
 

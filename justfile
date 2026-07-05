@@ -13,6 +13,9 @@ ci-fmt-check:
 ci-clippy:
     cargo clippy --all-targets -- -D warnings
 
+ci-test-lib:
+    CARGO_TARGET_DIR=.cargo-target-tests cargo test --lib
+
 ci-test:
     CARGO_TARGET_DIR=.cargo-target-tests cargo test
 

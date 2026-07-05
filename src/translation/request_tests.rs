@@ -34,7 +34,7 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
     assert_eq!(provider_body["model"], "glm-5.1");
     assert_eq!(provider_body["max_completion_tokens"], 64);
     assert_eq!(provider_body["stream"], true);
-    assert_eq!(provider_body["messages"][0]["role"], "system");
+    assert_eq!(provider_body["messages"][0]["role"], "developer");
     assert_eq!(provider_body["messages"][0]["content"], "Be concise.");
     assert_eq!(provider_body["messages"][1]["role"], "user");
     assert_eq!(provider_body["messages"][1]["content"][0]["text"], "hello");

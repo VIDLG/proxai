@@ -2,7 +2,6 @@ use serde_json::json;
 
 use crate::http_support::into_byte_stream;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::translation::TranslationError;
 
 use super::{translate_non_streaming_response, translate_streaming_response};
 
@@ -21,39 +20,40 @@ fn passes_through_self_protocol_non_streaming_payload() {
 }
 
 #[test]
-fn rejects_unsupported_success_non_streaming_response_translation() {
-    let error = translate_non_streaming_response(
+fn supports_responses_to_chat_completions_non_streaming_translation() {
+    // Previously unsupported; now implemented via responses → chat translator.
+    let payload = json!({
+        "id": "resp_1",
+        "model": "glm-5.1",
+        "created_at": 0,
+        "status": "completed",
+        "object": "response",
+        "output": [
+            {"type": "message", "id": "m", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "hi", "annotations": []}]}
+        ]
+    });
+
+    let translated = translate_non_streaming_response(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
-        json!({"object": "chat.completion"}),
+        payload,
     )
-    .unwrap_err();
+    .unwrap();
 
-    assert!(matches!(
-        error,
-        TranslationError::UnsupportedResponsePair {
-            from: ProviderProtocol::OpenaiResponses,
-            to: RequestProtocol::OpenaiChatCompletions,
-        }
-    ));
+    assert_eq!(translated["object"], "chat.completion");
+    assert_eq!(translated["choices"][0]["message"]["content"], "hi");
 }
 
 #[test]
-fn rejects_unsupported_success_streaming_response_translation() {
-    let error = match translate_streaming_response(
+fn supports_chat_completions_to_responses_streaming_translation() {
+    // Previously unsupported; now implemented via responses → chat translator.
+    let result = translate_streaming_response(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
         into_byte_stream(axum::body::Body::empty().into_data_stream()),
-    ) {
-        Ok(_) => panic!("expected unsupported streaming response translation error"),
-        Err(error) => error,
-    };
+    );
 
-    assert!(matches!(
-        error,
-        TranslationError::UnsupportedResponsePair {
-            from: ProviderProtocol::OpenaiResponses,
-            to: RequestProtocol::OpenaiChatCompletions,
-        }
-    ));
+    // An empty body produces no events and succeeds; the important assertion
+    // is that the pair is no longer rejected as unsupported.
+    assert!(result.is_ok());
 }

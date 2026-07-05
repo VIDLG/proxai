@@ -12,7 +12,7 @@ pre-push:
   commands:
     release-tag-version:
       root: "."
-      run: just check_release_tag_version
+      run: just ci-check-release-tag-version
     test-lib:
       root: "."
-      run: just test_lib
+      run: just ci-test-lib
