@@ -3,12 +3,13 @@ use serde_json::Value;
 use super::types::item_discriminant;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
-use crate::translation::TranslationResult;
-use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
 use crate::translation::anthropic_messages::outbound::{
-    text_block_param, tool_use_block_param, url_image_block,
+    content_block_message, document_source_from_file_data, document_source_from_url,
+    image_block_from_url, merge_adjacent_tool_messages, text_block_param, tool_use_block_param,
+    typed_text_block,
 };
-use crate::translation::text::join_text_parts;
+
+use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) fn translate_messages(
     request: &responses::ResponseCreateParams,
@@ -16,33 +17,36 @@ pub(super) fn translate_messages(
     Option<anthropic::SystemPrompt>,
     Vec<anthropic::MessageParam>,
 )> {
-    let mut system_parts = Vec::new();
+    let mut system_blocks = Vec::new();
     if let Some(instructions) = request.instructions.as_deref()
         && !instructions.trim().is_empty()
     {
-        system_parts.push(instructions.to_string());
+        system_blocks.push(typed_text_block(instructions.to_string()));
     }
 
-    let (input_system_parts, mut messages) = request
+    let (input_system_blocks, messages) = request
         .input
         .as_ref()
         .map(translate_input)
         .transpose()?
         .unwrap_or_default();
-    system_parts.extend(input_system_parts);
+    system_blocks.extend(input_system_blocks);
     if messages.is_empty() {
-        messages.push(anthropic::MessageParam {
-            role: anthropic::MessageParamRole::User,
-            content: anthropic::MessageParamContent::Text(String::new()),
-        });
+        return Err(TranslationError::InvalidPayload(
+            "OpenAI Responses request must contain at least one user or assistant input item to translate to Anthropic Messages"
+                .to_string(),
+        ));
     }
 
-    Ok((system_prompt_from_text_parts(system_parts), messages))
+    Ok((system_prompt_from_text_blocks(system_blocks), messages))
 }
 
 fn translate_input(
     input: &responses::InputParam,
-) -> TranslationResult<(Vec<String>, Vec<anthropic::MessageParam>)> {
+) -> TranslationResult<(
+    Vec<anthropic::TypedTextBlockParam>,
+    Vec<anthropic::MessageParam>,
+)> {
     match input {
         responses::InputParam::Text(text) => Ok((
             Vec::new(),
@@ -52,18 +56,29 @@ fn translate_input(
             }],
         )),
         responses::InputParam::Items(items) => {
-            let mut system_parts = Vec::new();
+            let mut system_blocks = Vec::new();
             let mut messages = Vec::new();
 
             for item in items {
                 match item {
                     responses::InputItem::ItemReference(reference) => {
-                        messages.push(reference.into())
+                        return Err(TranslationError::InvalidPayload(format!(
+                            "OpenAI Responses item_reference `{}` cannot be translated to Anthropic Messages because the referenced item content is not available",
+                            reference.id
+                        )));
                     }
                     responses::InputItem::EasyMessage(message) => match message.role {
                         responses::Role::System | responses::Role::Developer => {
-                            if let Some(text) = extract_easy_text(&message.content) {
-                                system_parts.push(text);
+                            match &message.content {
+                                responses::EasyInputContent::Text(text)
+                                    if !text.trim().is_empty() =>
+                                {
+                                    system_blocks.push(typed_text_block(text.clone()));
+                                }
+                                responses::EasyInputContent::ContentList(parts) => {
+                                    system_blocks.extend(system_blocks_from_input_content(parts)?);
+                                }
+                                responses::EasyInputContent::Text(_) => {}
                             }
                         }
                         responses::Role::Assistant => messages.push(anthropic::MessageParam {
@@ -79,9 +94,8 @@ fn translate_input(
                         responses::Item::Message(responses::MessageItem::Input(input)) => {
                             match input.role {
                                 responses::InputRole::System | responses::InputRole::Developer => {
-                                    if let Some(text) = extract_input_content_text(&input.content) {
-                                        system_parts.push(text);
-                                    }
+                                    system_blocks
+                                        .extend(system_blocks_from_input_content(&input.content)?);
                                 }
                                 responses::InputRole::User => {
                                     messages.push(anthropic::MessageParam {
@@ -96,64 +110,45 @@ fn translate_input(
                         responses::Item::Message(responses::MessageItem::Output(output)) => {
                             messages.push(output.into());
                         }
-                        responses::Item::FunctionCall(call) => append_message_content_block(
-                            &mut messages,
-                            anthropic::MessageParamRole::Assistant,
-                            anthropic::ContentBlockParam::from(call),
-                        ),
+                        responses::Item::FunctionCall(call) => {
+                            messages.push(content_block_message(
+                                anthropic::MessageParamRole::Assistant,
+                                anthropic::ContentBlockParam::from(call),
+                            ));
+                        }
                         responses::Item::FunctionCallOutput(output) => {
-                            append_message_content_block(
-                                &mut messages,
+                            messages.push(content_block_message(
                                 anthropic::MessageParamRole::User,
                                 anthropic::ContentBlockParam::ToolResult(
                                     anthropic::ToolResultBlockParam::try_from(output)?,
                                 ),
-                            )
+                            ));
                         }
-                        responses::Item::CustomToolCall(call) => append_message_content_block(
-                            &mut messages,
-                            anthropic::MessageParamRole::Assistant,
-                            anthropic::ContentBlockParam::from(call),
-                        ),
+                        responses::Item::CustomToolCall(call) => {
+                            messages.push(content_block_message(
+                                anthropic::MessageParamRole::Assistant,
+                                anthropic::ContentBlockParam::from(call),
+                            ));
+                        }
                         responses::Item::CustomToolCallOutput(output) => {
-                            append_message_content_block(
-                                &mut messages,
+                            messages.push(content_block_message(
                                 anthropic::MessageParamRole::User,
                                 anthropic::ContentBlockParam::ToolResult(
                                     anthropic::ToolResultBlockParam::from(output),
                                 ),
-                            )
+                            ));
                         }
                         other => {
-                            tracing::trace!(
-                                item_type = item_discriminant(other),
-                                reason = "Responses item has no Anthropic Messages request representation"
-                            );
-                            messages.push(anthropic::MessageParam {
-                                role: anthropic::MessageParamRole::User,
-                                content: anthropic::MessageParamContent::Text(format!(
-                                    "[OpenAI Responses item `{}` omitted during Anthropic translation]",
-                                    item_discriminant(other)
-                                )),
-                            });
+                            return Err(TranslationError::InvalidPayload(format!(
+                                "OpenAI Responses item `{}` cannot be translated to Anthropic Messages request content",
+                                item_discriminant(other)
+                            )));
                         }
                     },
                 }
             }
 
-            Ok((system_parts, messages))
-        }
-    }
-}
-
-impl From<&responses::ItemReference> for anthropic::MessageParam {
-    fn from(reference: &responses::ItemReference) -> Self {
-        Self {
-            role: anthropic::MessageParamRole::User,
-            content: anthropic::MessageParamContent::Text(format!(
-                "[OpenAI Responses item_reference `{}` omitted during Anthropic translation]",
-                reference.id
-            )),
+            Ok((system_blocks, merge_adjacent_tool_messages(messages)))
         }
     }
 }
@@ -212,16 +207,58 @@ impl TryFrom<&responses::InputContent> for anthropic::ContentBlockParam {
             responses::InputContent::InputText(text) => {
                 Ok(Self::Text(text_block_param(text.text.clone())))
             }
-            responses::InputContent::InputImage(image) => match image.image_url.as_deref() {
-                Some(url) => Ok(Self::Image(url_image_block(url))),
-                None => Ok(Self::Text(text_block_param(
-                    "[image omitted: only image_url is supported]".to_string(),
-                ))),
-            },
-            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block_param(
-                "[file omitted during Anthropic translation]".to_string(),
-            ))),
+            responses::InputContent::InputImage(image) => Ok(Self::Image(image.try_into()?)),
+            responses::InputContent::InputFile(file) => Ok(Self::Document(file.try_into()?)),
         }
+    }
+}
+
+impl TryFrom<&responses::InputImageContent> for anthropic::ImageBlockParam {
+    type Error = crate::translation::TranslationError;
+
+    fn try_from(image: &responses::InputImageContent) -> TranslationResult<Self> {
+        let Some(url) = image.image_url.as_deref() else {
+            return Err(TranslationError::InvalidPayload(
+                if image.file_id.is_some() {
+                    "OpenAI Responses input_image.file_id cannot be translated to Anthropic Messages image content; file IDs are provider-scoped"
+                } else {
+                    "OpenAI Responses input_image must include image_url as either a URL or data:image/<type>;base64,<data> value to translate to Anthropic Messages"
+                }
+                .to_string(),
+            ));
+        };
+
+        image_block_from_url(url)
+    }
+}
+
+impl TryFrom<&responses::InputFileContent> for anthropic::DocumentBlockParam {
+    type Error = crate::translation::TranslationError;
+
+    fn try_from(file: &responses::InputFileContent) -> TranslationResult<Self> {
+        let source = if let Some(data) = file.file_data.as_deref() {
+            document_source_from_file_data(data)?
+        } else if let Some(url) = file.file_url.as_deref() {
+            document_source_from_url(url)?
+        } else if file.file_id.is_some() {
+            return Err(TranslationError::InvalidPayload(
+                "OpenAI Responses input_file.file_id cannot be translated to Anthropic Messages document content; file IDs are provider-scoped"
+                    .to_string(),
+            ));
+        } else {
+            return Err(TranslationError::InvalidPayload(
+                "OpenAI Responses input_file must include file_data or file_url to translate to Anthropic Messages"
+                    .to_string(),
+            ));
+        };
+
+        Ok(anthropic::DocumentBlockParam {
+            source,
+            title: file.filename.clone(),
+            cache_control: None,
+            citations: None,
+            context: None,
+        })
     }
 }
 
@@ -279,15 +316,8 @@ impl TryFrom<&responses::InputContent> for anthropic::ToolResultContentBlockPara
             responses::InputContent::InputText(text) => {
                 Ok(Self::Text(text_block_param(text.text.clone())))
             }
-            responses::InputContent::InputImage(image) => match image.image_url.as_deref() {
-                Some(url) => Ok(Self::Image(url_image_block(url))),
-                None => Ok(Self::Text(text_block_param(
-                    "[image omitted: only image_url is supported]".to_string(),
-                ))),
-            },
-            responses::InputContent::InputFile(_) => Ok(Self::Text(text_block_param(
-                "[file omitted during Anthropic translation]".to_string(),
-            ))),
+            responses::InputContent::InputImage(image) => Ok(Self::Image(image.try_into()?)),
+            responses::InputContent::InputFile(file) => Ok(Self::Document(file.try_into()?)),
         }
     }
 }
@@ -301,8 +331,11 @@ impl From<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam 
                     anthropic::ToolResultContentParam::Text(text.clone())
                 }
                 responses::CustomToolCallOutputOutput::List(values) => {
-                    anthropic::ToolResultContentParam::Text(
-                        serde_json::to_string(values).unwrap_or_else(|_| String::new()),
+                    anthropic::ToolResultContentParam::Blocks(
+                        values
+                            .iter()
+                            .map(json_value_tool_result_text_block)
+                            .collect(),
                     )
                 }
             }),
@@ -312,53 +345,55 @@ impl From<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam 
     }
 }
 
-fn append_message_content_block(
-    messages: &mut Vec<anthropic::MessageParam>,
-    role: anthropic::MessageParamRole,
-    block: anthropic::ContentBlockParam,
-) {
-    let Some(last) = messages.last_mut() else {
-        messages.push(anthropic::MessageParam {
-            role,
-            content: anthropic::MessageParamContent::Blocks(vec![block]),
-        });
-        return;
+fn json_value_tool_result_text_block(value: &Value) -> anthropic::ToolResultContentBlockParam {
+    let text = match value {
+        Value::String(text) => text.clone(),
+        value => value.to_string(),
     };
-    if last.role != role {
-        messages.push(anthropic::MessageParam {
-            role,
-            content: anthropic::MessageParamContent::Blocks(vec![block]),
-        });
-        return;
-    }
+    anthropic::ToolResultContentBlockParam::Text(text_block_param(text))
+}
 
-    match &mut last.content {
-        anthropic::MessageParamContent::Blocks(content) => content.push(block),
-        anthropic::MessageParamContent::Text(text) => {
-            let previous_text = std::mem::take(text);
-            last.content = anthropic::MessageParamContent::Blocks(vec![
-                anthropic::ContentBlockParam::Text(text_block_param(previous_text)),
-                block,
-            ]);
+fn system_prompt_from_text_blocks(
+    blocks: Vec<anthropic::TypedTextBlockParam>,
+) -> Option<anthropic::SystemPrompt> {
+    let blocks: Vec<_> = blocks
+        .into_iter()
+        .filter(|block| !block.text.trim().is_empty())
+        .collect();
+
+    match blocks.len() {
+        0 => None,
+        1 => blocks
+            .into_iter()
+            .next()
+            .map(|block| anthropic::SystemPrompt::Text(block.text)),
+        _ => Some(anthropic::SystemPrompt::Blocks(blocks)),
+    }
+}
+
+fn system_blocks_from_input_content(
+    parts: &[responses::InputContent],
+) -> TranslationResult<Vec<anthropic::TypedTextBlockParam>> {
+    let mut blocks = Vec::new();
+    for part in parts {
+        match part {
+            responses::InputContent::InputText(text) if !text.text.trim().is_empty() => {
+                blocks.push(typed_text_block(text.text.clone()));
+            }
+            responses::InputContent::InputText(_) => {}
+            responses::InputContent::InputImage(_) => {
+                return Err(TranslationError::InvalidPayload(
+                    "OpenAI Responses system/developer message content cannot include input_image when translating to Anthropic Messages system prompt"
+                        .to_string(),
+                ));
+            }
+            responses::InputContent::InputFile(_) => {
+                return Err(TranslationError::InvalidPayload(
+                    "OpenAI Responses system/developer message content cannot include input_file when translating to Anthropic Messages system prompt"
+                        .to_string(),
+                ));
+            }
         }
     }
-}
-
-fn extract_easy_text(content: &responses::EasyInputContent) -> Option<String> {
-    match content {
-        responses::EasyInputContent::Text(text) => Some(text.clone()),
-        responses::EasyInputContent::ContentList(parts) => extract_input_content_text(parts),
-    }
-}
-
-fn extract_input_content_text(parts: &[responses::InputContent]) -> Option<String> {
-    join_text_parts(
-        parts
-            .iter()
-            .filter_map(|part| match part {
-                responses::InputContent::InputText(text) => Some(text.text.clone()),
-                _ => None,
-            })
-            .collect(),
-    )
+    Ok(blocks)
 }

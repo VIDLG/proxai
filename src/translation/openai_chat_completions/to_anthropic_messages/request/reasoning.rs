@@ -1,14 +1,12 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
+use crate::translation::anthropic_messages::outbound::output_config as anthropic_output_config;
 
 pub(super) fn output_config(
     effort: Option<chat::ReasoningEffort>,
 ) -> Option<anthropic::OutputConfig> {
     effort.and_then(|effort| {
-        Option::<anthropic::OutputEffort>::from(effort).map(|effort| anthropic::OutputConfig {
-            effort: Some(effort),
-            format: None,
-        })
+        Option::<anthropic::OutputEffort>::from(effort).map(anthropic_output_config)
     })
 }
 

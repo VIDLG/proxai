@@ -1,50 +1,55 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 
+use crate::translation::anthropic_messages::outbound::output_config as anthropic_output_config;
+use crate::translation::{TranslationError, TranslationResult};
+
 pub(super) fn output_config(
-    reasoning: Option<&responses::Reasoning>,
-) -> Option<anthropic::OutputConfig> {
-    match reasoning?.effort? {
-        responses::ReasoningEffort::Low => Some(output_effort(anthropic::OutputEffort::Low)),
-        responses::ReasoningEffort::Medium => Some(output_effort(anthropic::OutputEffort::Medium)),
-        responses::ReasoningEffort::High => Some(output_effort(anthropic::OutputEffort::High)),
-        responses::ReasoningEffort::Xhigh => Some(output_effort(anthropic::OutputEffort::Xhigh)),
-        responses::ReasoningEffort::None | responses::ReasoningEffort::Minimal => None,
-    }
+    reasoning: &responses::Reasoning,
+) -> TranslationResult<Option<anthropic::OutputConfig>> {
+    let Some(effort) = reasoning.effort else {
+        return Ok(None);
+    };
+    Ok(Some(anthropic_output_config(effort.try_into()?)))
 }
 
 pub(super) fn thinking_config(
-    reasoning: Option<&responses::Reasoning>,
+    reasoning: &responses::Reasoning,
 ) -> Option<anthropic::ThinkingConfigParam> {
-    let reasoning = reasoning?;
-    let has_summary = reasoning.summary.is_some();
+    Some(anthropic::ThinkingConfigParam::Adaptive(
+        anthropic::ThinkingConfigAdaptive {
+            display: Some(thinking_display(reasoning.summary?)),
+        },
+    ))
+}
 
-    match reasoning.effort {
-        Some(responses::ReasoningEffort::None | responses::ReasoningEffort::Minimal) => Some(
-            anthropic::ThinkingConfigParam::Disabled(anthropic::ThinkingConfigDisabled),
-        ),
-        Some(
-            responses::ReasoningEffort::Low
-            | responses::ReasoningEffort::Medium
-            | responses::ReasoningEffort::High
-            | responses::ReasoningEffort::Xhigh,
-        )
-        | None
-            if has_summary =>
-        {
-            Some(anthropic::ThinkingConfigParam::Adaptive(
-                anthropic::ThinkingConfigAdaptive {
-                    display: Some(anthropic::ThinkingDisplay::Summarized),
-                },
-            ))
+fn thinking_display(summary: responses::ReasoningSummary) -> anthropic::ThinkingDisplay {
+    match summary {
+        responses::ReasoningSummary::Auto => anthropic::ThinkingDisplay::Summarized,
+        responses::ReasoningSummary::Concise | responses::ReasoningSummary::Detailed => {
+            tracing::trace!(
+                summary = %summary,
+                reason = "Anthropic Messages thinking display cannot distinguish concise/detailed Responses summaries; using summarized"
+            );
+            anthropic::ThinkingDisplay::Summarized
         }
-        _ => None,
     }
 }
 
-fn output_effort(effort: anthropic::OutputEffort) -> anthropic::OutputConfig {
-    anthropic::OutputConfig {
-        effort: Some(effort),
-        format: None,
+impl TryFrom<responses::ReasoningEffort> for anthropic::OutputEffort {
+    type Error = TranslationError;
+
+    fn try_from(effort: responses::ReasoningEffort) -> TranslationResult<Self> {
+        match effort {
+            responses::ReasoningEffort::Low => Ok(Self::Low),
+            responses::ReasoningEffort::Medium => Ok(Self::Medium),
+            responses::ReasoningEffort::High => Ok(Self::High),
+            responses::ReasoningEffort::Xhigh => Ok(Self::Xhigh),
+            responses::ReasoningEffort::None | responses::ReasoningEffort::Minimal => {
+                Err(TranslationError::InvalidPayload(format!(
+                    "OpenAI Responses reasoning effort `{effort}` cannot be translated to Anthropic output_config.effort"
+                )))
+            }
+        }
     }
 }

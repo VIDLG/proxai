@@ -31,14 +31,23 @@ impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParam
             cache_control: None,
             container: None,
             inference_geo: None,
-            metadata: request.metadata.as_ref().and_then(translate_metadata),
-            output_config: output_config(request.reasoning.as_ref()),
+            metadata: request.metadata.as_ref().and_then(|metadata| {
+                metadata.get("user_id").map(|user_id| anthropic::Metadata {
+                    user_id: Some(user_id.clone()),
+                })
+            }),
+            output_config: request
+                .reasoning
+                .as_ref()
+                .map(output_config)
+                .transpose()?
+                .flatten(),
             service_tier: None,
             stop_sequences: None,
             stream: request.stream,
             system,
             temperature: request.temperature.and_then(json_number_from_f32),
-            thinking: thinking_config(request.reasoning.as_ref()),
+            thinking: request.reasoning.as_ref().and_then(thinking_config),
             tool_choice: translate_tool_choice(
                 request.tool_choice.as_ref(),
                 request.parallel_tool_calls,
@@ -48,14 +57,6 @@ impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParam
             top_p: request.top_p.and_then(json_number_from_f32),
         })
     }
-}
-
-fn translate_metadata(
-    metadata: &std::collections::HashMap<String, String>,
-) -> Option<anthropic::Metadata> {
-    metadata.get("user_id").map(|user_id| anthropic::Metadata {
-        user_id: Some(user_id.clone()),
-    })
 }
 
 #[cfg(test)]

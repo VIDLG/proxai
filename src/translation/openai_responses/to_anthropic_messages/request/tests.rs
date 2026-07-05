@@ -42,7 +42,7 @@ fn translates_text_request_with_instructions_and_function_tool() {
 }
 
 #[test]
-fn translates_glm_responses_request_with_item_reference_placeholder() {
+fn rejects_responses_request_with_item_reference() {
     let payload = json!({
         "model": "glm-5.1",
         "instructions": "Be concise.",
@@ -61,18 +61,70 @@ fn translates_glm_responses_request_with_item_reference_placeholder() {
         "stream": true
     });
 
-    let translated = translate_request_payload(&payload).unwrap();
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
 
-    assert_eq!(translated["model"], "glm-5.1");
-    assert_eq!(translated["max_tokens"], 128);
-    assert_eq!(translated["system"], "Be concise.");
-    assert_eq!(translated["messages"][0]["role"], "user");
-    assert_eq!(translated["messages"][0]["content"][0]["text"], "hello");
-    assert_eq!(translated["messages"][1]["role"], "user");
-    assert_eq!(
-        translated["messages"][1]["content"],
-        "[OpenAI Responses item_reference `future_zed_item` omitted during Anthropic translation]"
-    );
+    assert!(error.contains("item_reference `future_zed_item` cannot be translated"));
+}
+
+#[test]
+fn rejects_system_or_developer_content_list_with_non_text_parts() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [
+            {
+                "type": "message",
+                "role": "developer",
+                "content": [{"type": "input_image", "image_url": "https://example.test/policy.png"}]
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": "hello"
+            }
+        ]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("system/developer message content cannot include input_image"));
+}
+
+#[test]
+fn rejects_unsupported_responses_items_for_anthropic_translation() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": "hello"
+            },
+            {
+                "type": "reasoning",
+                "summary": [{"type": "summary_text", "text": "internal reasoning summary"}]
+            }
+        ]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("item `reasoning` cannot be translated"));
+}
+
+#[test]
+fn rejects_responses_request_without_anthropic_messages() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "instructions": "Be concise.",
+        "input": [
+            {"type": "message", "role": "developer", "content": "Follow policy."},
+            {"type": "message", "role": "system", "content": "System policy."}
+        ]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("at least one user or assistant input item"));
 }
 
 #[test]
@@ -120,18 +172,105 @@ fn translates_reasoning_effort_and_summary_to_output_config_plus_display() {
 }
 
 #[test]
-fn translates_minimal_reasoning_effort_to_disabled_thinking() {
+fn rejects_minimal_reasoning_effort_for_anthropic_output_config() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": "hello",
         "reasoning": {"effort": "minimal", "summary": "auto"}
     });
 
-    let translated = translate_request_payload(&payload).unwrap();
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
 
-    assert!(translated.get("output_config").is_none());
-    assert_eq!(translated["thinking"]["type"], "disabled");
-    assert!(translated["thinking"].get("display").is_none());
+    assert!(error.contains("reasoning effort `minimal` cannot be translated"));
+    assert!(error.contains("output_config.effort"));
+}
+
+#[test]
+fn translates_responses_image_and_file_content_to_anthropic_blocks() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Review these assets"},
+                {"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgo="},
+                {"type": "input_file", "filename": "spec.pdf", "file_data": "data:application/pdf;base64,JVBERi0x"},
+                {"type": "input_file", "filename": "notes.txt", "file_data": "plain notes"}
+            ]
+        }]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+    let content = translated["messages"][0]["content"].as_array().unwrap();
+
+    assert_eq!(content[1]["type"], "image");
+    assert_eq!(content[1]["source"]["type"], "base64");
+    assert_eq!(content[1]["source"]["media_type"], "image/png");
+    assert_eq!(content[1]["source"]["data"], "iVBORw0KGgo=");
+    assert_eq!(content[2]["type"], "document");
+    assert_eq!(content[2]["title"], "spec.pdf");
+    assert_eq!(content[2]["source"]["type"], "base64");
+    assert_eq!(content[2]["source"]["media_type"], "application/pdf");
+    assert_eq!(content[2]["source"]["data"], "JVBERi0x");
+    assert_eq!(content[3]["type"], "document");
+    assert_eq!(content[3]["title"], "notes.txt");
+    assert_eq!(content[3]["source"]["type"], "text");
+    assert_eq!(content[3]["source"]["media_type"], "text/plain");
+    assert_eq!(content[3]["source"]["data"], "plain notes");
+}
+
+#[test]
+fn rejects_bare_base64_responses_image_content_for_anthropic_translation() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_image", "image_url": "iVBORw0KGgo="}]
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("http(s) URL or data:image"));
+}
+
+#[test]
+fn rejects_non_pdf_responses_file_urls_for_anthropic_documents() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{
+                "type": "input_file",
+                "filename": "notes.txt",
+                "file_url": "https://example.test/notes.txt"
+            }]
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("Document URL values must be an http(s) PDF URL"));
+}
+
+#[test]
+fn rejects_provider_scoped_responses_file_ids_for_anthropic_translation() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_file", "file_id": "file_123"}]
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("input_file.file_id cannot be translated"));
+    assert!(error.contains("provider-scoped"));
 }
 
 #[test]
@@ -223,6 +362,11 @@ fn groups_custom_tool_calls_and_results_into_adjacent_messages() {
     assert_eq!(messages[1]["content"].as_array().unwrap().len(), 2);
     assert_eq!(messages[2]["role"], "user");
     assert_eq!(messages[2]["content"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        messages[2]["content"][1]["content"][0]["text"],
+        "Cargo.toml"
+    );
+    assert_eq!(messages[2]["content"][1]["content"][1]["text"], "src");
     assert_tool_results_immediately_follow_tool_uses(messages);
 }
 

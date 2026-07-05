@@ -4,6 +4,7 @@
 //! protocol-native request types without repeating `None` field noise.
 
 use serde_json::{Value, json};
+use url::Url;
 
 use crate::protocol::anthropic::messages as anthropic;
 use crate::translation::{TranslationError, TranslationResult};
@@ -46,6 +47,69 @@ pub(crate) fn assistant_message(
     message(anthropic::MessageParamRole::Assistant, content)
 }
 
+pub(crate) fn content_block_message(
+    role: anthropic::MessageParamRole,
+    block: anthropic::ContentBlockParam,
+) -> anthropic::MessageParam {
+    message(role, anthropic::MessageParamContent::Blocks(vec![block]))
+}
+
+pub(crate) fn merge_adjacent_tool_messages(
+    messages: Vec<anthropic::MessageParam>,
+) -> Vec<anthropic::MessageParam> {
+    let mut merged: Vec<anthropic::MessageParam> = Vec::new();
+    for message in messages {
+        let should_merge = merged.last().is_some_and(|last| {
+            last.role == message.role && is_tool_message(last) && is_tool_message(&message)
+        });
+        if should_merge {
+            if let (
+                Some(anthropic::MessageParam {
+                    content: anthropic::MessageParamContent::Blocks(target_blocks),
+                    ..
+                }),
+                anthropic::MessageParamContent::Blocks(source_blocks),
+            ) = (merged.last_mut(), message.content)
+            {
+                target_blocks.extend(source_blocks);
+            }
+        } else {
+            merged.push(message);
+        }
+    }
+    merged
+}
+
+fn is_tool_message(message: &anthropic::MessageParam) -> bool {
+    match (message.role, &message.content) {
+        (
+            anthropic::MessageParamRole::Assistant,
+            anthropic::MessageParamContent::Blocks(blocks),
+        ) => {
+            !blocks.is_empty()
+                && blocks
+                    .iter()
+                    .all(|block| matches!(block, anthropic::ContentBlockParam::ToolUse(_)))
+        }
+        (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Blocks(blocks)) => {
+            !blocks.is_empty()
+                && blocks
+                    .iter()
+                    .all(|block| matches!(block, anthropic::ContentBlockParam::ToolResult(_)))
+        }
+        _ => false,
+    }
+}
+
+// ── Output config ────────────────────────────────────────────────────────
+
+pub(crate) fn output_config(effort: anthropic::OutputEffort) -> anthropic::OutputConfig {
+    anthropic::OutputConfig {
+        effort: Some(effort),
+        format: None,
+    }
+}
+
 // ── System prompt ────────────────────────────────────────────────────────
 
 /// Build an Anthropic `SystemPrompt` from collected text parts.
@@ -72,27 +136,25 @@ pub(crate) fn system_prompt_from_text_parts(parts: Vec<String>) -> Option<anthro
 // ── Image ────────────────────────────────────────────────────────────────
 
 /// Build an Anthropic `ImageBlockParam` from a Chat/Responses-style image URL
-/// string. Supports both `data:<media>;base64,...` data URLs and plain URLs.
+/// string. Supports `data:<media>;base64,...` image data URLs and `http(s)` URLs.
 pub(crate) fn image_block_from_url(url: &str) -> TranslationResult<anthropic::ImageBlockParam> {
     let source = if let Some((media_type, data)) = parse_base64_image_data_url(url)? {
         anthropic::ImageBlockSource::Base64(anthropic::Base64ImageSource { data, media_type })
-    } else {
+    } else if is_http_url(url) {
         anthropic::ImageBlockSource::Url(anthropic::UrlImageSource {
             url: url.to_string(),
         })
+    } else {
+        return Err(TranslationError::InvalidPayload(
+            "Image URL values must be an http(s) URL or data:image/<type>;base64,<data> to translate to Anthropic Messages image content"
+                .to_string(),
+        ));
     };
 
     Ok(anthropic::ImageBlockParam {
         source,
         cache_control: None,
     })
-}
-
-pub(crate) fn url_image_block(url: impl Into<String>) -> anthropic::ImageBlockParam {
-    anthropic::ImageBlockParam {
-        source: anthropic::ImageBlockSource::Url(anthropic::UrlImageSource { url: url.into() }),
-        cache_control: None,
-    }
 }
 
 fn parse_base64_image_data_url(
@@ -120,6 +182,99 @@ fn image_media_type(value: &str) -> TranslationResult<anthropic::ImageMediaType>
             "Image media type `{other}` cannot be translated to Anthropic Messages image content"
         ))),
     }
+}
+
+fn is_http_url(value: &str) -> bool {
+    Url::parse(value).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+}
+
+// ── Documents ─────────────────────────────────────────────────────────────
+
+pub(crate) fn document_source_from_url(
+    url: &str,
+) -> TranslationResult<anthropic::DocumentBlockParamSource> {
+    if !is_pdf_url(url) {
+        return Err(TranslationError::InvalidPayload(
+            "Document URL values must be an http(s) PDF URL to translate to Anthropic Messages document content"
+                .to_string(),
+        ));
+    }
+
+    Ok(anthropic::DocumentBlockParamSource::Url(
+        anthropic::UrlPdfSource {
+            url: url.to_string(),
+        },
+    ))
+}
+
+pub(crate) fn document_source_from_file_data(
+    data: &str,
+) -> TranslationResult<anthropic::DocumentBlockParamSource> {
+    let Some(rest) = data.strip_prefix("data:") else {
+        return Ok(plain_text_document_source(data));
+    };
+
+    if let Some(source) = base64_pdf_document_source(rest) {
+        return Ok(source);
+    }
+
+    if let Some(text) = rest.strip_prefix("text/plain,") {
+        return Ok(plain_text_document_source(text));
+    }
+
+    if rest.starts_with("text/plain;base64,") {
+        return Err(TranslationError::InvalidPayload(
+            "text/plain;base64 file data cannot be translated to Anthropic Messages without decoding; provide plain text file_data instead"
+                .to_string(),
+        ));
+    }
+
+    Err(TranslationError::InvalidPayload(
+        "file_data must be raw text, data:text/plain,<text>, or data:application/pdf;base64,<data> to translate to Anthropic Messages document content"
+            .to_string(),
+    ))
+}
+
+pub(crate) fn pdf_document_source_from_file_data_or_url(
+    data: &str,
+) -> TranslationResult<anthropic::DocumentBlockParamSource> {
+    if let Some(rest) = data.strip_prefix("data:")
+        && let Some(source) = base64_pdf_document_source(rest)
+    {
+        return Ok(source);
+    }
+
+    if is_http_url(data) {
+        return document_source_from_url(data);
+    }
+
+    Err(TranslationError::InvalidPayload(
+        "file_data can only be translated to Anthropic Messages document content when it is a PDF data URL or PDF URL"
+            .to_string(),
+    ))
+}
+
+fn base64_pdf_document_source(rest: &str) -> Option<anthropic::DocumentBlockParamSource> {
+    rest.strip_prefix("application/pdf;base64,").map(|data| {
+        anthropic::DocumentBlockParamSource::Base64(anthropic::Base64PdfSource {
+            media_type: anthropic::PdfMediaType::ApplicationPdf,
+            data: data.to_string(),
+        })
+    })
+}
+
+fn plain_text_document_source(data: &str) -> anthropic::DocumentBlockParamSource {
+    anthropic::DocumentBlockParamSource::PlainText(anthropic::PlainTextSource {
+        media_type: anthropic::PlainTextMediaType::TextPlain,
+        data: data.to_string(),
+    })
+}
+
+fn is_pdf_url(value: &str) -> bool {
+    Url::parse(value).is_ok_and(|url| {
+        matches!(url.scheme(), "http" | "https")
+            && url.path().to_ascii_lowercase().ends_with(".pdf")
+    })
 }
 
 // ── Tool use / tool result ───────────────────────────────────────────────
@@ -191,3 +346,7 @@ pub(crate) fn custom_tool(
         type_: None,
     })
 }
+
+#[cfg(test)]
+#[path = "request_tests.rs"]
+mod tests;

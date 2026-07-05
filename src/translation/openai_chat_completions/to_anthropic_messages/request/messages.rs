@@ -4,7 +4,8 @@ use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
 use crate::translation::anthropic_messages::outbound::{
-    assistant_message, text_block_param, tool_use_block_param, user_message,
+    assistant_message, content_block_message, merge_adjacent_tool_messages, text_block_param,
+    tool_use_block_param, user_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -41,9 +42,10 @@ impl TryFrom<&[chat::ChatCompletionRequestMessage]> for AnthropicMessages {
                     )?));
                 }
                 chat::ChatCompletionRequestMessage::Tool(message) => {
-                    messages.push(user_message(anthropic::MessageParamContent::Blocks(vec![
+                    messages.push(content_block_message(
+                        anthropic::MessageParamRole::User,
                         anthropic::ContentBlockParam::ToolResult(message.into()),
-                    ])));
+                    ));
                 }
                 chat::ChatCompletionRequestMessage::Function(_) => {
                     return Err(TranslationError::InvalidPayload(
@@ -63,7 +65,7 @@ impl TryFrom<&[chat::ChatCompletionRequestMessage]> for AnthropicMessages {
 
         Ok(Self {
             system: system_prompt_from_text_parts(system_parts),
-            messages,
+            messages: merge_adjacent_tool_messages(messages),
         })
     }
 }
