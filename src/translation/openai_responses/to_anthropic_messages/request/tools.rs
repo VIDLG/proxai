@@ -1,4 +1,3 @@
-use super::types::tool_discriminant;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::custom_tool;
@@ -28,7 +27,7 @@ fn translate_tool(tool: &responses::Tool) -> Option<anthropic::ToolUnion> {
         )),
         other => {
             tracing::trace!(
-                tool_type = tool_discriminant(other),
+                tool_type = other.as_ref(),
                 reason = "Responses tool has no Anthropic Messages request representation"
             );
             None
@@ -71,23 +70,10 @@ pub(super) fn translate_tool_choice(
         }
         other => {
             tracing::trace!(
-                tool_choice_type = tool_choice_discriminant(other),
+                tool_choice_type = other.as_ref(),
                 reason = "Responses tool_choice has no Anthropic Messages request representation"
             );
             None
         }
-    }
-}
-
-fn tool_choice_discriminant(choice: &responses::ToolChoiceParam) -> &'static str {
-    match choice {
-        responses::ToolChoiceParam::AllowedTools(_) => "allowed_tools",
-        responses::ToolChoiceParam::Function(_) => "function",
-        responses::ToolChoiceParam::Mcp(_) => "mcp",
-        responses::ToolChoiceParam::Custom(_) => "custom",
-        responses::ToolChoiceParam::ApplyPatch => "apply_patch",
-        responses::ToolChoiceParam::Shell => "shell",
-        responses::ToolChoiceParam::Hosted(_) => "hosted",
-        responses::ToolChoiceParam::Mode(_) => "mode",
     }
 }

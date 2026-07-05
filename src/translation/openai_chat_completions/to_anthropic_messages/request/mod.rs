@@ -9,10 +9,11 @@ mod types;
 use self::messages::AnthropicMessages;
 use self::reasoning::{output_config, thinking_config};
 use self::tools::translate_tool_choice;
-use self::types::{chat_max_tokens, json_number_from_f32, stop_sequences};
+use self::types::{chat_max_tokens, stop_sequences};
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::TranslationResult;
+use crate::translation::anthropic_messages::outbound::json_number_from_f32;
 
 impl TryFrom<&chat::CreateChatCompletionRequest> for anthropic::MessageCreateParamsBase {
     type Error = crate::translation::TranslationError;

@@ -18,20 +18,22 @@ pub(super) fn thinking_config(
 ) -> Option<anthropic::ThinkingConfigParam> {
     Some(anthropic::ThinkingConfigParam::Adaptive(
         anthropic::ThinkingConfigAdaptive {
-            display: Some(thinking_display(reasoning.summary?)),
+            display: Some(reasoning.summary?.into()),
         },
     ))
 }
 
-fn thinking_display(summary: responses::ReasoningSummary) -> anthropic::ThinkingDisplay {
-    match summary {
-        responses::ReasoningSummary::Auto => anthropic::ThinkingDisplay::Summarized,
-        responses::ReasoningSummary::Concise | responses::ReasoningSummary::Detailed => {
-            tracing::trace!(
-                summary = %summary,
-                reason = "Anthropic Messages thinking display cannot distinguish concise/detailed Responses summaries; using summarized"
-            );
-            anthropic::ThinkingDisplay::Summarized
+impl From<responses::ReasoningSummary> for anthropic::ThinkingDisplay {
+    fn from(summary: responses::ReasoningSummary) -> Self {
+        match summary {
+            responses::ReasoningSummary::Auto => Self::Summarized,
+            responses::ReasoningSummary::Concise | responses::ReasoningSummary::Detailed => {
+                tracing::trace!(
+                    summary = %summary,
+                    reason = "Anthropic Messages thinking display cannot distinguish concise/detailed Responses summaries; using summarized"
+                );
+                Self::Summarized
+            }
         }
     }
 }

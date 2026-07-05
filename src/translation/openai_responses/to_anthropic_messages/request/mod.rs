@@ -3,14 +3,15 @@
 mod messages;
 mod reasoning;
 mod tools;
-mod types;
 
 use self::messages::translate_messages;
 use self::reasoning::{output_config, thinking_config};
 use self::tools::{translate_tool_choice, translate_tools};
-use self::types::{DEFAULT_MAX_TOKENS, json_number_from_f32};
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
+use crate::translation::anthropic_messages::outbound::{
+    COMPATIBILITY_MAX_TOKENS_FALLBACK, json_number_from_f32,
+};
 use crate::translation::{TranslationError, TranslationResult};
 
 impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParamsBase {
@@ -22,10 +23,13 @@ impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParam
                 "openai_responses -> anthropic_messages request requires `model`".to_string(),
             )
         })?;
-        let (system, messages) = translate_messages(request)?;
+        let (system, messages) =
+            translate_messages(request.instructions.as_deref(), request.input.as_ref())?;
 
         Ok(Self {
-            max_tokens: request.max_output_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
+            max_tokens: request
+                .max_output_tokens
+                .unwrap_or(COMPATIBILITY_MAX_TOKENS_FALLBACK),
             messages,
             model,
             cache_control: None,

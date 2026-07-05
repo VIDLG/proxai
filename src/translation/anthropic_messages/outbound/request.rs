@@ -9,6 +9,19 @@ use url::Url;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::translation::{TranslationError, TranslationResult};
 
+// ── Request defaults ─────────────────────────────────────────────────────
+
+// Anthropic Messages requires `max_tokens`, while OpenAI-compatible source
+// protocols can omit token-limit fields. This is a proxai compatibility
+// fallback for those clients; it is not an upstream protocol default.
+pub(crate) const COMPATIBILITY_MAX_TOKENS_FALLBACK: u32 = 4096;
+
+// ── JSON scalar helpers ──────────────────────────────────────────────────
+
+pub(crate) fn json_number_from_f32(value: f32) -> Option<serde_json::Number> {
+    serde_json::Number::from_f64(f64::from(value))
+}
+
 // ── Text blocks ───────────────────────────────────────────────────────────
 
 pub(crate) fn text_block_param(text: impl Into<String>) -> anthropic::TextBlockParam {

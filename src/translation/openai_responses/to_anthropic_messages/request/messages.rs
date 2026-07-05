@@ -1,6 +1,5 @@
 use serde_json::Value;
 
-use super::types::item_discriminant;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::{
@@ -12,24 +11,21 @@ use crate::translation::anthropic_messages::outbound::{
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) fn translate_messages(
-    request: &responses::ResponseCreateParams,
+    instructions: Option<&str>,
+    input: Option<&responses::InputParam>,
 ) -> TranslationResult<(
     Option<anthropic::SystemPrompt>,
     Vec<anthropic::MessageParam>,
 )> {
     let mut system_blocks = Vec::new();
-    if let Some(instructions) = request.instructions.as_deref()
+    if let Some(instructions) = instructions
         && !instructions.trim().is_empty()
     {
         system_blocks.push(typed_text_block(instructions.to_string()));
     }
 
-    let (input_system_blocks, messages) = request
-        .input
-        .as_ref()
-        .map(translate_input)
-        .transpose()?
-        .unwrap_or_default();
+    let (input_system_blocks, messages) =
+        input.map(translate_input).transpose()?.unwrap_or_default();
     system_blocks.extend(input_system_blocks);
     if messages.is_empty() {
         return Err(TranslationError::InvalidPayload(
@@ -141,7 +137,7 @@ fn translate_input(
                         other => {
                             return Err(TranslationError::InvalidPayload(format!(
                                 "OpenAI Responses item `{}` cannot be translated to Anthropic Messages request content",
-                                item_discriminant(other)
+                                other.as_ref()
                             )));
                         }
                     },
@@ -348,7 +344,13 @@ impl From<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam 
 fn json_value_tool_result_text_block(value: &Value) -> anthropic::ToolResultContentBlockParam {
     let text = match value {
         Value::String(text) => text.clone(),
-        value => value.to_string(),
+        value => {
+            tracing::trace!(
+                value = %value,
+                reason = "Responses custom_tool_call_output list values have no typed content block metadata; serializing JSON value as text"
+            );
+            value.to_string()
+        }
     };
     anthropic::ToolResultContentBlockParam::Text(text_block_param(text))
 }

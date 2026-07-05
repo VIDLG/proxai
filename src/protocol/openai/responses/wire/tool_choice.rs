@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use strum::Display;
+use strum::{AsRefStr, Display};
 
 use super::{ToolChoiceCustom, ToolChoiceFunction, ToolChoiceMCP};
 
@@ -43,7 +43,8 @@ pub enum ToolChoiceOptions {
     Required,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolChoiceParam {
     AllowedTools(ToolChoiceAllowed),

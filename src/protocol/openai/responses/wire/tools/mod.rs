@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 
 mod apply_patch;
 mod code_interpreter;
@@ -45,14 +46,16 @@ pub use self::web_search::*;
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses Tool variant names."
 )]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Tool {
     Function(FunctionTool),
     FileSearch(FileSearchTool),
     ComputerUsePreview(ComputerUsePreviewTool),
     WebSearch(WebSearchTool),
     #[serde(rename = "web_search_2025_08_26")]
+    #[strum(serialize = "web_search_20250826")]
     WebSearch20250826(WebSearchTool),
     Mcp(MCPTool),
     CodeInterpreter(CodeInterpreterTool),
@@ -65,6 +68,7 @@ pub enum Tool {
     ToolSearch(ToolSearchToolParam),
     WebSearchPreview(WebSearchTool),
     #[serde(rename = "web_search_preview_2025_03_11")]
+    #[strum(serialize = "web_search_preview_20250311")]
     WebSearchPreview20250311(WebSearchTool),
     ApplyPatch,
 }

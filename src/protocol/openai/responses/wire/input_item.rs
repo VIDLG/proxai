@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use strum::AsRefStr;
 
 use super::{
     ApplyPatchToolCallItemParam, ApplyPatchToolCallOutputItemParam, CodeInterpreterToolCall,
@@ -29,8 +30,9 @@ pub enum MessageItem {
     Input(InputMessage),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Item {
     Message(MessageItem),
     FileSearchCall(FileSearchToolCall),
