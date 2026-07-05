@@ -1,79 +1,69 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::custom_tool;
+use crate::translation::{TranslationError, TranslationResult};
 
-pub(super) fn translate_tools(
-    tools: Option<&Vec<responses::Tool>>,
-) -> Option<Vec<anthropic::ToolUnion>> {
-    let translated = tools?.iter().filter_map(translate_tool).collect::<Vec<_>>();
-    (!translated.is_empty()).then_some(translated)
-}
+impl TryFrom<&responses::Tool> for anthropic::ToolUnion {
+    type Error = TranslationError;
 
-fn translate_tool(tool: &responses::Tool) -> Option<anthropic::ToolUnion> {
-    match tool {
-        responses::Tool::Function(tool) => Some(custom_tool(
-            &tool.name,
-            tool.description.clone(),
-            tool.parameters.as_ref(),
-            tool.strict,
-            tool.defer_loading,
-        )),
-        responses::Tool::Custom(tool) => Some(custom_tool(
-            &tool.name,
-            tool.description.clone(),
-            None,
-            None,
-            tool.defer_loading,
-        )),
-        other => {
-            tracing::trace!(
-                tool_type = other.as_ref(),
-                reason = "Responses tool has no Anthropic Messages request representation"
-            );
-            None
+    fn try_from(tool: &responses::Tool) -> TranslationResult<Self> {
+        match tool {
+            responses::Tool::Function(tool) => Ok(custom_tool(
+                &tool.name,
+                tool.description.clone(),
+                tool.parameters.as_ref(),
+                tool.strict,
+                tool.defer_loading,
+            )),
+            responses::Tool::Custom(tool) => Ok(custom_tool(
+                &tool.name,
+                tool.description.clone(),
+                None,
+                None,
+                tool.defer_loading,
+            )),
+            other => Err(TranslationError::InvalidPayload(format!(
+                "OpenAI Responses tool `{}` cannot be translated to Anthropic Messages request tools",
+                other.as_ref()
+            ))),
         }
     }
 }
 
 pub(super) fn translate_tool_choice(
-    choice: Option<&responses::ToolChoiceParam>,
-    parallel_tool_calls: Option<bool>,
-) -> Option<anthropic::ToolChoice> {
-    let disable_parallel_tool_use = (parallel_tool_calls == Some(false)).then_some(true);
-
-    match choice? {
+    choice: &responses::ToolChoiceParam,
+    disable_parallel_tool_use: Option<bool>,
+) -> TranslationResult<anthropic::ToolChoice> {
+    match choice {
         responses::ToolChoiceParam::Mode(responses::ToolChoiceOptions::Auto) => {
-            Some(anthropic::ToolChoice::Auto(anthropic::ToolChoiceAuto {
+            Ok(anthropic::ToolChoice::Auto(anthropic::ToolChoiceAuto {
                 disable_parallel_tool_use,
             }))
         }
         responses::ToolChoiceParam::Mode(responses::ToolChoiceOptions::None) => {
-            Some(anthropic::ToolChoice::None(anthropic::ToolChoiceNone))
+            Ok(anthropic::ToolChoice::None(anthropic::ToolChoiceNone))
         }
         responses::ToolChoiceParam::Mode(responses::ToolChoiceOptions::Required)
         | responses::ToolChoiceParam::AllowedTools(_) => {
-            Some(anthropic::ToolChoice::Any(anthropic::ToolChoiceAny {
+            Ok(anthropic::ToolChoice::Any(anthropic::ToolChoiceAny {
                 disable_parallel_tool_use,
             }))
         }
         responses::ToolChoiceParam::Function(choice) => {
-            Some(anthropic::ToolChoice::Tool(anthropic::ToolChoiceTool {
+            Ok(anthropic::ToolChoice::Tool(anthropic::ToolChoiceTool {
                 name: choice.name.clone(),
                 disable_parallel_tool_use,
             }))
         }
         responses::ToolChoiceParam::Custom(choice) => {
-            Some(anthropic::ToolChoice::Tool(anthropic::ToolChoiceTool {
+            Ok(anthropic::ToolChoice::Tool(anthropic::ToolChoiceTool {
                 name: choice.name.clone(),
                 disable_parallel_tool_use,
             }))
         }
-        other => {
-            tracing::trace!(
-                tool_choice_type = other.as_ref(),
-                reason = "Responses tool_choice has no Anthropic Messages request representation"
-            );
-            None
-        }
+        other => Err(TranslationError::InvalidPayload(format!(
+            "OpenAI Responses tool_choice `{}` cannot be translated to Anthropic Messages request tool_choice",
+            other.as_ref()
+        ))),
     }
 }

@@ -1,27 +1,7 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 
-use crate::translation::anthropic_messages::outbound::output_config as anthropic_output_config;
 use crate::translation::{TranslationError, TranslationResult};
-
-pub(super) fn output_config(
-    reasoning: &responses::Reasoning,
-) -> TranslationResult<Option<anthropic::OutputConfig>> {
-    let Some(effort) = reasoning.effort else {
-        return Ok(None);
-    };
-    Ok(Some(anthropic_output_config(effort.try_into()?)))
-}
-
-pub(super) fn thinking_config(
-    reasoning: &responses::Reasoning,
-) -> Option<anthropic::ThinkingConfigParam> {
-    Some(anthropic::ThinkingConfigParam::Adaptive(
-        anthropic::ThinkingConfigAdaptive {
-            display: Some(reasoning.summary?.into()),
-        },
-    ))
-}
 
 impl From<responses::ReasoningSummary> for anthropic::ThinkingDisplay {
     fn from(summary: responses::ReasoningSummary) -> Self {

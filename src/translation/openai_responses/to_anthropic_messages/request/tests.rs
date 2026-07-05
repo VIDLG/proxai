@@ -42,6 +42,22 @@ fn translates_text_request_with_instructions_and_function_tool() {
 }
 
 #[test]
+fn reports_json_location_for_invalid_responses_request_payload() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": {"unexpected": true}
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("failed to deserialize normalized translation payload"));
+    assert!(error.contains("OpenAI Responses request payload"));
+    assert!(error.contains("JSON path `input`"));
+    assert!(error.contains("pretty line "));
+    assert!(error.contains("column "));
+}
+
+#[test]
 fn rejects_responses_request_with_item_reference() {
     let payload = json!({
         "model": "glm-5.1",
@@ -109,6 +125,35 @@ fn rejects_unsupported_responses_items_for_anthropic_translation() {
     let error = translate_request_payload(&payload).unwrap_err().to_string();
 
     assert!(error.contains("item `reasoning` cannot be translated"));
+}
+
+#[test]
+fn rejects_unsupported_responses_tools_for_anthropic_translation() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "tools": [{
+            "type": "file_search",
+            "vector_store_ids": ["vs_123"]
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("tool `file_search` cannot be translated"));
+}
+
+#[test]
+fn rejects_unsupported_responses_tool_choice_for_anthropic_translation() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "tool_choice": {"type": "apply_patch"}
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("tool_choice `apply_patch` cannot be translated"));
 }
 
 #[test]

@@ -6,23 +6,23 @@
 mod request;
 mod response;
 pub(super) mod streaming;
-mod types;
 
 use serde_json::Value;
 
 use crate::http_support::ByteStream;
 use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
 use crate::protocol::openai_responses::{Response, ResponseCreateParams};
-use crate::translation::TranslationResult;
+use crate::translation::{TranslationResult, json};
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
-    let request = serde_json::from_value::<ResponseCreateParams>(payload.clone())?;
+    let request =
+        json::from_value::<ResponseCreateParams>(payload, "OpenAI Responses request payload")?;
     let translated: MessageCreateParamsBase = (&request).try_into()?;
     Ok(serde_json::to_value(translated)?)
 }
 
 pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
-    let response = serde_json::from_value::<Response>(payload)?;
+    let response = json::from_value::<Response>(&payload, "OpenAI Responses response payload")?;
     let translated: Message = response::translate_response_payload(&response);
     Ok(serde_json::to_value(translated)?)
 }
