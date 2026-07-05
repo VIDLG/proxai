@@ -10,7 +10,9 @@ use crate::translation::{TranslationError, TranslationResult};
 
 use super::citations::text_block_annotations;
 use super::ids::OutputItemIdAllocator;
-use super::types::incomplete_details_from_stop_reason;
+use super::types::{
+    incomplete_details_from_stop_reason, responses_status_from_anthropic_stop_reason,
+};
 
 impl TryFrom<&Message> for Response {
     type Error = TranslationError;
@@ -40,7 +42,9 @@ impl TryFrom<&Message> for Response {
             reasoning: None,
             safety_identifier: None,
             service_tier: message.usage.service_tier.and_then(Into::into),
-            status: stop_reason.map(Into::into).unwrap_or(Status::InProgress),
+            status: stop_reason
+                .map(responses_status_from_anthropic_stop_reason)
+                .unwrap_or(Status::InProgress),
             temperature: None,
             text: None,
             tool_choice: None,

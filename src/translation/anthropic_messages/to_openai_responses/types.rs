@@ -57,16 +57,14 @@ impl From<ResponseServiceTier> for Option<ServiceTier> {
     }
 }
 
-impl From<StopReason> for Status {
-    fn from(stop_reason: StopReason) -> Self {
-        match stop_reason {
-            StopReason::MaxTokens => Status::Incomplete,
-            StopReason::Refusal => Status::Failed,
-            StopReason::EndTurn
-            | StopReason::StopSequence
-            | StopReason::PauseTurn
-            | StopReason::ToolUse => Status::Completed,
-        }
+pub(super) fn responses_status_from_anthropic_stop_reason(stop_reason: StopReason) -> Status {
+    match stop_reason {
+        StopReason::MaxTokens => Status::Incomplete,
+        StopReason::EndTurn
+        | StopReason::StopSequence
+        | StopReason::PauseTurn
+        | StopReason::Refusal
+        | StopReason::ToolUse => Status::Completed,
     }
 }
 

@@ -4,6 +4,7 @@
 //! streaming lifecycle wrapper used by every `responses -> *` translator.
 
 pub(crate) mod outbound;
+pub(crate) mod stop;
 pub(crate) mod streaming;
 pub(crate) mod to_anthropic_messages;
 pub(crate) mod to_openai_chat_completions;

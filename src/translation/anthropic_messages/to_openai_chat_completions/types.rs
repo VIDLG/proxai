@@ -106,16 +106,16 @@ fn completion_usage_from_anthropic(
     }
 }
 
-impl From<StopReason> for FinishReason {
-    fn from(stop_reason: StopReason) -> Self {
-        match stop_reason {
-            // Chat has no dedicated refusal finish reason; a refusal is still a
-            // terminal assistant turn rather than a tool-call request.
-            StopReason::EndTurn | StopReason::StopSequence | StopReason::Refusal => Self::Stop,
-            StopReason::MaxTokens => Self::Length,
-            // OpenAI Chat has no `pause_turn` finish reason. Treat it like
-            // `tool_use` so clients can continue the turn with follow-up action.
-            StopReason::ToolUse | StopReason::PauseTurn => Self::ToolCalls,
-        }
+pub(super) fn chat_finish_reason_from_anthropic_stop_reason(
+    stop_reason: StopReason,
+) -> FinishReason {
+    match stop_reason {
+        // Chat has no dedicated refusal finish reason; a refusal is still a
+        // terminal assistant turn rather than a tool-call request.
+        StopReason::EndTurn | StopReason::StopSequence | StopReason::Refusal => FinishReason::Stop,
+        StopReason::MaxTokens => FinishReason::Length,
+        // OpenAI Chat has no `pause_turn` finish reason. Treat it like
+        // `tool_use` so clients can continue the turn with follow-up action.
+        StopReason::ToolUse | StopReason::PauseTurn => FinishReason::ToolCalls,
     }
 }

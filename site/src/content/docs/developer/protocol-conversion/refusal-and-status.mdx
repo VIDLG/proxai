@@ -165,9 +165,11 @@ This is less strict than buffering the entire stream, but it preserves low-laten
 `anthropic_messages` and `openai_responses` represent terminal response state differently. Anthropic uses a single `stop_reason` enum on the message; Responses uses a top-level `status` field with richer lifecycle states.
 
 > [!IMPORTANT]
-> Streaming and non-streaming conversions **must agree** on this mapping. The
-> shared `From<StopReason> for Status` impl in `types.rs` is the single source
-> of truth — do not duplicate this match in streaming code.
+> Streaming and non-streaming conversions **must agree** on terminal semantics.
+> Stop/status/finish mappings are intentionally implemented as explicit
+> pair-local functions when information is lossy or context-sensitive. Do not
+> hide those mappings behind broad `From` impls unless the conversion is total
+> and structural.
 
 ### Bidirectional mapping
 
@@ -179,7 +181,7 @@ This is less strict than buffering the entire stream, but it preserves low-laten
     ['`tool_use`', '`completed`', 'Model finished its turn and requested tool execution.'],
     ['`pause_turn`', '`completed`', 'Model finished its turn, waiting for external action.'],
     ['`max_tokens`', '`incomplete`', 'Output was truncated before natural completion.'],
-    ['`refusal`', '`failed`', 'Model declined to produce useful output.'],
+    ['`refusal`', '`completed`', 'Model refusal is semantic assistant output, not a provider/request failure. Preserve refusal as content/metadata where possible.'],
     ['_(none / streaming)_', '`in_progress`', 'Response is still being generated.'],
   ]}
 />
@@ -187,9 +189,12 @@ This is less strict than buffering the entire stream, but it preserves low-laten
 <ProtocolCompare
   columns={['Responses `status`', 'Anthropic `stop_reason`', 'Rationale']}
   rows={[
-    ['`completed`', '`end_turn`', 'Closest equivalent normal termination.'],
-    ['`incomplete`', '`max_tokens`', 'Response was cut short.'],
-    ['`failed`', '`refusal`', 'Model did not produce a usable response.'],
+    ['`completed`', '`end_turn` / `tool_use` / `refusal` inferred from output', 'Use output content/items to infer terminal kind: refusal parts imply refusal, function/custom tool calls imply tool use, otherwise normal end turn.'],
+    ['`incomplete` with `incomplete_details.reason: "max_output_tokens"`', '`max_tokens`', 'Response was cut short by output token budget.'],
+    ['`incomplete` with `incomplete_details.reason: "content_filter"`', '`refusal`', 'Provider stopped output for policy/safety; preserve refusal-like stop semantics.'],
+    ['`incomplete` without details', '`max_tokens`', 'Compatibility fallback for upstreams that omit details; trace the ambiguity.'],
+    ['`incomplete` with unknown reason', '_(none)_', 'Unknown lifecycle reason; trace it rather than fabricating a stop reason.'],
+    ['`failed`', '_(none)_', 'Provider/request failure state, not model refusal. Surface as error/lifecycle state, not Anthropic refusal.'],
     ['`cancelled`', '_(none)_', 'Client-side lifecycle state; no Anthropic equivalent.'],
     ['`queued`', '_(none)_', 'Client-side lifecycle state; no Anthropic equivalent.'],
     ['`in_progress`', '_(none)_', 'Streaming in progress; no terminal stop reason yet.'],
@@ -198,14 +203,17 @@ This is less strict than buffering the entire stream, but it preserves low-laten
 
 ### Round-trip consistency
 
-The forward and reverse mappings are designed to round-trip for the three primary terminal states:
+The mappings preserve behavior, but they are not perfect round-trips because the protocols expose different information:
 
 ```text
-end_turn  → completed  → end_turn   ✅
-max_tokens → incomplete → max_tokens ✅
-refusal   → failed     → refusal    ✅
+end_turn   → completed → end_turn   ✅ when no tool/refusal output is present
+max_tokens → incomplete(max_output_tokens) → max_tokens ✅
+refusal    → completed + refusal content → refusal ✅ when refusal content is preserved
+tool_use   → completed + tool-call output → tool_use ✅ when tool-call output is preserved
 ```
 
-`stop_sequence`, `pause_turn`, and `tool_use` all map to `completed` in the forward direction and round-trip as `end_turn` in the reverse. This is a deliberate loss of granularity — Responses `status` does not distinguish between these termination modes.
+`stop_sequence` and `pause_turn` map to `completed` in the forward direction and generally round-trip as `end_turn` unless additional target-side information is available. Responses `status` alone does not distinguish those termination modes.
+
+`failed` is reserved for response lifecycle/provider failures. Do not use it to represent a model refusal; a refusal is successful model output with refusal semantics.
 
 `cancelled` and `queued` are Responses client-side lifecycle states with no Anthropic equivalent; they produce no `stop_reason` in the reverse direction.

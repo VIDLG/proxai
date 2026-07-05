@@ -155,6 +155,9 @@ Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 
 
 `anthropic_messages` 和 `openai_responses` 以不同方式表达响应的终态。Anthropic 在 message 上使用单一的 `stop_reason` 枚举；Responses 使用顶层 `status` 字段，具有更丰富的生命周期状态。
 
+> [!IMPORTANT]
+> 流式和非流式转换必须保持一致的终止语义。Stop/status/finish 映射在信息有损或依赖上下文时应使用显式的 pair-local 函数；只有完全、结构性的转换才适合隐藏在宽泛的 `From` impl 里。
+
 ### 双向映射
 
 <ProtocolCompare
@@ -165,7 +168,7 @@ Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 
     ['`tool_use`', '`completed`', '模型完成本轮输出并请求工具执行。'],
     ['`pause_turn`', '`completed`', '模型完成本轮输出，等待外部动作。'],
     ['`max_tokens`', '`incomplete`', '输出在自然完成前被截断。'],
-    ['`refusal`', '`failed`', '模型拒绝产生有用输出。'],
+    ['`refusal`', '`completed`', '模型 refusal 是语义 assistant 输出，不是 provider/request failure。目标协议能表达时保留为 refusal 内容/元数据。'],
     ['_(无 / 流式中)_', '`in_progress`', '响应仍在生成中。'],
   ]}
 />
@@ -173,9 +176,12 @@ Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 
 <ProtocolCompare
   columns={['Responses `status`', 'Anthropic `stop_reason`', '理由']}
   rows={[
-    ['`completed`', '`end_turn`', '最接近的正常终止等价物。'],
-    ['`incomplete`', '`max_tokens`', '响应被截断。'],
-    ['`failed`', '`refusal`', '模型未产生可用响应。'],
+    ['`completed`', '根据 output 推断为 `end_turn` / `tool_use` / `refusal`', '使用输出内容/items 推断终止类型：refusal part 表示 refusal，function/custom tool call 表示 tool_use，否则是普通 end_turn。'],
+    ['带 `incomplete_details.reason: "max_output_tokens"` 的 `incomplete`', '`max_tokens`', '输出被 token 预算截断。'],
+    ['带 `incomplete_details.reason: "content_filter"` 的 `incomplete`', '`refusal`', 'Provider 因策略/安全停止输出；保留 refusal-like stop 语义。'],
+    ['没有 details 的 `incomplete`', '`max_tokens`', '兼容省略 details 的上游；记录 trace 表示这里有歧义。'],
+    ['带未知 reason 的 `incomplete`', '_(无)_', '未知生命周期原因；记录 trace，而不是伪造 stop reason。'],
+    ['`failed`', '_(无)_', 'Provider/request failure 状态，不是模型 refusal。应作为错误/生命周期状态处理，不映射成 Anthropic refusal。'],
     ['`cancelled`', '_(无)_', '客户端侧生命周期状态，Anthropic 无对应。'],
     ['`queued`', '_(无)_', '客户端侧生命周期状态，Anthropic 无对应。'],
     ['`in_progress`', '_(无)_', '流式传输中，尚无终态 stop_reason。'],
@@ -184,14 +190,17 @@ Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 
 
 ### Round-trip 一致性
 
-正向和反向映射为三个主要终态设计了完整的 round-trip：
+这些映射优先保留行为，但并不都是完美 round-trip，因为协议暴露的信息不同：
 
 ```text
-end_turn  → completed  → end_turn    ✅
-max_tokens → incomplete → max_tokens ✅
-refusal   → failed     → refusal    ✅
+end_turn   → completed → end_turn   ✅ 当没有 tool/refusal 输出时
+tool_use   → completed + tool-call output → tool_use ✅ 当 tool-call 输出被保留时
+max_tokens → incomplete(max_output_tokens) → max_tokens ✅
+refusal    → completed + refusal content → refusal ✅ 当 refusal 内容被保留时
 ```
 
-`stop_sequence`、`pause_turn` 和 `tool_use` 在正向映射中都归为 `completed`，反向 round-trip 为 `end_turn`。这是有意的粒度损失——Responses `status` 不区分这些终止模式。
+`stop_sequence` 和 `pause_turn` 正向映射为 `completed`，除非目标侧还有额外信息，否则反向通常只能恢复成 `end_turn`。Responses `status` 本身不区分这些终止模式。
+
+`failed` 保留给 response lifecycle/provider failure。不要用它表示模型 refusal；refusal 是一次成功的模型输出，只是带有拒绝语义。
 
 `cancelled` 和 `queued` 是 Responses 客户端侧生命周期状态，Anthropic 无对应；反向映射不产生 `stop_reason`。

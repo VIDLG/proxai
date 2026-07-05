@@ -15,7 +15,9 @@ use crate::translation::streaming::{
 };
 
 use super::super::ids::OutputItemIdAllocator;
-use super::super::types::incomplete_details_from_stop_reason;
+use super::super::types::{
+    incomplete_details_from_stop_reason, responses_status_from_anthropic_stop_reason,
+};
 
 #[derive(Debug)]
 pub(super) struct StreamingState {
@@ -88,12 +90,12 @@ impl StreamingState {
     }
 
     pub(super) fn terminal_response_status(&self) -> Status {
-        // Match the non-streaming conversion in types.rs: refusal is Failed,
-        // max_tokens is Incomplete, everything else is Completed. Reusing the
-        // shared `From<StopReason> for Status` impl keeps streaming and
-        // non-streaming terminal status in lockstep.
+        // Match the non-streaming conversion in types.rs: max_tokens is
+        // Incomplete, terminal assistant outcomes (including refusals and tool
+        // use) are Completed. Reusing `responses_status_from_anthropic_stop_reason`
+        // keeps streaming and non-streaming terminal status in lockstep.
         self.stop_reason
-            .map(Status::from)
+            .map(responses_status_from_anthropic_stop_reason)
             .unwrap_or(Status::Completed)
     }
 

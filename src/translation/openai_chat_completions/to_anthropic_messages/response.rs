@@ -11,6 +11,7 @@ use crate::translation::anthropic_messages::outbound::{text_block, tool_use_bloc
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::super::response::single_assistant_choice;
+use super::types::anthropic_stop_reason_from_chat_finish_reason;
 
 impl TryFrom<&CreateChatCompletionResponse> for Message {
     type Error = TranslationError;
@@ -118,7 +119,7 @@ pub(super) fn chat_stop_state(
         // commonly still `stop` for refused turns.
         Some(StopReason::Refusal)
     } else {
-        finish_reason.map(Into::into)
+        finish_reason.map(anthropic_stop_reason_from_chat_finish_reason)
     };
 
     let details = refusal.map(|explanation| RefusalStopDetails {

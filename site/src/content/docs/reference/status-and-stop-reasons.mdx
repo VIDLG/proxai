@@ -37,7 +37,7 @@ Different protocols use different names for “the model stopped producing outpu
         { value: 'stop_sequence', mapsTo: 'stop', note: 'A configured stop sequence was generated. `stop_sequence` may identify the matched sequence.' },
         { value: 'tool_use', mapsTo: 'tool_calls', note: 'The assistant produced a tool-use request and expects the client/tool loop to continue.' },
         { value: 'pause_turn', mapsTo: 'stop or protocol-specific continuation', note: 'Provider asks the client to continue later; conversion must be careful not to pretend it is a normal final answer.' },
-        { value: 'refusal', mapsTo: 'content_filter or refusal metadata', note: 'Provider refused the request. Preserve refusal semantics where the target protocol can represent them.' },
+        { value: 'refusal', mapsTo: 'refusal metadata / completed Responses with refusal content', note: 'A model refusal is a terminal assistant turn, not a provider/request failure.' },
       ],
     },
     {
@@ -46,7 +46,7 @@ Different protocols use different names for “the model stopped producing outpu
         { value: 'stop', mapsTo: 'end_turn / stop_sequence', note: 'The model stopped normally or hit an explicit stop condition.' },
         { value: 'length', mapsTo: 'max_tokens', note: 'The model stopped because the token budget was exhausted.' },
         { value: 'tool_calls', mapsTo: 'tool_use', note: 'The assistant emitted tool calls.' },
-        { value: 'content_filter', mapsTo: 'refusal / filtered status', note: 'The provider stopped output for safety or policy reasons.' },
+        { value: 'content_filter', mapsTo: 'refusal / incomplete Responses', note: 'The provider stopped output for safety or policy reasons. Treat as policy stop/truncation, not transport failure.' },
       ],
     },
   ]}
@@ -74,6 +74,8 @@ From a logical non-streaming success path, a final Anthropic `message` should in
 - ProxAI observes streaming terminal events; it does not treat arbitrary byte-stream closure as semantic completion.
 - ProxAI does not fabricate provider-specific reason details such as upstream `code`, `param`, or matched stop sequences.
 - Cross-protocol mappings should preserve behavior first, exact field spelling second.
+- A model refusal is semantic output, not an upstream/request failure; do not map it to Responses `failed`.
+- Responses `failed` is a response lifecycle/error state and should not be fabricated as Anthropic `refusal` without refusal content.
 - Tool-call terminal states must remain distinct from natural text completion.
 
 ## Related docs

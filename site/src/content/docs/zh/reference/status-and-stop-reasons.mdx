@@ -38,7 +38,7 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
         { value: 'stop_sequence', mapsTo: 'stop', note: '命中了配置的 stop sequence。`stop_sequence` 可能标识匹配到的序列。' },
         { value: 'tool_use', mapsTo: 'tool_calls', note: 'assistant 生成了工具调用请求，期望客户端/工具循环继续。' },
         { value: 'pause_turn', mapsTo: 'stop 或协议特定续接状态', note: 'Provider 要求客户端稍后继续；转换时不能伪装成普通最终回答。' },
-        { value: 'refusal', mapsTo: 'content_filter 或 refusal 元数据', note: 'Provider 拒绝了请求。目标协议能表达时应保留 refusal 语义。' },
+        { value: 'refusal', mapsTo: 'refusal 元数据 / 带 refusal 内容的 Responses completed', note: '模型拒绝是一次终态 assistant 输出，不是 provider/request failure。' },
       ],
     },
     {
@@ -47,7 +47,7 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
         { value: 'stop', mapsTo: 'end_turn / stop_sequence', note: '模型正常停止或命中显式停止条件。' },
         { value: 'length', mapsTo: 'max_tokens', note: '模型因为 token 预算耗尽而停止。' },
         { value: 'tool_calls', mapsTo: 'tool_use', note: 'assistant 输出了工具调用。' },
-        { value: 'content_filter', mapsTo: 'refusal / filtered status', note: 'Provider 因安全或策略原因停止输出。' },
+        { value: 'content_filter', mapsTo: 'refusal / incomplete Responses', note: 'Provider 因安全或策略原因停止输出。按策略停止/截断处理，不当作传输失败。' },
       ],
     },
   ]}
@@ -75,6 +75,8 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
 - ProxAI 会观察流式终止事件；不会把任意字节流关闭当成语义完成。
 - ProxAI 不会伪造 provider 特有的原因细节，例如上游 `code`、`param` 或匹配到的 stop sequence。
 - 跨协议映射优先保留行为，其次才是字段名称。
+- 模型 refusal 是语义输出，不是上游/request failure；不要映射成 Responses `failed`。
+- Responses `failed` 是响应生命周期/错误状态；没有 refusal 内容时不要伪造成 Anthropic `refusal`。
 - 工具调用终止状态必须和自然文本完成保持区分。
 
 ## 相关文档

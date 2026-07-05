@@ -16,12 +16,9 @@ use crate::translation::streaming::{
 mod output;
 mod state;
 
+use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use output::{chat_choice_chunk, chat_terminal_delta, chat_usage_chunk};
 use state::{StreamBlock, StreamingState};
-
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;
 
 #[derive(Debug, Default)]
 pub(super) struct ChatCompletionStreamTranslator {
@@ -177,7 +174,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let emitted_representable_content = phase.emitted_any();
                 let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
                 let identity = self.lifecycle.stream_identity()?.clone();
-                let finish_reason = stop_reason.into();
+                let finish_reason = chat_finish_reason_from_anthropic_stop_reason(stop_reason);
 
                 if let Some(refusal) = terminal_delta {
                     phase.mark_refusal();
@@ -246,3 +243,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
         Err(self.lifecycle.unexpected_stream_end_error(end))
     }
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

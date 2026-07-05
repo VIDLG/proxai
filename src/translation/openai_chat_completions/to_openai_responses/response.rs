@@ -7,7 +7,9 @@ use crate::translation::openai_responses::outbound::{output_text, response_id};
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::super::response::single_assistant_choice;
-use super::types::incomplete_details_from_finish_reason;
+use super::types::{
+    incomplete_details_from_finish_reason, responses_status_from_chat_finish_reason,
+};
 
 impl TryFrom<&CreateChatCompletionResponse> for Response {
     type Error = TranslationError;
@@ -82,7 +84,10 @@ impl TryFrom<&CreateChatCompletionResponse> for Response {
             reasoning: None,
             safety_identifier: None,
             service_tier: None,
-            status: choice.finish_reason.map(Into::into).unwrap_or_default(),
+            status: choice
+                .finish_reason
+                .map(responses_status_from_chat_finish_reason)
+                .unwrap_or_default(),
             temperature: None,
             text: None,
             tool_choice: None,

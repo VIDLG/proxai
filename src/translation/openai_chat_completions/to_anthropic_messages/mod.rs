@@ -13,16 +13,22 @@ use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
 use crate::protocol::openai::chat_completions::{
     CreateChatCompletionRequest, CreateChatCompletionResponse,
 };
-use crate::translation::TranslationResult;
+use crate::translation::{TranslationResult, json};
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
-    let request = serde_json::from_value::<CreateChatCompletionRequest>(payload.clone())?;
+    let request = json::from_value::<CreateChatCompletionRequest>(
+        payload,
+        "OpenAI Chat Completions request payload",
+    )?;
     let translated: MessageCreateParamsBase = (&request).try_into()?;
     Ok(serde_json::to_value(translated)?)
 }
 
 pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
-    let response = serde_json::from_value::<CreateChatCompletionResponse>(payload)?;
+    let response = json::from_value::<CreateChatCompletionResponse>(
+        &payload,
+        "OpenAI Chat Completions response payload",
+    )?;
     let translated: Message = (&response).try_into()?;
     Ok(serde_json::to_value(translated)?)
 }

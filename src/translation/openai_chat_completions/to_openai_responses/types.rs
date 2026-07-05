@@ -24,13 +24,11 @@ pub(super) fn incomplete_details_from_finish_reason(
     }
 }
 
-impl From<FinishReason> for Status {
-    fn from(value: FinishReason) -> Self {
-        match value {
-            FinishReason::Length | FinishReason::ContentFilter => Self::Incomplete,
-            FinishReason::Stop | FinishReason::ToolCalls | FinishReason::FunctionCall => {
-                Self::Completed
-            }
+pub(super) fn responses_status_from_chat_finish_reason(value: FinishReason) -> Status {
+    match value {
+        FinishReason::Length | FinishReason::ContentFilter => Status::Incomplete,
+        FinishReason::Stop | FinishReason::ToolCalls | FinishReason::FunctionCall => {
+            Status::Completed
         }
     }
 }

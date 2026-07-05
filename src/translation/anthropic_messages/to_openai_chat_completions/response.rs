@@ -1,6 +1,7 @@
 //! Non-streaming response conversion for `anthropic_messages -> openai_chat_completions`.
 
 use super::citations::text_block_annotations;
+use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use crate::protocol::anthropic::messages::{ContentBlock, Message, StopReason};
 use crate::protocol::openai::chat_completions::{
     ChatChoice, ChatChoiceLogprobs, ChatCompletionResponseMessage, CreateChatCompletionResponse,
@@ -74,7 +75,9 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
                     role: Role::Assistant,
                     audio: None,
                 },
-                finish_reason: message.stop_reason.map(Into::into),
+                finish_reason: message
+                    .stop_reason
+                    .map(chat_finish_reason_from_anthropic_stop_reason),
                 // Anthropic does not expose Chat-style token logprobs on message responses.
                 logprobs: None::<ChatChoiceLogprobs>,
             }],

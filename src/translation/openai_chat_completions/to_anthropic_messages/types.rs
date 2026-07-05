@@ -1,14 +1,12 @@
 use crate::protocol::anthropic::messages::{StopReason, Usage};
 use crate::protocol::openai::chat_completions::{CompletionUsage, FinishReason};
 
-impl From<FinishReason> for StopReason {
-    fn from(reason: FinishReason) -> Self {
-        match reason {
-            FinishReason::Stop => Self::EndTurn,
-            FinishReason::Length => Self::MaxTokens,
-            FinishReason::ToolCalls | FinishReason::FunctionCall => Self::ToolUse,
-            FinishReason::ContentFilter => Self::Refusal,
-        }
+pub(super) fn anthropic_stop_reason_from_chat_finish_reason(reason: FinishReason) -> StopReason {
+    match reason {
+        FinishReason::Stop => StopReason::EndTurn,
+        FinishReason::Length => StopReason::MaxTokens,
+        FinishReason::ToolCalls | FinishReason::FunctionCall => StopReason::ToolUse,
+        FinishReason::ContentFilter => StopReason::Refusal,
     }
 }
 

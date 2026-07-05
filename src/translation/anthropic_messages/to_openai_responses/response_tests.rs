@@ -191,6 +191,38 @@ fn translates_max_tokens_stop_to_incomplete_details() {
 }
 
 #[test]
+fn translates_anthropic_refusal_stop_to_completed_responses_status() {
+    let message: Message = serde_json::from_value(json!({
+        "id": "msg_refusal",
+        "container": null,
+        "type": "message",
+        "role": "assistant",
+        "model": "glm-5.1",
+        "content": [{"type": "text", "text": "I can't help with that.", "citations": null}],
+        "stop_details": null,
+        "stop_reason": "refusal",
+        "stop_sequence": null,
+        "usage": {
+            "input_tokens": 10,
+            "output_tokens": 6,
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "inference_geo": null,
+            "server_tool_use": null,
+            "service_tier": "standard"
+        }
+    }))
+    .unwrap();
+
+    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let value = serde_json::to_value(translated).unwrap();
+
+    assert_eq!(value["status"], "completed");
+    assert!(value["incomplete_details"].is_null());
+}
+
+#[test]
 fn omits_unrepresentable_anthropic_batch_service_tier() {
     let message: Message = serde_json::from_value(json!({
         "id": "msg_batch",

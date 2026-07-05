@@ -14,6 +14,7 @@
 
 pub(crate) mod anthropic_messages;
 pub(crate) mod error;
+pub(crate) mod json;
 pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
 mod request;

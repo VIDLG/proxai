@@ -21,4 +21,15 @@ pub enum TranslationError {
 
     #[error("JSON conversion failed during translation: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error(
+        "failed to deserialize normalized translation payload for {context} at JSON path `{path}` (pretty line {line}, column {column}): {message}"
+    )]
+    JsonPayload {
+        context: &'static str,
+        path: String,
+        message: String,
+        line: usize,
+        column: usize,
+    },
 }
