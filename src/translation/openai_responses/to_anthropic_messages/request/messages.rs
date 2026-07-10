@@ -134,6 +134,31 @@ fn translate_input(
                                 ),
                             ));
                         }
+                        responses::Item::Reasoning(reasoning) => {
+                            if let Some(data) = &reasoning.encrypted_content {
+                                messages.push(content_block_message(
+                                    anthropic::MessageParamRole::Assistant,
+                                    anthropic::ContentBlockParam::RedactedThinking(
+                                        anthropic::RedactedThinkingBlockParam {
+                                            data: data.clone(),
+                                        },
+                                    ),
+                                ));
+                            }
+
+                            let has_content = reasoning
+                                .content
+                                .as_ref()
+                                .is_some_and(|content| !content.is_empty());
+                            if !reasoning.summary.is_empty() || has_content {
+                                tracing::trace!(
+                                    has_summary = !reasoning.summary.is_empty(),
+                                    has_content,
+                                    reason = "OpenAI Responses reasoning history has no Anthropic thinking signature",
+                                    "skipping unsigned OpenAI Responses reasoning history during Anthropic Messages request translation"
+                                );
+                            }
+                        }
                         other => {
                             return Err(TranslationError::InvalidPayload(format!(
                                 "OpenAI Responses item `{}` cannot be translated to Anthropic Messages request content",

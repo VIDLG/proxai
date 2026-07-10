@@ -44,6 +44,8 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
     ['Hosted tools', 'Provider-compatible 表达或显式 unsupported 行为', '不要假装上游支持它并不支持的 hosted tools。'],
     ['`reasoning.effort`', '可用时映射到 `output_config.effort`', '支持的 effort 值直接映射；disabled/minimal 映射为 disabled thinking 行为。'],
     ['`reasoning.summary`', '有损映射到 `thinking.display`', 'Anthropic 没有等价的 summary 粒度。'],
+    ['历史 `reasoning.content` / `summary`', 'trace 后跳过', 'Responses 未携带 Anthropic signature，不能构造成 Anthropic `thinking`。'],
+    ['历史 `reasoning.encrypted_content`', '`redacted_thinking.data`', '为 Anthropic-originated 的 opaque thinking 历史原样保留；它不能与普通 thinking signature 互换。'],
   ]}
   codeFirstColumn={false}
 />

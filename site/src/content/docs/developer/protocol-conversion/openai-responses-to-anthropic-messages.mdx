@@ -44,6 +44,8 @@ This page documents the high-value conversion pair used when a client speaks Ope
     ['Hosted tools', 'Provider-compatible representation or explicit unsupported behavior', 'Do not pretend an upstream supports hosted tools if it does not.'],
     ['`reasoning.effort`', '`output_config.effort` when available', 'Supported effort values map directly; disabled/minimal maps to disabled thinking behavior.'],
     ['`reasoning.summary`', '`thinking.display` lossily', 'Anthropic has no equivalent summary granularity.'],
+    ['Historical `reasoning.content` / `summary`', 'Skipped with trace', 'They cannot become Anthropic `thinking` because Responses does not carry an Anthropic signature.'],
+    ['Historical `reasoning.encrypted_content`', '`redacted_thinking.data`', 'Preserved verbatim for Anthropic-originated opaque thinking history; it is not interchangeable with a normal thinking signature.'],
   ]}
   codeFirstColumn={false}
 />

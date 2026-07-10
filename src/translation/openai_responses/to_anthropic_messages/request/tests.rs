@@ -106,7 +106,7 @@ fn rejects_system_or_developer_content_list_with_non_text_parts() {
 }
 
 #[test]
-fn rejects_unsupported_responses_items_for_anthropic_translation() {
+fn skips_unsigned_responses_reasoning_history() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [
@@ -117,14 +117,62 @@ fn rejects_unsupported_responses_items_for_anthropic_translation() {
             },
             {
                 "type": "reasoning",
-                "summary": [{"type": "summary_text", "text": "internal reasoning summary"}]
+                "id": "rs_123",
+                "summary": [{"type": "summary_text", "text": "internal reasoning summary"}],
+                "content": [{"type": "reasoning_text", "text": "private chain of thought"}]
+            },
+            {
+                "type": "message",
+                "id": "msg_123",
+                "status": "completed",
+                "role": "assistant",
+                "content": [{
+                    "type": "output_text",
+                    "text": "Hi!",
+                    "annotations": []
+                }]
             }
         ]
     });
 
-    let error = translate_request_payload(&payload).unwrap_err().to_string();
+    let translated = translate_request_payload(&payload).unwrap();
 
-    assert!(error.contains("item `reasoning` cannot be translated"));
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(translated["messages"][0]["role"], "user");
+    assert_eq!(translated["messages"][0]["content"], "hello");
+    assert_eq!(translated["messages"][1]["role"], "assistant");
+    assert_eq!(translated["messages"][1]["content"][0]["type"], "text");
+    assert_eq!(translated["messages"][1]["content"][0]["text"], "Hi!");
+    assert!(!translated.to_string().contains("private chain of thought"));
+}
+
+#[test]
+fn preserves_responses_encrypted_reasoning_as_anthropic_redacted_thinking() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [
+            {"type": "message", "role": "user", "content": "continue"},
+            {
+                "type": "reasoning",
+                "id": "rs_redacted",
+                "summary": [],
+                "encrypted_content": "anthropic-redacted-thinking-data"
+            }
+        ]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(translated["messages"][1]["role"], "assistant");
+    assert_eq!(
+        translated["messages"][1]["content"][0]["type"],
+        "redacted_thinking"
+    );
+    assert_eq!(
+        translated["messages"][1]["content"][0]["data"],
+        "anthropic-redacted-thinking-data"
+    );
 }
 
 #[test]
