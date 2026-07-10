@@ -498,10 +498,40 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                 }),
             ),
             typed_responses_sse_event(
+                "response.output_item.added",
+                json!({
+                    "type": "response.output_item.added",
+                    "sequence_number": 2,
+                    "output_index": 0,
+                    "item": {
+                        "type": "message",
+                        "id": "msg_1",
+                        "role": "assistant",
+                        "status": "in_progress",
+                        "content": [],
+                    },
+                }),
+            ),
+            typed_responses_sse_event(
+                "response.content_part.added",
+                json!({
+                    "type": "response.content_part.added",
+                    "sequence_number": 3,
+                    "item_id": "msg_1",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "part": {
+                        "type": "output_text",
+                        "text": "",
+                        "annotations": [],
+                    },
+                }),
+            ),
+            typed_responses_sse_event(
                 "response.output_text.delta",
                 json!({
                     "type": "response.output_text.delta",
-                    "sequence_number": 2,
+                    "sequence_number": 4,
                     "item_id": "msg_1",
                     "output_index": 0,
                     "content_index": 0,
@@ -510,10 +540,56 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                 }),
             ),
             typed_responses_sse_event(
+                "response.output_text.done",
+                json!({
+                    "type": "response.output_text.done",
+                    "sequence_number": 5,
+                    "item_id": "msg_1",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "text": "hello",
+                    "logprobs": null,
+                }),
+            ),
+            typed_responses_sse_event(
+                "response.content_part.done",
+                json!({
+                    "type": "response.content_part.done",
+                    "sequence_number": 6,
+                    "item_id": "msg_1",
+                    "output_index": 0,
+                    "content_index": 0,
+                    "part": {
+                        "type": "output_text",
+                        "text": "hello",
+                        "annotations": [],
+                    },
+                }),
+            ),
+            typed_responses_sse_event(
+                "response.output_item.done",
+                json!({
+                    "type": "response.output_item.done",
+                    "sequence_number": 7,
+                    "output_index": 0,
+                    "item": {
+                        "type": "message",
+                        "id": "msg_1",
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [{
+                            "type": "output_text",
+                            "text": "hello",
+                            "annotations": [],
+                        }],
+                    },
+                }),
+            ),
+            typed_responses_sse_event(
                 "response.completed",
                 json!({
                     "type": "response.completed",
-                    "sequence_number": 3,
+                    "sequence_number": 8,
                     "response": typed_responses_response("completed", Some(1), 2),
                 }),
             ),

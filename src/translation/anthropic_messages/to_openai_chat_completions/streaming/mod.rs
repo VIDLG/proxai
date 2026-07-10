@@ -5,9 +5,13 @@
 //! of its own beyond the inbound lifecycle wrapper.
 
 use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, MessageStreamEvent};
-use crate::protocol::openai::chat_completions::ChatCompletionStreamResponseDelta;
+use crate::protocol::openai::chat_completions::FunctionType;
 
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
+use crate::translation::openai_chat_completions::outbound::{
+    assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
+    refusal_delta, tool_arguments_delta, tool_call_start_delta,
+};
 use crate::translation::streaming::{
     SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
     StreamingEventTranslator,
@@ -17,7 +21,7 @@ mod output;
 mod state;
 
 use super::types::chat_finish_reason_from_anthropic_stop_reason;
-use output::{chat_choice_chunk, chat_terminal_delta, chat_usage_chunk};
+use output::chat_terminal_delta;
 use state::{StreamBlock, StreamingState};
 
 #[derive(Debug, Default)]
@@ -27,7 +31,7 @@ pub(super) struct ChatCompletionStreamTranslator {
 
 impl StreamingEventTranslator for ChatCompletionStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
-        let parsed = self.lifecycle.parse_allowed_stream_event(event.data)?;
+        let parsed = self.lifecycle.parse_stream_event(event.data)?;
         let mut chunks = Vec::new();
         let mut done = false;
 
@@ -39,11 +43,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 );
                 self.lifecycle
                     .begin_message_stream(identity.clone(), StreamingState::new())?;
-                chunks.push(chat_choice_chunk(
-                    &identity,
-                    output::message_start_delta(),
-                    None,
-                ));
+                chunks.push(chat_choice_chunk(&identity, message_start_delta(), None));
             }
             MessageStreamEvent::Ping(_) => {}
 
@@ -69,7 +69,12 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         let identity = self.lifecycle.stream_identity()?;
                         chunks.push(chat_choice_chunk(
                             identity,
-                            output::tool_call_start_delta(tool_call_index, block),
+                            tool_call_start_delta(
+                                tool_call_index,
+                                block.id,
+                                block.name,
+                                Some(FunctionType::Function),
+                            ),
                             None,
                         ));
                     }
@@ -132,7 +137,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     let identity = self.lifecycle.stream_identity()?;
                     chunks.push(chat_choice_chunk(
                         identity,
-                        output::tool_arguments_delta(tool_call_index, delta.partial_json),
+                        tool_arguments_delta(tool_call_index, delta.partial_json),
                         None,
                     ));
                 }
@@ -178,17 +183,10 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
 
                 if let Some(refusal) = terminal_delta {
                     phase.mark_refusal();
+                    chunks.push(chat_choice_chunk(&identity, refusal_delta(refusal), None));
                     chunks.push(chat_choice_chunk(
                         &identity,
-                        ChatCompletionStreamResponseDelta {
-                            refusal: Some(refusal),
-                            ..Default::default()
-                        },
-                        None,
-                    ));
-                    chunks.push(chat_choice_chunk(
-                        &identity,
-                        ChatCompletionStreamResponseDelta::default(),
+                        Default::default(),
                         Some(finish_reason),
                     ));
                 } else {
@@ -200,7 +198,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     }
                     chunks.push(chat_choice_chunk(
                         &identity,
-                        ChatCompletionStreamResponseDelta::default(),
+                        Default::default(),
                         Some(finish_reason),
                     ));
                 }

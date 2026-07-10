@@ -72,6 +72,15 @@ impl<S, T> ChatInboundLifecycle<S, T> {
             Ok(Some(identity))
         } else {
             self.ensure_same_stream_identity(&identity)?;
+            if !matches!(
+                self.inner.phase_kind(),
+                InboundStreamLifecyclePhase::Streaming
+            ) {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Chat stream emitted choice deltas while lifecycle was {}; expected streaming",
+                    self.inner.phase_kind()
+                )));
+            }
             Ok(None)
         }
     }

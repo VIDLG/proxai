@@ -120,11 +120,23 @@ Cross-protocol streaming translation uses a protocol-neutral four-phase carrier 
   columns={['Inbound source', 'Terminal payload', 'Reason']}
   rows={[
     ['Anthropic Messages', '`StreamingPhase<S>`', '`message_delta` carries terminal stop/usage semantics, but `message_stop` is still required. The translator keeps the full phase until `message_stop` consumes it.'],
-    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` ends semantic deltas. Later `[DONE]`, EOF, or usage-only chunks need only a target-specific terminal summary, such as `ChatTerminalState` for Anthropic output or `()` for Responses output.'],
+    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` ends semantic deltas. Later `[DONE]`, EOF, or usage-only chunks use a target-specific pending terminal: `PendingAnthropicTerminal` for Anthropic output, or `PendingResponsesTerminal` for Responses output.'],
+    ['OpenAI Responses', '`S`', 'Responses terminal events (`response.completed`, `response.incomplete`, `response.failed`) carry response-level terminal semantics directly. There is no extra `message_stop`; the wrapper moves the streaming state into terminal so pair translators can finalize target output.'],
   ]}
 />
 
-Protocol wrappers such as `anthropic_messages::streaming` and `openai_chat_completions::streaming` keep source-specific event ordering and error wording. Pair translators remain responsible for target representability checks, output item/block emission, and terminal flush behavior.
+Protocol wrappers such as `anthropic_messages::streaming`, `openai_chat_completions::streaming`, and `openai_responses::streaming` keep source-specific event ordering and error wording. Pair translators remain responsible for target representability checks, output item/block emission, and terminal flush behavior.
+
+All three wrappers use typed protocol event parsing as the source-event allowlist:
+
+<ReferenceTable
+  columns={['Inbound source', 'Typed event model', 'Extra source lifecycle checks']}
+  rows={[
+    ['Anthropic Messages', '`MessageStreamEvent`', 'Requires `message_start` before semantic events, `message_delta.stop_reason` before `message_stop`, and rejects events after `message_stop`.'],
+    ['OpenAI Chat Completions', '`CreateChatCompletionStreamResponse`', 'First assistant chunk initializes the stream; later chunks must keep the same identity; `finish_reason` closes semantic deltas before `[DONE]`/EOF.'],
+    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` initializes the stream; response terminal events move the lifecycle to terminal; pair translators validate target-specific item/content ordering.'],
+  ]}
+/>
 
 ### Stream identity ownership
 
@@ -135,6 +147,7 @@ Streaming identity (`StreamIdentity`) belongs to the protocol-neutral inbound li
   rows={[
     ['Anthropic Messages', '`message_start.message.id` and `message_start.message.model`', 'Anthropic emits identity once at the explicit `message_start` semantic boundary. Later `content_block_*`, `message_delta`, and `message_stop` events do not repeat `id`/`model`, so the Anthropic wrapper initializes lifecycle identity at `message_start` and then relies on lifecycle ordering to prevent duplicate starts.'],
     ['OpenAI Chat Completions', 'Every `chat.completion.chunk` repeats `id` and `model`', 'Chat has no separate `message_start` event. The first semantic chunk initializes lifecycle identity, and later chunks are checked against it so pieces from different upstream responses are never merged into one translated message/response.'],
+    ['OpenAI Responses', '`response.created.response.id` / `model` or `response.in_progress.response.id` / `model`', 'Responses has explicit response-level lifecycle events. The wrapper initializes identity at `response.created` or `response.in_progress`; later item/content events rely on that response identity while pair-local state tracks target output assembly.'],
   ]}
 />
 
@@ -153,38 +166,34 @@ Most observers return `Continue`. `InjectAndClose` is reserved for cases where P
 
 ## Translation pair internals
 
-Each translation direction's streaming implementation (e.g. `anthropic_messages -> openai_responses`) is split into three submodules under a `streaming/` directory:
+Cross-protocol streaming code separates source lifecycle, pair state, and target construction:
 
 ```text
-streaming/
-├── mod.rs       # translator: drives state + calls output, owns lifecycle and timing
-├── state.rs     # accumulation state machine: fields + register/append/stop/snapshot
-└── output.rs    # pure constructors: take data, return events; hold no streaming state
+translation/<source>/streaming.rs
+  source protocol parsing, identity, and lifecycle ordering
+
+translation/<source>/to_<target>/streaming/
+├── mod.rs       # routes source events through pair state and owns carrier timing
+├── state.rs     # validates/accumulates pair state and returns typed target events
+└── output.rs    # optional pair-local pure helpers when terminal assembly is substantial
+
+translation/<target>/outbound/
+  shared stateless constructors for target request/response/stream wire types
 ```
 
 ### Responsibility boundaries
 
-- **state** only accumulates and queries state; it does not know about the event loop.
-- **output** only constructs events/items; it holds no streaming state (no `&mut State`).
-- **mod** drives state, calls output, and manages lifecycle.
+- **source lifecycle wrappers** own source event parsing, envelope identity, and phase ordering.
+- **pair state** owns atomic source-to-target transitions: validation, accumulation, target index allocation, and the typed target events produced by that transition.
+- **target outbound modules** contain reusable stateless constructors. They do not inspect source events or hold streaming state.
+- **pair mod.rs** dispatches source events, invokes pair state, handles terminal outcomes, and maps typed target events to carrier-level `StreamEvent`s.
+- **pair output.rs** is optional. Keep it only when pair-local terminal construction is substantial enough to improve readability; do not duplicate constructors already owned by the target `outbound/` module.
 
-Rule of thumb: if a function needs `&mut State` (advance counter, push items, read accumulated fields), it is state behavior and stays in state.rs; if it only takes data and returns an event, it is output construction and belongs in output.rs.
+This makes state methods small transducers rather than passive bags of fields. If a method mutates pair state and returns target events, both operations must describe one atomic protocol transition. Carrier encoding and client-facing error rendering remain outside pair state.
 
-### When `types.rs` is needed
+### Pair-private types
 
-When state and output share the same internal data structure, a `streaming/types.rs` is the neutral home to avoid state ↔ output circular dependencies.
-
-Whether it is needed depends on the accumulation model:
-
-<ReferenceTable
-  columns={['Pair', 'Accumulation model', 'Finalize model', 'Needs types.rs?']}
-  rows={[
-    ['ant → responses', 'each content_block accumulates independently', '`stop_block` returns owned data; output consumes it', 'No (`StreamBlock` flows through output once, move semantics)'],
-    ['chat → responses', 'whole stream accumulates text/tool items', '`finish_completed_stream` is a state method that reads state fields multiple times', 'Yes (`StreamTextItem`/`StreamToolItem` are held by state and read repeatedly by output)'],
-  ]}
-/>
-
-Root cause: Anthropic's accumulation unit is the content_block (explicit open/close lifecycle, moved away on stop), while Chat's is the whole stream (finalized all at once at stream end, so state must retain data for repeated reads and terminal snapshot). The latter "state holds + output reads repeatedly" pattern naturally requires a neutral home for shared types.
+Use a pair-local `types.rs` when multiple pair modules share accumulation records, such as `StreamTextItem` and `StreamToolItem`. Keep protocol-native wire constructors in the target `outbound/` module instead of moving them into pair-private types.
 
 ### Terminal state type choice
 
@@ -193,8 +202,8 @@ Root cause: Anthropic's accumulation unit is the content_block (explicit open/cl
 <ReferenceTable
   columns={['Pair', 'S (streaming)', 'T (terminal)', 'Why']}
   rows={[
-    ['chat → ant', 'ChatStreamingState', 'ChatTerminalState (lightweight snapshot)', 'Terminal events are constructed on the spot by the translator; only finish_reason + refusal are needed. All blocks were closed during streaming.'],
-    ['chat → responses', 'StreamingState', 'StreamingState (same type)', 'Terminal events (`*.done` × N + `response.completed`) need the full accumulated data (text/tool items/usage), constructed by the state method `finish_completed_stream`.'],
+    ['chat → ant', 'ChatStreamingState', 'PendingAnthropicTerminal', 'Keeps finish_reason, refusal, and the latest usage snapshot until `[DONE]`, EOF, or a trailing usage-only chunk finalizes `message_delta` + `message_stop`.'],
+    ['chat → responses', 'StreamingState', 'PendingResponsesTerminal', 'Keeps the full accumulated state plus finish_reason until `*.done` events and the final completed/incomplete response snapshot are emitted.'],
   ]}
 />
 

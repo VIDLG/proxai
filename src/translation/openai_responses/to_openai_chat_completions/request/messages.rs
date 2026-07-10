@@ -1,6 +1,9 @@
 use crate::protocol::openai::chat_completions as chat;
-use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 use crate::protocol::openai::responses;
+use crate::translation::openai_chat_completions::outbound::{
+    assistant_message, developer_text_message, system_text_message, text_part, tool_message,
+    user_message, user_text_message,
+};
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) fn chat_messages(
@@ -81,27 +84,14 @@ fn messages_from_easy_message(
             }
         }
         responses::Role::User => {
-            messages.push(chat::ChatCompletionRequestMessage::User(
-                chat::ChatCompletionRequestUserMessage {
-                    content: (&message.content).try_into()?,
-                    name: None,
-                },
-            ));
+            messages.push(user_message((&message.content).try_into()?));
         }
         // Easy input messages only carry user/system/developer/assistant roles.
         responses::Role::Assistant => {
             // Easy assistant content is treated as output text; Chat assistant
             // messages require non-empty content, so drop empty turns.
             if let Some(content) = assistant_content_from_easy(&message.content) {
-                messages.push(chat::ChatCompletionRequestMessage::Assistant(
-                    chat::ChatCompletionRequestAssistantMessage {
-                        content: Some(content),
-                        refusal: None,
-                        name: None,
-                        audio: None,
-                        tool_calls: None,
-                    },
-                ));
+                messages.push(assistant_message(Some(content), None));
             }
         }
     }
@@ -125,24 +115,20 @@ fn messages_from_item(
             push_assistant_tool_call(messages, call.into());
         }
         responses::Item::FunctionCallOutput(output) => {
-            messages.push(chat::ChatCompletionRequestMessage::Tool(
-                chat::ChatCompletionRequestToolMessage {
-                    content: (&output.output).into(),
-                    tool_call_id: output.call_id.clone(),
-                },
+            messages.push(tool_message(
+                (&output.output).into(),
+                output.call_id.clone(),
             ));
         }
         responses::Item::CustomToolCall(call) => {
             push_assistant_tool_call(messages, call.into());
         }
         responses::Item::CustomToolCallOutput(output) => {
-            messages.push(chat::ChatCompletionRequestMessage::Tool(
-                chat::ChatCompletionRequestToolMessage {
-                    content: chat::ChatCompletionRequestToolMessageContent::Text(
-                        custom_tool_output_to_string(&output.output),
-                    ),
-                    tool_call_id: output.call_id.clone(),
-                },
+            messages.push(tool_message(
+                chat::ChatCompletionRequestToolMessageContent::Text(custom_tool_output_to_string(
+                    &output.output,
+                )),
+                output.call_id.clone(),
             ));
         }
         other => {
@@ -169,9 +155,9 @@ fn push_assistant_output_message(
         match part {
             responses::OutputMessageContent::OutputText(text) => {
                 chat_content.push(
-                    chat::ChatCompletionRequestAssistantMessageContentPart::Text(
-                        ChatCompletionRequestMessageContentPartText { text: text.text },
-                    ),
+                    chat::ChatCompletionRequestAssistantMessageContentPart::Text(text_part(
+                        text.text,
+                    )),
                 );
             }
             responses::OutputMessageContent::Refusal(refusal) => {
@@ -192,16 +178,11 @@ fn push_assistant_output_message(
         return;
     }
 
-    messages.push(chat::ChatCompletionRequestMessage::Assistant(
-        chat::ChatCompletionRequestAssistantMessage {
-            content: Some(chat::ChatCompletionRequestAssistantMessageContent::Array(
-                chat_content,
-            )),
-            refusal: None,
-            name: None,
-            audio: None,
-            tool_calls: None,
-        },
+    messages.push(assistant_message(
+        Some(chat::ChatCompletionRequestAssistantMessageContent::Array(
+            chat_content,
+        )),
+        None,
     ));
 }
 
@@ -231,13 +212,18 @@ fn push_input_message(
                 .filter_map(|content| match content {
                     responses::InputContent::InputText(text) => {
                         Some(chat::ChatCompletionRequestUserMessageContentPart::Text(
-                            ChatCompletionRequestMessageContentPartText {
-                                text: text.text.clone(),
-                            },
+                            text_part(text.text.clone()),
                         ))
                     }
                     responses::InputContent::InputImage(image) => {
-                        let url = image.image_url.clone()?;
+                        let Some(url) = image.image_url.clone() else {
+                            tracing::trace!(
+                                source_field = "input[].content[].image_url",
+                                reason = "Chat Completions user image parts require an image URL",
+                                "skipping Responses input content during Chat Completions translation"
+                            );
+                            return None;
+                        };
                         Some(chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(
                             chat::ChatCompletionRequestMessageContentPartImage {
                                 image_url: chat::ImageUrl {
@@ -247,9 +233,14 @@ fn push_input_message(
                             },
                         ))
                     }
-                    // Responses input files cannot be represented in Chat's user
-                    // message content parts without a hosted file id; mark as omitted.
-                    responses::InputContent::InputFile(_) => None,
+                    responses::InputContent::InputFile(_) => {
+                        tracing::trace!(
+                            source_field = "input[].content[].input_file",
+                            reason = "Chat Completions user message content has no compatible hosted file representation",
+                            "skipping Responses input content during Chat Completions translation"
+                        );
+                        None
+                    }
                 })
                 .collect();
 
@@ -258,12 +249,7 @@ fn push_input_message(
             } else {
                 chat::ChatCompletionRequestUserMessageContent::Array(parts)
             };
-            messages.push(chat::ChatCompletionRequestMessage::User(
-                chat::ChatCompletionRequestUserMessage {
-                    content,
-                    name: None,
-                },
-            ));
+            messages.push(user_message(content));
         }
     }
 }
@@ -279,15 +265,7 @@ fn push_assistant_tool_call(
             .push(tool_call);
         return;
     }
-    messages.push(chat::ChatCompletionRequestMessage::Assistant(
-        chat::ChatCompletionRequestAssistantMessage {
-            content: None,
-            refusal: None,
-            name: None,
-            audio: None,
-            tool_calls: Some(vec![tool_call]),
-        },
-    ));
+    messages.push(assistant_message(None, Some(vec![tool_call])));
 }
 
 fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<String> {
@@ -297,7 +275,14 @@ fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<St
             .iter()
             .filter_map(|part| match part {
                 responses::InputContent::InputText(text) => Some(text.text.clone()),
-                _ => None,
+                other => {
+                    tracing::trace!(
+                        discriminant = ?std::mem::discriminant(other),
+                        reason = "instruction messages can only be represented as Chat text",
+                        "skipping Responses instruction content during Chat Completions translation"
+                    );
+                    None
+                }
             })
             .collect(),
     }
@@ -308,7 +293,14 @@ fn join_input_text(content: &[responses::InputContent]) -> Option<String> {
         .iter()
         .filter_map(|part| match part {
             responses::InputContent::InputText(text) => Some(text.text.clone()),
-            _ => None,
+            other => {
+                tracing::trace!(
+                    discriminant = ?std::mem::discriminant(other),
+                    reason = "instruction messages can only be represented as Chat text",
+                    "skipping Responses instruction content during Chat Completions translation"
+                );
+                None
+            }
         })
         .collect();
     if parts.is_empty() {
@@ -331,11 +323,15 @@ fn assistant_content_from_easy(
             for part in parts {
                 if let responses::InputContent::InputText(text) = part {
                     translated.push(
-                        chat::ChatCompletionRequestAssistantMessageContentPart::Text(
-                            ChatCompletionRequestMessageContentPartText {
-                                text: text.text.clone(),
-                            },
-                        ),
+                        chat::ChatCompletionRequestAssistantMessageContentPart::Text(text_part(
+                            text.text.clone(),
+                        )),
+                    );
+                } else {
+                    tracing::trace!(
+                        discriminant = ?std::mem::discriminant(part),
+                        reason = "Chat assistant history content can only represent text here",
+                        "skipping Responses assistant content during Chat Completions translation"
                     );
                 }
             }
@@ -365,27 +361,6 @@ fn is_non_instruction_message(message: &chat::ChatCompletionRequestMessage) -> b
         chat::ChatCompletionRequestMessage::System(_)
             | chat::ChatCompletionRequestMessage::Developer(_)
     )
-}
-
-fn system_text_message(text: impl Into<String>) -> chat::ChatCompletionRequestMessage {
-    chat::ChatCompletionRequestMessage::System(chat::ChatCompletionRequestSystemMessage {
-        content: chat::ChatCompletionRequestSystemMessageContent::Text(text.into()),
-        name: None,
-    })
-}
-
-fn developer_text_message(text: impl Into<String>) -> chat::ChatCompletionRequestMessage {
-    chat::ChatCompletionRequestMessage::Developer(chat::ChatCompletionRequestDeveloperMessage {
-        content: chat::ChatCompletionRequestDeveloperMessageContent::Text(text.into()),
-        name: None,
-    })
-}
-
-fn user_text_message(text: impl Into<String>) -> chat::ChatCompletionRequestMessage {
-    chat::ChatCompletionRequestMessage::User(chat::ChatCompletionRequestUserMessage {
-        content: chat::ChatCompletionRequestUserMessageContent::Text(text.into()),
-        name: None,
-    })
 }
 
 impl TryFrom<&responses::EasyInputContent> for chat::ChatCompletionRequestUserMessageContent {
@@ -421,9 +396,7 @@ impl TryFrom<&responses::InputContent> for chat::ChatCompletionRequestUserMessag
                             .to_string(),
                     ));
                 }
-                Ok(Self::Text(ChatCompletionRequestMessageContentPartText {
-                    text: text.text.clone(),
-                }))
+                Ok(Self::Text(text_part(text.text.clone())))
             }
             responses::InputContent::InputImage(image) => {
                 let url = image.image_url.clone().ok_or_else(|| {
@@ -456,11 +429,16 @@ impl From<&responses::FunctionCallOutput> for chat::ChatCompletionRequestToolMes
                     .iter()
                     .filter_map(|part| match part {
                         responses::InputContent::InputText(text) => {
-                            Some(ChatCompletionRequestMessageContentPartText {
-                                text: text.text.clone(),
-                            })
+                            Some(text_part(text.text.clone()))
                         }
-                        _ => None,
+                        other => {
+                            tracing::trace!(
+                                discriminant = ?std::mem::discriminant(other),
+                                reason = "Chat tool messages can only represent text output parts",
+                                "skipping Responses function output content during Chat Completions translation"
+                            );
+                            None
+                        }
                     })
                     .collect::<Vec<_>>();
                 if translated.is_empty() {

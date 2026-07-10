@@ -115,6 +115,23 @@ impl StreamEvent {
     }
 }
 
+pub(crate) fn typed_stream_event<E>(event: E) -> StreamTranslationResult<StreamEvent>
+where
+    E: AsRef<str> + Serialize,
+{
+    let event_type = event.as_ref().to_string();
+    StreamEvent::json(event_type, event)
+}
+
+pub(crate) fn typed_stream_events<E>(
+    events: impl IntoIterator<Item = E>,
+) -> StreamTranslationResult<Vec<StreamEvent>>
+where
+    E: AsRef<str> + Serialize,
+{
+    events.into_iter().map(typed_stream_event).collect()
+}
+
 pub(crate) trait StreamingEventTranslator: Send + 'static {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>>;
 
@@ -207,7 +224,7 @@ where
     into_byte_stream(stream.map(|chunk: StreamTranslationResult<Bytes>| chunk))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StreamIdentity {
     id: String,
     model: String,

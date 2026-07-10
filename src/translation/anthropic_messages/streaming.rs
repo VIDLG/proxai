@@ -37,31 +37,10 @@ impl<S> AnthropicInboundLifecycle<S> {
         }
     }
 
-    pub(crate) fn parse_allowed_stream_event(
+    pub(crate) fn parse_stream_event(
         &self,
         payload: Value,
     ) -> StreamTranslationResult<MessageStreamEvent> {
-        match payload.get("type").and_then(Value::as_str) {
-            Some(
-                "ping"
-                | "message_start"
-                | "content_block_start"
-                | "content_block_delta"
-                | "content_block_stop"
-                | "message_delta"
-                | "message_stop",
-            ) => {}
-            Some(event_type) => {
-                return Err(StreamTranslationError::Semantic(format!(
-                    "Anthropic stream emitted unsupported event type `{event_type}`"
-                )));
-            }
-            None => {
-                return Err(StreamTranslationError::Semantic(
-                    "Anthropic stream event is missing `type`".to_string(),
-                ));
-            }
-        }
         let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
         if matches!(parsed, MessageStreamEvent::Ping(_)) {
             return Ok(parsed);

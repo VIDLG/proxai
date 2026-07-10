@@ -2,23 +2,22 @@
 //!
 //! Converts Responses SSE events into Anthropic `MessageStreamEvent`s. Each
 //! inbound `ResponseStreamEvent` is mapped to one or more Anthropic
-//! `MessageStreamEvent`s via the pure builders in `output`, then converted
-//! to carrier-level `StreamEvent`s at the boundary.
+//! `MessageStreamEvent`s, then converted to carrier-level `StreamEvent`s at the boundary.
 //!
 //! Source-side lifecycle (identity, terminal detection, unexpected-end
 //! reporting) is shared across all `responses -> *` translators through
 //! `crate::translation::openai_responses::streaming::ResponsesInboundLifecycle`.
 
-mod output;
 mod state;
 
 use crate::http_support::ByteStream;
-use crate::protocol::anthropic::messages::StopReason;
-use crate::protocol::openai_responses::ResponseStreamEvent;
+use crate::protocol::anthropic::messages::{MessageStreamEvent, StopReason};
+use crate::protocol::openai_responses::{Response, ResponseStreamEvent};
+
 use crate::translation::openai_responses::streaming::ResponsesInboundLifecycle;
 use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationResult, StreamingEventTranslator,
-    translate_sse_stream,
+    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    StreamingEventTranslator, translate_sse_stream, typed_stream_events,
 };
 
 use state::StreamingState;
@@ -39,178 +38,193 @@ pub(super) struct MessagesStreamTranslator {
 impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
+        let event_type = parsed.as_ref().to_string();
         let mut events = Vec::new();
 
         match parsed {
             ResponseStreamEvent::ResponseCreated(event) => {
-                let identity = response_identity(&event.response);
-                self.lifecycle
-                    .begin_response_stream(identity.clone(), StreamingState::default())?;
-                self.lifecycle
-                    .streaming_state_mut()?
-                    .record_usage(&event.response);
-                if let Some(event) = self
-                    .lifecycle
-                    .streaming_state_mut()?
-                    .start_message(&identity)
-                {
-                    events.push(event);
-                }
+                events.extend(self.observe_response_snapshot(&event.response)?);
             }
             ResponseStreamEvent::ResponseInProgress(event) => {
-                let identity = response_identity(&event.response);
-                self.lifecycle
-                    .begin_response_stream(identity.clone(), StreamingState::default())?;
-                self.lifecycle
-                    .streaming_state_mut()?
-                    .record_usage(&event.response);
-                if let Some(event) = self
-                    .lifecycle
-                    .streaming_state_mut()?
-                    .start_message(&identity)
-                {
-                    events.push(event);
-                }
+                events.extend(self.observe_response_snapshot(&event.response)?);
             }
             ResponseStreamEvent::ResponseOutputItemAdded(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
                 let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.register_output_item(event.output_index, event.item) {
-                    events.push(event);
-                }
+                events.extend(state.register_output_item(
+                    event.output_index,
+                    event.item,
+                    &event_type,
+                )?);
             }
-            ResponseStreamEvent::ResponseOutputTextDelta(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.ensure_text_block(event.output_index) {
-                    events.push(event);
-                }
-                events.push(output::text_delta(event.output_index, event.delta));
-            }
-            ResponseStreamEvent::ResponseOutputTextDone(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.stop_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.ensure_thinking_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.stop_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseReasoningSummaryTextDelta(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.ensure_thinking_block(event.output_index) {
-                    events.push(event);
-                }
-                events.push(output::thinking_delta(event.output_index, event.delta));
-            }
-            ResponseStreamEvent::ResponseReasoningTextDelta(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.ensure_thinking_block(event.output_index) {
-                    events.push(event);
-                }
-                events.push(output::thinking_delta(event.output_index, event.delta));
-            }
-            ResponseStreamEvent::ResponseReasoningSummaryTextDone(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.stop_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseReasoningTextDone(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) = state.stop_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) =
-                    state.ensure_tool_block(event.output_index, Some(event.item_id.clone()), None)
-                {
-                    events.push(event);
-                }
-                events.push(output::input_json_delta(event.output_index, event.delta));
-            }
-            ResponseStreamEvent::ResponseFunctionCallArgumentsDone(event) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.ensure_message_started(&identity));
-                if let Some(event) =
-                    state.ensure_tool_block(event.output_index, Some(event.item_id), event.name)
-                {
-                    events.push(event);
-                }
-                if let Some(event) = state.stop_block(event.output_index) {
-                    events.push(event);
-                }
-            }
-            ResponseStreamEvent::ResponseCompleted(event) => {
+            ResponseStreamEvent::ResponseOutputItemDone(event) => {
                 self.lifecycle
                     .streaming_state_mut()?
-                    .record_usage(&event.response);
-                let identity = self.lifecycle.stream_identity()?.clone();
+                    .finish_output_item(event.output_index, &event_type)?;
+            }
+            ResponseStreamEvent::ResponseContentPartAdded(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .register_content_part(
+                            event.output_index,
+                            event.content_index,
+                            event.part,
+                            &event_type,
+                        )?,
+                );
+            }
+            ResponseStreamEvent::ResponseContentPartDone(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.finish_content_part(
+                    event.output_index,
+                    event.content_index,
+                    event.part,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseOutputTextDelta(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.text_delta(
+                    event.output_index,
+                    event.content_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseOutputTextDone(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.finish_text(
+                    event.output_index,
+                    event.content_index,
+                    event.text,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseRefusalDelta(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.refusal_delta(
+                    event.output_index,
+                    event.content_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseRefusalDone(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.finish_refusal(
+                    event.output_index,
+                    event.content_index,
+                    event.refusal,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .register_summary_part(
+                            event.output_index,
+                            event.summary_index,
+                            event.part,
+                            &event_type,
+                        )?,
+                );
+            }
+            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.stop_summary_part(
+                    event.output_index,
+                    event.summary_index,
+                    event.part,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningSummaryTextDelta(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.summary_delta(
+                    event.output_index,
+                    event.summary_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningTextDelta(event) => {
+                let state = self.lifecycle.streaming_state_mut()?;
+                events.extend(state.reasoning_text_delta(
+                    event.output_index,
+                    event.content_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningSummaryTextDone(event) => {
+                events.extend(self.lifecycle.streaming_state_mut()?.finish_summary_text(
+                    event.output_index,
+                    event.summary_index,
+                    event.text,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningTextDone(event) => {
+                let state = self.lifecycle.streaming_state_mut()?;
+                events.extend(state.stop_reasoning_text(
+                    event.output_index,
+                    event.content_index,
+                    event.text,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(event) => {
+                let state = self.lifecycle.streaming_state_mut()?;
+                events.push(state.function_arguments_delta(
+                    event.output_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseFunctionCallArgumentsDone(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .finish_function_arguments(
+                            event.output_index,
+                            event.arguments,
+                            &event_type,
+                        )?,
+                );
+            }
+            ResponseStreamEvent::ResponseCustomToolCallInputDelta(event) => {
+                self.lifecycle
+                    .streaming_state_mut()?
+                    .custom_tool_input_delta(event.output_index, &event.delta, &event_type)?;
+            }
+            ResponseStreamEvent::ResponseCustomToolCallInputDone(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .finish_custom_tool_input(event.output_index, event.input, &event_type)?,
+                );
+            }
+            ResponseStreamEvent::ResponseCompleted(event) => {
+                let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
                 let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.ensure_message_started(&identity));
-                events.extend(state.complete(StopReason::EndTurn));
+                events.extend(state.complete(StopReason::EndTurn, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseIncomplete(event) => {
-                self.lifecycle
-                    .streaming_state_mut()?
-                    .record_usage(&event.response);
-                let identity = self.lifecycle.stream_identity()?.clone();
+                let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
                 let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.ensure_message_started(&identity));
-                events.extend(state.complete(StopReason::MaxTokens));
+                events.extend(state.complete(StopReason::MaxTokens, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseFailed(event) => {
-                self.lifecycle
-                    .streaming_state_mut()?
-                    .record_usage(&event.response);
-                let identity = self.lifecycle.stream_identity()?.clone();
-                self.lifecycle.receive_terminal_event()?;
-                let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.ensure_message_started(&identity));
-                events.extend(state.complete(StopReason::Refusal));
-                self.lifecycle.stop();
+                return Err(response_failure_error(&event.response));
             }
-            ResponseStreamEvent::ResponseError(_) => {
-                let identity = self.lifecycle.stream_identity()?.clone();
-                self.lifecycle.receive_terminal_event()?;
-                let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.ensure_message_started(&identity));
-                events.extend(state.complete(StopReason::Refusal));
-                self.lifecycle.stop();
+            ResponseStreamEvent::ResponseError(event) => {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Responses stream error{}: {}",
+                    event
+                        .code
+                        .as_deref()
+                        .map(|code| format!(" ({code})"))
+                        .unwrap_or_default(),
+                    event.message
+                )));
             }
             other => {
                 tracing::trace!(
@@ -220,28 +234,50 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             }
         }
 
-        output::encode_events(events)
+        typed_stream_events(events)
     }
 
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_stopped() {
             return Ok(Vec::new());
         }
-        // Responses streams always end with a terminal event (completed /
-        // incomplete / failed). If we reach here without one, the upstream
-        // closed early; surface the unexpected end but emit no synthetic
-        // terminal events (the protocol gives us no stop_reason to invent).
-        tracing::trace!(
-            ?end,
-            reason = "Responses stream ended without a terminal Responses event"
-        );
-        let _ = self.lifecycle.unexpected_stream_end_error(end);
-        Ok(Vec::new())
+        // Responses streams must end with a terminal semantic event
+        // (`response.completed` / `incomplete` / `failed` / `error`). A carrier
+        // EOF or `[DONE]` before that means the upstream closed early; surface it
+        // as a stream translation error instead of inventing Anthropic terminal
+        // events.
+        Err(self.lifecycle.unexpected_stream_end_error(end))
     }
+}
+
+impl MessagesStreamTranslator {
+    fn observe_response_snapshot(
+        &mut self,
+        response: &Response,
+    ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
+        let identity = response_identity(response);
+        self.lifecycle
+            .observe_response_stream(identity.clone(), StreamingState::default)?;
+        Ok(self
+            .lifecycle
+            .streaming_state_mut()?
+            .start_message(&identity, response.usage.as_ref())
+            .into_iter()
+            .collect())
+    }
+}
+
+fn response_failure_error(response: &Response) -> StreamTranslationError {
+    let detail = response
+        .error
+        .as_ref()
+        .map(|error| format!("{}: {}", error.code, error.message))
+        .unwrap_or_else(|| "upstream response failed without error details".to_string());
+    StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))
 }
 
 /// Build a `StreamIdentity` from a Responses `Response` snapshot, preserving
 /// the upstream `resp_...` id verbatim so round-trip debugging stays tractable.
-fn response_identity(response: &crate::protocol::openai_responses::Response) -> StreamIdentity {
+fn response_identity(response: &Response) -> StreamIdentity {
     StreamIdentity::new(response.id.clone(), response.model.clone())
 }

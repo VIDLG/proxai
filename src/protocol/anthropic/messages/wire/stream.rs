@@ -122,7 +122,7 @@ pub struct MessageDelta {
 }
 
 /// Token usage update emitted with a message-level stream delta.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MessageDeltaUsage {
     /// @sdk(required_nullable_accepts_missing)
     pub cache_creation_input_tokens: Option<u32>,

@@ -1,9 +1,11 @@
 use crate::protocol::openai::chat_completions::{
-    ChatChoice, ChatCompletionMessageToolCalls, ChatCompletionResponseMessage,
-    CreateChatCompletionResponse, FinishReason, Role,
+    ChatChoice, ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
 };
 use crate::protocol::openai::responses::{
     OutputItem, OutputMessage, OutputMessageContent, Response,
+};
+use crate::translation::openai_chat_completions::outbound::{
+    CHAT_COMPLETION_OBJECT, assistant_response_message,
 };
 use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
 use crate::translation::{TranslationError, TranslationResult};
@@ -61,14 +63,12 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
             id: chat_id(&response.id),
             choices: vec![ChatChoice {
                 index: 0,
-                message: ChatCompletionResponseMessage {
-                    content: (!content.is_empty()).then_some(content),
-                    refusal: (!refusal.is_empty()).then_some(refusal),
-                    tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
-                    annotations: None,
-                    role: Role::Assistant,
-                    audio: None,
-                },
+                message: assistant_response_message(
+                    (!content.is_empty()).then_some(content),
+                    (!refusal.is_empty()).then_some(refusal),
+                    (!tool_calls.is_empty()).then_some(tool_calls),
+                    None,
+                ),
                 finish_reason: chat_finish_reason(response),
                 logprobs: None,
             }],
@@ -77,7 +77,7 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
             model: response.model.clone(),
             // Responses has no Chat-style service tier field on the response body.
             service_tier: None,
-            object: "chat.completion".to_string(),
+            object: CHAT_COMPLETION_OBJECT.to_string(),
             usage: response.usage.as_ref().map(Into::into),
         })
     }

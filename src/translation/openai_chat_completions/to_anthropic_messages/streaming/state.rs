@@ -6,22 +6,22 @@
 //! routed and finalized correctly. Holds no Anthropic event builders
 //! directly; those live in `super::output`.
 
-use serde_json::Value;
 use std::collections::BTreeMap;
 
-use crate::protocol::anthropic::messages::{
-    ContentBlock, ContentBlockDelta, ContentBlockDeltaEvent, ContentBlockStartEvent,
-    ContentBlockStopEvent, InputJsonDelta, MessageStreamEvent, TextDelta,
-};
+use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::protocol::openai::chat_completions::{ChatCompletionMessageToolCallChunk, FinishReason};
 
-use crate::translation::anthropic_messages::outbound::{text_block, tool_use_block};
+use crate::translation::anthropic_messages::outbound::{
+    content_block_stop, input_json_delta, text_block_start, text_delta, thinking_block_start,
+    thinking_delta, tool_use_block_start,
+};
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
 #[derive(Debug, Default)]
 pub(super) struct ChatToAnthropicBlockState {
     next_block_index: u32,
     text_block_index: Option<u32>,
+    reasoning_block_index: Option<u32>,
     tool_block_indexes: BTreeMap<u32, u32>,
 }
 
@@ -43,21 +43,11 @@ impl ChatStreamingState {
 
     pub(super) fn text_delta(&mut self, text: String) -> Vec<MessageStreamEvent> {
         match self.blocks.text_block_index {
-            Some(index) => vec![MessageStreamEvent::ContentBlockDelta(
-                ContentBlockDeltaEvent {
-                    index,
-                    delta: ContentBlockDelta::TextDelta(TextDelta { text }),
-                },
-            )],
+            Some(index) => vec![text_delta(index, text)],
             None => {
                 let index = self.blocks.allocate_block_index();
                 self.blocks.text_block_index = Some(index);
-                vec![MessageStreamEvent::ContentBlockStart(
-                    ContentBlockStartEvent {
-                        index,
-                        content_block: ContentBlock::Text(text_block(text)),
-                    },
-                )]
+                vec![text_block_start(index, text)]
             }
         }
     }
@@ -65,6 +55,20 @@ impl ChatStreamingState {
     pub(super) fn refusal_delta(&mut self, refusal: String) -> Vec<MessageStreamEvent> {
         self.refusal.push_str(&refusal);
         self.text_delta(refusal)
+    }
+
+    pub(super) fn reasoning_delta(&mut self, reasoning: String) -> Vec<MessageStreamEvent> {
+        match self.blocks.reasoning_block_index {
+            Some(index) => vec![thinking_delta(index, reasoning)],
+            None => {
+                let index = self.blocks.allocate_block_index();
+                self.blocks.reasoning_block_index = Some(index);
+                vec![
+                    thinking_block_start(index),
+                    thinking_delta(index, reasoning),
+                ]
+            }
+        }
     }
 
     /// Whether any refusal text has been accumulated so far.
@@ -115,29 +119,13 @@ impl ChatStreamingState {
                 self.blocks
                     .tool_block_indexes
                     .insert(tool_call.index, index);
-                outputs.push(MessageStreamEvent::ContentBlockStart(
-                    ContentBlockStartEvent {
-                        index,
-                        content_block: ContentBlock::ToolUse(tool_use_block(
-                            id,
-                            name,
-                            Value::Object(Default::default()),
-                        )),
-                    },
-                ));
+                outputs.push(tool_use_block_start(index, id, name));
                 index
             }
         };
 
         if let Some(arguments) = arguments {
-            outputs.push(MessageStreamEvent::ContentBlockDelta(
-                ContentBlockDeltaEvent {
-                    index: block_index,
-                    delta: ContentBlockDelta::InputJsonDelta(InputJsonDelta {
-                        partial_json: arguments,
-                    }),
-                },
-            ));
+            outputs.push(input_json_delta(block_index, arguments));
         }
 
         Ok(outputs)
@@ -169,19 +157,20 @@ impl ChatToAnthropicBlockState {
         if let Some(index) = self.text_block_index.take() {
             indexes.push(index);
         }
+        if let Some(index) = self.reasoning_block_index.take() {
+            indexes.push(index);
+        }
         indexes.extend(self.tool_block_indexes.values().copied());
         self.tool_block_indexes.clear();
         indexes.sort_unstable();
 
-        indexes
-            .into_iter()
-            .map(|index| MessageStreamEvent::ContentBlockStop(ContentBlockStopEvent { index }))
-            .collect()
+        indexes.into_iter().map(content_block_stop).collect()
     }
 }
 
 #[derive(Debug)]
-pub(super) struct ChatTerminalState {
+pub(super) struct PendingAnthropicTerminal {
     pub(super) finish_reason: FinishReason,
     pub(super) refusal: String,
+    pub(super) usage: Option<crate::protocol::openai::chat_completions::CompletionUsage>,
 }

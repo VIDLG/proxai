@@ -7,6 +7,8 @@
 
 mod request;
 mod response;
+mod streaming;
 
 pub(crate) use request::*;
 pub(crate) use response::*;
+pub(crate) use streaming::*;

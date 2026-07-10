@@ -10,8 +10,8 @@
 //!
 //! Target-specific state (block tracking, sequence numbers, output assembly)
 //! stays inside each pair translator; this module owns only the source-protocol
-//! envelope: identity initialization, terminal detection, and source-side
-//! semantic event allowlisting.
+//! envelope: identity initialization, terminal detection, and source-side typed
+//! event parsing.
 
 use delegate::delegate;
 use serde_json::Value;
@@ -38,15 +38,15 @@ impl<S> ResponsesInboundLifecycle<S> {
     delegate! {
         to self.inner {
             pub(crate) fn is_stopped(&self) -> bool;
+            pub(crate) fn stop(&mut self);
         }
     }
 
-    /// Parse and allowlist a Responses SSE event payload.
+    /// Parse a Responses SSE event payload into the typed source event model.
     ///
-    /// Unknown event types are accepted but logged at the caller; semantic
-    /// ordering is enforced loosely because Responses does not require a strict
-    /// `created -> content -> completed` order beyond what each translator
-    /// already checks.
+    /// Responses exposes many semantic event kinds. This parser only decodes the
+    /// typed source event; source event ordering is enforced by the inbound
+    /// lifecycle and each pair translator's target-side state.
     pub(crate) fn parse_stream_event(
         &self,
         payload: Value,
@@ -54,20 +54,46 @@ impl<S> ResponsesInboundLifecycle<S> {
         serde_json::from_value::<ResponseStreamEvent>(payload).map_err(Into::into)
     }
 
-    /// Begin a Responses stream when `response.created` / `in_progress` arrives.
-    pub(crate) fn begin_response_stream(
+    /// Observe a Responses lifecycle snapshot (`response.created` / `in_progress`).
+    ///
+    /// The first snapshot initializes stream identity and pair state. Later
+    /// snapshots are valid only while streaming and must refer to the same
+    /// response identity; they do not reset pair state.
+    pub(crate) fn observe_response_stream(
         &mut self,
         identity: StreamIdentity,
-        state: S,
-    ) -> StreamTranslationResult<()> {
-        if !self.inner.is_waiting() {
-            return Err(StreamTranslationError::Semantic(
-                "Responses stream emitted duplicate response.created / response.in_progress"
-                    .to_string(),
-            ));
+        state: impl FnOnce() -> S,
+    ) -> StreamTranslationResult<bool> {
+        if self.inner.is_waiting() {
+            self.inner.begin_streaming(identity, state());
+            return Ok(true);
         }
-        self.inner.begin_streaming(identity, state);
-        Ok(())
+
+        let current = self.inner.require_identity(|| {
+            StreamTranslationError::Semantic(
+                "Responses stream lifecycle snapshot arrived before identity initialization"
+                    .to_string(),
+            )
+        })?;
+        if current != &identity {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Responses stream identity changed from {}/{} to {}/{}",
+                current.id(),
+                current.model(),
+                identity.id(),
+                identity.model()
+            )));
+        }
+        if !matches!(
+            self.inner.phase_kind(),
+            InboundStreamLifecyclePhase::Streaming
+        ) {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Responses stream emitted response.created / response.in_progress while lifecycle was {}; expected streaming",
+                self.inner.phase_kind()
+            )));
+        }
+        Ok(false)
     }
 
     /// Move from streaming to terminal when a `response.completed` /
@@ -81,11 +107,6 @@ impl<S> ResponsesInboundLifecycle<S> {
         })?;
         self.inner.receive_terminal(phase.into_state());
         Ok(())
-    }
-
-    /// Mark the carrier stream as fully stopped after a terminal event.
-    pub(crate) fn stop(&mut self) {
-        self.inner.stop();
     }
 
     pub(crate) fn stream_identity(&self) -> StreamTranslationResult<&StreamIdentity> {

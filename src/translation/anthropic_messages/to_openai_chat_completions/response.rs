@@ -3,9 +3,9 @@
 use super::citations::text_block_annotations;
 use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use crate::protocol::anthropic::messages::{ContentBlock, Message, StopReason};
-use crate::protocol::openai::chat_completions::{
-    ChatChoice, ChatChoiceLogprobs, ChatCompletionResponseMessage, CreateChatCompletionResponse,
-    Role,
+use crate::protocol::openai::chat_completions::{ChatChoice, CreateChatCompletionResponse};
+use crate::translation::openai_chat_completions::outbound::{
+    CHAT_COMPLETION_OBJECT, assistant_response_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -62,24 +62,20 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
             id: format!("chatcmpl_{}", message.id),
             choices: vec![ChatChoice {
                 index: 0,
-                message: ChatCompletionResponseMessage {
-                    content: (!content.is_empty()).then_some(content),
-                    // Chat has only a refusal string; Anthropic refusal category
-                    // has no equivalent Chat response field.
+                message: assistant_response_message(
+                    (!content.is_empty()).then_some(content),
                     refusal,
-                    tool_calls: (!tool_calls.is_empty()).then_some(tool_calls),
+                    (!tool_calls.is_empty()).then_some(tool_calls),
                     // Only Anthropic web-search citations can be represented as
                     // OpenAI Chat URL annotations. Other citation location types
                     // lack URL annotation equivalents.
-                    annotations: (!annotations.is_empty()).then_some(annotations),
-                    role: Role::Assistant,
-                    audio: None,
-                },
+                    (!annotations.is_empty()).then_some(annotations),
+                ),
                 finish_reason: message
                     .stop_reason
                     .map(chat_finish_reason_from_anthropic_stop_reason),
                 // Anthropic does not expose Chat-style token logprobs on message responses.
-                logprobs: None::<ChatChoiceLogprobs>,
+                logprobs: None,
             }],
             // Anthropic message responses do not carry a Unix creation timestamp.
             created: 0,
@@ -87,7 +83,7 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
             // Anthropic response `usage.service_tier` is not the same shape as OpenAI
             // Chat's response-level service tier, so avoid inventing a value.
             service_tier: None,
-            object: "chat.completion".to_string(),
+            object: CHAT_COMPLETION_OBJECT.to_string(),
             usage: Some((&message.usage).into()),
         })
     }

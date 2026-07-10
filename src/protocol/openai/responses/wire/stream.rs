@@ -536,11 +536,14 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "error")]
     #[strum(serialize = "error")]
     ResponseError(ResponseErrorEvent),
+    #[serde(other)]
+    #[strum(serialize = "unknown")]
+    Unknown,
 }
 
 impl ResponseStreamEvent {
-    pub fn sequence_number(&self) -> u64 {
-        match self {
+    pub fn sequence_number(&self) -> Option<u64> {
+        let sequence_number = match self {
             Self::ResponseCreated(event) => event.sequence_number,
             Self::ResponseInProgress(event) => event.sequence_number,
             Self::ResponseCompleted(event) => event.sequence_number,
@@ -590,7 +593,9 @@ impl ResponseStreamEvent {
             Self::ResponseCustomToolCallInputDelta(event) => event.sequence_number,
             Self::ResponseCustomToolCallInputDone(event) => event.sequence_number,
             Self::ResponseError(event) => event.sequence_number,
-        }
+            Self::Unknown => return None,
+        };
+        Some(sequence_number)
     }
 }
 

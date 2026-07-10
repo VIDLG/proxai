@@ -7,13 +7,15 @@
 
 #[derive(Debug, Clone)]
 pub(super) struct StreamTextItem {
+    pub(super) output_index: u32,
     pub(super) item_id: String,
     pub(super) text: String,
 }
 
 impl StreamTextItem {
-    pub(super) fn new(item_id: String) -> Self {
+    pub(super) fn new(output_index: u32, item_id: String) -> Self {
         Self {
+            output_index,
             item_id,
             text: String::new(),
         }
@@ -26,14 +28,16 @@ impl StreamTextItem {
 
 #[derive(Debug, Clone)]
 pub(super) struct StreamToolItem {
+    pub(super) output_index: u32,
     pub(super) item_id: String,
     pub(super) name: String,
     pub(super) arguments: String,
 }
 
 impl StreamToolItem {
-    pub(super) fn new(item_id: String, name: String) -> Self {
+    pub(super) fn new(output_index: u32, item_id: String, name: String) -> Self {
         Self {
+            output_index,
             item_id,
             name,
             arguments: String::new(),

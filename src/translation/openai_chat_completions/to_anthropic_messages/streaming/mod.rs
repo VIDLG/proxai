@@ -4,24 +4,24 @@
 //! `MessageStreamEvent`s built via `output`. Converts the finalized
 //! Anthropic events to carrier-level `StreamEvent`s at the boundary.
 
-use crate::protocol::anthropic::messages::{MessageStartEvent, MessageStreamEvent};
+use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::protocol::openai::chat_completions::{
     ChatChoiceStream, CreateChatCompletionStreamResponse, Role,
 };
 
+use crate::translation::anthropic_messages::outbound::{message_start, message_stop};
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
 use crate::translation::streaming::{
     SseStreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator,
+    StreamingEventTranslator, typed_stream_events as encode_outputs,
 };
 
 mod output;
 mod state;
 
-use output::encode_outputs;
-use state::{ChatStreamingState, ChatTerminalState};
+use state::{ChatStreamingState, PendingAnthropicTerminal};
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -29,7 +29,7 @@ mod tests;
 
 #[derive(Debug, Default)]
 pub(super) struct MessagesStreamTranslator {
-    lifecycle: ChatInboundLifecycle<ChatStreamingState, ChatTerminalState>,
+    lifecycle: ChatInboundLifecycle<ChatStreamingState, PendingAnthropicTerminal>,
 }
 
 impl StreamingEventTranslator for MessagesStreamTranslator {
@@ -47,11 +47,10 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             .lifecycle
             .register_chunk_stream(identity, ChatStreamingState::new())?
         {
-            outputs.push(MessageStreamEvent::MessageStart(
-                MessageStartEvent::new_empty_message(
-                    identity.id().to_string(),
-                    identity.model().to_string(),
-                ),
+            outputs.push(message_start(
+                identity.id().to_string(),
+                identity.model().to_string(),
+                Default::default(),
             ));
         }
 
@@ -80,6 +79,14 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             phase.mark_refusal();
             outputs.extend(phase.state_mut().refusal_delta(refusal));
         }
+        if let Some(reasoning) = choice
+            .delta
+            .reasoning_content
+            .filter(|reasoning| !reasoning.is_empty())
+        {
+            phase.mark_reasoning();
+            outputs.extend(phase.state_mut().reasoning_delta(reasoning));
+        }
         if let Some(tool_calls) = choice.delta.tool_calls {
             for tool_call in tool_calls {
                 let tool_outputs = phase.state_mut().tool_call_delta(tool_call)?;
@@ -97,9 +104,10 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                 ));
             }
             outputs.extend(phase.state_mut().blocks.stop_open_blocks());
-            let terminal = ChatTerminalState {
+            let terminal = PendingAnthropicTerminal {
                 finish_reason,
                 refusal: phase.state_mut().take_refusal(),
+                usage: chunk.usage.clone(),
             };
             self.lifecycle.receive_terminal_finish(terminal);
         }
@@ -111,7 +119,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
         if self.lifecycle.is_waiting_for_first_chunk() {
             Err(self.lifecycle.unexpected_stream_end_error(end))
         } else if let Some(terminal) = self.lifecycle.terminal() {
-            let outputs = output::terminal_events(terminal, None);
+            let outputs = vec![output::message_delta(terminal), message_stop()];
             self.lifecycle.stop();
             encode_outputs(outputs)
         } else if self.lifecycle.is_stopped() {
@@ -136,8 +144,14 @@ impl MessagesStreamTranslator {
         let identity = stream_identity(chunk, "msg_");
         self.lifecycle.ensure_same_stream_identity(&identity)?;
 
-        let outputs = if let Some(terminal) = self.lifecycle.terminal() {
-            output::terminal_events(terminal, Some(usage))
+        let outputs = if self.lifecycle.terminal().is_some() {
+            let terminal = self.lifecycle.terminal_mut().ok_or_else(|| {
+                StreamTranslationError::Semantic(
+                    "Chat stream usage arrived outside terminal state".to_string(),
+                )
+            })?;
+            terminal.usage = Some(usage.clone());
+            output::message_delta(terminal)
         } else if self.lifecycle.is_waiting_for_first_chunk() {
             return Err(StreamTranslationError::Semantic(
                 "Chat stream emitted a usage-only chunk before any assistant message chunk"
@@ -156,7 +170,7 @@ impl MessagesStreamTranslator {
         };
 
         self.lifecycle.stop();
-        Ok(outputs)
+        Ok(vec![outputs, message_stop()])
     }
 }
 

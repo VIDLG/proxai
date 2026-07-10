@@ -271,6 +271,63 @@ async fn translates_chat_refusal_to_anthropic_refusal_stop_reason() {
 }
 
 #[tokio::test]
+async fn translates_chat_reasoning_to_anthropic_thinking_block() {
+    let stream = concat_streams([
+        chat_chunk(CHAT_ID, CHAT_MODEL, 0, json!({ "role": "assistant" }), None),
+        chat_chunk(
+            CHAT_ID,
+            CHAT_MODEL,
+            0,
+            json!({ "reasoning_content": "think" }),
+            None,
+        ),
+        chat_chunk(CHAT_ID, CHAT_MODEL, 0, json!({}), Some("stop")),
+        done_sentinel(),
+    ]);
+
+    let body = run_translation(stream).await;
+    let events = anthropic_message_payloads(&body);
+
+    assert_eq!(events[1]["type"], "content_block_start");
+    assert_eq!(events[1]["content_block"]["type"], "thinking");
+    assert_eq!(events[2]["type"], "content_block_delta");
+    assert_eq!(events[2]["delta"]["type"], "thinking_delta");
+    assert_eq!(events[2]["delta"]["thinking"], "think");
+}
+
+#[tokio::test]
+async fn attaches_usage_from_terminal_choice_chunk() {
+    let terminal = json!({
+        "id": CHAT_ID,
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": CHAT_MODEL,
+        "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop",
+            "logprobs": null,
+        }],
+        "usage": {
+            "prompt_tokens": 9,
+            "completion_tokens": 4,
+            "total_tokens": 13,
+        },
+    });
+    let stream = concat_streams([
+        chat_chunk(CHAT_ID, CHAT_MODEL, 0, json!({ "content": "hi" }), None),
+        format!("data: {terminal}\n\n"),
+        done_sentinel(),
+    ]);
+
+    let body = run_translation(stream).await;
+    let events = anthropic_message_payloads(&body);
+    let delta = &events[events.len() - 2];
+    assert_eq!(delta["usage"]["input_tokens"], 9);
+    assert_eq!(delta["usage"]["output_tokens"], 4);
+}
+
+#[tokio::test]
 async fn attaches_usage_from_terminal_usage_only_chunk() {
     // OpenAI's stream_options.include_usage sends a trailing chunk with empty
     // choices and the cumulative usage. It must arrive after finish_reason.

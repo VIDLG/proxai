@@ -9,16 +9,10 @@
 //! cumulative text offset across the whole stream.
 
 use crate::protocol::anthropic::messages::TextBlock;
-use crate::protocol::openai_responses::{
-    AssistantRole, FunctionToolCall, OutputItem, OutputMessage, OutputStatus, ReasoningItem,
-    Response, ResponseCompletedEvent, ResponseCreatedEvent,
-    ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-    ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-    ResponseReasoningTextDeltaEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
-    ResponseTextDeltaEvent, ResponseTextDoneEvent, Status,
-};
+use crate::protocol::openai_responses::{OutputItem, ResponseStreamEvent};
 use crate::translation::openai_responses::outbound::{
-    reasoning_item, redacted_reasoning_item, text_message_item,
+    completed_function_call_item_with_id, output_text_done, reasoning_item, reasoning_text_done,
+    redacted_reasoning_item, text_message_item, tool_arguments_done,
 };
 use crate::translation::streaming::StreamTranslationResult;
 
@@ -31,7 +25,7 @@ use super::state::StreamBlock;
 /// Returns `(item, content_done_events)`:
 /// - `item` is appended to `StreamingState::output_items` by the caller and
 ///   also drives the protocol-mandated `response.output_item.done` event,
-///   which the caller emits separately via `output_item_done_event`.
+///   which the caller emits separately via `output_item_done`.
 /// - `content_done_events` are the variant-specific content-close events
 ///   (`response.output_text.done`, `response.reasoning_text.done`,
 ///   `response.function_call_arguments.done`). Redacted thinking emits none
@@ -59,14 +53,8 @@ pub(super) fn finalize_block(
             text,
             citations,
         } => {
-            let done = ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
-                sequence_number,
-                item_id: item_id.clone(),
-                output_index,
-                content_index: 0,
-                text: text.clone(),
-                logprobs: None,
-            });
+            let done =
+                output_text_done(sequence_number, item_id.clone(), output_index, text.clone());
             // Translate Anthropic citations to Responses URL annotations
             // using the cumulative character offset of all previous text
             // items, mirroring the non-streaming conversion in response.rs.
@@ -81,13 +69,7 @@ pub(super) fn finalize_block(
         }
         StreamBlock::Thinking { item_id, text } => {
             let done =
-                ResponseStreamEvent::ResponseReasoningTextDone(ResponseReasoningTextDoneEvent {
-                    sequence_number,
-                    item_id: item_id.clone(),
-                    output_index,
-                    content_index: 0,
-                    text: text.clone(),
-                });
+                reasoning_text_done(sequence_number, item_id.clone(), output_index, text.clone());
             let item = reasoning_item(item_id, text);
             (item, vec![done])
         }
@@ -100,191 +82,15 @@ pub(super) fn finalize_block(
             name,
             arguments,
         } => {
-            let done = ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
-                ResponseFunctionCallArgumentsDoneEvent {
-                    sequence_number,
-                    item_id: item_id.clone(),
-                    output_index,
-                    name: Some(name.clone()),
-                    arguments: arguments.clone(),
-                },
+            let done = tool_arguments_done(
+                sequence_number,
+                item_id.clone(),
+                output_index,
+                Some(name.clone()),
+                arguments.clone(),
             );
-            let item = OutputItem::FunctionCall(FunctionToolCall {
-                id: Some(item_id.clone()),
-                call_id: item_id,
-                name,
-                arguments,
-                status: Some(OutputStatus::Completed),
-                namespace: None,
-            });
+            let item = completed_function_call_item_with_id(item_id, name, arguments);
             (item, vec![done])
         }
     })
-}
-
-/// Build the protocol-mandated `response.output_item.done` event that closes
-/// the lifecycle opened by `response.output_item.added`, regardless of which
-/// block variant produced the item.
-pub(super) fn output_item_done_event(
-    output_index: u32,
-    item: OutputItem,
-    sequence_number: u64,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
-        sequence_number,
-        output_index,
-        item,
-    })
-}
-
-// ---------------------------------------------------------------------
-// Initial OutputItem variants (status: InProgress) for content_block_start.
-// ---------------------------------------------------------------------
-
-/// Empty assistant message shell opened by `content_block_start` of a text
-/// block. Content is filled in by subsequent text deltas.
-pub(super) fn message_item_initial(item_id: String) -> OutputItem {
-    OutputItem::Message(OutputMessage {
-        id: item_id,
-        role: AssistantRole::Assistant,
-        status: OutputStatus::InProgress,
-        content: Vec::new(),
-        phase: None,
-    })
-}
-
-/// Reasoning item opened by `content_block_start` of a thinking block. Text
-/// content is filled in by subsequent thinking deltas.
-pub(super) fn reasoning_item_initial(item_id: String) -> OutputItem {
-    OutputItem::Reasoning(ReasoningItem {
-        id: Some(item_id),
-        summary: Vec::new(),
-        content: Some(Vec::new()),
-        encrypted_content: None,
-        status: Some(OutputStatus::InProgress),
-    })
-}
-
-/// Reasoning item opened by `content_block_start` of a redacted-thinking
-/// block. No streamed text deltas; the opaque `encrypted_content` arrives
-/// with `content_block_stop` and is attached by `finalize_block`.
-pub(super) fn redacted_reasoning_item_initial(item_id: String) -> OutputItem {
-    OutputItem::Reasoning(ReasoningItem {
-        id: Some(item_id),
-        summary: Vec::new(),
-        content: None,
-        // Placeholder; the real data arrives with content_block_stop.
-        encrypted_content: None,
-        status: Some(OutputStatus::InProgress),
-    })
-}
-
-/// Function-call item opened by `content_block_start` of a tool_use block.
-/// Arguments are filled in by subsequent `input_json_delta` events.
-pub(super) fn tool_use_item_initial(item_id: String, name: String) -> OutputItem {
-    OutputItem::FunctionCall(FunctionToolCall {
-        id: Some(item_id.clone()),
-        call_id: item_id,
-        name,
-        arguments: String::new(),
-        status: Some(OutputStatus::InProgress),
-        namespace: None,
-    })
-}
-
-// ---------------------------------------------------------------------
-// ResponseStreamEvent constructors for lifecycle / delta events.
-// ---------------------------------------------------------------------
-
-pub(super) fn response_created(sequence_number: u64, response: Response) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseCreated(ResponseCreatedEvent {
-        sequence_number,
-        response,
-    })
-}
-
-/// Terminal snapshot event. `Incomplete` and `Completed` are the two
-/// representable terminal statuses for an Anthropic stream; the variant is
-/// selected by `status`.
-pub(super) fn response_terminal(
-    sequence_number: u64,
-    response: Response,
-    status: Status,
-) -> ResponseStreamEvent {
-    match status {
-        Status::Incomplete => ResponseStreamEvent::ResponseIncomplete(ResponseIncompleteEvent {
-            sequence_number,
-            response,
-        }),
-        _ => ResponseStreamEvent::ResponseCompleted(ResponseCompletedEvent {
-            sequence_number,
-            response,
-        }),
-    }
-}
-
-pub(super) fn output_item_added(
-    sequence_number: u64,
-    output_index: u32,
-    item: OutputItem,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
-        sequence_number,
-        output_index,
-        item,
-    })
-}
-
-// The constructors below (`output_text_delta`, `tool_arguments_delta`,
-// `reasoning_text_delta`) are mirrored verbatim in
-// `openai_chat_completions::to_openai_responses::streaming::output` (the first
-// two) because both pairs emit the same Responses streaming event shapes. If a
-// third pair translating to Responses appears, extract these into a shared
-// module under `protocol::openai_responses` or `translation::streaming`.
-
-pub(super) fn output_text_delta(
-    sequence_number: u64,
-    item_id: String,
-    output_index: u32,
-    delta: String,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
-        sequence_number,
-        item_id,
-        output_index,
-        content_index: 0,
-        delta,
-        logprobs: None,
-    })
-}
-
-pub(super) fn reasoning_text_delta(
-    sequence_number: u64,
-    item_id: String,
-    output_index: u32,
-    delta: String,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseReasoningTextDelta(ResponseReasoningTextDeltaEvent {
-        sequence_number,
-        item_id,
-        output_index,
-        content_index: 0,
-        delta,
-    })
-}
-
-pub(super) fn tool_arguments_delta(
-    sequence_number: u64,
-    item_id: String,
-    output_index: u32,
-    delta: String,
-) -> ResponseStreamEvent {
-    ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
-        ResponseFunctionCallArgumentsDeltaEvent {
-            sequence_number,
-            item_id,
-            output_index,
-            delta,
-        },
-    )
 }

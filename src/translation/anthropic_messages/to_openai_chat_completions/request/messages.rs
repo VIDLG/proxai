@@ -1,6 +1,10 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire as chat_request;
+use crate::translation::openai_chat_completions::outbound::{
+    assistant_message, assistant_text_message, system_message, system_text_message, text_part,
+    tool_message, user_message, user_text_message,
+};
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::types::non_empty;
@@ -18,12 +22,7 @@ pub(super) fn chat_messages(
             ));
         }
         (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Text(text)) => {
-            vec![chat::ChatCompletionRequestMessage::User(
-                chat::ChatCompletionRequestUserMessage {
-                    content: chat::ChatCompletionRequestUserMessageContent::Text(text),
-                    name: None,
-                },
-            )]
+            vec![user_text_message(text)]
         }
         (anthropic::MessageParamRole::User, anthropic::MessageParamContent::Blocks(blocks)) => {
             user_block_messages(blocks)?
@@ -37,17 +36,7 @@ pub(super) fn chat_messages(
             ));
         }
         (anthropic::MessageParamRole::Assistant, anthropic::MessageParamContent::Text(text)) => {
-            vec![chat::ChatCompletionRequestMessage::Assistant(
-                chat::ChatCompletionRequestAssistantMessage {
-                    content: Some(chat::ChatCompletionRequestAssistantMessageContent::Text(
-                        text,
-                    )),
-                    refusal: None,
-                    name: None,
-                    audio: None,
-                    tool_calls: None,
-                },
-            )]
+            vec![assistant_text_message(text)]
         }
         (
             anthropic::MessageParamRole::Assistant,
@@ -56,7 +45,7 @@ pub(super) fn chat_messages(
             vec![assistant_blocks_message(blocks)?]
         }
         (anthropic::MessageParamRole::System, anthropic::MessageParamContent::Text(text)) => {
-            vec![chat::ChatCompletionRequestSystemMessageContent::Text(text).into()]
+            vec![system_text_message(text)]
         }
         (anthropic::MessageParamRole::System, anthropic::MessageParamContent::Blocks(blocks)) => {
             vec![system_blocks_message(blocks)?]
@@ -110,18 +99,9 @@ fn take_pending_user_message(
     pending_user_parts: &mut Vec<chat::ChatCompletionRequestUserMessageContentPart>,
 ) -> Option<chat::ChatCompletionRequestMessage> {
     (!pending_user_parts.is_empty()).then(|| {
-        chat_user_message(chat::ChatCompletionRequestUserMessageContent::from(
+        user_message(chat::ChatCompletionRequestUserMessageContent::from(
             std::mem::take(pending_user_parts),
         ))
-    })
-}
-
-fn chat_user_message(
-    content: chat::ChatCompletionRequestUserMessageContent,
-) -> chat::ChatCompletionRequestMessage {
-    chat::ChatCompletionRequestMessage::User(chat::ChatCompletionRequestUserMessage {
-        content,
-        name: None,
     })
 }
 
@@ -199,14 +179,9 @@ fn assistant_blocks_message(
         ));
     }
 
-    Ok(chat::ChatCompletionRequestMessage::Assistant(
-        chat::ChatCompletionRequestAssistantMessage {
-            content: non_empty(content_parts).map(Into::into),
-            refusal: None,
-            name: None,
-            audio: None,
-            tool_calls: non_empty(tool_calls),
-        },
+    Ok(assistant_message(
+        non_empty(content_parts).map(Into::into),
+        non_empty(tool_calls),
     ))
 }
 
@@ -290,19 +265,13 @@ fn system_blocks_message(
 
 impl From<anthropic::SystemPrompt> for chat::ChatCompletionRequestMessage {
     fn from(system: anthropic::SystemPrompt) -> Self {
-        Self::System(chat::ChatCompletionRequestSystemMessage {
-            content: system.into(),
-            name: None,
-        })
+        system_message(system.into())
     }
 }
 
 impl From<chat::ChatCompletionRequestSystemMessageContent> for chat::ChatCompletionRequestMessage {
     fn from(content: chat::ChatCompletionRequestSystemMessageContent) -> Self {
-        Self::System(chat::ChatCompletionRequestSystemMessage {
-            content,
-            name: None,
-        })
+        system_message(content)
     }
 }
 
@@ -352,7 +321,7 @@ impl From<anthropic::TextBlockParam> for chat::ChatCompletionRequestSystemMessag
 
 impl From<String> for chat_request::ChatCompletionRequestMessageContentPartText {
     fn from(text: String) -> Self {
-        Self { text }
+        text_part(text)
     }
 }
 
@@ -464,10 +433,7 @@ impl TryFrom<anthropic::ToolResultBlockParam> for chat::ChatCompletionRequestMes
     type Error = TranslationError;
 
     fn try_from(block: anthropic::ToolResultBlockParam) -> TranslationResult<Self> {
-        Ok(Self::Tool(chat::ChatCompletionRequestToolMessage {
-            content: block.content.try_into()?,
-            tool_call_id: block.tool_use_id,
-        }))
+        Ok(tool_message(block.content.try_into()?, block.tool_use_id))
     }
 }
 

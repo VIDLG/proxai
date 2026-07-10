@@ -262,10 +262,13 @@ async fn proxy_rejects_openai_responses_requests_without_model() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = response.text().await.unwrap();
+    let payload: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(
-        body,
+        payload["error"]["message"],
         "OpenAI Responses requests must include a non-empty `model`."
     );
+    assert_eq!(payload["error"]["type"], "invalid_request_error");
+    assert_eq!(payload["error"]["status"], 400);
 }
 
 #[tokio::test]

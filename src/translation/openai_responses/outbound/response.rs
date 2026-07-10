@@ -33,6 +33,16 @@ pub(crate) fn assistant_message(
     }
 }
 
+pub(crate) fn in_progress_message_item(id: impl Into<String>) -> responses::OutputItem {
+    responses::OutputItem::Message(responses::OutputMessage {
+        id: id.into(),
+        role: responses::AssistantRole::Assistant,
+        status: responses::OutputStatus::InProgress,
+        content: Vec::new(),
+        phase: None,
+    })
+}
+
 pub(crate) fn text_message_item(
     id: impl Into<String>,
     text: impl Into<String>,
@@ -44,6 +54,20 @@ pub(crate) fn text_message_item(
             text,
             annotations,
         ))],
+    ))
+}
+
+pub(crate) fn refusal_message_item(
+    id: impl Into<String>,
+    refusal: impl Into<String>,
+) -> responses::OutputItem {
+    responses::OutputItem::Message(assistant_message(
+        id,
+        vec![responses::OutputMessageContent::Refusal(
+            responses::RefusalContent {
+                refusal: refusal.into(),
+            },
+        )],
     ))
 }
 
@@ -71,6 +95,37 @@ pub(crate) fn function_call_item(
     responses::OutputItem::FunctionCall(completed_function_tool_call(call_id, name, arguments))
 }
 
+pub(crate) fn in_progress_function_call_item(
+    item_id: impl Into<String>,
+    name: impl Into<String>,
+) -> responses::OutputItem {
+    let item_id = item_id.into();
+    responses::OutputItem::FunctionCall(responses::FunctionToolCall {
+        id: Some(item_id.clone()),
+        call_id: item_id,
+        name: name.into(),
+        arguments: String::new(),
+        status: Some(responses::OutputStatus::InProgress),
+        namespace: None,
+    })
+}
+
+pub(crate) fn completed_function_call_item_with_id(
+    item_id: impl Into<String>,
+    name: impl Into<String>,
+    arguments: impl Into<String>,
+) -> responses::OutputItem {
+    let item_id = item_id.into();
+    responses::OutputItem::FunctionCall(responses::FunctionToolCall {
+        id: Some(item_id.clone()),
+        call_id: item_id,
+        name: name.into(),
+        arguments: arguments.into(),
+        status: Some(responses::OutputStatus::Completed),
+        namespace: None,
+    })
+}
+
 pub(crate) fn reasoning_item(
     id: impl Into<String>,
     text: impl Into<String>,
@@ -83,6 +138,26 @@ pub(crate) fn reasoning_item(
         )]),
         encrypted_content: None,
         status: Some(responses::OutputStatus::Completed),
+    })
+}
+
+pub(crate) fn in_progress_reasoning_item(id: impl Into<String>) -> responses::OutputItem {
+    responses::OutputItem::Reasoning(responses::ReasoningItem {
+        id: Some(id.into()),
+        summary: Vec::new(),
+        content: Some(Vec::new()),
+        encrypted_content: None,
+        status: Some(responses::OutputStatus::InProgress),
+    })
+}
+
+pub(crate) fn in_progress_redacted_reasoning_item(id: impl Into<String>) -> responses::OutputItem {
+    responses::OutputItem::Reasoning(responses::ReasoningItem {
+        id: Some(id.into()),
+        summary: Vec::new(),
+        content: None,
+        encrypted_content: None,
+        status: Some(responses::OutputStatus::InProgress),
     })
 }
 

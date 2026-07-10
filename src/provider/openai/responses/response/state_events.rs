@@ -120,6 +120,7 @@ impl From<&ResponseStreamEvent> for StateEvent {
             ResponseStreamEvent::ResponseOutputTextAnnotationAdded(_) => Self::Ignored,
             ResponseStreamEvent::ResponseCustomToolCallInputDelta(_) => Self::Ignored,
             ResponseStreamEvent::ResponseCustomToolCallInputDone(_) => Self::Ignored,
+            ResponseStreamEvent::Unknown => Self::Ignored,
         }
     }
 }
@@ -136,7 +137,9 @@ impl ResponsesUpstreamState {
     }
 
     fn record_event(&mut self, event: &ResponseStreamEvent) {
-        self.record_sequence_number(event.sequence_number());
+        if let Some(sequence_number) = event.sequence_number() {
+            self.record_sequence_number(sequence_number);
+        }
 
         match StateEvent::from(event) {
             StateEvent::Snapshot { kind, projection } => {

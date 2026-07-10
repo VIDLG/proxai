@@ -4,8 +4,8 @@
 //! shape, including output items (text / tool calls / reasoning) and usage.
 
 use crate::protocol::anthropic::messages::{
-    ContentBlock, Message as AnthropicMessage, MessageRole, MessageType, OutputTokensDetails,
-    StopReason, Usage,
+    ContentBlock, Message as AnthropicMessage, MessageDeltaUsage, MessageRole, MessageType,
+    OutputTokensDetails, StopReason, Usage,
 };
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::{
@@ -127,6 +127,23 @@ impl From<&responses::ResponseUsage> for Usage {
             ),
             server_tool_use: None,
             service_tier: None,
+        }
+    }
+}
+
+impl From<&responses::ResponseUsage> for MessageDeltaUsage {
+    fn from(usage: &responses::ResponseUsage) -> Self {
+        Self {
+            cache_creation_input_tokens: None,
+            cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens),
+            input_tokens: Some(usage.input_tokens),
+            output_tokens: usage.output_tokens,
+            output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0).then_some(
+                OutputTokensDetails {
+                    thinking_tokens: usage.output_tokens_details.reasoning_tokens,
+                },
+            ),
+            server_tool_use: None,
         }
     }
 }

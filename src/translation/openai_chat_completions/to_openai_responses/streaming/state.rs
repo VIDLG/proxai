@@ -5,27 +5,31 @@
 //! a single assistant message — multiple choices are rejected by the
 //! translator) and any number of parallel tool-call items.
 //!
-//! Terminal event construction (`response.created`, per-item `done` events,
-//! `response.completed`) lives in `output::finalize_completed_stream`; this
-//! module owns only the state those events are built from.
+//! Terminal event construction combines this state with pair-local output
+//! helpers and shared `openai_responses::outbound` event builders.
 
 use std::collections::BTreeMap;
 
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCallChunk, CompletionUsage, CreateChatCompletionStreamResponse,
+    FinishReason,
 };
 use crate::protocol::openai_responses::{
-    AssistantRole, FunctionToolCall, InputTokenDetails, OutputItem, OutputMessage, OutputStatus,
-    OutputTokenDetails, Response, ResponseCompletedEvent, ResponseCreatedEvent,
-    ResponseOutputItemAddedEvent, ResponseStreamEvent, ResponseUsage, Status,
+    IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails, Response,
+    ResponseStreamEvent, ResponseUsage, Status,
 };
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
-use super::output::{
-    output_item_done, output_text_done, text_output_item, tool_arguments_done, tool_output_item,
+use super::super::types::{
+    incomplete_details_from_finish_reason, responses_status_from_chat_finish_reason,
 };
 use super::types::{StreamTextItem, StreamToolItem};
-use crate::translation::openai_responses::outbound::response_id;
+use crate::translation::openai_responses::outbound::{
+    completed_function_call_item_with_id, in_progress_function_call_item, in_progress_message_item,
+    in_progress_reasoning_item, output_item_added, output_item_done, output_text_done,
+    reasoning_item, reasoning_text_done, refusal_done, refusal_message_item, response_created,
+    response_id, response_terminal, text_message_item, tool_arguments_done,
+};
 
 #[derive(Debug)]
 pub(super) struct StreamingState {
@@ -33,10 +37,30 @@ pub(super) struct StreamingState {
     pub(super) response_id: String,
     pub(super) model: String,
     pub(super) created_at: u64,
+    next_output_index: u32,
     pub(super) text_item: Option<StreamTextItem>,
+    pub(super) refusal_item: Option<StreamTextItem>,
+    pub(super) reasoning_item: Option<StreamTextItem>,
     pub(super) tool_items: BTreeMap<u32, StreamToolItem>,
     pub(super) output_items: Vec<OutputItem>,
     pub(super) usage: Option<CompletionUsage>,
+}
+
+#[derive(Debug)]
+enum PendingOutput {
+    Text(StreamTextItem),
+    Refusal(StreamTextItem),
+    Reasoning(StreamTextItem),
+    Tool(StreamToolItem),
+}
+
+impl PendingOutput {
+    fn output_index(&self) -> u32 {
+        match self {
+            Self::Text(item) | Self::Refusal(item) | Self::Reasoning(item) => item.output_index,
+            Self::Tool(item) => item.output_index,
+        }
+    }
 }
 
 impl StreamingState {
@@ -61,7 +85,10 @@ impl StreamingState {
             response_id,
             model,
             created_at,
+            next_output_index: 0,
             text_item: None,
+            refusal_item: None,
+            reasoning_item: None,
             tool_items: BTreeMap::new(),
             output_items: Vec::new(),
             usage: None,
@@ -76,18 +103,24 @@ impl StreamingState {
 
     pub(super) fn response_created_event(&mut self) -> ResponseStreamEvent {
         let sequence_number = self.next_sequence_number();
-        ResponseStreamEvent::ResponseCreated(ResponseCreatedEvent {
+        response_created(
             sequence_number,
-            response: self.response_snapshot(Status::InProgress),
-        })
+            self.response_snapshot(Status::InProgress, None),
+        )
     }
 
-    pub(super) fn response_completed_event(&mut self) -> ResponseStreamEvent {
+    pub(super) fn response_terminal_event(
+        &mut self,
+        finish_reason: FinishReason,
+    ) -> ResponseStreamEvent {
+        let status = responses_status_from_chat_finish_reason(finish_reason);
+        let incomplete_details = incomplete_details_from_finish_reason(Some(finish_reason));
         let sequence_number = self.next_sequence_number();
-        ResponseStreamEvent::ResponseCompleted(ResponseCompletedEvent {
+        response_terminal(
             sequence_number,
-            response: self.response_snapshot(Status::Completed),
-        })
+            self.response_snapshot(status, incomplete_details),
+            status,
+        )
     }
 
     /// Build the terminal event sequence for a completed stream: per-item
@@ -97,41 +130,91 @@ impl StreamingState {
     /// Finalized items are pushed into `self.output_items` so the terminal
     /// `response.completed` snapshot's `output` field reflects what the
     /// stream actually produced.
-    pub(super) fn finish_completed_stream(&mut self) -> Vec<ResponseStreamEvent> {
+    pub(super) fn finish_stream(
+        &mut self,
+        finish_reason: FinishReason,
+    ) -> Vec<ResponseStreamEvent> {
         let mut events = Vec::new();
-
-        if let Some(text_item) = self.text_item.take() {
-            let sequence_number = self.next_sequence_number();
-            events.push(output_text_done(sequence_number, text_item.clone()));
-
-            let output_item = text_output_item(text_item);
-            let sequence_number = self.next_sequence_number();
-            events.push(output_item_done(sequence_number, 0, output_item.clone()));
-            self.output_items.push(output_item);
+        let mut pending = Vec::new();
+        if let Some(item) = self.text_item.take() {
+            pending.push(PendingOutput::Text(item));
         }
-        for (index, tool_item) in std::mem::take(&mut self.tool_items) {
-            let sequence_number = self.next_sequence_number();
-            events.push(tool_arguments_done(
-                sequence_number,
-                tool_item.clone(),
-                index,
-            ));
-
-            let output_item = tool_output_item(tool_item);
-            let sequence_number = self.next_sequence_number();
-            events.push(output_item_done(
-                sequence_number,
-                index,
-                output_item.clone(),
-            ));
-            self.output_items.push(output_item);
+        if let Some(item) = self.refusal_item.take() {
+            pending.push(PendingOutput::Refusal(item));
         }
-        let event = self.response_completed_event();
-        events.push(event);
+        if let Some(item) = self.reasoning_item.take() {
+            pending.push(PendingOutput::Reasoning(item));
+        }
+        pending.extend(
+            std::mem::take(&mut self.tool_items)
+                .into_values()
+                .map(PendingOutput::Tool),
+        );
+        pending.sort_by_key(PendingOutput::output_index);
+
+        for output in pending {
+            let output_index = output.output_index();
+            match output {
+                PendingOutput::Text(item) => {
+                    let sequence_number = self.next_sequence_number();
+                    events.push(output_text_done(
+                        sequence_number,
+                        item.item_id.clone(),
+                        output_index,
+                        item.text.clone(),
+                    ));
+                    let output_item = text_message_item(item.item_id, item.text, Vec::new());
+                    self.finish_output_item(output_index, output_item, &mut events);
+                }
+                PendingOutput::Refusal(item) => {
+                    let sequence_number = self.next_sequence_number();
+                    events.push(refusal_done(
+                        sequence_number,
+                        item.item_id.clone(),
+                        output_index,
+                        item.text.clone(),
+                    ));
+                    let output_item = refusal_message_item(item.item_id, item.text);
+                    self.finish_output_item(output_index, output_item, &mut events);
+                }
+                PendingOutput::Reasoning(item) => {
+                    let sequence_number = self.next_sequence_number();
+                    events.push(reasoning_text_done(
+                        sequence_number,
+                        item.item_id.clone(),
+                        output_index,
+                        item.text.clone(),
+                    ));
+                    let output_item = reasoning_item(item.item_id, item.text);
+                    self.finish_output_item(output_index, output_item, &mut events);
+                }
+                PendingOutput::Tool(item) => {
+                    let sequence_number = self.next_sequence_number();
+                    events.push(tool_arguments_done(
+                        sequence_number,
+                        item.item_id.clone(),
+                        output_index,
+                        Some(item.name.clone()),
+                        item.arguments.clone(),
+                    ));
+                    let output_item = completed_function_call_item_with_id(
+                        item.item_id,
+                        item.name,
+                        item.arguments,
+                    );
+                    self.finish_output_item(output_index, output_item, &mut events);
+                }
+            }
+        }
+        events.push(self.response_terminal_event(finish_reason));
         events
     }
 
-    pub(super) fn response_snapshot(&self, status: Status) -> Response {
+    pub(super) fn response_snapshot(
+        &self,
+        status: Status,
+        incomplete_details: Option<IncompleteDetails>,
+    ) -> Response {
         let usage = self.usage.as_ref();
         let input_tokens = usage.map(|usage| usage.prompt_tokens).unwrap_or_default();
         let output_tokens = usage
@@ -149,7 +232,7 @@ impl StreamingState {
             completed_at: None,
             error: None,
             id: self.response_id.clone(),
-            incomplete_details: None,
+            incomplete_details,
             instructions: None,
             max_output_tokens: None,
             metadata: None,
@@ -191,64 +274,112 @@ impl StreamingState {
     /// single choice (multiple choices are rejected by the translator); the
     /// Responses side models it as one `OutputItem::Message` whose content
     /// fills in via subsequent text deltas.
-    pub(super) fn ensure_text_item(&mut self) -> Option<ResponseStreamEvent> {
-        if self.text_item.is_some() {
-            return None;
+    pub(super) fn ensure_text_item(
+        &mut self,
+    ) -> StreamTranslationResult<Option<ResponseStreamEvent>> {
+        if self.refusal_item.is_some() {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream contains both content and refusal deltas; Responses keeps refusal separate from normal output text"
+                    .to_string(),
+            ));
         }
+        if self.text_item.is_some() {
+            return Ok(None);
+        }
+        let output_index = self.allocate_output_index();
         let item_id = format!("msg_{}", self.response_id);
         let sequence_number = self.next_sequence_number();
-        let event = ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
+        let event = output_item_added(
             sequence_number,
-            output_index: 0,
-            item: OutputItem::Message(OutputMessage {
-                id: item_id.clone(),
-                role: AssistantRole::Assistant,
-                status: OutputStatus::InProgress,
-                content: Vec::new(),
-                phase: None,
-            }),
-        });
-        self.text_item = Some(StreamTextItem::new(item_id));
+            output_index,
+            in_progress_message_item(item_id.clone()),
+        );
+        self.text_item = Some(StreamTextItem::new(output_index, item_id));
+        Ok(Some(event))
+    }
+
+    pub(super) fn ensure_refusal_item(
+        &mut self,
+    ) -> StreamTranslationResult<Option<ResponseStreamEvent>> {
+        if self.text_item.is_some() {
+            return Err(StreamTranslationError::Semantic(
+                "Chat stream contains both content and refusal deltas; Responses keeps refusal separate from normal output text"
+                    .to_string(),
+            ));
+        }
+        if self.refusal_item.is_some() {
+            return Ok(None);
+        }
+        let output_index = self.allocate_output_index();
+        let item_id = format!("msg_{}_refusal", self.response_id);
+        let sequence_number = self.next_sequence_number();
+        let event = output_item_added(
+            sequence_number,
+            output_index,
+            in_progress_message_item(item_id.clone()),
+        );
+        self.refusal_item = Some(StreamTextItem::new(output_index, item_id));
+        Ok(Some(event))
+    }
+
+    pub(super) fn ensure_reasoning_item(&mut self) -> Option<ResponseStreamEvent> {
+        if self.reasoning_item.is_some() {
+            return None;
+        }
+        let output_index = self.allocate_output_index();
+        let item_id = format!("rs_{}", self.response_id);
+        let sequence_number = self.next_sequence_number();
+        let event = output_item_added(
+            sequence_number,
+            output_index,
+            in_progress_reasoning_item(item_id.clone()),
+        );
+        self.reasoning_item = Some(StreamTextItem::new(output_index, item_id));
         Some(event)
     }
 
-    /// Append a text delta to the in-flight text item and return its item id
-    /// plus the sequence number for the delta event.
-    ///
-    /// Caller is responsible for ensuring a text item exists (via
-    /// `ensure_text_item`) before calling this.
-    pub(super) fn append_text_delta(&mut self, delta: &str) -> Option<(String, u64)> {
+    pub(super) fn append_text_delta(&mut self, delta: &str) -> Option<(String, u32, u64)> {
         let item = self.text_item.as_mut()?;
         item.append(delta);
-        Some((item.item_id.clone(), self.next_sequence_number()))
+        let item_id = item.item_id.clone();
+        let output_index = item.output_index;
+        Some((item_id, output_index, self.next_sequence_number()))
     }
 
-    /// Update the name of an in-flight tool item.
+    pub(super) fn append_refusal_delta(&mut self, delta: &str) -> Option<(String, u32, u64)> {
+        let item = self.refusal_item.as_mut()?;
+        item.append(delta);
+        let item_id = item.item_id.clone();
+        let output_index = item.output_index;
+        Some((item_id, output_index, self.next_sequence_number()))
+    }
+
+    pub(super) fn append_reasoning_delta(&mut self, delta: &str) -> Option<(String, u32, u64)> {
+        let item = self.reasoning_item.as_mut()?;
+        item.append(delta);
+        let item_id = item.item_id.clone();
+        let output_index = item.output_index;
+        Some((item_id, output_index, self.next_sequence_number()))
+    }
+
     pub(super) fn set_tool_name(&mut self, index: u32, name: &str) {
         if let Some(item) = self.tool_items.get_mut(&index) {
             item.set_name(name);
         }
     }
 
-    /// Append arguments to an in-flight tool item and return its item id plus
-    /// the sequence number for the delta event. Returns `None` if no tool item
-    /// exists for `index`.
     pub(super) fn append_tool_arguments_delta(
         &mut self,
         index: u32,
         delta: &str,
-    ) -> Option<(String, u64)> {
+    ) -> Option<(String, u32, u64)> {
         let item = self.tool_items.get_mut(&index)?;
         item.append_arguments(delta);
-        Some((item.item_id.clone(), self.next_sequence_number()))
+        let item_id = item.item_id.clone();
+        let output_index = item.output_index;
+        Some((item_id, output_index, self.next_sequence_number()))
     }
 
-    /// Ensure a tool-call slot exists for the given Chat tool index, returning
-    /// the `response.output_item.added` event if a new slot was opened.
-    ///
-    /// One Chat choice may carry multiple parallel tool calls, each keyed by
-    /// its Chat `tool_call.index`; each maps to its own Responses
-    /// `OutputItem::FunctionCall`.
     pub(super) fn ensure_tool_item(
         &mut self,
         index: u32,
@@ -278,21 +409,36 @@ impl StreamingState {
                 )
             })?
             .to_string();
+        let output_index = self.allocate_output_index();
         let sequence_number = self.next_sequence_number();
-        let event = ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
+        let event = output_item_added(
             sequence_number,
-            output_index: index,
-            item: OutputItem::FunctionCall(FunctionToolCall {
-                id: Some(item_id.clone()),
-                call_id: item_id.clone(),
-                name: name.clone(),
-                arguments: String::new(),
-                status: Some(OutputStatus::InProgress),
-                namespace: None,
-            }),
-        });
+            output_index,
+            in_progress_function_call_item(item_id.clone(), name.clone()),
+        );
         self.tool_items
-            .insert(index, StreamToolItem::new(item_id, name));
+            .insert(index, StreamToolItem::new(output_index, item_id, name));
         Ok(Some(event))
+    }
+
+    fn allocate_output_index(&mut self) -> u32 {
+        let index = self.next_output_index;
+        self.next_output_index = self.next_output_index.saturating_add(1);
+        index
+    }
+
+    fn finish_output_item(
+        &mut self,
+        output_index: u32,
+        output_item: OutputItem,
+        events: &mut Vec<ResponseStreamEvent>,
+    ) {
+        let sequence_number = self.next_sequence_number();
+        events.push(output_item_done(
+            sequence_number,
+            output_index,
+            output_item.clone(),
+        ));
+        self.output_items.push(output_item);
     }
 }

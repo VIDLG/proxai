@@ -181,11 +181,23 @@ state.rs
   columns={['Inbound source', 'Terminal payload', '原因']}
   rows={[
     ['Anthropic Messages', '`StreamingPhase<S>`', '`message_delta` 携带 stop/usage 终态语义，但后面仍然必须出现 `message_stop`。translator 需要保留完整 phase，直到 `message_stop` 消费它。'],
-    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` 已经结束语义 delta。之后的 `[DONE]`、EOF 或 usage-only chunk 只需要目标协议专属的 terminal summary，例如输出 Anthropic 时的 `ChatTerminalState`，或输出 Responses 时的 `()`。'],
+    ['OpenAI Chat Completions', 'pair-specific `T`', '`finish_reason` 已经结束语义 delta。之后的 `[DONE]`、EOF 或 usage-only chunk 使用目标协议专属的 pending terminal：Anthropic 输出使用 `PendingAnthropicTerminal`，Responses 输出使用 `PendingResponsesTerminal`。'],
+    ['OpenAI Responses', '`S`', 'Responses terminal events（`response.completed`、`response.incomplete`、`response.failed`）直接携带 response-level 终态语义。没有额外的 `message_stop`；wrapper 将 streaming state 移到 terminal，供 pair translator finalize 目标输出。'],
   ]}
 />
 
-`anthropic_messages::streaming` 和 `openai_chat_completions::streaming` 这类协议 wrapper 负责保留 source-specific event ordering 和错误文案。pair translator 仍然负责目标协议是否可表达、output item/block emission，以及 terminal flush 行为。
+`anthropic_messages::streaming`、`openai_chat_completions::streaming` 和 `openai_responses::streaming` 这类协议 wrapper 负责保留 source-specific event ordering 和错误文案。pair translator 仍然负责目标协议是否可表达、output item/block emission，以及 terminal flush 行为。
+
+三个 wrapper 都使用协议 typed event 解析作为 source event allowlist：
+
+<ReferenceTable
+  columns={['Inbound source', 'typed event model', '额外 source lifecycle 检查']}
+  rows={[
+    ['Anthropic Messages', '`MessageStreamEvent`', '要求 `message_start` 先于语义事件，`message_delta.stop_reason` 先于 `message_stop`，并拒绝 `message_stop` 之后的事件。'],
+    ['OpenAI Chat Completions', '`CreateChatCompletionStreamResponse`', '第一条 assistant chunk 初始化 stream；后续 chunk 必须保持同一 identity；`finish_reason` 在 `[DONE]`/EOF 前关闭语义 delta。'],
+    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` 初始化 stream；response terminal events 将 lifecycle 移入 terminal；pair translator 校验目标协议专属的 item/content ordering。'],
+  ]}
+/>
 
 ### Stream identity 归属
 
@@ -196,10 +208,24 @@ Streaming identity（`StreamIdentity`）属于协议无关的 inbound lifecycle 
   rows={[
     ['Anthropic Messages', '`message_start.message.id` 和 `message_start.message.model`', 'Anthropic 在显式的 `message_start` 语义边界一次性给出 identity。后续 `content_block_*`、`message_delta`、`message_stop` 不再重复 `id`/`model`，所以 Anthropic wrapper 在 `message_start` 时初始化 lifecycle identity，并依赖 lifecycle ordering 防止重复 start。'],
     ['OpenAI Chat Completions', '每个 `chat.completion.chunk` 都重复携带 `id` 和 `model`', 'Chat 没有单独的 `message_start` 事件。第一条语义 chunk 初始化 lifecycle identity；后续 chunk 必须与该 identity 校验一致，避免把不同 upstream response 的片段合并到同一个 translated message/response。'],
+    ['OpenAI Responses', '`response.created.response.id` / `model` 或 `response.in_progress.response.id` / `model`', 'Responses 有显式 response-level lifecycle event。wrapper 在 `response.created` 或 `response.in_progress` 初始化 identity；后续 item/content 事件依赖该 response identity，pair-local state 只追踪目标输出拼装。'],
   ]}
 />
 
 `InboundStreamLifecycle` 把 identity 放在 phase enum 外层，因为 identity 是整条 stream 的 envelope metadata，会稳定横跨 `Streaming`、`Terminal` 和 `Stopped`。pair-local stream state 应只保存目标转换状态或派生 id，不再保存完整 source identity 的副本。
+
+## Translation pair 内部分层
+
+跨协议流式转换按 source lifecycle、pair state 和 target constructor 分层：
+
+- `translation/<source>/streaming.rs` 负责 source typed event、identity 与生命周期顺序；
+- `translation/<source>/to_<target>/streaming/mod.rs` 负责事件分发、terminal outcome 和 carrier 边界；
+- pair `state.rs` 负责一次原子 source→target transition 的校验、累积、目标 index 分配，并返回 typed target events；
+- `translation/<target>/outbound/` 提供跨 pair 复用的无状态 target wire constructors；
+- pair-local `output.rs` 是可选的，只保留确实有助于表达复杂 terminal assembly 的纯 helper，不重复 target `outbound/` 已有构造器。
+
+pair state 可以作为小型 transducer 返回 typed target events，但不得负责 SSE bytes 编码或客户端错误响应渲染。
+
 
 
 ## OpenAI Responses observer
@@ -462,8 +488,8 @@ streaming/
 <ReferenceTable
   columns={['Pair', 'S（streaming）', 'T（terminal）', '为什么']}
   rows={[
-    ['chat → ant', 'ChatStreamingState', 'ChatTerminalState（轻量快照）', '终止事件在 translator 当场构造，只需要 finish_reason + refusal。所有 blocks 在 streaming 阶段已 close。'],
-    ['chat → responses', 'StreamingState', 'StreamingState（同一类型）', '终止事件（`*.done` × N + `response.completed`）需要完整累积数据（text/tool items/usage），由 state 方法 `finish_completed_stream` 构造。'],
+    ['chat → ant', 'ChatStreamingState', 'PendingAnthropicTerminal', '保留 finish_reason、refusal 和最新 usage snapshot，直到 `[DONE]`、EOF 或 trailing usage-only chunk 完成 `message_delta` + `message_stop`。'],
+    ['chat → responses', 'StreamingState', 'PendingResponsesTerminal', '保留完整 accumulation state 与 finish_reason，直到输出 `*.done` 和最终 completed/incomplete response snapshot。'],
   ]}
 />
 

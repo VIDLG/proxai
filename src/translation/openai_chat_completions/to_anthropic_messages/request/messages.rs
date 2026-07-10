@@ -4,8 +4,8 @@ use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
 use crate::translation::anthropic_messages::outbound::{
-    assistant_message, content_block_message, merge_adjacent_tool_messages, text_block_param,
-    tool_use_block_param, user_message,
+    assistant_message, content_block_message, image_block_from_url, merge_adjacent_tool_messages,
+    text_block_param, tool_use_block_param, user_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -168,7 +168,7 @@ impl TryFrom<&chat::ImageUrl> for anthropic::ImageBlockParam {
     type Error = TranslationError;
 
     fn try_from(image: &chat::ImageUrl) -> TranslationResult<Self> {
-        crate::translation::anthropic_messages::outbound::image_block_from_url(&image.url)
+        image_block_from_url(&image.url)
     }
 }
 
