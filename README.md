@@ -99,15 +99,16 @@ Common commands:
 
 - `pixi install`
 - `just run` — run ProxAI locally
-- `just check` — full local validation
+- `just check` — full local validation, including the OpenAI protocol drift check
 - `just test-e2e` — end-to-end tests
 - `just build` — release build
 - `cargo run -- check-update` — check for updates
 
 Protocol coverage comparison against official SDKs:
 
+- `just protocol-compare` — fast OpenAI protocol drift gate used by `just check`
 - `just compare-anthropic-protocol` — Anthropic Messages types vs official TS SDK
-- `just compare-openai-protocol` — OpenAI types vs `async-openai` v0.40.2
+- `just compare-openai-protocol` — detailed OpenAI types vs `async-openai` v0.41.1
 
 The referenced SDK checkouts are git submodules under `contrib/`:
 

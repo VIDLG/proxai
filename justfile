@@ -68,6 +68,7 @@ check:
     just fmt_check
     just clippy
     just test
+    just protocol-compare
 
 test:
     CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test
@@ -99,11 +100,15 @@ capture-enable:
 capture-disable:
     {{ pixi }} run -- cargo run -- capture disable
 
+# Fast OpenAI protocol drift gate used by the full local check.
+protocol-compare:
+    {{ pixi }} run -- python tools/compare_openai_protocol.py --quiet
+
 # Compare proxai Anthropic protocol types against official SDK
 compare-anthropic-protocol level="2":
     {{ pixi }} run -- python tools/compare_anthropic_protocol.py --level {{ level }}
 
-# Compare proxai OpenAI protocol types against async-openai v0.40.2
+# Compare proxai OpenAI protocol types against async-openai v0.41.1
 compare-openai-protocol level="2":
     {{ pixi }} run -- python tools/compare_openai_protocol.py --level {{ level }}
 

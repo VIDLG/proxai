@@ -96,15 +96,16 @@ proxai --config <path> \
 
 - `pixi install`
 - `just run` —— 本地运行 ProxAI
-- `just check` —— 完整本地校验
+- `just check` —— 完整本地校验，包含 OpenAI 协议漂移检查
 - `just test-e2e` —— 端到端测试
 - `just build` —— release 构建
 - `cargo run -- check-update` —— 检查更新
 
 与官方 SDK 的协议类型覆盖率对比：
 
+- `just protocol-compare` —— `just check` 使用的快速 OpenAI 协议漂移检查
 - `just compare-anthropic-protocol` —— Anthropic Messages 协议类型 vs 官方 TS SDK
-- `just compare-openai-protocol` —— OpenAI 协议类型 vs `async-openai` v0.40.2
+- `just compare-openai-protocol` —— OpenAI 协议类型详细对比 vs `async-openai` v0.41.1
 
 这些用于对比的 SDK checkout 作为 git submodule 放在 `contrib/`：
 
