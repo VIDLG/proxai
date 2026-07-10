@@ -24,8 +24,11 @@ pub enum ToolSearchExecutionType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolSearchToolParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<ToolSearchExecutionType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parameters: Option<Value>,
 }
 
@@ -35,19 +38,28 @@ pub struct ToolSearchToolParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolSearchCallItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<ToolSearchExecutionType>,
+    #[serde(default)]
     pub arguments: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolSearchOutputItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<ToolSearchExecutionType>,
     pub tools: Vec<Tool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 
@@ -62,6 +74,7 @@ pub struct ToolSearchCall {
     pub execution: ToolSearchExecutionType,
     pub arguments: Value,
     pub status: FunctionCallStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -72,5 +85,6 @@ pub struct ToolSearchOutput {
     pub execution: ToolSearchExecutionType,
     pub tools: Vec<Tool>,
     pub status: FunctionCallOutputStatusEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

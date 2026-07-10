@@ -228,7 +228,7 @@ fn push_input_message(
                             chat::ChatCompletionRequestMessageContentPartImage {
                                 image_url: chat::ImageUrl {
                                     url,
-                                    detail: image.detail.map(Into::into),
+                                    detail: Some(image.detail.into()),
                                 },
                             },
                         ))
@@ -408,7 +408,7 @@ impl TryFrom<&responses::InputContent> for chat::ChatCompletionRequestUserMessag
                 Ok(Self::ImageUrl(chat::ChatCompletionRequestMessageContentPartImage {
                     image_url: chat::ImageUrl {
                         url,
-                        detail: image.detail.map(Into::into),
+                        detail: Some(image.detail.into()),
                     },
                 }))
             }

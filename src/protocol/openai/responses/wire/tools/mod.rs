@@ -55,7 +55,7 @@ pub enum Tool {
     ComputerUsePreview(ComputerUsePreviewTool),
     WebSearch(WebSearchTool),
     #[serde(rename = "web_search_2025_08_26")]
-    #[strum(serialize = "web_search_20250826")]
+    #[strum(serialize = "web_search_2025_08_26")]
     WebSearch20250826(WebSearchTool),
     Mcp(MCPTool),
     CodeInterpreter(CodeInterpreterTool),
@@ -68,7 +68,7 @@ pub enum Tool {
     ToolSearch(ToolSearchToolParam),
     WebSearchPreview(WebSearchTool),
     #[serde(rename = "web_search_preview_2025_03_11")]
-    #[strum(serialize = "web_search_preview_20250311")]
+    #[strum(serialize = "web_search_preview_2025_03_11")]
     WebSearchPreview20250311(WebSearchTool),
     ApplyPatch,
 }

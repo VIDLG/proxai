@@ -15,6 +15,7 @@ pub struct ContainerNetworkPolicyDomainSecretParam {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ContainerNetworkPolicyAllowlistDetails {
     pub allowed_domains: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub domain_secrets: Option<Vec<ContainerNetworkPolicyDomainSecretParam>>,
 }
 
@@ -28,6 +29,7 @@ pub enum ContainerNetworkPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct SkillReferenceParam {
     pub skill_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
 }
 
@@ -53,8 +55,11 @@ pub enum SkillParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ContainerAutoParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub network_policy: Option<ContainerNetworkPolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub skills: Option<Vec<SkillParam>>,
 }
 
@@ -67,6 +72,7 @@ pub struct LocalSkillParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct LocalEnvironmentParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub skills: Option<Vec<LocalSkillParam>>,
 }
 
@@ -89,6 +95,7 @@ pub enum FunctionShellEnvironment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionShellToolParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<FunctionShellEnvironment>,
 }
 
@@ -99,7 +106,9 @@ pub struct FunctionShellToolParam {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionShellActionParam {
     pub commands: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_output_length: Option<u64>,
 }
 
@@ -144,18 +153,23 @@ pub struct FunctionShellCallOutputContentParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionShellCallItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub call_id: String,
     pub action: FunctionShellActionParam,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<FunctionShellCallItemStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<FunctionShellCallItemEnvironment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionShellCallOutputItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub call_id: String,
     pub output: Vec<FunctionShellCallOutputContentParam>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_output_length: Option<u64>,
 }
 
@@ -226,7 +240,9 @@ pub enum FunctionShellCallOutputOutcome {
 pub struct FunctionShellCallOutputContent {
     pub stdout: String,
     pub stderr: String,
+    #[serde(flatten)]
     pub outcome: FunctionShellCallOutputOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -241,6 +257,7 @@ pub struct FunctionShellCall {
     pub action: FunctionShellAction,
     pub status: FunctionShellCallStatus,
     pub environment: Option<FunctionShellCallEnvironment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -248,9 +265,9 @@ pub struct FunctionShellCall {
 pub struct FunctionShellCallOutput {
     pub id: String,
     pub call_id: String,
-    #[serde(default)]
     pub status: FunctionShellCallOutputStatusEnum,
     pub output: Vec<FunctionShellCallOutputContent>,
     pub max_output_length: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

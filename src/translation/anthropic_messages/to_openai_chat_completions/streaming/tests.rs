@@ -46,9 +46,7 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
         json!({
             "prompt_tokens": 2,
             "completion_tokens": 1,
-            "total_tokens": 3,
-            "prompt_tokens_details": null,
-            "completion_tokens_details": null
+            "total_tokens": 3
         })
     );
     assert!(body.contains("data: [DONE]"));
@@ -97,9 +95,7 @@ async fn translates_anthropic_stream_refusal_details_to_chat_refusal_delta() {
         json!({
             "prompt_tokens": 2,
             "completion_tokens": 0,
-            "total_tokens": 2,
-            "prompt_tokens_details": null,
-            "completion_tokens_details": null
+            "total_tokens": 2
         })
     );
 }

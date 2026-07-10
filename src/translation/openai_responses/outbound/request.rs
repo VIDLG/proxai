@@ -14,7 +14,7 @@ pub(crate) fn input_text(text: impl Into<String>) -> responses::InputContent {
 pub(crate) fn input_image_url(url: impl Into<String>) -> responses::InputContent {
     responses::InputContent::InputImage(responses::InputImageContent {
         image_url: Some(url.into()),
-        detail: None,
+        detail: responses::ImageDetail::Auto,
         file_id: None,
     })
 }

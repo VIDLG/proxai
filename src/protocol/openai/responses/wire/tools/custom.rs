@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use strum::Display;
 
+use super::super::InputContent;
 use super::function::{FunctionCallOutputStatusEnum, FunctionCallStatus};
 
 // ============================================================
@@ -49,6 +49,7 @@ pub struct CustomToolParam {
     pub name: String,
     pub description: Option<String>,
     pub format: CustomToolParamFormat,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
 }
 
@@ -60,7 +61,7 @@ pub struct CustomToolParam {
 #[serde(untagged)]
 pub enum CustomToolCallOutputOutput {
     Text(String),
-    List(Vec<Value>),
+    List(Vec<InputContent>),
 }
 
 // ============================================================
@@ -71,6 +72,7 @@ pub enum CustomToolCallOutputOutput {
 pub struct CustomToolCallOutput {
     pub call_id: String,
     pub output: CustomToolCallOutputOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
 }
 
@@ -81,21 +83,24 @@ pub struct CustomToolCallOutput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CustomToolCall {
     pub call_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
     pub input: String,
     pub name: String,
-    pub id: Option<String>,
+    pub id: String,
 }
 
 #[allow(dead_code, reason = "Retained for future item-resource modeling.")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CustomToolCallResource {
     pub call_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
     pub input: String,
     pub name: String,
     pub id: String,
     pub status: FunctionCallStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -105,5 +110,6 @@ pub struct CustomToolCallOutputResource {
     pub output: CustomToolCallOutputOutput,
     pub id: String,
     pub status: FunctionCallOutputStatusEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

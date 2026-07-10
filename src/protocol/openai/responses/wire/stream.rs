@@ -73,6 +73,7 @@ pub struct ResponseTextDeltaEvent {
     pub output_index: u32,
     pub content_index: u32,
     pub delta: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<Vec<ResponseLogProb>>,
 }
 
@@ -536,14 +537,11 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "error")]
     #[strum(serialize = "error")]
     ResponseError(ResponseErrorEvent),
-    #[serde(other)]
-    #[strum(serialize = "unknown")]
-    Unknown,
 }
 
 impl ResponseStreamEvent {
-    pub fn sequence_number(&self) -> Option<u64> {
-        let sequence_number = match self {
+    pub fn sequence_number(&self) -> u64 {
+        match self {
             Self::ResponseCreated(event) => event.sequence_number,
             Self::ResponseInProgress(event) => event.sequence_number,
             Self::ResponseCompleted(event) => event.sequence_number,
@@ -593,9 +591,7 @@ impl ResponseStreamEvent {
             Self::ResponseCustomToolCallInputDelta(event) => event.sequence_number,
             Self::ResponseCustomToolCallInputDone(event) => event.sequence_number,
             Self::ResponseError(event) => event.sequence_number,
-            Self::Unknown => return None,
-        };
-        Some(sequence_number)
+        }
     }
 }
 

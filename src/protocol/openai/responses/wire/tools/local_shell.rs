@@ -25,6 +25,7 @@ pub struct LocalShellExecAction {
 pub struct LocalShellToolCallOutput {
     pub id: String,
     pub output: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 

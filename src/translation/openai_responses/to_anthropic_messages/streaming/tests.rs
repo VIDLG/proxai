@@ -89,6 +89,24 @@ data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_in
 }
 
 #[tokio::test]
+async fn rejects_output_delta_with_mismatched_item_id() {
+    let body = translate_body(
+        "event: response.created\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mismatch\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+event: response.output_item.added\n\
+data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_expected\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
+event: response.output_text.delta\n\
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_wrong\",\"output_index\":0,\"content_index\":0,\"delta\":\"bad\"}\n\n",
+    )
+    .await;
+
+    assert!(body.contains("stream translation error"));
+    assert!(body.contains("item_id msg_wrong"));
+    assert!(body.contains("expected item_id msg_expected"));
+    assert!(!body.contains("\"text\":\"bad\""));
+}
+
+#[tokio::test]
 async fn reports_unexpected_eof_before_responses_terminal_event() {
     let body = translate_body(
         "event: response.created\n\

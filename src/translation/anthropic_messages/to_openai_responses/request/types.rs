@@ -21,7 +21,7 @@ impl TryFrom<anthropic::OutputFormat> for responses::ResponseTextParam {
                     responses::ResponseFormatJsonSchema {
                         description: None,
                         name: "anthropic_json_schema".to_string(),
-                        schema: Some(schema.schema),
+                        schema: schema.schema,
                         strict: None,
                     },
                 ),

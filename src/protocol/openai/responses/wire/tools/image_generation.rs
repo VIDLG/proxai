@@ -26,7 +26,9 @@ pub enum InputFidelity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ImageGenToolInputImageMask {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
 }
 
@@ -91,16 +93,27 @@ pub enum ImageGenActionEnum {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageGenTool {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<ImageGenToolBackground>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub input_fidelity: Option<InputFidelity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub input_image_mask: Option<ImageGenToolInputImageMask>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub moderation: Option<ImageGenToolModeration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_compression: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_format: Option<ImageGenToolOutputFormat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub partial_images: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<ImageGenToolQuality>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<ImageGenToolSize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<ImageGenActionEnum>,
 }
 

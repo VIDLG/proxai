@@ -82,7 +82,7 @@ impl From<&CustomToolCall> for ChatCompletionMessageToolCalls {
     fn from(call: &CustomToolCall) -> Self {
         Self::Custom(
             crate::protocol::openai::chat_completions::ChatCompletionMessageCustomToolCall {
-                id: tool_call_id(&call.id, &call.call_id),
+                id: call.id.clone(),
                 custom_tool: crate::protocol::openai::chat_completions::CustomTool {
                     name: call.name.clone(),
                     input: call.input.clone(),

@@ -27,8 +27,10 @@ pub enum RankVersionType {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RankingOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hybrid_search: Option<HybridSearch>,
     pub ranker: RankVersionType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub score_threshold: Option<f32>,
 }
 
@@ -39,8 +41,11 @@ pub struct RankingOptions {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileSearchTool {
     pub vector_store_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_num_results: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<Filter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ranking_options: Option<RankingOptions>,
 }
 
@@ -77,5 +82,6 @@ pub struct FileSearchToolCall {
     pub id: String,
     pub queries: Vec<String>,
     pub status: FileSearchToolCallStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub results: Option<Vec<FileSearchToolCallResult>>,
 }

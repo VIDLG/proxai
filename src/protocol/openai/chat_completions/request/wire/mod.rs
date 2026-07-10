@@ -49,9 +49,11 @@ pub enum Verbosity {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseFormatJsonSchema {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub name: String,
-    pub schema: Option<Value>,
+    pub schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
 }
 
@@ -89,7 +91,9 @@ pub enum PredictionContent {
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionStreamOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub include_usage: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub include_obfuscation: Option<bool>,
 }
 

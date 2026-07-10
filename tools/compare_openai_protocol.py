@@ -230,10 +230,7 @@ CATEGORY_DESCRIPTIONS = {
 INTENTIONAL_FIELD_EXCLUSIONS = {
     # Toplevel type → set of field names
     "Response": {
-        "object",  # serialization marker, not a semantic field
-        "incomplete_details",  # proxai uses status == Incomplete instead
         "modalities",  # request-time field
-        "parallel_tool_calls",  # moved to feature level
     },
     "OutputItem": {
         "type",  # serde tag, not a semantic field
@@ -252,6 +249,9 @@ INTENTIONAL_FIELD_EXCLUSIONS = {
     },
     "CreateChatCompletionRequest": {
         "metadata",  # SDK uses Metadata newtype with private .0 access
+    },
+    "UpdateChatCompletionRequest": {
+        "metadata",  # Same intentional generic-Value projection as create metadata
     },
 }
 
@@ -371,11 +371,13 @@ def _index_sdk_types(node, buf, index, rel):
             if child.type == "struct_item":
                 name = _type_name(child)
                 if name:
-                    fields, deprecated = _struct_fields(child, buf)
+                    fields, deprecated, field_serde, field_types = _struct_fields(child, buf)
                     index[name] = dict(
                         kind="struct",
                         fields=fields,
                         deprecated_fields=deprecated,
+                        field_serde=field_serde,
+                        field_types=field_types,
                         line=child.start_point[0] + 1,
                         file=rel,
                     )
@@ -386,6 +388,7 @@ def _index_sdk_types(node, buf, index, rel):
                     index[name] = dict(
                         kind="enum",
                         variants=variants,
+                        variant_payloads=_enum_variant_payloads_ast(child),
                         enum_serde=_enum_serde_summary(child),
                         variant_serde=_enum_variant_serde_summary(child),
                         line=child.start_point[0] + 1,
@@ -401,31 +404,37 @@ def _index_sdk_types(node, buf, index, rel):
 
 
 def _struct_fields(struct_node, buf):
-    """Extract field names and detect deprecated fields from a struct_item AST node.
-    Returns (field_names, deprecated_set).
+    """Extract struct fields and their wire-relevant serde attributes.
+
+    Returns `(field_names, deprecated_fields, field_serde, field_types)`.
+    Field-level serde attributes and Rust type shape both affect emitted JSON,
+    so protocol comparison must retain them rather than checking only
+    structural presence.
     """
     fields = []
     deprecated = set()
+    field_serde = {}
+    field_types = {}
     for child in struct_node.children:
         if child.type == "field_declaration_list":
             for field in child.children:
-                if field.type == "field_declaration":
-                    # Check if this field has a #[deprecated] attribute
-                    is_deprecated = False
-                    cursor = field.prev_named_sibling
-                    while cursor and cursor.type == "attribute_item":
-                        if cursor.text.decode().startswith("#[deprecated"):
-                            is_deprecated = True
-                            break
-                        cursor = cursor.prev_named_sibling
-                    for ident in field.children:
-                        if ident.type == "field_identifier":
-                            name = ident.text.decode()
-                            fields.append(name)
-                            if is_deprecated:
-                                deprecated.add(name)
-                            break
-    return fields, deprecated
+                if field.type != "field_declaration":
+                    continue
+                attrs = _attributes_before(field)
+                is_deprecated = any(attr.startswith("#[deprecated") for attr in attrs)
+                for ident in field.children:
+                    if ident.type == "field_identifier":
+                        name = ident.text.decode()
+                        fields.append(name)
+                        field_serde[name] = _field_serde_summary(attrs)
+                        type_node = field.named_children[-1]
+                        field_types[name] = type_node.text.decode(
+                            "utf-8", errors="replace"
+                        )
+                        if is_deprecated:
+                            deprecated.add(name)
+                        break
+    return fields, deprecated, field_serde, field_types
 
 
 def _enum_variants_ast(enum_node):
@@ -440,6 +449,32 @@ def _enum_variants_ast(enum_node):
                             variants.append(ident.text.decode())
                             break
     return variants
+
+
+def _enum_variant_payloads_ast(enum_node):
+    """Extract each enum variant's tuple/struct payload shape."""
+    payloads = {}
+    for child in enum_node.children:
+        if child.type != "enum_variant_list":
+            continue
+        for variant in child.children:
+            if variant.type != "enum_variant":
+                continue
+            name_node = next(
+                (node for node in variant.named_children if node.type == "identifier"),
+                None,
+            )
+            if name_node is None:
+                continue
+            payload_nodes = [
+                node
+                for node in variant.named_children
+                if node != name_node and node.type != "attribute_item"
+            ]
+            payloads[name_node.text.decode()] = "".join(
+                node.text.decode("utf-8", errors="replace") for node in payload_nodes
+            )
+    return payloads
 
 
 def _attributes_before(node):
@@ -476,6 +511,63 @@ def _serde_attr_value(attrs, key):
 def _serde_attr_has(attrs, key):
     pattern = rf"(?:^|[^A-Za-z0-9_]){re.escape(key)}(?:[^A-Za-z0-9_]|$)"
     return any(re.search(pattern, attr) for attr in attrs)
+
+
+def _field_serde_summary(attrs):
+    serde_attrs = [attr for attr in attrs if attr.startswith("#[serde")]
+    return {
+        "rename": _attr_value(serde_attrs, "rename"),
+        "default": _serde_attr_has(serde_attrs, "default"),
+        "skip_serializing_if": _attr_value(serde_attrs, "skip_serializing_if"),
+        "flatten": _serde_attr_has(serde_attrs, "flatten"),
+        "skip": _serde_attr_has(serde_attrs, "skip")
+        or _serde_attr_has(serde_attrs, "skip_serializing"),
+    }
+
+
+def _field_serde_diffs(px_info, sdk_info, common_fields, exclusions):
+    diffs = []
+    sdk_summaries = sdk_info.get("field_serde", {})
+    px_summaries = px_info.get("field_serde", {})
+    for field in common_fields:
+        if field in exclusions:
+            continue
+        sdk_summary = sdk_summaries.get(field, {})
+        px_summary = px_summaries.get(field, {})
+        if sdk_summary != px_summary:
+            diffs.append((field, sdk_summary, px_summary))
+    return diffs
+
+
+def _normalize_field_type(field_type):
+    compact = re.sub(r"\s+", "", field_type or "")
+    compact = re.sub(r",([})])", r"\1", compact)
+    return re.sub(r"\b(?:[A-Za-z_][A-Za-z0-9_]*::)+", "", compact)
+
+
+def _field_type_diffs(px_info, sdk_info, common_fields, exclusions):
+    diffs = []
+    sdk_types = sdk_info.get("field_types", {})
+    px_types = px_info.get("field_types", {})
+    for field in common_fields:
+        if field in exclusions:
+            continue
+        sdk_type = sdk_types.get(field, "")
+        px_type = px_types.get(field, "")
+        if _normalize_field_type(sdk_type) != _normalize_field_type(px_type):
+            diffs.append((field, sdk_type, px_type))
+    return diffs
+
+
+def _compact_field_serde_summary(summary):
+    parts = []
+    for key in ("rename", "default", "skip_serializing_if", "flatten", "skip"):
+        value = summary.get(key)
+        if value is True:
+            parts.append(key)
+        elif value:
+            parts.append(f"{key}={value}")
+    return "{" + ", ".join(parts) + "}" if parts else "{}"
 
 
 def _enum_serde_summary(enum_node):
@@ -549,14 +641,19 @@ def _index_px_types(node, buf, index, rel):
                 name = _type_name(child)
                 if name:
                     info["kind"] = "struct"
-                    px_fields, _ = _struct_fields(child, buf)
+                    px_fields, _, px_field_serde, px_field_types = _struct_fields(
+                        child, buf
+                    )
                     info["fields"] = px_fields
+                    info["field_serde"] = px_field_serde
+                    info["field_types"] = px_field_types
                     index[name] = info
             elif child.type == "enum_item":
                 name = _type_name(child)
                 if name:
                     info["kind"] = "enum"
                     info["variants"] = _enum_variants_ast(child)
+                    info["variant_payloads"] = _enum_variant_payloads_ast(child)
                     info["enum_serde"] = _enum_serde_summary(child)
                     info["variant_serde"] = _enum_variant_serde_summary(child)
                     index[name] = info
@@ -664,9 +761,18 @@ def _enum_serde_diffs(px_name, px_info, sdk_name, sdk_info):
 
     sdk_variants = sdk_info.get("variant_serde", {})
     px_variants = px_info.get("variant_serde", {})
+    sdk_payloads = sdk_info.get("variant_payloads", {})
+    px_payloads = px_info.get("variant_payloads", {})
     for variant in sorted(set(sdk_variants) & set(px_variants)):
         sdk_variant = sdk_variants.get(variant, {})
         px_variant = px_variants.get(variant, {})
+        sdk_payload = sdk_payloads.get(variant, "")
+        px_payload = px_payloads.get(variant, "")
+        if _normalize_field_type(sdk_payload) != _normalize_field_type(px_payload):
+            messages.append(
+                f"variant `{variant}` payload differs: "
+                f"SDK `{sdk_payload or 'unit'}` vs ours `{px_payload or 'unit'}`"
+            )
         sdk_wire = _variant_wire_name(variant, sdk_enum, sdk_variant)
         px_wire = _variant_wire_name(variant, px_enum, px_variant)
         if sdk_wire != px_wire:
@@ -792,6 +898,8 @@ def _check_protocol(protocol, level=2):
     struct_diffs = []  # list of (px_type, sdk_type, missing_fields, extra_fields)
     enum_diffs = []  # list of (px_type, sdk_type, missing_variants, extra_variants)
     serde_diffs = []  # list of (px_type, sdk_type, messages)
+    field_serde_diffs = []  # list of (px_type, sdk_type, field summaries)
+    field_type_diffs = []  # list of (px_type, sdk_type, field types)
     aligned_ok = 0
 
     for nk in sorted(sk & pk):
@@ -835,11 +943,34 @@ def _check_protocol(protocol, level=2):
             if common and px_common and common != px_common:
                 order_mismatch = (common, px_common)
 
+            common_fields = sorted(sdk_set & px_set)
+            field_serde_messages = _field_serde_diffs(
+                px_info,
+                sdk_info,
+                common_fields,
+                exclusions,
+            )
+            field_type_messages = _field_type_diffs(
+                px_info,
+                sdk_info,
+                common_fields,
+                exclusions,
+            )
             if missing_f or extra_f or order_mismatch:
                 struct_diffs.append(
                     (px_name, sdk_name, missing_f, extra_f, order_mismatch)
                 )
-            else:
+            if field_serde_messages:
+                field_serde_diffs.append((px_name, sdk_name, field_serde_messages))
+            if field_type_messages:
+                field_type_diffs.append((px_name, sdk_name, field_type_messages))
+            if not (
+                missing_f
+                or extra_f
+                or order_mismatch
+                or field_serde_messages
+                or field_type_messages
+            ):
                 aligned_ok += 1
 
         elif px_info["kind"] == "enum":
@@ -868,9 +999,17 @@ def _check_protocol(protocol, level=2):
         if not isinstance(m_f, str)  # skip kind-mismatch entries
     )
     has_struct_gaps = has_missing_fields
-    has_gaps = has_gaps or has_struct_gaps or bool(serde_diffs)
+    has_missing_variants = any(missing for _, _, missing, _ in enum_diffs)
+    has_gaps = (
+        has_gaps
+        or has_struct_gaps
+        or has_missing_variants
+        or bool(serde_diffs)
+        or bool(field_serde_diffs)
+        or bool(field_type_diffs)
+    )
 
-    structural_checked = aligned_ok + len(struct_diffs) + len(enum_diffs) + len(serde_diffs)
+    structural_checked = len(sk & pk)
 
     # ── Level 1: header + summary ──────────────────────────────────
     hr()
@@ -914,8 +1053,14 @@ def _check_protocol(protocol, level=2):
         out()
 
         # Structural diffs
-        if struct_diffs or enum_diffs or serde_diffs:
-            if has_missing_fields or enum_diffs or serde_diffs:
+        if struct_diffs or enum_diffs or serde_diffs or field_serde_diffs or field_type_diffs:
+            if (
+                has_missing_fields
+                or has_missing_variants
+                or serde_diffs
+                or field_serde_diffs
+                or field_type_diffs
+            ):
                 has_gaps = True
             if has_missing_fields:
                 h2("Structural alignment (field-level)")
@@ -954,6 +1099,23 @@ def _check_protocol(protocol, level=2):
                     for message in messages:
                         out(f"        {message}")
 
+            if field_serde_diffs:
+                out(f"\n  ✗ Struct field serde wire mismatches:")
+                for px_name, sdk_name, diffs in field_serde_diffs:
+                    out(f"      {px_name} → {sdk_name}")
+                    for field, sdk_summary, px_summary in diffs:
+                        out(
+                            f"        `{field}`: SDK {_compact_field_serde_summary(sdk_summary)} "
+                            f"vs ours {_compact_field_serde_summary(px_summary)}"
+                        )
+
+            if field_type_diffs:
+                out(f"\n  ✗ Struct field type mismatches:")
+                for px_name, sdk_name, diffs in field_type_diffs:
+                    out(f"      {px_name} → {sdk_name}")
+                    for field, sdk_type, px_type in diffs:
+                        out(f"        `{field}`: SDK `{sdk_type}` vs ours `{px_type}`")
+
             if enum_diffs and level >= 3:
                 out(f"\n  ✗ Enum variant mismatches:")
                 for px_name, sdk_name, missing_v, extra_v in enum_diffs:
@@ -963,8 +1125,16 @@ def _check_protocol(protocol, level=2):
                     if extra_v:
                         out(f"        Extra variants:   {', '.join(extra_v)}")
 
-            if not struct_diffs and not enum_diffs and not serde_diffs:
-                out(f"  ✅  All struct fields, enum variants, and enum serde attrs match")
+            if (
+                not struct_diffs
+                and not enum_diffs
+                and not serde_diffs
+                and not field_serde_diffs
+                and not field_type_diffs
+            ):
+                out(
+                    "  ✅  All struct fields, field types, enum variants, and serde attrs match"
+                )
             out()
 
         # Intentional exclusions

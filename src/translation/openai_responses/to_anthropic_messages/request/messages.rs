@@ -130,7 +130,7 @@ fn translate_input(
                             messages.push(content_block_message(
                                 anthropic::MessageParamRole::User,
                                 anthropic::ContentBlockParam::ToolResult(
-                                    anthropic::ToolResultBlockParam::from(output),
+                                    anthropic::ToolResultBlockParam::try_from(output)?,
                                 ),
                             ));
                         }
@@ -318,41 +318,29 @@ impl TryFrom<&responses::InputContent> for anthropic::ToolResultContentBlockPara
     }
 }
 
-impl From<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam {
-    fn from(output: &responses::CustomToolCallOutput) -> Self {
-        Self {
+impl TryFrom<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam {
+    type Error = crate::translation::TranslationError;
+
+    fn try_from(output: &responses::CustomToolCallOutput) -> TranslationResult<Self> {
+        Ok(Self {
             tool_use_id: output.call_id.clone(),
             content: Some(match &output.output {
                 responses::CustomToolCallOutputOutput::Text(text) => {
                     anthropic::ToolResultContentParam::Text(text.clone())
                 }
-                responses::CustomToolCallOutputOutput::List(values) => {
+                responses::CustomToolCallOutputOutput::List(parts) => {
                     anthropic::ToolResultContentParam::Blocks(
-                        values
+                        parts
                             .iter()
-                            .map(json_value_tool_result_text_block)
-                            .collect(),
+                            .map(anthropic::ToolResultContentBlockParam::try_from)
+                            .collect::<TranslationResult<Vec<_>>>()?,
                     )
                 }
             }),
             is_error: Some(false),
             cache_control: None,
-        }
+        })
     }
-}
-
-fn json_value_tool_result_text_block(value: &Value) -> anthropic::ToolResultContentBlockParam {
-    let text = match value {
-        Value::String(text) => text.clone(),
-        value => {
-            tracing::trace!(
-                value = %value,
-                reason = "Responses custom_tool_call_output list values have no typed content block metadata; serializing JSON value as text"
-            );
-            value.to_string()
-        }
-    };
-    anthropic::ToolResultContentBlockParam::Text(text_block_param(text))
 }
 
 fn system_prompt_from_text_blocks(

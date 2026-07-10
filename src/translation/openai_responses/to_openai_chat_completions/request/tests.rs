@@ -67,6 +67,39 @@ fn translates_responses_request_to_chat_completions_shape() {
 }
 
 #[test]
+fn translates_default_responses_text_format_for_chat_completions() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": [{"type": "message", "role": "user", "content": "hello"}],
+        "text": {"format": {"type": "text"}}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+    serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
+        .expect("translated payload must match Chat Completions request schema");
+
+    assert_eq!(translated["response_format"], json!({"type": "text"}));
+}
+
+#[test]
+fn translates_structured_responses_text_format_for_chat_completions() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": [{"type": "message", "role": "user", "content": "hello"}],
+        "text": {"format": {"type": "json_object"}}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+    serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
+        .expect("translated payload must match Chat Completions request schema");
+
+    assert_eq!(
+        translated["response_format"],
+        json!({"type": "json_object"})
+    );
+}
+
+#[test]
 fn preserves_responses_system_and_developer_roles_as_chat_instruction_messages() {
     let payload = json!({
         "model": "glm-5.1",
@@ -108,6 +141,40 @@ fn preserves_responses_system_and_developer_roles_as_chat_instruction_messages()
     );
     assert_eq!(translated["messages"][3]["role"], "user");
     assert_eq!(translated["messages"][3]["content"][0]["text"], "hello");
+}
+
+#[test]
+fn translates_normalized_assistant_replay_with_output_text() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": [
+            {
+                "type": "message",
+                "id": "msg_zed_replay_0",
+                "role": "assistant",
+                "status": "completed",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "previous answer", "annotations": []}]
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "continue"}]
+            }
+        ]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+    serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
+        .expect("translated payload must match Chat Completions request schema");
+
+    assert_eq!(translated["messages"][0]["role"], "assistant");
+    assert_eq!(
+        translated["messages"][0]["content"][0]["text"],
+        "previous answer"
+    );
+    assert_eq!(translated["messages"][1]["role"], "user");
+    assert_eq!(translated["messages"][1]["content"][0]["text"], "continue");
 }
 
 #[test]

@@ -56,6 +56,7 @@ pub enum ApplyPatchOperationParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplyPatchToolCallItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub call_id: String,
     pub status: ApplyPatchCallStatusParam,
@@ -64,9 +65,11 @@ pub struct ApplyPatchToolCallItemParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplyPatchToolCallOutputItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub call_id: String,
     pub status: ApplyPatchCallOutputStatusParam,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
 }
 
@@ -129,6 +132,7 @@ pub struct ApplyPatchToolCall {
     pub call_id: String,
     pub status: ApplyPatchCallStatus,
     pub operation: ApplyPatchOperation,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -138,5 +142,6 @@ pub struct ApplyPatchToolCallOutput {
     pub call_id: String,
     pub status: ApplyPatchCallOutputStatus,
     pub output: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

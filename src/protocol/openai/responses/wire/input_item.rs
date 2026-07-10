@@ -19,6 +19,7 @@ pub enum ItemReferenceType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemReference {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<ItemReferenceType>,
     pub id: String,
 }

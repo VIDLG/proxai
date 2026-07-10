@@ -301,7 +301,7 @@ fn translates_anthropic_container_upload_to_chat_file_part() {
         translated["messages"][0]["content"],
         json!([{
             "type": "file",
-            "file": {"file_data": null, "file_id": "file_123", "filename": null}
+            "file": {"file_id": "file_123"}
         }])
     );
 }
@@ -367,7 +367,6 @@ fn translates_anthropic_base64_document_to_chat_file_part() {
             "type": "file",
             "file": {
                 "file_data": "JVBERi0x",
-                "file_id": null,
                 "filename": "spec.pdf"
             }
         })

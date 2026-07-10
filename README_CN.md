@@ -5,9 +5,9 @@
 [English README](README.md)
 
 ProxAI 是一个运行在 AI 客户端和模型上游之间的本地轻量兼容代理。
-它接收本地 OpenAI Compatible 请求，修复会导致某些上游失败的特定
-OpenAI Responses API system-message 形状问题，然后尽量透明地转发到
-配置好的 provider。
+它接收本地 OpenAI Compatible 请求，修复会导致某些上游失败的、Zed 特有的
+OpenAI Responses API system-message 与紧凑历史消息形状问题，然后尽量透明地
+转发到配置好的 provider。
 
 当前稳定运行路径支持 OpenAI Responses、OpenAI Chat Completions 和
 Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转换路径。

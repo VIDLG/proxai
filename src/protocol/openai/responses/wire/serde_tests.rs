@@ -67,6 +67,17 @@ fn serializes_responses_nested_output_unions_as_type_tagged_wire() {
 }
 
 #[test]
+fn rejects_unknown_responses_stream_event_types() {
+    let payload = json!({
+        "type": "response.future_progress",
+        "sequence_number": 2,
+        "detail": "new upstream telemetry"
+    });
+
+    assert!(serde_json::from_value::<ResponseStreamEvent>(payload).is_err());
+}
+
+#[test]
 fn serializes_responses_shell_and_namespace_unions_as_type_tagged_wire() {
     assert_eq!(
         serde_json::to_value(ContainerNetworkPolicy::Disabled).unwrap(),
@@ -97,11 +108,7 @@ fn serializes_responses_shell_and_namespace_unions_as_type_tagged_wire() {
         .unwrap(),
         json!({
             "type": "function",
-            "name": "lookup",
-            "description": null,
-            "parameters": null,
-            "strict": null,
-            "defer_loading": null
+            "name": "lookup"
         })
     );
 }

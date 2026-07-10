@@ -20,18 +20,26 @@ pub struct ToolChoiceFunction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionTool {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parameters: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FunctionToolParam {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parameters: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
 }
 
@@ -65,9 +73,12 @@ pub enum FunctionCallOutputStatusEnum {
 pub struct FunctionToolCall {
     pub arguments: String,
     pub call_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 
@@ -86,7 +97,9 @@ pub enum FunctionCallOutput {
 pub struct FunctionCallOutputItemParam {
     pub call_id: String,
     pub output: FunctionCallOutput,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 
@@ -99,10 +112,12 @@ pub struct FunctionCallOutputItemParam {
 pub struct FunctionToolCallResource {
     pub arguments: String,
     pub call_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
     pub name: String,
     pub id: String,
     pub status: FunctionCallStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 
@@ -112,5 +127,6 @@ pub struct FunctionToolCallOutputResource {
     pub output: FunctionCallOutput,
     pub id: String,
     pub status: FunctionCallOutputStatusEnum,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

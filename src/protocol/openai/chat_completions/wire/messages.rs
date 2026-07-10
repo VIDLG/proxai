@@ -35,6 +35,7 @@ pub enum ImageDetail {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ImageUrl {
     pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<ImageDetail>,
 }
 
@@ -63,8 +64,11 @@ pub struct InputAudio {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileObject {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 }
 
@@ -172,18 +176,21 @@ pub enum ChatCompletionRequestDeveloperMessageContent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestDeveloperMessage {
     pub content: ChatCompletionRequestDeveloperMessageContent,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestSystemMessage {
     pub content: ChatCompletionRequestSystemMessageContent,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestUserMessage {
     pub content: ChatCompletionRequestUserMessageContent,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 }
 
@@ -194,10 +201,15 @@ pub struct ChatCompletionRequestAssistantMessageAudio {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestAssistantMessage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<ChatCompletionRequestAssistantMessageContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refusal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio: Option<ChatCompletionRequestAssistantMessageAudio>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
 }
 
@@ -249,7 +261,9 @@ pub struct Logprobs {
 pub struct Choice {
     pub text: String,
     pub index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<Logprobs>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<CompletionFinishReason>,
 }
 
@@ -269,33 +283,61 @@ pub enum ContentPart {
 pub struct CreateChatCompletionRequest {
     pub messages: Vec<ChatCompletionRequestMessage>,
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modalities: Option<Vec<ResponseModalities>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub verbosity: Option<Verbosity>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_completion_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub web_search_options: Option<WebSearchOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ResponseFormat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio: Option<ChatCompletionAudio>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stop: Option<StopConfiguration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub logit_bias: Option<HashMap<String, i8>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub n: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prediction: Option<PredictionContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<ChatCompletionStreamOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<ServiceTier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<ChatCompletionTools>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ChatCompletionToolChoiceOption>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub safety_identifier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_cache_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -318,7 +360,9 @@ pub struct ChatCompletionList {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatCompletionMessageListItem {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content_parts: Option<Vec<ContentPart>>,
+    #[serde(flatten)]
     pub message: ChatCompletionResponseMessage,
 }
 

@@ -7,6 +7,7 @@ use strum::Display;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchToolFilters {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_domains: Option<Vec<String>>,
 }
 
@@ -20,10 +21,15 @@ pub enum WebSearchApproximateLocationType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchApproximateLocation {
+    #[serde(default)]
     pub r#type: WebSearchApproximateLocationType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub city: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub country: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timezone: Option<String>,
 }
 
@@ -50,9 +56,13 @@ pub enum SearchContentType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchTool {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<WebSearchToolFilters>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_location: Option<WebSearchApproximateLocation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub search_context_size: Option<WebSearchToolSearchContextSize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub search_content_types: Option<Vec<SearchContentType>>,
 }
 
@@ -108,7 +118,8 @@ pub enum WebSearchToolCallStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebSearchToolCall {
-    pub action: WebSearchToolCallAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<WebSearchToolCallAction>,
     pub id: String,
     pub status: WebSearchToolCallStatus,
 }

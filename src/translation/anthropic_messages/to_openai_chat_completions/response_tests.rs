@@ -40,9 +40,7 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         json!({
             "prompt_tokens": 3,
             "completion_tokens": 5,
-            "total_tokens": 8,
-            "prompt_tokens_details": null,
-            "completion_tokens_details": null
+            "total_tokens": 8
         })
     );
 }

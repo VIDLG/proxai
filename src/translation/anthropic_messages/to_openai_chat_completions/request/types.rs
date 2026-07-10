@@ -27,7 +27,7 @@ impl From<anthropic::OutputFormat> for chat::ResponseFormat {
                 json_schema: ResponseFormatJsonSchema {
                     description: None,
                     name: "anthropic_json_schema".to_string(),
-                    schema: Some(schema.schema),
+                    schema: schema.schema,
                     strict: None,
                 },
             },

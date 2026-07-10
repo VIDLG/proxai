@@ -62,7 +62,7 @@ impl From<&ChatCompletionMessageToolCalls> for OutputItem {
                 function_call_item(&call.id, &call.function.name, &call.function.arguments)
             }
             ChatCompletionMessageToolCalls::Custom(call) => Self::CustomToolCall(CustomToolCall {
-                id: Some(call.id.clone()),
+                id: call.id.clone(),
                 call_id: call.id.clone(),
                 name: call.custom_tool.name.clone(),
                 input: call.custom_tool.input.clone(),

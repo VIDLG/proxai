@@ -5,9 +5,9 @@
 [中文文档](README_CN.md)
 
 ProxAI is a small local compatibility proxy for OpenAI-compatible requests.
-It accepts local client traffic, normalizes the specific OpenAI Responses API
-system-message shape that breaks some upstreams, and forwards requests to the
-configured provider with minimal surprises.
+It accepts local client traffic, normalizes the narrow Zed-specific OpenAI
+Responses system-message and compact history shapes that break some upstreams,
+and forwards requests to the configured provider with minimal surprises.
 
 Today, the stable runtime paths support no-conversion forwarding for OpenAI
 Responses, OpenAI Chat Completions, and Anthropic Messages, plus explicit

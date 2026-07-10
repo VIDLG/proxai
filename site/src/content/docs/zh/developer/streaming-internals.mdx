@@ -195,9 +195,11 @@ state.rs
   rows={[
     ['Anthropic Messages', '`MessageStreamEvent`', '要求 `message_start` 先于语义事件，`message_delta.stop_reason` 先于 `message_stop`，并拒绝 `message_stop` 之后的事件。'],
     ['OpenAI Chat Completions', '`CreateChatCompletionStreamResponse`', '第一条 assistant chunk 初始化 stream；后续 chunk 必须保持同一 identity；`finish_reason` 在 `[DONE]`/EOF 前关闭语义 delta。'],
-    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` 初始化 stream；response terminal events 将 lifecycle 移入 terminal；pair translator 校验目标协议专属的 item/content ordering。'],
+    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` 初始化 stream；source wrapper 校验 `output_index → kind/item_id` 的注册与完成；response terminal events 将 lifecycle 移入 terminal。'],
   ]}
 />
+
+`ResponsesInboundLifecycle` 同时拥有 source-side output registry。`response.output_item.added` 将每个 `output_index` 绑定到 item kind 和可选 item `id`；后续 content、reasoning、tool 事件必须携带相同 `item_id` 和预期 kind，`response.output_item.done` 也必须关闭同一个 item。通过这些 source invariant 后，pair state 才负责目标 block/index 投影。
 
 ### Stream identity 归属
 

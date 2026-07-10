@@ -38,6 +38,7 @@ pub(super) struct MessagesStreamTranslator {
 impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
+        self.lifecycle.validate_stream_event(&parsed)?;
         let event_type = parsed.as_ref().to_string();
         let mut events = Vec::new();
 

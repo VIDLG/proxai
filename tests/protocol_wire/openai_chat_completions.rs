@@ -115,3 +115,14 @@ fn projects_chat_completions_tools_and_response_format_from_wire_shape() {
     assert!(projection.tool_choice.is_some());
     assert!(projection.response_format.is_some());
 }
+
+#[test]
+fn serializes_chat_request_without_none_optional_fields() {
+    let payload = json!({
+        "model": "gpt-4.1",
+        "messages": [{"role": "user", "content": "Hello"}]
+    });
+    let request = serde_json::from_value::<CreateChatCompletionRequest>(payload.clone()).unwrap();
+
+    assert_eq!(serde_json::to_value(request).unwrap(), payload);
+}

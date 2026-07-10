@@ -35,6 +35,7 @@ pub(super) struct ChatCompletionStreamTranslator {
 impl StreamingEventTranslator for ChatCompletionStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
+        self.lifecycle.validate_stream_event(&parsed)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -45,20 +46,36 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 chunks.extend(self.observe_response_snapshot(&event.response)?);
             }
             ResponseStreamEvent::ResponseOutputItemAdded(event) => {
-                if let OutputItem::FunctionCall(call) = event.item {
-                    // Open a Chat tool-call stream only the first time this
-                    // output index is seen; later arguments deltas reuse it.
-                    if let Some(tool_call_index) = self
-                        .lifecycle
-                        .streaming_state_mut()?
-                        .register_tool_call(event.output_index)
-                    {
-                        let identity = self.lifecycle.stream_identity()?.clone();
-                        chunks.push(StreamEvent::message(chat_choice_chunk(
-                            &identity,
-                            tool_call_start_delta(tool_call_index, call.call_id, call.name, None),
-                            None,
-                        ))?);
+                match event.item {
+                    OutputItem::FunctionCall(call) => {
+                        // Open a Chat tool-call stream only the first time this
+                        // output index is seen; later arguments deltas reuse it.
+                        if let Some(tool_call_index) = self
+                            .lifecycle
+                            .streaming_state_mut()?
+                            .register_tool_call(event.output_index)
+                        {
+                            let identity = self.lifecycle.stream_identity()?.clone();
+                            chunks.push(StreamEvent::message(chat_choice_chunk(
+                                &identity,
+                                tool_call_start_delta(
+                                    tool_call_index,
+                                    call.call_id,
+                                    call.name,
+                                    None,
+                                ),
+                                None,
+                            ))?);
+                        }
+                    }
+                    OutputItem::Message(_) | OutputItem::Reasoning(_) => {}
+                    other => {
+                        tracing::trace!(
+                            output_index = event.output_index,
+                            item_type = other.as_ref(),
+                            reason = "Responses output item has no Chat Completions streaming representation",
+                            "skipping Responses output item"
+                        );
                     }
                 }
             }

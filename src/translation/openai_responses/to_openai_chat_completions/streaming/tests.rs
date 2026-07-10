@@ -37,12 +37,14 @@ async fn translates_responses_text_stream_to_chat_completions_sse() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.output_text.delta\n",
-        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"hel\"}\n\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"hel\"}\n\n",
         "event: response.output_text.delta\n",
-        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"lo\"}\n\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"lo\"}\n\n",
         "event: response.completed\n",
-        "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n"
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
@@ -61,7 +63,7 @@ async fn translates_responses_tool_calls_stream_to_chat_completions_sse() {
         "event: response.output_item.added\n",
         "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_abc\",\"name\":\"get_weather\",\"arguments\":\"\",\"status\":\"in_progress\"}}\n\n",
         "event: response.function_call_arguments.delta\n",
-        "data: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":3,\"item_id\":\"call_abc\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\\\"SF\\\"}\"}\n\n",
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":3,\"item_id\":\"fc_1\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\\\"SF\\\"}\"}\n\n",
         "event: response.completed\n",
         "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_456\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n"
     );
@@ -79,10 +81,12 @@ async fn translates_responses_incomplete_to_length_finish_reason() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_789\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.output_text.delta\n",
-        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\"}\n\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\"}\n\n",
         "event: response.incomplete\n",
-        "data: {\"type\":\"response.incomplete\",\"sequence_number\":3,\"response\":{\"id\":\"resp_789\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"incomplete\"}}\n\n"
+        "data: {\"type\":\"response.incomplete\",\"sequence_number\":4,\"response\":{\"id\":\"resp_789\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"incomplete\"}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
@@ -94,10 +98,12 @@ async fn translates_responses_refusal_to_chat_refusal_delta() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.refusal.delta\n",
-        "data: {\"type\":\"response.refusal.delta\",\"sequence_number\":2,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"cannot comply\"}\n\n",
+        "data: {\"type\":\"response.refusal.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"cannot comply\"}\n\n",
         "event: response.completed\n",
-        "data: {\"type\":\"response.completed\",\"sequence_number\":3,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n"
+        "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
@@ -132,22 +138,60 @@ async fn compacts_responses_output_index_to_chat_tool_call_index() {
 }
 
 #[tokio::test]
-async fn skips_unknown_responses_events_without_breaking_translation() {
+async fn rejects_text_delta_with_mismatched_item_id() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mismatch\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_expected\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+        "event: response.output_text.delta\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_wrong\",\"output_index\":0,\"content_index\":0,\"delta\":\"bad\"}\n\n"
+    );
+    let text = translate_responses_stream_body(body).await;
+
+    assert!(text.contains("stream translation error"));
+    assert!(text.contains("item_id msg_wrong"));
+    assert!(text.contains("expected item_id msg_expected"));
+    assert!(!text.contains("\"content\":\"bad\""));
+}
+
+#[tokio::test]
+async fn rejects_output_item_done_with_mismatched_item_id() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_done_mismatch\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_expected\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+        "event: response.output_item.done\n",
+        "data: {\"type\":\"response.output_item.done\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_wrong\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[]}}\n\n"
+    );
+    let text = translate_responses_stream_body(body).await;
+
+    assert!(text.contains("stream translation error"));
+    assert!(text.contains("item_id msg_wrong"));
+    assert!(text.contains("expected item_id msg_expected"));
+}
+
+#[tokio::test]
+async fn rejects_unknown_responses_events_as_protocol_drift() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_unknown\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
         "event: response.future_progress\n",
         "data: {\"type\":\"response.future_progress\",\"sequence_number\":2,\"detail\":\"new upstream telemetry\"}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.output_text.delta\n",
-        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"ok\"}\n\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"ok\"}\n\n",
         "event: response.completed\n",
-        "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_unknown\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n"
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_unknown\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
-    assert!(text.contains("\"content\":\"ok\""));
-    assert!(text.contains("data: [DONE]"));
-    assert!(!text.contains("stream translation error"));
+    assert!(text.contains("stream translation error"));
+    assert!(text.contains("response.future_progress"));
+    assert!(!text.contains("\"content\":\"ok\""));
+    assert!(!text.contains("data: [DONE]"));
 }
 
 #[tokio::test]
@@ -155,8 +199,10 @@ async fn reports_unexpected_eof_before_responses_terminal_event() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_eof\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.output_text.delta\n",
-        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\"}\n\n"
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\"}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 

@@ -18,7 +18,9 @@ pub struct ToolChoiceMCP {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MCPToolFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub read_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_names: Option<Vec<String>>,
 }
 
@@ -57,7 +59,9 @@ pub enum MCPToolApprovalSetting {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MCPToolApprovalFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub always: Option<MCPToolFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub never: Option<MCPToolFilter>,
 }
 
@@ -75,13 +79,21 @@ pub enum MCPToolRequireApproval {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MCPTool {
     pub server_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_tools: Option<MCPToolAllowedTools>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub authorization: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connector_id: Option<McpToolConnectorId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub require_approval: Option<MCPToolRequireApproval>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub server_description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub server_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defer_loading: Option<bool>,
 }
 
@@ -93,7 +105,9 @@ pub struct MCPTool {
 pub struct MCPApprovalResponse {
     pub approval_request_id: String,
     pub approve: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
 
@@ -117,7 +131,9 @@ pub struct MCPApprovalRequest {
 pub struct MCPListToolsTool {
     pub input_schema: Value,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
@@ -130,6 +146,7 @@ pub struct MCPListTools {
     pub id: String,
     pub server_label: String,
     pub tools: Vec<MCPListToolsTool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 

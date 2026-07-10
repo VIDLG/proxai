@@ -287,7 +287,7 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContentPart> for responses::
             }
             chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(part) => {
                 Ok(responses::InputContent::InputImage(responses::InputImageContent {
-                    detail: part.image_url.detail.map(Into::into),
+                    detail: part.image_url.detail.map(Into::into).unwrap_or_default(),
                     file_id: None,
                     image_url: Some(part.image_url.url.clone()),
                 }))
@@ -349,7 +349,7 @@ impl From<&chat::ChatCompletionMessageToolCalls> for responses::Item {
                     namespace: None,
                     input: call.custom_tool.input.clone(),
                     name: call.custom_tool.name.clone(),
-                    id: Some(call.id.clone()),
+                    id: call.id.clone(),
                 })
             }
         }

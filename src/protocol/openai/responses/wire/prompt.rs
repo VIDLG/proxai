@@ -15,7 +15,9 @@ pub enum ResponsePromptVariables {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Prompt {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub variables: Option<ResponsePromptVariables>,
 }
 

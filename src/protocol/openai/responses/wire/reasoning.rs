@@ -27,7 +27,9 @@ pub enum ReasoningSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Reasoning {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<ReasoningEffort>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<ReasoningSummary>,
 }
 
@@ -57,7 +59,10 @@ pub enum ReasoningItemContent {
 pub struct ReasoningItem {
     pub id: Option<String>,
     pub summary: Vec<SummaryPart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Vec<ReasoningItemContent>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }

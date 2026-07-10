@@ -134,9 +134,11 @@ All three wrappers use typed protocol event parsing as the source-event allowlis
   rows={[
     ['Anthropic Messages', '`MessageStreamEvent`', 'Requires `message_start` before semantic events, `message_delta.stop_reason` before `message_stop`, and rejects events after `message_stop`.'],
     ['OpenAI Chat Completions', '`CreateChatCompletionStreamResponse`', 'First assistant chunk initializes the stream; later chunks must keep the same identity; `finish_reason` closes semantic deltas before `[DONE]`/EOF.'],
-    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` initializes the stream; response terminal events move the lifecycle to terminal; pair translators validate target-specific item/content ordering.'],
+    ['OpenAI Responses', '`ResponseStreamEvent`', '`response.created` / `response.in_progress` initializes the stream; the source wrapper validates `output_index → kind/item_id` registration and completion; response terminal events move the lifecycle to terminal.'],
   ]}
 />
+
+`ResponsesInboundLifecycle` also owns the source-side output registry. `response.output_item.added` binds each `output_index` to its item kind and optional item `id`; subsequent content, reasoning, and tool events must carry the same `item_id` and expected kind, and `response.output_item.done` must close the same item. Pair state remains responsible only for target block/index projection after these source invariants pass.
 
 ### Stream identity ownership
 

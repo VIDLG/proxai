@@ -70,9 +70,11 @@ pub struct Conversation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ResponseFormatJsonSchema {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub name: String,
-    pub schema: Option<Value>,
+    pub schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strict: Option<bool>,
 }
 
@@ -89,41 +91,68 @@ pub enum TextResponseFormatConfiguration {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ResponseTextParam {
+    #[serde(default)]
     pub format: TextResponseFormatConfiguration,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub verbosity: Option<Verbosity>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Response {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub billing: Option<Billing>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation: Option<Conversation>,
     pub created_at: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorObject>,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub incomplete_details: Option<IncompleteDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub instructions: Option<Instructions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
     pub model: String,
     pub object: String,
     pub output: Vec<OutputItem>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_response_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<Prompt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_cache_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt_cache_retention: Option<PromptCacheRetention>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<Reasoning>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub safety_identifier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<ServiceTier>,
     pub status: Status,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<ResponseTextParam>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoiceParam>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Tool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub top_logprobs: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub truncation: Option<Truncation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<ResponseUsage>,
 }

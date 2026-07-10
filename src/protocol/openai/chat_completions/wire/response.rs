@@ -102,12 +102,17 @@ pub struct ChatChoiceLogprobs {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionResponseMessage {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refusal: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<Vec<ChatCompletionResponseMessageAnnotation>>,
     pub role: Role,
     // Deprecated function_call is intentionally not projected.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub audio: Option<ChatCompletionResponseMessageAudio>,
 }
 
@@ -115,7 +120,9 @@ pub struct ChatCompletionResponseMessage {
 pub struct ChatChoice {
     pub index: u32,
     pub message: ChatCompletionResponseMessage,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub finish_reason: Option<FinishReason>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
@@ -125,6 +132,7 @@ pub struct CreateChatCompletionResponse {
     pub choices: Vec<ChatChoice>,
     pub created: u32,
     pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<ServiceTier>,
     // Deprecated system_fingerprint is intentionally not projected.
     pub object: String,

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompactionSummaryItemParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub encrypted_content: String,
 }
@@ -18,6 +19,7 @@ pub struct CompactionSummaryItemParam {
 pub struct CompactionBody {
     pub id: String,
     pub encrypted_content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }
 

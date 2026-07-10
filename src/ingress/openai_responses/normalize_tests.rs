@@ -138,7 +138,7 @@ fn does_not_normalize_mixed_assistant_replay_content() {
 }
 
 #[test]
-fn leaves_zed_assistant_replay_message_unchanged() {
+fn normalizes_zed_assistant_replay_to_complete_output_message() {
     let payload = json!({
         "model": "glm-5.2",
         "input": [
@@ -158,15 +158,15 @@ fn leaves_zed_assistant_replay_message_unchanged() {
 
     let normalized = normalize_payload(payload);
 
-    assert!(normalized["input"][0].get("id").is_none());
-    assert!(normalized["input"][0].get("status").is_none());
+    assert_eq!(normalized["input"][0]["type"], "message");
+    assert_eq!(normalized["input"][0]["id"], "msg_zed_replay_0");
+    assert_eq!(normalized["input"][0]["status"], "completed");
     assert_eq!(normalized["input"][0]["content"][0]["type"], "output_text");
-    assert!(
-        normalized["input"][0]["content"][0]
-            .get("annotations")
-            .is_none()
+    assert_eq!(
+        normalized["input"][0]["content"][0]["annotations"],
+        json!([])
     );
     assert_eq!(normalized["input"][1]["role"], "user");
     serde_json::from_value::<crate::protocol::openai_responses::ResponseCreateParams>(normalized)
-        .expect_err("assistant replay adaptation belongs to projection, not ingress normalize");
+        .expect("normalized Zed assistant replay must match the native Responses schema");
 }

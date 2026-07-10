@@ -42,9 +42,11 @@ pub enum EasyInputContent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EasyInputMessage {
+    #[serde(default)]
     pub r#type: MessageType,
     pub role: Role,
     pub content: EasyInputContent,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<MessagePhase>,
 }
 
@@ -52,5 +54,6 @@ pub struct EasyInputMessage {
 pub struct InputMessage {
     pub content: Vec<InputContent>,
     pub role: InputRole,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }

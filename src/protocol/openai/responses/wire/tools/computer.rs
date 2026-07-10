@@ -59,6 +59,7 @@ pub struct ClickParam {
     pub button: ClickButtonType,
     pub x: i32,
     pub y: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<String>>,
 }
 
@@ -72,6 +73,7 @@ pub struct DoubleClickAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DragParam {
     pub path: Vec<CoordParam>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<String>>,
 }
 
@@ -84,6 +86,7 @@ pub struct KeyPressAction {
 pub struct MoveParam {
     pub x: i32,
     pub y: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<String>>,
 }
 
@@ -93,6 +96,7 @@ pub struct ScrollParam {
     pub scroll_y: i32,
     pub x: i32,
     pub y: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keys: Option<Vec<String>>,
 }
 
@@ -118,7 +122,9 @@ pub enum ComputerAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerCallSafetyCheckParam {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
@@ -142,7 +148,9 @@ pub enum ComputerScreenshotImageType {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerScreenshotImage {
     pub r#type: ComputerScreenshotImageType,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
 }
 
@@ -154,8 +162,11 @@ pub struct ComputerScreenshotImage {
 pub struct ComputerCallOutputItemParam {
     pub call_id: String,
     pub output: ComputerScreenshotImage,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub acknowledged_safety_checks: Option<Vec<ComputerCallSafetyCheckParam>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<OutputStatus>,
 }
 
@@ -165,7 +176,9 @@ pub struct ComputerCallOutputItemParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerToolCall {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<ComputerAction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub actions: Option<Vec<ComputerAction>>,
     pub call_id: String,
     pub id: String,
@@ -177,8 +190,10 @@ pub struct ComputerToolCall {
 pub struct ComputerToolCallOutputResource {
     pub call_id: String,
     pub output: ComputerScreenshotImage,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub acknowledged_safety_checks: Option<Vec<ComputerCallSafetyCheckParam>>,
     pub id: String,
     pub status: ComputerCallOutputStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
 }

@@ -392,10 +392,17 @@ fn groups_custom_tool_calls_and_results_into_adjacent_messages() {
         "model": "MiniMax-M3",
         "input": [
             {"type": "message", "role": "user", "content": "Use custom tools"},
-            {"type": "custom_tool_call", "call_id": "call_1", "name": "shell", "input": "pwd"},
-            {"type": "custom_tool_call", "call_id": "call_2", "name": "shell", "input": "ls"},
+            {"type": "custom_tool_call", "id": "item_1", "call_id": "call_1", "name": "shell", "input": "pwd"},
+            {"type": "custom_tool_call", "id": "item_2", "call_id": "call_2", "name": "shell", "input": "ls"},
             {"type": "custom_tool_call_output", "call_id": "call_1", "output": "D:/projects/proxai"},
-            {"type": "custom_tool_call_output", "call_id": "call_2", "output": ["Cargo.toml", "src"]}
+            {
+                "type": "custom_tool_call_output",
+                "call_id": "call_2",
+                "output": [
+                    {"type": "input_text", "text": "Cargo.toml"},
+                    {"type": "input_text", "text": "src"}
+                ]
+            }
         ]
     });
 

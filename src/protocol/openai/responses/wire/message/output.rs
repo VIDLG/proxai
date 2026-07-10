@@ -80,6 +80,7 @@ pub struct OutputMessage {
     pub content: Vec<OutputMessageContent>,
     pub id: String,
     pub role: AssistantRole,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub phase: Option<MessagePhase>,
     pub status: OutputStatus,
 }

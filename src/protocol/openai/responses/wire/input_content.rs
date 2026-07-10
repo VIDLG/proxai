@@ -25,19 +25,27 @@ pub struct InputTextContent {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct InputImageContent {
-    pub detail: Option<ImageDetail>,
+    #[serde(default)]
+    pub detail: ImageDetail,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputFileContent {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<FileInputDetail>,
 }
 
