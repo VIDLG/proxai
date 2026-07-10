@@ -17,6 +17,7 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
 
     fn try_from(response: &Response) -> TranslationResult<Self> {
         let mut content_parts: Vec<String> = Vec::new();
+        let mut reasoning_parts: Vec<String> = Vec::new();
         let mut refusal_parts: Vec<String> = Vec::new();
         let mut tool_calls = Vec::new();
 
@@ -30,6 +31,31 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
                 }
                 OutputItem::CustomToolCall(call) => {
                     tool_calls.push(ChatCompletionMessageToolCalls::from(call));
+                }
+                OutputItem::Reasoning(reasoning) => {
+                    reasoning_parts.extend(reasoning.summary.iter().map(|part| match part {
+                        crate::protocol::openai::responses::SummaryPart::SummaryText(text) => {
+                            text.text.clone()
+                        }
+                    }));
+                    if let Some(content) = reasoning.content.as_ref() {
+                        reasoning_parts.extend(content.iter().map(|part| {
+                            match part {
+                            crate::protocol::openai::responses::ReasoningItemContent::ReasoningText(
+                                text,
+                            ) => text.text.clone(),
+                        }
+                        }));
+                    }
+                    if reasoning.encrypted_content.is_some()
+                        && reasoning.summary.is_empty()
+                        && reasoning.content.as_ref().is_none_or(Vec::is_empty)
+                    {
+                        tracing::trace!(
+                            reason = "Chat reasoning_content cannot represent encrypted reasoning",
+                            "skipping encrypted Responses reasoning item during Chat Completions translation"
+                        );
+                    }
                 }
                 skipped => {
                     // Responses output items without a Chat Completions
@@ -45,6 +71,7 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
         }
 
         let content = content_parts.join("");
+        let reasoning_content = reasoning_parts.concat();
         let refusal = refusal_parts.join("");
         if !content.is_empty() && !refusal.is_empty() {
             return Err(TranslationError::InvalidPayload(
@@ -52,9 +79,14 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
                     .to_string(),
             ));
         }
-        if content.is_empty() && refusal.is_empty() && tool_calls.is_empty() {
+        if content.is_empty()
+            && reasoning_content.is_empty()
+            && refusal.is_empty()
+            && tool_calls.is_empty()
+        {
             return Err(TranslationError::InvalidPayload(
-                "OpenAI Responses output has no Chat-representable text or tool calls".to_string(),
+                "OpenAI Responses output has no Chat-representable text, reasoning, or tool calls"
+                    .to_string(),
             ));
         }
 
@@ -65,6 +97,7 @@ impl TryFrom<&Response> for CreateChatCompletionResponse {
                 index: 0,
                 message: assistant_response_message(
                     (!content.is_empty()).then_some(content),
+                    (!reasoning_content.is_empty()).then_some(reasoning_content),
                     (!refusal.is_empty()).then_some(refusal),
                     (!tool_calls.is_empty()).then_some(tool_calls),
                     None,

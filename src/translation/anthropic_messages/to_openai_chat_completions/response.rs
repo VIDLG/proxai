@@ -14,6 +14,7 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
 
     fn try_from(message: &Message) -> TranslationResult<Self> {
         let mut text_parts: Vec<String> = Vec::new();
+        let mut reasoning_parts: Vec<String> = Vec::new();
         let mut tool_calls = Vec::new();
         let mut annotations = Vec::new();
 
@@ -25,9 +26,8 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
                     text_parts.push(block.text.clone());
                 }
                 ContentBlock::ToolUse(block) => tool_calls.push(block.try_into()?),
-                // OpenAI Chat response messages only expose `content` plus
-                // `tool_calls`. Other Anthropic response blocks (thinking,
-                // redacted thinking, server-tool artifacts) have no safe Chat
+                ContentBlock::Thinking(block) => reasoning_parts.push(block.thinking.clone()),
+                // Redacted thinking and server-tool artifacts have no safe Chat
                 // message field, so they are skipped with a trace log to keep
                 // silent drops observable.
                 skipped => {
@@ -42,6 +42,7 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
         // Chat Completions cannot preserve Anthropic block interleaving in a
         // non-streaming assistant message, so text blocks are flattened.
         let content = text_parts.join("");
+        let reasoning_content = reasoning_parts.concat();
         let refusal = message_refusal(message, &content);
         let content = if refusal.is_some() {
             String::new()
@@ -49,9 +50,13 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
             content
         };
 
-        if content.is_empty() && refusal.is_none() && tool_calls.is_empty() {
+        if content.is_empty()
+            && reasoning_content.is_empty()
+            && refusal.is_none()
+            && tool_calls.is_empty()
+        {
             return Err(TranslationError::InvalidPayload(
-                "Anthropic message response has no Chat-representable content, refusal, or tool_use blocks"
+                "Anthropic message response has no Chat-representable content, thinking, refusal, or tool_use blocks"
                     .to_string(),
             ));
         }
@@ -64,6 +69,7 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
                 index: 0,
                 message: assistant_response_message(
                     (!content.is_empty()).then_some(content),
+                    (!reasoning_content.is_empty()).then_some(reasoning_content),
                     refusal,
                     (!tool_calls.is_empty()).then_some(tool_calls),
                     // Only Anthropic web-search citations can be represented as

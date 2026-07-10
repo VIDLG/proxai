@@ -104,6 +104,9 @@ pub struct ChatChoiceLogprobs {
 pub struct ChatCompletionResponseMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    /// OpenAI-compatible reasoning extension consumed by Zed as thinking output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refusal: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

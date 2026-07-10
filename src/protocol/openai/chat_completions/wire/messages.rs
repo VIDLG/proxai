@@ -209,6 +209,9 @@ pub struct ChatCompletionRequestAssistantMessage {
     pub name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio: Option<ChatCompletionRequestAssistantMessageAudio>,
+    /// OpenAI-compatible reasoning extension replayed by Zed for assistant history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCalls>>,
 }

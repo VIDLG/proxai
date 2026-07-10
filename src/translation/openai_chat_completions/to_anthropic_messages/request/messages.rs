@@ -176,6 +176,15 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
     type Error = TranslationError;
 
     fn try_from(message: &chat::ChatCompletionRequestAssistantMessage) -> TranslationResult<Self> {
+        if let Some(reasoning) = message.reasoning_content.as_deref()
+            && !reasoning.is_empty()
+        {
+            tracing::trace!(
+                reason = "Chat reasoning_content has no Anthropic thinking signature",
+                "skipping Chat assistant reasoning during Anthropic Messages request translation"
+            );
+        }
+
         let mut blocks = Vec::new();
         if let Some(content) = &message.content {
             match content {

@@ -27,6 +27,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['`messages[]`', '`messages[]` plus normalized system placement', 'Chat system/developer instructions must not be duplicated as user-visible turns.'],
     ['Assistant text', 'Assistant content blocks', 'Preserve ordered visible text.'],
+    ['Assistant `reasoning_content`', 'No signature-safe Anthropic equivalent', 'The Chat extension carries text but no Anthropic thinking signature, so cross-protocol request translation traces and skips it rather than forging a signature.'],
     ['`tools[]` function definitions', '`tools[]`', 'Preserve name, description, and JSON schema where possible.'],
     ['Assistant `tool_calls[]`', 'Anthropic `tool_use` blocks', 'Chat `tool_calls[].index` is stream-local; Anthropic content blocks use content-block indices.'],
     ['Tool result messages', 'Anthropic `tool_result` blocks', 'Preserve call id linkage where target protocol can represent it.'],
@@ -41,7 +42,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['Text content block', '`choices[0].message.content`', 'Chat has a single assistant message per choice.'],
     ['Tool use block', '`choices[0].message.tool_calls[]`', 'Assign stable call ids and function names.'],
-    ['Thinking/reasoning block', 'Chat-compatible reasoning extension when supported', 'Plain Chat has weak reasoning structure; do not mix reasoning into ordinary content unless required.'],
+    ['Thinking/reasoning block', '`choices[0].message.reasoning_content`', 'Zed consumes this OpenAI-compatible extension as thinking output; reasoning is not mixed into visible `content`.'],
     ['`stop_reason`', '`finish_reason`', 'Map natural turns, token limits, tool use, and refusals carefully.'],
   ]}
   codeFirstColumn={false}
@@ -54,6 +55,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['`message_start`', 'Initialize choice and assistant role delta.'],
     ['Text `content_block_delta`', 'Emit `delta.content` chunks.'],
+    ['Thinking `content_block_delta`', 'Emit `delta.reasoning_content` chunks consumed by Zed as thinking.'],
     ['Tool `input_json_delta`', 'Emit `delta.tool_calls[].function.arguments` chunks keyed by Chat tool index.'],
     ['`message_delta.stop_reason`', 'Set final `finish_reason` when terminal state is known.'],
     ['`message_stop`', 'Emit final chunk and `[DONE]`.'],
@@ -68,7 +70,8 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
 ## Lossy areas
 
 - Chat has no native output item graph.
-- Reasoning support is weaker and often extension-based.
+- Plain thinking text is preserved through the `reasoning_content` compatibility extension, but Chat still has no per-reasoning-item identity or signature field.
+- Redacted/encrypted thinking cannot be represented by Chat and remains explicitly lossy.
 - Chat streaming uses `tool_calls[].index`; Anthropic streaming uses content block `index`.
 - Chat `[DONE]` is a stream carrier terminator; Anthropic `message_stop` is the semantic terminal event.
 

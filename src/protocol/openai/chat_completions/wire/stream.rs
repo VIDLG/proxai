@@ -31,6 +31,7 @@ pub struct ChatCompletionStreamResponseDelta {
     pub tool_calls: Option<Vec<ChatCompletionMessageToolCallChunk>>,
     pub role: Option<Role>,
     pub refusal: Option<String>,
+    /// OpenAI-compatible reasoning extension consumed by Zed as thinking output.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
 }

@@ -1,6 +1,6 @@
 use proxai::protocol::openai::chat_completions::{
-    ChatCompletionRequestMessage, ChatCompletionTools, CreateChatCompletionRequest,
-    RequestProjection,
+    ChatCompletionRequestMessage, ChatCompletionResponseMessage, ChatCompletionStreamResponseDelta,
+    ChatCompletionTools, CreateChatCompletionRequest, RequestProjection,
 };
 use serde_json::json;
 
@@ -114,6 +114,44 @@ fn projects_chat_completions_tools_and_response_format_from_wire_shape() {
     assert_eq!(projection.tools.as_ref().map(Vec::len), Some(1));
     assert!(projection.tool_choice.is_some());
     assert!(projection.response_format.is_some());
+}
+
+#[test]
+fn preserves_zed_chat_reasoning_content_wire_extensions() {
+    let request_payload = json!({
+        "model": "gpt-4.1",
+        "messages": [
+            {"role": "user", "content": "Think."},
+            {
+                "role": "assistant",
+                "content": "Answer.",
+                "reasoning_content": "Hidden reasoning."
+            }
+        ]
+    });
+    let request =
+        serde_json::from_value::<CreateChatCompletionRequest>(request_payload.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), request_payload);
+
+    let response_message = serde_json::from_value::<ChatCompletionResponseMessage>(json!({
+        "role": "assistant",
+        "content": "Answer.",
+        "reasoning_content": "Hidden reasoning."
+    }))
+    .unwrap();
+    assert_eq!(
+        response_message.reasoning_content.as_deref(),
+        Some("Hidden reasoning.")
+    );
+
+    let stream_delta = serde_json::from_value::<ChatCompletionStreamResponseDelta>(json!({
+        "reasoning_content": "Hidden reasoning."
+    }))
+    .unwrap();
+    assert_eq!(
+        stream_delta.reasoning_content.as_deref(),
+        Some("Hidden reasoning.")
+    );
 }
 
 #[test]

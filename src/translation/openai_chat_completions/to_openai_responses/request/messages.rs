@@ -138,6 +138,26 @@ fn assistant_input_items(
     let mut items = Vec::new();
     let mut content = Vec::new();
 
+    if let Some(reasoning) = message
+        .reasoning_content
+        .as_deref()
+        .filter(|reasoning| !reasoning.is_empty())
+    {
+        items.push(responses::InputItem::Item(responses::Item::Reasoning(
+            responses::ReasoningItem {
+                id: Some(format!("rs_chat_assistant_{message_index}")),
+                summary: Vec::new(),
+                content: Some(vec![responses::ReasoningItemContent::ReasoningText(
+                    responses::ReasoningTextContent {
+                        text: reasoning.to_string(),
+                    },
+                )]),
+                encrypted_content: None,
+                status: Some(responses::OutputStatus::Completed),
+            },
+        )));
+    }
+
     if let Some(message_content) = message.content.as_ref() {
         content.extend(assistant_output_content(message_content)?);
     }
@@ -176,7 +196,7 @@ fn assistant_input_items(
 
     if items.is_empty() {
         return Err(TranslationError::InvalidPayload(
-            "Chat Completions assistant message without content, refusal, or tool calls cannot be translated to OpenAI Responses input"
+            "Chat Completions assistant message without content, reasoning_content, refusal, or tool calls cannot be translated to OpenAI Responses input"
                 .to_string(),
         ));
     }

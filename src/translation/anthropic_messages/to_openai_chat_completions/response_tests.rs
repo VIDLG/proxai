@@ -256,7 +256,7 @@ async fn maps_repeated_cited_text_to_later_occurrences_in_order() {
 }
 
 #[tokio::test]
-async fn rejects_anthropic_response_without_chat_representable_content() {
+async fn translates_anthropic_thinking_only_response_to_chat_reasoning_content() {
     let upstream = json!({
         "id": "msg_empty",
         "type": "message",
@@ -270,11 +270,13 @@ async fn rejects_anthropic_response_without_chat_representable_content() {
         "usage": {"input_tokens": 3, "output_tokens": 4}
     });
 
-    let error = translate_non_streaming_response(upstream)
-        .unwrap_err()
-        .to_string();
+    let translated = translate_non_streaming_response(upstream).unwrap();
 
-    assert!(error.contains("no Chat-representable content"));
+    assert_eq!(
+        translated["choices"][0]["message"]["reasoning_content"],
+        "hidden"
+    );
+    assert!(translated["choices"][0]["message"].get("content").is_none());
 }
 
 #[tokio::test]

@@ -22,6 +22,7 @@ fn translates_chat_completions_request_to_responses_shape() {
             {
                 "role": "assistant",
                 "content": "checking",
+                "reasoning_content": "Need to look this up.",
                 "tool_calls": [{
                     "id": "call_1",
                     "type": "function",
@@ -66,11 +67,16 @@ fn translates_chat_completions_request_to_responses_shape() {
     assert_eq!(translated["input"][0]["content"][0]["type"], "input_text");
     assert_eq!(translated["input"][0]["content"][1]["type"], "input_image");
     assert_eq!(translated["input"][0]["content"][2]["type"], "input_file");
-    assert_eq!(translated["input"][1]["role"], "assistant");
-    assert_eq!(translated["input"][1]["content"][0]["type"], "output_text");
-    assert_eq!(translated["input"][2]["type"], "function_call");
-    assert_eq!(translated["input"][2]["name"], "lookup");
-    assert_eq!(translated["input"][3]["type"], "function_call_output");
+    assert_eq!(translated["input"][1]["type"], "reasoning");
+    assert_eq!(
+        translated["input"][1]["content"][0]["text"],
+        "Need to look this up."
+    );
+    assert_eq!(translated["input"][2]["role"], "assistant");
+    assert_eq!(translated["input"][2]["content"][0]["type"], "output_text");
+    assert_eq!(translated["input"][3]["type"], "function_call");
+    assert_eq!(translated["input"][3]["name"], "lookup");
+    assert_eq!(translated["input"][4]["type"], "function_call_output");
     assert_eq!(translated["tools"][0]["type"], "function");
     assert_eq!(translated["tool_choice"]["name"], "lookup");
 }
@@ -148,7 +154,11 @@ fn rejects_empty_chat_assistant_message_for_request_translation() {
 
     let error = translate_request_payload(&payload).unwrap_err().to_string();
 
-    assert!(error.contains("assistant message without content, refusal, or tool calls"));
+    assert!(
+        error.contains(
+            "assistant message without content, reasoning_content, refusal, or tool calls"
+        )
+    );
 }
 
 #[test]

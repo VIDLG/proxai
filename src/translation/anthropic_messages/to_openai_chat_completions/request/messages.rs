@@ -149,6 +149,7 @@ fn assistant_blocks_message(
     blocks: Vec<anthropic::ContentBlockParam>,
 ) -> TranslationResult<chat::ChatCompletionRequestMessage> {
     let mut content_parts = Vec::new();
+    let mut reasoning_parts = Vec::new();
     let mut tool_calls = Vec::new();
 
     let mut seen_tool_use = false;
@@ -165,6 +166,8 @@ fn assistant_blocks_message(
                 }
                 content_parts.push(text.into());
             }
+            AssistantBlock::Reasoning(reasoning) if reasoning.is_empty() => {}
+            AssistantBlock::Reasoning(reasoning) => reasoning_parts.push(reasoning),
             AssistantBlock::ToolCall(tool_call) => {
                 seen_tool_use = true;
                 tool_calls.push(tool_call);
@@ -172,21 +175,23 @@ fn assistant_blocks_message(
         }
     }
 
-    if content_parts.is_empty() && tool_calls.is_empty() {
+    if content_parts.is_empty() && reasoning_parts.is_empty() && tool_calls.is_empty() {
         return Err(TranslationError::InvalidPayload(
-            "Anthropic assistant message without content or tool_use blocks cannot be translated to Chat Completions"
+            "Anthropic assistant message without content, thinking, or tool_use blocks cannot be translated to Chat Completions"
                 .to_string(),
         ));
     }
 
     Ok(assistant_message(
         non_empty(content_parts).map(Into::into),
+        (!reasoning_parts.is_empty()).then(|| reasoning_parts.concat()),
         non_empty(tool_calls),
     ))
 }
 
 enum AssistantBlock {
     Text(String),
+    Reasoning(String),
     ToolCall(chat::ChatCompletionMessageToolCalls),
 }
 
@@ -196,6 +201,7 @@ impl TryFrom<anthropic::ContentBlockParam> for AssistantBlock {
     fn try_from(block: anthropic::ContentBlockParam) -> TranslationResult<Self> {
         match block {
             anthropic::ContentBlockParam::Text(block) => Ok(Self::Text(block.text)),
+            anthropic::ContentBlockParam::Thinking(block) => Ok(Self::Reasoning(block.thinking)),
             anthropic::ContentBlockParam::ToolUse(block) => Ok(Self::ToolCall(block.try_into()?)),
             other => Err(TranslationError::InvalidPayload(format!(
                 "Anthropic assistant content block `{}` cannot be translated to Chat Completions request content",

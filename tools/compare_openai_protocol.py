@@ -255,6 +255,21 @@ INTENTIONAL_FIELD_EXCLUSIONS = {
     },
 }
 
+# Local OpenAI-compatible fields intentionally supported beyond async-openai.
+# These extensions must have a concrete client/provider interoperability reason;
+# otherwise protocol drift belongs in ingress/provider adaptation instead.
+INTENTIONAL_LOCAL_FIELD_EXTENSIONS = {
+    "ChatCompletionRequestAssistantMessage": {
+        "reasoning_content": "Zed replays assistant thinking in Chat conversation history.",
+    },
+    "ChatCompletionResponseMessage": {
+        "reasoning_content": "Zed reads non-streaming Chat reasoning as thinking output.",
+    },
+    "ChatCompletionStreamResponseDelta": {
+        "reasoning_content": "Zed, DeepSeek, and LM Studio consume streamed Chat thinking from this field.",
+    },
+}
+
 
 # ── tree-sitter helpers ───────────────────────────────────────
 
@@ -900,6 +915,8 @@ def _check_protocol(protocol, level=2):
     serde_diffs = []  # list of (px_type, sdk_type, messages)
     field_serde_diffs = []  # list of (px_type, sdk_type, field summaries)
     field_type_diffs = []  # list of (px_type, sdk_type, field types)
+    local_field_extensions = []  # list of (type, field, reason)
+    missing_local_field_extensions = []  # configured extension fields absent locally
     aligned_ok = 0
 
     for nk in sorted(sk & pk):
@@ -932,9 +949,19 @@ def _check_protocol(protocol, level=2):
 
             sdk_set = set(sdk_fields)
             px_set = set(px_fields)
+            configured_extensions = INTENTIONAL_LOCAL_FIELD_EXTENSIONS.get(px_name, {})
+            extension_fields = set(configured_extensions)
+            for field in sorted((px_set - sdk_set) & extension_fields):
+                local_field_extensions.append(
+                    (px_name, field, configured_extensions[field])
+                )
+            for field in sorted(extension_fields - px_set):
+                missing_local_field_extensions.append(
+                    (px_name, field, configured_extensions[field])
+                )
 
             missing_f = sorted(sdk_set - px_set - exclusions)
-            extra_f = sorted(px_set - sdk_set)
+            extra_f = sorted(px_set - sdk_set - extension_fields)
 
             # Check field order (only if same fields and both non-empty).
             order_mismatch = None
@@ -970,6 +997,7 @@ def _check_protocol(protocol, level=2):
                 or order_mismatch
                 or field_serde_messages
                 or field_type_messages
+                or any(type_name == px_name for type_name, _, _ in missing_local_field_extensions)
             ):
                 aligned_ok += 1
 
@@ -1007,6 +1035,7 @@ def _check_protocol(protocol, level=2):
         or bool(serde_diffs)
         or bool(field_serde_diffs)
         or bool(field_type_diffs)
+        or bool(missing_local_field_extensions)
     )
 
     structural_checked = len(sk & pk)
@@ -1135,6 +1164,23 @@ def _check_protocol(protocol, level=2):
                 out(
                     "  ✅  All struct fields, field types, enum variants, and serde attrs match"
                 )
+            out()
+
+        # Intentional local wire extensions
+        if missing_local_field_extensions:
+            h2("MISSING intentional local field extensions")
+            for type_name, field, reason in missing_local_field_extensions:
+                out(f"  ✗ {type_name}.{field}")
+                out(f"    Required because: {reason}")
+            out()
+
+        if local_field_extensions:
+            h2(
+                f"Intentional local field extensions ({len(local_field_extensions)} fields)"
+            )
+            for type_name, field, reason in local_field_extensions:
+                out(f"  + {type_name}.{field}")
+                out(f"    {reason}")
             out()
 
         # Intentional exclusions

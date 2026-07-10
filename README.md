@@ -31,6 +31,11 @@ Other cross-protocol translation paths remain intentionally unsupported until
 they are implemented explicitly. See [Protocols Reference](https://vidlg.github.io/proxai/reference/protocols)
 for the full matrix.
 
+For Chat-compatible clients such as Zed, plain reasoning text is preserved through
+the `reasoning_content` extension in assistant history, non-streaming messages,
+and streaming deltas. Redacted or encrypted reasoning is never exposed as ordinary
+visible content.
+
 ## Quick Start
 
 1. Download the Windows release executable, or build from source.

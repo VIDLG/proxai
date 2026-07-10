@@ -94,6 +94,31 @@ fn translates_anthropic_request_to_chat_completion_shape() {
 }
 
 #[test]
+fn preserves_anthropic_assistant_thinking_in_chat_history() {
+    let payload = json!({
+        "model": "claude-sonnet-4-5",
+        "max_tokens": 128,
+        "messages": [{
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "thinking": "Need a tool.", "signature": "sig"},
+                {"type": "text", "text": "Checking."},
+                {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {}}
+            ]
+        }]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(
+        translated["messages"][0]["reasoning_content"],
+        "Need a tool."
+    );
+    assert_eq!(translated["messages"][0]["content"], "Checking.");
+    assert_eq!(translated["messages"][0]["tool_calls"][0]["id"], "toolu_1");
+}
+
+#[test]
 fn splits_mixed_anthropic_user_content_and_tool_result_into_chat_messages() {
     let payload = json!({
         "model": "claude-sonnet-4-5",
@@ -222,7 +247,7 @@ fn rejects_empty_anthropic_assistant_content_for_chat_completion() {
 
     let error = translate_request_payload(&payload).unwrap_err().to_string();
 
-    assert!(error.contains("assistant message without content or tool_use"));
+    assert!(error.contains("assistant message without content, thinking, or tool_use"));
 }
 
 #[test]

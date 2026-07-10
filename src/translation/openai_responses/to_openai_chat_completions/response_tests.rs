@@ -179,6 +179,33 @@ fn rejects_mixed_responses_text_and_refusal_for_chat_response() {
 }
 
 #[test]
+fn translates_responses_reasoning_output_to_chat_reasoning_content() {
+    let upstream = json!({
+        "id": "resp_reasoning",
+        "model": "gpt-5.1",
+        "created_at": 0,
+        "status": "completed",
+        "object": "response",
+        "output": [{
+            "type": "reasoning",
+            "id": "r",
+            "summary": [{"type": "summary_text", "text": "Summary. "}],
+            "content": [{"type": "reasoning_text", "text": "Details."}],
+            "status": "completed"
+        }]
+    });
+    let response = serde_json::from_value::<Response>(upstream).unwrap();
+    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
+    let value = serde_json::to_value(translated).unwrap();
+
+    assert_eq!(
+        value["choices"][0]["message"]["reasoning_content"],
+        "Summary. Details."
+    );
+    assert!(value["choices"][0]["message"].get("content").is_none());
+}
+
+#[test]
 fn rejects_responses_output_without_chat_content() {
     let upstream = json!({
         "id": "resp_1",
@@ -193,5 +220,5 @@ fn rejects_responses_output_without_chat_content() {
     let response = serde_json::from_value::<Response>(upstream).unwrap();
     let error: Result<CreateChatCompletionResponse, _> = (&response).try_into();
     let error = error.unwrap_err().to_string();
-    assert!(error.contains("no Chat-representable text or tool calls"));
+    assert!(error.contains("no Chat-representable text, reasoning, or tool calls"));
 }

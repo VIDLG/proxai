@@ -91,7 +91,7 @@ fn messages_from_easy_message(
             // Easy assistant content is treated as output text; Chat assistant
             // messages require non-empty content, so drop empty turns.
             if let Some(content) = assistant_content_from_easy(&message.content) {
-                messages.push(assistant_message(Some(content), None));
+                messages.push(assistant_message(Some(content), None, None));
             }
         }
     }
@@ -130,6 +130,9 @@ fn messages_from_item(
                 )),
                 output.call_id.clone(),
             ));
+        }
+        responses::Item::Reasoning(reasoning) => {
+            push_assistant_reasoning(reasoning, messages);
         }
         other => {
             // Responses items without a Chat Completions representation
@@ -178,12 +181,62 @@ fn push_assistant_output_message(
         return;
     }
 
+    if let Some(chat::ChatCompletionRequestMessage::Assistant(assistant)) = messages.last_mut()
+        && assistant.content.is_none()
+        && assistant.refusal.is_none()
+        && assistant.tool_calls.is_none()
+        && assistant.reasoning_content.is_some()
+    {
+        assistant.content = Some(chat::ChatCompletionRequestAssistantMessageContent::Array(
+            chat_content,
+        ));
+        return;
+    }
+
     messages.push(assistant_message(
         Some(chat::ChatCompletionRequestAssistantMessageContent::Array(
             chat_content,
         )),
         None,
+        None,
     ));
+}
+
+fn push_assistant_reasoning(
+    reasoning: &responses::ReasoningItem,
+    messages: &mut Vec<chat::ChatCompletionRequestMessage>,
+) {
+    let mut parts: Vec<String> = reasoning
+        .summary
+        .iter()
+        .map(|part| match part {
+            responses::SummaryPart::SummaryText(text) => text.text.clone(),
+        })
+        .collect();
+    if let Some(content) = reasoning.content.as_ref() {
+        parts.extend(content.iter().map(|part| match part {
+            responses::ReasoningItemContent::ReasoningText(text) => text.text.clone(),
+        }));
+    }
+    let reasoning_content = parts.concat();
+    if reasoning_content.is_empty() {
+        tracing::trace!(
+            encrypted = reasoning.encrypted_content.is_some(),
+            reason = "Chat reasoning_content requires visible reasoning text",
+            "skipping Responses reasoning item during Chat Completions request translation"
+        );
+        return;
+    }
+
+    if let Some(chat::ChatCompletionRequestMessage::Assistant(assistant)) = messages.last_mut() {
+        assistant
+            .reasoning_content
+            .get_or_insert_with(String::new)
+            .push_str(&reasoning_content);
+        return;
+    }
+
+    messages.push(assistant_message(None, Some(reasoning_content), None));
 }
 
 fn push_input_message(
@@ -265,7 +318,7 @@ fn push_assistant_tool_call(
             .push(tool_call);
         return;
     }
-    messages.push(assistant_message(None, Some(vec![tool_call])));
+    messages.push(assistant_message(None, None, Some(vec![tool_call])));
 }
 
 fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<String> {

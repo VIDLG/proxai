@@ -29,6 +29,10 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 其他跨协议转换路径仍保持显式未支持，直到逐个实现。完整矩阵见
 [协议参考](https://vidlg.github.io/proxai/zh/reference/protocols)。
 
+对于 Zed 等 Chat-compatible 客户端，普通 reasoning 文本会通过
+`reasoning_content` 扩展保留在 assistant 历史消息、非流式 message 和流式
+delta 中。Redacted 或 encrypted reasoning 不会伪装成普通可见正文。
+
 ## 快速开始
 
 1. 下载 Windows release 可执行文件，或从源码构建。
