@@ -2,10 +2,12 @@ use serde_json::Value;
 
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
-use crate::translation::anthropic_messages::outbound::system_prompt_from_text_parts;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
+
 use crate::translation::anthropic_messages::outbound::{
     assistant_message, content_block_message, image_block_from_url, merge_adjacent_tool_messages,
-    text_block_param, tool_use_block_param, user_message,
+    redacted_thinking_content_block, system_prompt_from_text_parts, text_block_param,
+    thinking_content_block, tool_use_block_param, user_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -176,16 +178,40 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
     type Error = TranslationError;
 
     fn try_from(message: &chat::ChatCompletionRequestAssistantMessage) -> TranslationResult<Self> {
-        if let Some(reasoning) = message.reasoning_content.as_deref()
-            && !reasoning.is_empty()
-        {
-            tracing::trace!(
-                reason = "Chat reasoning_content has no Anthropic thinking signature",
-                "skipping Chat assistant reasoning during Anthropic Messages request translation"
-            );
+        let mut blocks = Vec::new();
+
+        if let Some(reasoning) = message.reasoning_content.as_deref() {
+            let (visible_reasoning, continuations) =
+                ContinuationEnvelope::split_chat_reasoning_content(reasoning)?;
+            if let Some(envelope) = continuations {
+                for continuation in envelope {
+                    match continuation {
+                        Continuation::Thinking {
+                            thinking,
+                            signature,
+                        } if !signature.is_empty() => {
+                            blocks.push(thinking_content_block(thinking, signature));
+                        }
+                        Continuation::Thinking { .. } => {
+                            return Err(TranslationError::InvalidPayload(
+                                "Anthropic thinking continuation is missing its signature"
+                                    .to_string(),
+                            ));
+                        }
+                        Continuation::RedactedThinking { data } => {
+                            blocks.push(redacted_thinking_content_block(data));
+                        }
+                    }
+                }
+            }
+            if !visible_reasoning.is_empty() {
+                tracing::trace!(
+                    reason = "Chat reasoning_content has no Anthropic thinking signature",
+                    "skipping unsigned Chat assistant reasoning during Anthropic Messages request translation"
+                );
+            }
         }
 
-        let mut blocks = Vec::new();
         if let Some(content) = &message.content {
             match content {
                 chat::ChatCompletionRequestAssistantMessageContent::Text(text) => {

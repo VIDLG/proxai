@@ -92,6 +92,7 @@ data: {\"type\":\"message_stop\"}\n\n",
     assert!(body.contains("\"delta\":\"plan\""));
     assert!(body.contains("event: response.reasoning_text.done"));
     assert!(body.contains("event: response.completed"));
+    assert!(body.contains("proxai:anthropic:v1:"));
     assert!(
         !body.contains("event: error"),
         "thinking block stream must not fail translation: {body}"

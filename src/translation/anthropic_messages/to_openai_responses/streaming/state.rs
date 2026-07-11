@@ -56,6 +56,7 @@ pub(super) enum StreamBlock {
     Thinking {
         item_id: String,
         text: String,
+        signature: String,
     },
     RedactedThinking {
         item_id: String,
@@ -180,12 +181,14 @@ impl StreamingState {
         &mut self,
         block_index: u32,
         item_id: String,
+        signature: String,
     ) -> StreamTranslationResult<()> {
         self.register_block(
             block_index,
             StreamBlock::Thinking {
                 item_id,
                 text: String::new(),
+                signature,
             },
         )
     }
@@ -276,7 +279,7 @@ impl StreamingState {
         delta: &str,
     ) -> StreamTranslationResult<String> {
         match self.blocks.get_mut(&block_index) {
-            Some(StreamBlock::Thinking { item_id, text }) => {
+            Some(StreamBlock::Thinking { item_id, text, .. }) => {
                 text.push_str(delta);
                 Ok(item_id.clone())
             }
@@ -318,21 +321,23 @@ impl StreamingState {
         }
     }
 
-    pub(super) fn require_reasoning_signature_block(
-        &self,
+    pub(super) fn append_signature_delta(
+        &mut self,
         block_index: u32,
+        delta: &str,
     ) -> StreamTranslationResult<()> {
-        let Some(actual) = self.blocks.get(&block_index) else {
-            return Err(StreamTranslationError::Semantic(format!(
-                "Anthropic stream emitted signature_delta for unopened content block index {block_index}"
-            )));
-        };
-        if !matches!(actual, StreamBlock::Thinking { .. }) {
-            return Err(StreamTranslationError::Semantic(format!(
+        match self.blocks.get_mut(&block_index) {
+            Some(StreamBlock::Thinking { signature, .. }) => {
+                signature.push_str(delta);
+                Ok(())
+            }
+            Some(_) => Err(StreamTranslationError::Semantic(format!(
                 "Anthropic stream emitted signature_delta for incompatible content block index {block_index}"
-            )));
+            ))),
+            None => Err(StreamTranslationError::Semantic(format!(
+                "Anthropic stream emitted signature_delta for unopened content block index {block_index}"
+            ))),
         }
-        Ok(())
     }
 
     pub(super) fn stop_block(&mut self, block_index: u32) -> StreamTranslationResult<StreamBlock> {

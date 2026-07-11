@@ -421,7 +421,7 @@ enum StreamBlock {
 }
 ```
 
-Chat 只区分 block 类型，加上一个整数（`chat_tool_index`），它必须在每个 `tool_calls[].index` chunk 上回填。实际内容——text 片段、tool 参数、reasoning text——逐 chunk emit，不需要保留。OpenAI-compatible `reasoning_content` 扩展可以为 Zed 等客户端承载普通 thinking 文本，但它没有 per-item identity 或 encrypted payload slot；因此 redacted thinking 仍会塌缩成 `Ignored`。
+Chat 只区分 block 类型，加上一个整数（`chat_tool_index`），它必须在每个 `tool_calls[].index` chunk 上回填。可见文本、tool 参数和普通 reasoning 逐步 emit。对于 Anthropic thinking continuation，ProxAI 则会在相关 block 结束前累积 signature 与 redacted payload，随后在最后一个 `reasoning_content` delta 里追加带版本的 continuation envelope。该 envelope 由客户端而非代理持有，供后续回放。
 
 Responses 累积内容，因为每个 block 最终必须为两个下游消费者产生一个完整的 `OutputItem`：`response.output_item.done`（携带最终化的 item）和 `response.completed` 快照的 `output` 数组。Text 需要 `text` 给快照、`item_id` 给每个 delta/done 事件、`citations` 给 annotation 转换。ToolUse 需要累积的 `arguments` 加上 `name` 和 `item_id`。RedactedThinking 没有流式 delta，但必须把其 `data` payload 表达为 `encrypted_content`。
 
@@ -436,7 +436,7 @@ Responses 累积内容，因为每个 block 最终必须为两个下游消费者
     ['', '`citations`', '否', '是', 'Responses `OutputTextContent.annotations`；Chat 用不同方式处理 annotations'],
     ['Thinking', 'discriminant', '是', '是', 'delta 类型校验'],
     ['', '`item_id` / `text`', '否', '是', '与 Text 相同原因'],
-    ['RedactedThk', '`item_id` / `data`', '`Ignored`', '是', 'Responses 使用 `encrypted_content`；Chat `reasoning_content` 只能承载普通文本，不能承载 encrypted reasoning'],
+    ['RedactedThk', '`item_id` / `data`', '是，客户端携带的 continuation', '是', 'Responses 使用 `encrypted_content`；Chat 将带版本 envelope 追加到 `reasoning_content`，供兼容历史回放'],
     ['ToolUse', 'discriminant', '是', '是', 'delta 类型校验'],
     ['', '`chat_tool_index`', '是', '否', 'Chat-only 整数 index 进入 `tool_calls[]`；Responses 用 `item_id`'],
     ['', '`item_id` / `name`', '否', '是', 'Responses 需要稳定 id + name 给 done 事件和快照'],

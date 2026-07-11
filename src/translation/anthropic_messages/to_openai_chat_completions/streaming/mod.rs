@@ -10,7 +10,7 @@ use crate::protocol::openai::chat_completions::FunctionType;
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
-    refusal_delta, tool_arguments_delta, tool_call_start_delta,
+    reasoning_delta, refusal_delta, tool_arguments_delta, tool_call_start_delta,
 };
 use crate::translation::streaming::{
     SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
@@ -22,7 +22,7 @@ mod state;
 
 use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use output::chat_terminal_delta;
-use state::{StreamBlock, StreamingState};
+use state::StreamingState;
 
 #[derive(Debug, Default)]
 pub(super) struct ChatCompletionStreamTranslator {
@@ -80,23 +80,21 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     }
 
                     ContentBlock::Thinking(block) => {
+                        let thinking = block.thinking.clone();
+                        let signature = block.signature.clone();
                         self.lifecycle
                             .streaming_state_mut()?
-                            .register_thinking_block(index)?;
+                            .register_thinking_block(index, thinking, signature)?;
                         if !block.thinking.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                             let identity = self.lifecycle.stream_identity()?;
                             chunks.push(chat_choice_chunk(identity, block.into(), None));
                         }
                     }
-                    ContentBlock::RedactedThinking(_) => {
-                        tracing::trace!(
-                            block_index = index,
-                            "skipping Anthropic redacted_thinking block with no Chat-representable field"
-                        );
+                    ContentBlock::RedactedThinking(block) => {
                         self.lifecycle
                             .streaming_state_mut()?
-                            .register_ignored_block(index)?;
+                            .register_redacted_thinking_block(index, block.data.clone())?;
                     }
 
                     ContentBlock::ToolResult(_)
@@ -117,11 +115,9 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
             }
             MessageStreamEvent::ContentBlockDelta(event) => match event.delta {
                 ContentBlockDelta::TextDelta(delta) => {
-                    self.lifecycle.streaming_state()?.require_block(
-                        event.index,
-                        StreamBlock::Text,
-                        "text_delta",
-                    )?;
+                    self.lifecycle
+                        .streaming_state()?
+                        .require_text_block(event.index, "text_delta")?;
                     if !delta.text.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_text();
                         let identity = self.lifecycle.stream_identity()?;
@@ -143,21 +139,19 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 }
 
                 ContentBlockDelta::ThinkingDelta(delta) => {
-                    self.lifecycle.streaming_state()?.require_block(
-                        event.index,
-                        StreamBlock::Thinking,
-                        "thinking_delta",
-                    )?;
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .append_thinking_delta(event.index, &delta.thinking)?;
                     if !delta.thinking.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                         let identity = self.lifecycle.stream_identity()?;
                         chunks.push(chat_choice_chunk(identity, delta.into(), None));
                     }
                 }
-                ContentBlockDelta::SignatureDelta(_) => {
+                ContentBlockDelta::SignatureDelta(delta) => {
                     self.lifecycle
-                        .streaming_state()?
-                        .require_reasoning_signature_block(event.index)?;
+                        .streaming_state_mut()?
+                        .append_signature_delta(event.index, &delta.signature)?;
                 }
 
                 ContentBlockDelta::CitationsDelta(_) => {
@@ -180,6 +174,16 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
                 let identity = self.lifecycle.stream_identity()?.clone();
                 let finish_reason = chat_finish_reason_from_anthropic_stop_reason(stop_reason);
+
+                if let Some(continuation) = phase.state_mut().take_continuation() {
+                    chunks.push(chat_choice_chunk(
+                        &identity,
+                        reasoning_delta(
+                            continuation.append_to_chat_reasoning_content(String::new())?,
+                        ),
+                        None,
+                    ));
+                }
 
                 if let Some(refusal) = terminal_delta {
                     phase.mark_refusal();
@@ -217,9 +221,13 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 done = true;
             }
             MessageStreamEvent::ContentBlockStop(event) => {
-                self.lifecycle
+                let produced_continuation = self
+                    .lifecycle
                     .streaming_state_mut()?
                     .stop_block(event.index)?;
+                if produced_continuation {
+                    self.lifecycle.streaming_phase_mut()?.mark_reasoning();
+                }
             }
         }
 

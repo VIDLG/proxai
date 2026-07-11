@@ -2,10 +2,11 @@ use serde_json::Value;
 
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::anthropic_messages::outbound::{
     content_block_message, document_source_from_file_data, document_source_from_url,
-    image_block_from_url, merge_adjacent_tool_messages, text_block_param, tool_use_block_param,
-    typed_text_block,
+    image_block_from_url, merge_adjacent_tool_messages, redacted_thinking_content_block,
+    text_block_param, thinking_content_block, tool_use_block_param, typed_text_block,
 };
 
 use crate::translation::{TranslationError, TranslationResult};
@@ -135,28 +136,62 @@ fn translate_input(
                             ));
                         }
                         responses::Item::Reasoning(reasoning) => {
-                            if let Some(data) = &reasoning.encrypted_content {
-                                messages.push(content_block_message(
-                                    anthropic::MessageParamRole::Assistant,
-                                    anthropic::ContentBlockParam::RedactedThinking(
-                                        anthropic::RedactedThinkingBlockParam {
-                                            data: data.clone(),
-                                        },
-                                    ),
-                                ));
+                            let mut restored_continuation = false;
+                            let mut has_unrecognized_encrypted_content = false;
+                            if let Some(encrypted_content) = &reasoning.encrypted_content {
+                                match ContinuationEnvelope::decode(encrypted_content)? {
+                                    Some(envelope) => {
+                                        restored_continuation = true;
+                                        for continuation in envelope {
+                                            match continuation {
+                                                Continuation::Thinking {
+                                                    thinking,
+                                                    signature,
+                                                } if !signature.is_empty() => {
+                                                    messages.push(content_block_message(
+                                                        anthropic::MessageParamRole::Assistant,
+                                                        thinking_content_block(thinking, signature),
+                                                    ));
+                                                }
+                                                Continuation::Thinking { .. } => {
+                                                    return Err(TranslationError::InvalidPayload(
+                                                        "Anthropic thinking continuation is missing its signature"
+                                                            .to_string(),
+                                                    ));
+                                                }
+                                                Continuation::RedactedThinking { data } => {
+                                                    messages.push(content_block_message(
+                                                        anthropic::MessageParamRole::Assistant,
+                                                        redacted_thinking_content_block(data),
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    None => {
+                                        has_unrecognized_encrypted_content = true;
+                                    }
+                                }
                             }
 
                             let has_content = reasoning
                                 .content
                                 .as_ref()
                                 .is_some_and(|content| !content.is_empty());
-                            if !reasoning.summary.is_empty() || has_content {
-                                tracing::trace!(
-                                    has_summary = !reasoning.summary.is_empty(),
-                                    has_content,
-                                    reason = "OpenAI Responses reasoning history has no Anthropic thinking signature",
-                                    "skipping unsigned OpenAI Responses reasoning history during Anthropic Messages request translation"
-                                );
+                            if !restored_continuation {
+                                if has_unrecognized_encrypted_content {
+                                    tracing::trace!(
+                                        reason = "OpenAI Responses encrypted_content is provider-scoped and has no ProxAI continuation prefix",
+                                        "skipping unrecognized OpenAI Responses encrypted reasoning during Anthropic Messages request translation"
+                                    );
+                                } else if !reasoning.summary.is_empty() || has_content {
+                                    tracing::trace!(
+                                        has_summary = !reasoning.summary.is_empty(),
+                                        has_content,
+                                        reason = "OpenAI Responses reasoning history has no Anthropic thinking signature",
+                                        "skipping unsigned OpenAI Responses reasoning history during Anthropic Messages request translation"
+                                    );
+                                }
                             }
                         }
                         other => {

@@ -36,6 +36,12 @@ the `reasoning_content` extension in assistant history, non-streaming messages,
 and streaming deltas. Redacted or encrypted reasoning is never exposed as ordinary
 visible content.
 
+When translating Anthropic thinking across turns, ProxAI uses a versioned,
+client-carried continuation envelope: Responses uses `reasoning.encrypted_content`,
+and Chat-compatible history uses a suffix in `reasoning_content`. ProxAI removes
+that envelope and restores the provider-specific thinking blocks before forwarding
+the next request to Anthropic; it keeps no proxy-side continuation state.
+
 ## Quick Start
 
 1. Download the Windows release executable, or build from source.

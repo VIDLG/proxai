@@ -28,11 +28,31 @@ This page documents the conversion path used when the provider speaks Anthropic 
     ['`Message` envelope', 'Responses response envelope', 'Anthropic returns one final message; Responses returns an envelope with `output[]`.'],
     ['Text block', 'Message output item/content part', 'Preserve visible text order.'],
     ['`tool_use` block', '`function_call` output item', 'Preserve call identity using Responses item/call identifiers.'],
-    ['`thinking` block', 'Reasoning output item when representable', 'Transform provider-specific metadata instead of raw round-tripping.'],
+    ['`thinking` block', 'Reasoning output item plus continuation envelope', 'Keep visible thinking as Responses reasoning content and store the Anthropic signature in `encrypted_content` for a compatible client to replay.'],
+    ['`redacted_thinking` block', 'Reasoning output item continuation envelope', 'Carry provider-opaque data in the same client-held envelope; do not expose it as visible content.'],
     ['`stop_reason`', 'Responses terminal status and output state', 'Map terminal behavior, not just field names.'],
   ]}
   codeFirstColumn={false}
 />
+
+## Thinking continuation across turns
+
+Anthropic thinking signatures and redacted-thinking payloads are provider-scoped,
+but they are required when a client replays assistant history back to Anthropic.
+For the `anthropic_messages` → `openai_responses` pair, ProxAI writes a versioned
+continuation envelope into the standard Responses
+`reasoning.encrypted_content` field. On a later
+`openai_responses` → `anthropic_messages` request, it recognizes that envelope,
+removes it from the Responses representation, and restores the original
+Anthropic `thinking` or `redacted_thinking` block.
+
+This is client-carried state, not proxy persistence. It only round-trips when the
+client preserves and replays Responses reasoning items. The envelope is prefixed
+and JSON-encoded, not cryptographically encrypted or authenticated; the
+`encrypted_content` name is the existing Responses carrier field. An unknown
+`encrypted_content` value is provider-scoped and is trace-skipped during
+Responses-to-Anthropic translation; only the versioned ProxAI prefix identifies
+restorable continuation data.
 
 ## Streaming event mapping
 
@@ -68,7 +88,7 @@ This page documents the conversion path used when the provider speaks Anthropic 
 ## Lossy areas
 
 - Anthropic content block `index` is stream-local; Responses item identity is client-visible and can be stable across turns.
-- Provider-specific thinking metadata may not have a Responses equivalent.
+- Provider-specific thinking metadata is preserved only for clients that replay ProxAI's continuation envelope; other provider-specific metadata may still have no Responses equivalent.
 - Anthropic `pause_turn` and refusal metadata need behavior-preserving target semantics.
 - Usage and stop metadata may arrive late in streams.
 

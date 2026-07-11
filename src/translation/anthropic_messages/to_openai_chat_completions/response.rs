@@ -4,6 +4,7 @@ use super::citations::text_block_annotations;
 use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use crate::protocol::anthropic::messages::{ContentBlock, Message, StopReason};
 use crate::protocol::openai::chat_completions::{ChatChoice, CreateChatCompletionResponse};
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_chat_completions::outbound::{
     CHAT_COMPLETION_OBJECT, assistant_response_message,
 };
@@ -15,6 +16,7 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
     fn try_from(message: &Message) -> TranslationResult<Self> {
         let mut text_parts: Vec<String> = Vec::new();
         let mut reasoning_parts: Vec<String> = Vec::new();
+        let mut continuation = ContinuationEnvelope::default();
         let mut tool_calls = Vec::new();
         let mut annotations = Vec::new();
 
@@ -26,10 +28,19 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
                     text_parts.push(block.text.clone());
                 }
                 ContentBlock::ToolUse(block) => tool_calls.push(block.try_into()?),
-                ContentBlock::Thinking(block) => reasoning_parts.push(block.thinking.clone()),
-                // Redacted thinking and server-tool artifacts have no safe Chat
-                // message field, so they are skipped with a trace log to keep
-                // silent drops observable.
+                ContentBlock::Thinking(block) => {
+                    reasoning_parts.push(block.thinking.clone());
+                    continuation.push(Continuation::Thinking {
+                        thinking: block.thinking.clone(),
+                        signature: block.signature.clone(),
+                    });
+                }
+                ContentBlock::RedactedThinking(block) => {
+                    continuation.push(Continuation::RedactedThinking {
+                        data: block.data.clone(),
+                    });
+                }
+                // Server-tool artifacts have no safe Chat message field.
                 skipped => {
                     tracing::trace!(
                         discriminant = ?std::mem::discriminant(skipped),
@@ -42,7 +53,11 @@ impl TryFrom<&Message> for CreateChatCompletionResponse {
         // Chat Completions cannot preserve Anthropic block interleaving in a
         // non-streaming assistant message, so text blocks are flattened.
         let content = text_parts.join("");
-        let reasoning_content = reasoning_parts.concat();
+        let reasoning_content = if continuation.is_empty() {
+            reasoning_parts.concat()
+        } else {
+            continuation.append_to_chat_reasoning_content(reasoning_parts.concat())?
+        };
         let refusal = message_refusal(message, &content);
         let content = if refusal.is_some() {
             String::new()

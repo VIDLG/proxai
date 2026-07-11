@@ -41,6 +41,26 @@ pub(crate) fn typed_text_block(text: impl Into<String>) -> anthropic::TypedTextB
     }
 }
 
+// ── Thinking blocks ───────────────────────────────────────────────────────
+
+pub(crate) fn thinking_content_block(
+    thinking: impl Into<String>,
+    signature: impl Into<String>,
+) -> anthropic::ContentBlockParam {
+    anthropic::ContentBlockParam::Thinking(anthropic::ThinkingBlockParam {
+        thinking: thinking.into(),
+        signature: signature.into(),
+    })
+}
+
+pub(crate) fn redacted_thinking_content_block(
+    data: impl Into<String>,
+) -> anthropic::ContentBlockParam {
+    anthropic::ContentBlockParam::RedactedThinking(anthropic::RedactedThinkingBlockParam {
+        data: data.into(),
+    })
+}
+
 // ── Messages ─────────────────────────────────────────────────────────────
 
 pub(crate) fn message(

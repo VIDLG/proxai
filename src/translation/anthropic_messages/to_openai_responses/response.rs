@@ -5,6 +5,7 @@ use crate::protocol::openai::responses::{
     FunctionCallOutput, FunctionCallOutputStatusEnum, FunctionToolCallOutputResource, OutputItem,
     ReasoningItem, Response, Status,
 };
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{response_id, text_message_item};
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -82,11 +83,24 @@ fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
             ContentBlock::Thinking(block) => {
                 let mut item: ReasoningItem = block.into();
                 item.id = Some(ids.reasoning());
+                item.encrypted_content = Some(
+                    ContinuationEnvelope::from(vec![Continuation::Thinking {
+                        thinking: block.thinking.clone(),
+                        signature: block.signature.clone(),
+                    }])
+                    .encode()?,
+                );
                 output.push(OutputItem::Reasoning(item));
             }
             ContentBlock::RedactedThinking(block) => {
                 let mut item: ReasoningItem = block.into();
                 item.id = Some(ids.reasoning());
+                item.encrypted_content = Some(
+                    ContinuationEnvelope::from(vec![Continuation::RedactedThinking {
+                        data: block.data.clone(),
+                    }])
+                    .encode()?,
+                );
                 output.push(OutputItem::Reasoning(item));
             }
             ContentBlock::ToolUse(block) => {

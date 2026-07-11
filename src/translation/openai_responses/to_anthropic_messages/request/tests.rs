@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::to_anthropic_messages::translate_request_payload;
 
 #[test]
@@ -147,32 +148,89 @@ fn skips_unsigned_responses_reasoning_history() {
 }
 
 #[test]
-fn preserves_responses_encrypted_reasoning_as_anthropic_redacted_thinking() {
+fn skips_provider_scoped_responses_encrypted_reasoning() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [
             {"type": "message", "role": "user", "content": "continue"},
             {
                 "type": "reasoning",
-                "id": "rs_redacted",
+                "id": "rs_provider_scoped",
                 "summary": [],
-                "encrypted_content": "anthropic-redacted-thinking-data"
+                "encrypted_content": "provider-scoped-encrypted-reasoning"
             }
         ]
     });
 
     let translated = translate_request_payload(&payload).unwrap();
 
-    assert_eq!(translated["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(translated["messages"][0]["role"], "user");
+    assert!(
+        !translated
+            .to_string()
+            .contains("provider-scoped-encrypted-reasoning")
+    );
+}
+
+#[test]
+fn restores_anthropic_thinking_from_responses_continuation_envelope() {
+    let envelope = ContinuationEnvelope::from(vec![Continuation::Thinking {
+        thinking: "private plan".to_string(),
+        signature: "sig_123".to_string(),
+    }])
+    .encode()
+    .unwrap();
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [
+            {"type": "message", "role": "user", "content": "continue"},
+            {
+                "type": "reasoning",
+                "id": "rs_thinking",
+                "summary": [],
+                "encrypted_content": envelope,
+                "content": [{"type": "reasoning_text", "text": "private plan"}]
+            }
+        ]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
     assert_eq!(translated["messages"][1]["role"], "assistant");
+    assert_eq!(translated["messages"][1]["content"][0]["type"], "thinking");
     assert_eq!(
-        translated["messages"][1]["content"][0]["type"],
-        "redacted_thinking"
+        translated["messages"][1]["content"][0]["thinking"],
+        "private plan"
     );
     assert_eq!(
-        translated["messages"][1]["content"][0]["data"],
-        "anthropic-redacted-thinking-data"
+        translated["messages"][1]["content"][0]["signature"],
+        "sig_123"
     );
+}
+
+#[test]
+fn rejects_responses_continuation_with_missing_anthropic_thinking_signature() {
+    let envelope = ContinuationEnvelope::from(vec![Continuation::Thinking {
+        thinking: "private plan".to_string(),
+        signature: String::new(),
+    }])
+    .encode()
+    .unwrap();
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": [{
+            "type": "reasoning",
+            "id": "rs_thinking",
+            "summary": [],
+            "encrypted_content": envelope,
+            "content": [{"type": "reasoning_text", "text": "private plan"}]
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("Anthropic thinking continuation is missing its signature"));
 }
 
 #[test]

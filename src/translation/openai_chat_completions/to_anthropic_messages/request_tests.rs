@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::protocol::anthropic::messages::MessageCreateParamsBase;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
 use super::super::translate_request_payload;
 
@@ -176,6 +177,61 @@ fn rejects_empty_chat_user_content_for_anthropic_messages() {
     let error = translate_request_payload(&payload).unwrap_err().to_string();
 
     assert!(error.contains("user message without content"));
+}
+
+#[test]
+fn restores_anthropic_thinking_from_chat_reasoning_continuation() {
+    let reasoning_content = ContinuationEnvelope::from(vec![Continuation::Thinking {
+        thinking: "private plan".to_string(),
+        signature: "sig_123".to_string(),
+    }])
+    .append_to_chat_reasoning_content("visible thinking".to_string())
+    .unwrap();
+    let payload = json!({
+        "model": "glm-5.1",
+        "messages": [{
+            "role": "assistant",
+            "content": "continue",
+            "reasoning_content": reasoning_content
+        }]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["messages"][0]["role"], "assistant");
+    assert_eq!(translated["messages"][0]["content"][0]["type"], "thinking");
+    assert_eq!(
+        translated["messages"][0]["content"][0]["thinking"],
+        "private plan"
+    );
+    assert_eq!(
+        translated["messages"][0]["content"][0]["signature"],
+        "sig_123"
+    );
+    assert_eq!(translated["messages"][0]["content"][1]["type"], "text");
+    assert_eq!(translated["messages"][0]["content"][1]["text"], "continue");
+}
+
+#[test]
+fn rejects_chat_continuation_with_missing_anthropic_thinking_signature() {
+    let reasoning_content = ContinuationEnvelope::from(vec![Continuation::Thinking {
+        thinking: "private plan".to_string(),
+        signature: String::new(),
+    }])
+    .append_to_chat_reasoning_content(String::new())
+    .unwrap();
+    let payload = json!({
+        "model": "glm-5.1",
+        "messages": [{
+            "role": "assistant",
+            "content": "continue",
+            "reasoning_content": reasoning_content
+        }]
+    });
+
+    let error = translate_request_payload(&payload).unwrap_err().to_string();
+
+    assert!(error.contains("Anthropic thinking continuation is missing its signature"));
 }
 
 #[test]

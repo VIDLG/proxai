@@ -28,11 +28,28 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
     ['`Message` envelope', 'Responses response envelope', 'Anthropic 返回一个最终 message；Responses 返回带 `output[]` 的 envelope。'],
     ['Text block', 'Message output item/content part', '保留可见文本顺序。'],
     ['`tool_use` block', '`function_call` output item', '使用 Responses item/call identifiers 保留 call identity。'],
-    ['`thinking` block', '可表达时映射为 Reasoning output item', '转换 provider-specific metadata，而不是 raw round-trip。'],
+    ['`thinking` block', 'Reasoning output item 加 continuation envelope', '将可见 thinking 保留为 Responses reasoning content，并把 Anthropic signature 放入 `encrypted_content`，供兼容客户端回放。'],
+    ['`redacted_thinking` block', 'Reasoning output item continuation envelope', '将 provider-opaque data 放入同一个客户端持有的 envelope；不暴露为可见内容。'],
     ['`stop_reason`', 'Responses terminal status 和 output state', '映射终止行为，而不只是字段名。'],
   ]}
   codeFirstColumn={false}
 />
+
+## 跨轮 thinking continuation
+
+Anthropic thinking signature 与 redacted-thinking payload 是 provider-scoped 数据，
+但客户端将 assistant 历史回放给 Anthropic 时必须保留它们。对于
+`anthropic_messages` → `openai_responses`，ProxAI 把带版本的 continuation
+envelope 写入标准 Responses `reasoning.encrypted_content` 字段。后续收到
+`openai_responses` → `anthropic_messages` 请求时，ProxAI 会识别该 envelope、
+从 Responses 表示中剥离，并恢复原始 Anthropic `thinking` 或
+`redacted_thinking` block。
+
+这是客户端携带的状态，而不是代理持久化；只有客户端保留并回放 Responses
+reasoning item 时才能跨轮续接。该 envelope 带前缀且以 JSON 编码，并非密码学
+加密或认证；`encrypted_content` 只是既有的 Responses 承载字段名。未知的
+`encrypted_content` 是 provider-scoped 数据，在 Responses-to-Anthropic 转换中会
+trace 后跳过；只有带版本 ProxAI 前缀的数据才会被识别为可恢复 continuation。
 
 ## 流式事件映射
 
@@ -68,7 +85,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 ## 有损区域
 
 - Anthropic content block `index` 是 stream-local；Responses item identity 是客户端可见且可跨轮稳定的。
-- Provider-specific thinking metadata 可能没有 Responses 等价物。
+- Provider-specific thinking metadata 只有在客户端回放 ProxAI continuation envelope 时才能保留；其他 provider-specific metadata 仍可能没有 Responses 等价物。
 - Anthropic `pause_turn` 和 refusal metadata 需要保留行为的目标语义。
 - Usage 和 stop metadata 可能在 stream 后段才到达。
 

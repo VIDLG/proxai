@@ -3,6 +3,7 @@ use axum::http::{Response, header};
 use serde_json::json;
 
 use crate::http_support::into_byte_stream;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
 use super::super::translate_streaming_response;
 
@@ -143,6 +144,54 @@ async fn translates_anthropic_stream_with_only_thinking_blocks() {
 }
 
 #[tokio::test]
+async fn streams_signature_only_thinking_as_continuation() {
+    let stream = concat!(
+        "event: message_start\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_signature_only\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "event: content_block_start\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n",
+        "event: content_block_delta\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig\"}}\n\n",
+        "event: content_block_stop\n",
+        "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+        "event: message_delta\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "event: message_stop\n",
+        "data: {\"type\":\"message_stop\"}\n\n"
+    );
+    let mut response = Response::new(Body::from(stream));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("text/event-stream"),
+    );
+
+    let response =
+        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
+    let body = to_bytes(Body::from_stream(response), usize::MAX)
+        .await
+        .unwrap();
+    let body = std::str::from_utf8(&body).unwrap();
+    let chunks = chat_stream_payloads(body);
+
+    let (visible_reasoning, continuation) = ContinuationEnvelope::split_chat_reasoning_content(
+        chunks[1]["choices"][0]["delta"]["reasoning_content"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(visible_reasoning, "");
+    assert_eq!(
+        continuation,
+        Some(ContinuationEnvelope::from(vec![Continuation::Thinking {
+            thinking: "".to_string(),
+            signature: "sig".to_string(),
+        }])),
+    );
+    assert_eq!(chunks[2]["choices"][0]["finish_reason"], "stop");
+    assert!(body.contains("data: [DONE]"));
+}
+
+#[tokio::test]
 async fn translates_anthropic_thinking_blocks_before_text() {
     let stream = concat!(
         "event: message_start\n",
@@ -183,8 +232,22 @@ async fn translates_anthropic_thinking_blocks_before_text() {
         " more"
     );
     assert_eq!(chunks[3]["choices"][0]["delta"]["content"], "hello");
-    assert_eq!(chunks[4]["choices"][0]["finish_reason"], "stop");
-    assert_eq!(chunks[5]["usage"]["completion_tokens"], 1);
+    let (thinking, continuations) = ContinuationEnvelope::split_chat_reasoning_content(
+        chunks[4]["choices"][0]["delta"]["reasoning_content"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(thinking, "");
+    assert_eq!(
+        continuations,
+        Some(ContinuationEnvelope::from(vec![Continuation::Thinking {
+            thinking: "hidden more".to_string(),
+            signature: "sig".to_string(),
+        }])),
+    );
+    assert_eq!(chunks[5]["choices"][0]["finish_reason"], "stop");
+    assert_eq!(chunks[6]["usage"]["completion_tokens"], 1);
     assert!(body.contains("data: [DONE]"));
 }
 

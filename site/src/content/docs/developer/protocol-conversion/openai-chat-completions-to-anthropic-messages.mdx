@@ -27,7 +27,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['`messages[]`', '`messages[]` plus normalized system placement', 'Chat system/developer instructions must not be duplicated as user-visible turns.'],
     ['Assistant text', 'Assistant content blocks', 'Preserve ordered visible text.'],
-    ['Assistant `reasoning_content`', 'No signature-safe Anthropic equivalent', 'The Chat extension carries text but no Anthropic thinking signature, so cross-protocol request translation traces and skips it rather than forging a signature.'],
+    ['Assistant `reasoning_content`', 'Anthropic thinking blocks when a ProxAI continuation is present', 'A versioned continuation suffix restores signed or redacted Anthropic thinking and is removed before forwarding. Plain unsigned reasoning has no Anthropic signature, so translation traces and skips it rather than forging one.'],
     ['`tools[]` function definitions', '`tools[]`', 'Preserve name, description, and JSON schema where possible.'],
     ['Assistant `tool_calls[]`', 'Anthropic `tool_use` blocks', 'Chat `tool_calls[].index` is stream-local; Anthropic content blocks use content-block indices.'],
     ['Tool result messages', 'Anthropic `tool_result` blocks', 'Preserve call id linkage where target protocol can represent it.'],
@@ -42,7 +42,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['Text content block', '`choices[0].message.content`', 'Chat has a single assistant message per choice.'],
     ['Tool use block', '`choices[0].message.tool_calls[]`', 'Assign stable call ids and function names.'],
-    ['Thinking/reasoning block', '`choices[0].message.reasoning_content`', 'Zed consumes this OpenAI-compatible extension as thinking output; reasoning is not mixed into visible `content`.'],
+    ['Thinking/reasoning block', '`choices[0].message.reasoning_content`', 'Zed consumes this OpenAI-compatible extension as thinking output; ProxAI appends a versioned continuation suffix to preserve Anthropic signatures and redacted payloads for replay without mixing them into visible `content`.'],
     ['`stop_reason`', '`finish_reason`', 'Map natural turns, token limits, tool use, and refusals carefully.'],
   ]}
   codeFirstColumn={false}
@@ -55,7 +55,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
   rows={[
     ['`message_start`', 'Initialize choice and assistant role delta.'],
     ['Text `content_block_delta`', 'Emit `delta.content` chunks.'],
-    ['Thinking `content_block_delta`', 'Emit `delta.reasoning_content` chunks consumed by Zed as thinking.'],
+    ['Thinking `content_block_delta`', 'Emit `delta.reasoning_content` chunks consumed by Zed as thinking; append the continuation suffix before the terminal chunk.'],
     ['Tool `input_json_delta`', 'Emit `delta.tool_calls[].function.arguments` chunks keyed by Chat tool index.'],
     ['`message_delta.stop_reason`', 'Set final `finish_reason` when terminal state is known.'],
     ['`message_stop`', 'Emit final chunk and `[DONE]`.'],
@@ -70,8 +70,8 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
 ## Lossy areas
 
 - Chat has no native output item graph.
-- Plain thinking text is preserved through the `reasoning_content` compatibility extension, but Chat still has no per-reasoning-item identity or signature field.
-- Redacted/encrypted thinking cannot be represented by Chat and remains explicitly lossy.
+- Plain thinking text is preserved through the `reasoning_content` compatibility extension. ProxAI appends its versioned continuation suffix only for compatible clients that replay it; Chat itself still has no native per-item identity or signature field.
+- The continuation suffix can preserve redacted/encrypted thinking across ProxAI's Anthropic conversion pair, but is not a portable Chat Completions feature.
 - Chat streaming uses `tool_calls[].index`; Anthropic streaming uses content block `index`.
 - Chat `[DONE]` is a stream carrier terminator; Anthropic `message_stop` is the semantic terminal event.
 

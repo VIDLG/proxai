@@ -509,12 +509,12 @@ index, but the two enums carry very different payloads:
 ```
 
 Chat only discriminates block kind, plus one integer (`chat_tool_index`) it
-has to feed back on every `tool_calls[].index` chunk. The actual content —
-text fragments, tool arguments, reasoning text — is emitted chunk by chunk
-as it arrives and never needs to be remembered. The OpenAI-compatible
-`reasoning_content` extension carries plain thinking text for clients such as
-Zed, but it has no per-item identity or encrypted payload slot; redacted
-thinking therefore still collapses into `Ignored`.
+has to feed back on every `tool_calls[].index` chunk. Visible text, tool
+arguments, and ordinary reasoning are emitted incrementally. For Anthropic
+thinking continuation, however, ProxAI accumulates signatures and redacted
+payloads until the relevant blocks stop, then appends a versioned continuation
+envelope in a final `reasoning_content` delta. The client, rather than the
+proxy, holds that envelope for a later replay.
 
 Responses accumulates content because each block must eventually produce a
 complete `OutputItem` for two downstream consumers: `response.output_item.done`
@@ -535,7 +535,7 @@ Field-by-field justification, classified by what consumes each field:
     ['', '`citations`', 'no', 'yes', 'Responses `OutputTextContent.annotations`; Chat handles annotations differently'],
     ['Thinking', 'discriminant', 'yes', 'yes', 'delta type validation'],
     ['', '`item_id` / `text`', 'no', 'yes', 'same reason as Text'],
-    ['RedactedThk', '`item_id` / `data`', '`Ignored`', 'yes', 'Responses `encrypted_content`; Chat `reasoning_content` only carries plain text, not encrypted reasoning'],
+    ['RedactedThk', '`item_id` / `data`', 'yes, client-carried continuation', 'yes', 'Responses uses `encrypted_content`; Chat appends a versioned envelope to `reasoning_content` for compatible history replay'],
     ['ToolUse', 'discriminant', 'yes', 'yes', 'delta type validation'],
     ['', '`chat_tool_index`', 'yes', 'no', 'Chat-only integer index into `tool_calls[]`; Responses uses `item_id`'],
     ['', '`item_id` / `name`', 'no', 'yes', 'Responses needs stable id + name for the done event and snapshot'],

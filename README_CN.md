@@ -33,6 +33,11 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 `reasoning_content` 扩展保留在 assistant 历史消息、非流式 message 和流式
 delta 中。Redacted 或 encrypted reasoning 不会伪装成普通可见正文。
 
+Anthropic thinking 的跨轮续接使用带版本的、由客户端携带的 continuation envelope：
+Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在
+`reasoning_content` 后。ProxAI 会在向 Anthropic 转发下一次请求前剥离 envelope
+并恢复 provider-specific thinking block；代理自身不保存这类续接状态。
+
 ## 快速开始
 
 1. 下载 Windows release 可执行文件，或从源码构建。

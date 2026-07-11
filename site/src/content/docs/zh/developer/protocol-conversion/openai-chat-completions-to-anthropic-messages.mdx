@@ -27,7 +27,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
   rows={[
     ['`messages[]`', '`messages[]` 加规范化 system placement', 'Chat system/developer instructions 不应重复成用户可见 turns。'],
     ['Assistant text', 'Assistant content blocks', '保留有序可见文本。'],
-    ['Assistant `reasoning_content`', '没有 signature-safe 的 Anthropic 等价物', 'Chat 扩展只有 reasoning 文本，没有 Anthropic thinking signature；跨协议请求转换会 trace 后跳过，而不是伪造签名。'],
+    ['Assistant `reasoning_content`', '携带 ProxAI continuation 时恢复为 Anthropic thinking blocks', '带版本的 continuation 后缀会恢复带签名或 redacted 的 Anthropic thinking，并在转发前剥离。普通无签名 reasoning 没有 Anthropic signature，转换会 trace 后跳过，而不是伪造签名。'],
     ['`tools[]` function definitions', '`tools[]`', '尽量保留 name、description 和 JSON schema。'],
     ['Assistant `tool_calls[]`', 'Anthropic `tool_use` blocks', 'Chat `tool_calls[].index` 是 stream-local；Anthropic content blocks 使用 content-block indices。'],
     ['Tool result messages', 'Anthropic `tool_result` blocks', '目标协议能表达时保留 call id linkage。'],
@@ -42,7 +42,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
   rows={[
     ['Text content block', '`choices[0].message.content`', 'Chat 每个 choice 只有一个 assistant message。'],
     ['Tool use block', '`choices[0].message.tool_calls[]`', '分配稳定 call ids 和 function names。'],
-    ['Thinking/reasoning block', '`choices[0].message.reasoning_content`', 'Zed 会把这个 OpenAI-compatible 扩展消费为 thinking output；reasoning 不会混入可见 `content`。'],
+    ['Thinking/reasoning block', '`choices[0].message.reasoning_content`', 'Zed 会将这个 OpenAI-compatible 扩展消费为 thinking output；ProxAI 会追加带版本的 continuation 后缀，以在回放时保留 Anthropic signature 和 redacted payload，且不把它们混入可见 `content`。'],
     ['`stop_reason`', '`finish_reason`', '谨慎映射自然轮次、token 限制、tool use 和 refusals。'],
   ]}
   codeFirstColumn={false}
@@ -55,7 +55,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
   rows={[
     ['`message_start`', '初始化 choice 和 assistant role delta。'],
     ['Text `content_block_delta`', '发出 `delta.content` chunks。'],
-    ['Thinking `content_block_delta`', '发出 `delta.reasoning_content` chunks，Zed 将其消费为 thinking。'],
+    ['Thinking `content_block_delta`', '发出 `delta.reasoning_content` chunks，Zed 将其消费为 thinking；在 terminal chunk 前追加 continuation 后缀。'],
     ['Tool `input_json_delta`', '按 Chat tool index 发出 `delta.tool_calls[].function.arguments` chunks。'],
     ['`message_delta.stop_reason`', '终态已知时设置最终 `finish_reason`。'],
     ['`message_stop`', '发出最终 chunk 和 `[DONE]`。'],
@@ -70,8 +70,8 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 ## 有损区域
 
 - Chat 没有原生 output item graph。
-- 普通 thinking 文本通过 `reasoning_content` 兼容扩展保留，但 Chat 仍没有 per-reasoning-item identity 或 signature 字段。
-- Redacted/encrypted thinking 无法由 Chat 表达，仍属于显式有损转换。
+- 普通 thinking 文本通过 `reasoning_content` 兼容扩展保留。ProxAI 只会为能回放该字段的兼容客户端追加带版本的 continuation 后缀；Chat 自身仍没有原生的 per-item identity 或 signature 字段。
+- continuation 后缀可以在 ProxAI 的 Anthropic 转换对中保留 redacted/encrypted thinking，但它不是可移植的 Chat Completions 功能。
 - Chat streaming 使用 `tool_calls[].index`；Anthropic streaming 使用 content block `index`。
 - Chat `[DONE]` 是 stream carrier terminator；Anthropic `message_stop` 是语义终止事件。
 

@@ -2,6 +2,7 @@ use serde_json::json;
 
 use crate::protocol::anthropic::messages::Message;
 use crate::protocol::openai::responses::Response as OpenaiResponse;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
 use super::super::translate_non_streaming_response;
 
@@ -99,6 +100,14 @@ fn preserves_interleaved_text_reasoning_and_tool_order() {
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["output"][0]["type"], "reasoning");
+    assert_eq!(
+        ContinuationEnvelope::decode(value["output"][0]["encrypted_content"].as_str().unwrap())
+            .unwrap(),
+        Some(ContinuationEnvelope::from(vec![Continuation::Thinking {
+            thinking: "plan".to_string(),
+            signature: "sig".to_string(),
+        }])),
+    );
     assert_eq!(value["output"][1]["type"], "message");
     assert_eq!(value["output"][1]["id"], "msg_msg_ordered");
     assert_eq!(value["output"][1]["content"][0]["text"], "before tool");

@@ -10,6 +10,7 @@
 
 use crate::protocol::anthropic::messages::TextBlock;
 use crate::protocol::openai_responses::{OutputItem, ResponseStreamEvent};
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{
     completed_function_call_item_with_id, output_text_done, reasoning_item, reasoning_text_done,
     redacted_reasoning_item, text_message_item, tool_arguments_done,
@@ -67,14 +68,33 @@ pub(super) fn finalize_block(
             let item = text_message_item(item_id, text, annotations);
             (item, vec![done])
         }
-        StreamBlock::Thinking { item_id, text } => {
+        StreamBlock::Thinking {
+            item_id,
+            text,
+            signature,
+        } => {
             let done =
                 reasoning_text_done(sequence_number, item_id.clone(), output_index, text.clone());
-            let item = reasoning_item(item_id, text);
+            let mut item = reasoning_item(item_id, text.clone());
+            if let OutputItem::Reasoning(item) = &mut item {
+                item.encrypted_content = Some(
+                    ContinuationEnvelope::from(vec![Continuation::Thinking {
+                        thinking: text,
+                        signature,
+                    }])
+                    .encode()?,
+                );
+            }
             (item, vec![done])
         }
         StreamBlock::RedactedThinking { item_id, data } => {
-            let item = redacted_reasoning_item(item_id, data);
+            let mut item = redacted_reasoning_item(item_id, data.clone());
+            if let OutputItem::Reasoning(item) = &mut item {
+                item.encrypted_content = Some(
+                    ContinuationEnvelope::from(vec![Continuation::RedactedThinking { data }])
+                        .encode()?,
+                );
+            }
             (item, Vec::new())
         }
         StreamBlock::ToolUse {

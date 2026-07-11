@@ -152,7 +152,7 @@ Example target Chat response:
 For Anthropic -> Chat Completions streaming conversion, `message_delta.stop_reason` and `stop_details` arrive after content block deltas. Therefore proxai uses a best-effort rule:
 
 - map Anthropic `thinking` block text and `thinking_delta` fragments to the Zed-supported Chat-compatible extension field `delta.reasoning_content`; do not put thinking text in ordinary `delta.content`;
-- ignore `signature_delta` and `redacted_thinking` payloads instead of leaking them into Chat content, because Chat Completions has no standard safe field for those values;
+- accumulate `signature_delta` and `redacted_thinking` payloads, then append a versioned ProxAI continuation envelope in the final `reasoning_content` delta. A compatible client replays it in assistant history, and ProxAI strips it before forwarding to Anthropic;
 - if no text delta has been emitted, convert `stop_details.explanation` to `delta.refusal`;
 - if text has already been emitted as `delta.content`, do not emit duplicate refusal text;
 - still map the final choice `finish_reason` to `stop`.

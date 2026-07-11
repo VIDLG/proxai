@@ -143,7 +143,7 @@ Anthropic -> Chat Completions 非流式转换规则：
 Anthropic -> Chat Completions 流式转换中，`message_delta.stop_reason` 和 `stop_details` 会在 content block delta 之后到达。因此 proxai 使用 best-effort 规则：
 
 - 将 Anthropic `thinking` block 文本和 `thinking_delta` 片段映射到 Zed 支持的 Chat-compatible 扩展字段 `delta.reasoning_content`；不要把 thinking 文本放进普通 `delta.content`；
-- 忽略 `signature_delta` 和 `redacted_thinking` payload，不把它们泄露进 Chat content，因为 Chat Completions 没有标准且安全的字段承载这些值；
+- 累积 `signature_delta` 与 `redacted_thinking` payload，并在最终的 `reasoning_content` delta 中追加带版本的 ProxAI continuation envelope。兼容客户端会在 assistant 历史中回放它，ProxAI 则会在向 Anthropic 转发前剥离它；
 - 如果还没有发出 text delta，将 `stop_details.explanation` 转成 `delta.refusal`；
 - 如果 text 已经作为 `delta.content` 发出，则不要再发重复 refusal 文本；
 - 最终 choice `finish_reason` 仍映射为 `stop`。

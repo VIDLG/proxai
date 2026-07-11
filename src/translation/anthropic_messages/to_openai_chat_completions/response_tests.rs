@@ -1,5 +1,7 @@
 use serde_json::json;
 
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
+
 use super::super::translate_non_streaming_response;
 
 #[tokio::test]
@@ -272,9 +274,19 @@ async fn translates_anthropic_thinking_only_response_to_chat_reasoning_content()
 
     let translated = translate_non_streaming_response(upstream).unwrap();
 
+    let (thinking, continuations) = ContinuationEnvelope::split_chat_reasoning_content(
+        translated["choices"][0]["message"]["reasoning_content"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(thinking, "hidden");
     assert_eq!(
-        translated["choices"][0]["message"]["reasoning_content"],
-        "hidden"
+        continuations,
+        Some(ContinuationEnvelope::from(vec![Continuation::Thinking {
+            thinking: "hidden".to_string(),
+            signature: "sig".to_string(),
+        }])),
     );
     assert!(translated["choices"][0]["message"].get("content").is_none());
 }

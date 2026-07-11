@@ -95,9 +95,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                             index,
                             in_progress_reasoning_item(item_id.to_string()),
                         ));
+                        let signature = block.signature.clone();
                         self.lifecycle
                             .streaming_state_mut()?
-                            .register_thinking_block(index, item_id)?;
+                            .register_thinking_block(index, item_id, signature)?;
                         if !block.thinking.is_empty() {
                             let item_id = self
                                 .lifecycle
@@ -213,10 +214,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         delta.partial_json,
                     ));
                 }
-                ContentBlockDelta::SignatureDelta(_) => {
+                ContentBlockDelta::SignatureDelta(delta) => {
                     self.lifecycle
-                        .streaming_state()?
-                        .require_reasoning_signature_block(event.index)?;
+                        .streaming_state_mut()?
+                        .append_signature_delta(event.index, &delta.signature)?;
                 }
                 ContentBlockDelta::CitationsDelta(_) => {
                     return Err(StreamTranslationError::Semantic(
