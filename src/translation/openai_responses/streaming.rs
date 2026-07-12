@@ -150,105 +150,111 @@ impl<S> ResponsesInboundLifecycle<S> {
             ResponseStreamEvent::ResponseOutputItemDone(event) => {
                 self.complete_output_item(event.output_index, &event.item, event_type)
             }
-            ResponseStreamEvent::ResponseContentPartAdded(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::from(&event.part),
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseContentPartDone(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::from(&event.part),
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseOutputTextDelta(event) => self.require_output_item(
+            ResponseStreamEvent::ResponseContentPartAdded(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::from(&event.part),
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseContentPartDone(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::from(&event.part),
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseOutputTextDelta(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Message,
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseOutputTextDone(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Message,
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseRefusalDelta(event) => self.observe_required_output_item(
                 event.output_index,
                 &event.item_id,
                 ResponsesOutputKind::Message,
                 event_type,
             ),
-            ResponseStreamEvent::ResponseOutputTextDone(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Message,
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseRefusalDelta(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Message,
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseRefusalDone(event) => self.require_output_item(
+            ResponseStreamEvent::ResponseRefusalDone(event) => self.observe_required_output_item(
                 event.output_index,
                 &event.item_id,
                 ResponsesOutputKind::Message,
                 event_type,
             ),
             ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseReasoningSummaryTextDelta(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseReasoningSummaryTextDone(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
-            ResponseStreamEvent::ResponseReasoningTextDelta(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Reasoning,
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseReasoningTextDone(event) => self.require_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Reasoning,
-                event_type,
-            ),
+            ResponseStreamEvent::ResponseReasoningTextDelta(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Reasoning,
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseReasoningTextDone(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Reasoning,
+                    event_type,
+                ),
             ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::FunctionCall,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseFunctionCallArgumentsDone(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::FunctionCall,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseCustomToolCallInputDelta(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::CustomToolCall,
                     event_type,
                 ),
             ResponseStreamEvent::ResponseCustomToolCallInputDone(event) => self
-                .require_output_item(
+                .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::CustomToolCall,
@@ -288,14 +294,14 @@ impl<S> ResponsesInboundLifecycle<S> {
             output_index,
             ObservedOutputItem {
                 kind: ResponsesOutputKind::from(item),
-                item_id: output_item_id(item)?.map(ToOwned::to_owned),
+                item_id: item.id().map(ToOwned::to_owned),
                 completed: false,
             },
         );
         Ok(())
     }
 
-    fn require_output_item(
+    fn observe_required_output_item(
         &mut self,
         output_index: u32,
         item_id: &str,
@@ -355,7 +361,7 @@ impl<S> ResponsesInboundLifecycle<S> {
                 observed.kind
             )));
         }
-        if let Some(item_id) = output_item_id(item)? {
+        if let Some(item_id) = item.id() {
             match observed.item_id.as_deref() {
                 Some(expected_item_id) if expected_item_id != item_id => {
                     return Err(StreamTranslationError::Semantic(format!(
@@ -428,38 +434,6 @@ impl<S> ResponsesInboundLifecycle<S> {
         };
         StreamTranslationError::Semantic(message)
     }
-}
-
-fn output_item_id(item: &OutputItem) -> StreamTranslationResult<Option<&str>> {
-    let item_id = match item {
-        OutputItem::Message(item) => Some(item.id.as_str()),
-        OutputItem::FileSearchCall(item) => Some(item.id.as_str()),
-        OutputItem::FunctionCall(item) => item.id.as_deref(),
-        OutputItem::FunctionCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::WebSearchCall(item) => Some(item.id.as_str()),
-        OutputItem::ComputerCall(item) => Some(item.id.as_str()),
-        OutputItem::ComputerCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::Reasoning(item) => Some(item.id.as_str()),
-        OutputItem::Compaction(item) => Some(item.id.as_str()),
-        OutputItem::ImageGenerationCall(item) => Some(item.id.as_str()),
-        OutputItem::CodeInterpreterCall(item) => Some(item.id.as_str()),
-        OutputItem::LocalShellCall(item) => Some(item.id.as_str()),
-        OutputItem::LocalShellCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::ShellCall(item) => Some(item.id.as_str()),
-        OutputItem::ShellCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::ApplyPatchCall(item) => Some(item.id.as_str()),
-        OutputItem::ApplyPatchCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::McpCall(item) => Some(item.id.as_str()),
-        OutputItem::McpListTools(item) => Some(item.id.as_str()),
-        OutputItem::McpApprovalRequest(item) => Some(item.id.as_str()),
-        OutputItem::McpApprovalResponse(item) => Some(item.id.as_str()),
-        OutputItem::CustomToolCall(item) => item.id.as_deref(),
-        OutputItem::CustomToolCallOutput(item) => Some(item.id.as_str()),
-        OutputItem::ToolSearchCall(item) => Some(item.id.as_str()),
-        OutputItem::ToolSearchOutput(item) => Some(item.id.as_str()),
-    };
-
-    Ok(item_id)
 }
 
 #[cfg(test)]

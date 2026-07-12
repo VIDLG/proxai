@@ -41,3 +41,36 @@ pub enum OutputItem {
     ToolSearchCall(ToolSearchCall),
     ToolSearchOutput(ToolSearchOutput),
 }
+
+impl OutputItem {
+    /// Returns the platform item ID when the wire shape carries one.
+    pub fn id(&self) -> Option<&str> {
+        match self {
+            Self::Message(item) => Some(&item.id),
+            Self::FileSearchCall(item) => Some(&item.id),
+            Self::FunctionCall(item) => item.id.as_deref(),
+            Self::FunctionCallOutput(item) => Some(&item.id),
+            Self::WebSearchCall(item) => Some(&item.id),
+            Self::ComputerCall(item) => Some(&item.id),
+            Self::ComputerCallOutput(item) => Some(&item.id),
+            Self::Reasoning(item) => Some(&item.id),
+            Self::Compaction(item) => Some(&item.id),
+            Self::ImageGenerationCall(item) => Some(&item.id),
+            Self::CodeInterpreterCall(item) => Some(&item.id),
+            Self::LocalShellCall(item) => Some(&item.id),
+            Self::LocalShellCallOutput(item) => Some(&item.id),
+            Self::ShellCall(item) => Some(&item.id),
+            Self::ShellCallOutput(item) => Some(&item.id),
+            Self::ApplyPatchCall(item) => Some(&item.id),
+            Self::ApplyPatchCallOutput(item) => Some(&item.id),
+            Self::McpCall(item) => Some(&item.id),
+            Self::McpListTools(item) => Some(&item.id),
+            Self::McpApprovalRequest(item) => Some(&item.id),
+            Self::McpApprovalResponse(item) => Some(&item.id),
+            Self::CustomToolCall(item) => item.id.as_deref(),
+            Self::CustomToolCallOutput(item) => Some(&item.id),
+            Self::ToolSearchCall(item) => Some(&item.id),
+            Self::ToolSearchOutput(item) => Some(&item.id),
+        }
+    }
+}
