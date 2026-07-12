@@ -78,7 +78,7 @@ async fn translates_chat_text_stream_to_anthropic_messages_events() {
     let events = anthropic_message_payloads(&body);
 
     // message_start carries the assistant envelope with id prefixed `msg_`.
-    assert_eq!(events[0]["type"], "message_start");
+    assert_eq!(events[0]["type"], "message_start", "{body}");
     assert_eq!(events[0]["message"]["id"], format!("msg_{CHAT_ID}"));
     assert_eq!(events[0]["message"]["model"], CHAT_MODEL);
     assert_eq!(events[0]["message"]["role"], "assistant");
@@ -343,7 +343,11 @@ async fn attaches_usage_from_terminal_usage_only_chunk() {
     let events = anthropic_message_payloads(&body);
 
     // The terminal message_delta carries the usage from the trailing chunk.
-    let delta = &events[events.len() - 2];
+    let delta = events
+        .iter()
+        .rev()
+        .find(|event| event["type"] == "message_delta")
+        .unwrap_or_else(|| panic!("terminal stream should emit message_delta; body={body}"));
     assert_eq!(delta["type"], "message_delta");
     assert_eq!(delta["usage"]["input_tokens"], 7);
     assert_eq!(delta["usage"]["output_tokens"], 3);
@@ -437,7 +441,7 @@ async fn rejects_chat_choice_with_logprobs() {
             "index": 0,
             "delta": { "role": "assistant" },
             "finish_reason": null,
-            "logprobs": { "content": [] },
+            "logprobs": { "content": [], "refusal": null },
         }],
         "usage": null,
     });
@@ -475,8 +479,6 @@ fn usage_only_chunk(id: &str, model: &str, prompt_tokens: u32, completion_tokens
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
-            "prompt_tokens_details": null,
-            "completion_tokens_details": null,
         },
     });
     format!("data: {chunk}\n\n")

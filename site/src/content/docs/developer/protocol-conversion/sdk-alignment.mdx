@@ -18,41 +18,64 @@ The Anthropic Messages wire model is compared against the vendored official Type
 just compare-anthropic-protocol
 ```
 
-The comparison checks type coverage, field coverage and order, serde discriminator handling, enum literals, untagged unions, structured SDK markers, and selected serde field semantics.
+The comparison checks type coverage, field coverage and order, serde discriminator handling, enum literals, untagged unions, field carriers, and structured SDK markers. Every public wire type must also declare explicit provenance in its doc comments:
 
+```rust
+/// @sdk(shape = "SearchResultBlockParam")
+pub struct SearchResultBlockParam { /* ... */ }
 
-## Required-nullable fields
+/// @sdk(alias = "ToolBash20250124")
+pub struct ServerToolDef { /* ... */ }
 
-TypeScript distinguishes these two shapes:
-
-```ts
-field?: T          // optional: the field may be absent
-field: T | null    // required nullable: the field should be present, but may be null
+/// @sdk(proxai_internal = "field_literal_wrapper")
+pub enum ImageMediaType { /* ... */ }
 ```
 
-Rust `Option<T>` accepts both missing and `null` during deserialization, so it is stricter than neither shape. It is exact enough for SDK-optional fields, but it is intentionally wider than SDK required-nullable fields.
+`shape` binds a local type to a named SDK export; `alias` records a deliberate many-to-one model; `proxai_internal` classifies a carrier for an inline SDK shape, union, discriminator, or field literal. The compare rejects an otherwise matching Rust name with no explicit provenance marker.
 
-When an SDK required-nullable field is represented as `Option<T>`, mark the Rust field directly:
+
+## Presence and nullability
+
+Official schemas distinguish four field contracts:
+
+<ProtocolCompare
+  columns={['Official shape', 'Rust carrier']}
+  rows={[
+    ['`field: T`', '`T`'],
+    ['`field?: T`', '`Option<T>`'],
+    ['`field: T | null`', '`RequiredNullable<T>`'],
+    ['`field?: T | null`', '`OptionalNullable<T>`'],
+  ]}
+/>
+
+`RequiredNullable<T>` is self-contained. Its JSON deserializer rejects a missing field, accepts explicit `null` as `Nullable::null()`, and delegates non-null values to `T` while preserving useful inner errors such as unknown enum variants. It needs no field-level serde attribute:
 
 ```rust
 pub struct Usage {
     pub output_tokens: u32,
-    /// @sdk(required_nullable_accepts_missing)
-    pub server_tool_use: Option<ServerToolUsage>,
+    pub server_tool_use: RequiredNullable<ServerToolUsage>,
 }
 ```
 
-This marker means:
+Optional fields need field-level presence handling only when they use Rust's outer `Option<T>`: serde otherwise collapses a missing field and explicit `null`. Optional non-nullable fields use:
 
-- SDK shape: `field: T | null`
-- Rust shape: `Option<T>`
-- Intentional difference: ProxAI also accepts a missing field as compatibility tolerance
+```rust
+#[serde(
+    default,
+    skip_serializing_if = "Option::is_none",
+    deserialize_with = "deserialize_present"
+)]
+pub field: Option<T>;
+```
 
-Do not use this marker when the SDK field is optional (`field?: T` or `field?: T | null`). Missing is already part of the official shape there.
+`OptionalNullable<T>` is a self-contained three-state carrier: `Missing`, `Null`, or `Value(T)`. Its deserializer handles a present `null` or value, while `#[serde(default)]` supplies `Missing` for an omitted field:
 
-Do not use this marker to justify `Option<T>` for SDK required non-null fields (`field: T`). Those should remain non-optional in Rust unless there is a separate, explicitly documented protocol decision.
+```rust
+#[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+pub field: OptionalNullable<T>;
+```
 
-The compare script prints marked fields compactly in the `Required-nullable fields accepting missing` section. Unmarked required-nullable `Option<T>` fields fail the comparison.
+The shared protocol compare rules enforce these named carriers and their distinct serde contracts for both OpenAI and Anthropic. They reject raw `Option<Nullable<T>>`, required-nullable fields modeled as `Option<T>`, and obsolete field-level deserializers for both nullable carriers.
 
 
 ## Compatibility normalization

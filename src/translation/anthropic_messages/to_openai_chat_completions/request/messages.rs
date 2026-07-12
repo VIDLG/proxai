@@ -1,6 +1,7 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire as chat_request;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_chat_completions::outbound::{
     assistant_message, assistant_text_message, system_message, system_text_message, text_part,
     tool_message, user_message, user_text_message,
@@ -8,6 +9,45 @@ use crate::translation::openai_chat_completions::outbound::{
 use crate::translation::{TranslationError, TranslationResult};
 
 use super::types::non_empty;
+
+pub(super) fn assistant_reasoning_content(
+    message: &anthropic::MessageParam,
+) -> TranslationResult<Option<String>> {
+    if message.role != anthropic::MessageParamRole::Assistant {
+        return Ok(None);
+    }
+    let anthropic::MessageParamContent::Blocks(blocks) = &message.content else {
+        return Ok(None);
+    };
+
+    let mut visible = String::new();
+    let mut continuation = ContinuationEnvelope::default();
+    for block in blocks {
+        match block {
+            anthropic::ContentBlockParam::Thinking(block) => {
+                visible.push_str(&block.thinking);
+                continuation.push(Continuation::Thinking {
+                    thinking: block.thinking.clone(),
+                    signature: block.signature.clone(),
+                });
+            }
+            anthropic::ContentBlockParam::RedactedThinking(block) => {
+                continuation.push(Continuation::RedactedThinking {
+                    data: block.data.clone(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if continuation.is_empty() {
+        Ok((!visible.is_empty()).then_some(visible))
+    } else {
+        Ok(Some(
+            continuation.append_to_chat_reasoning_content(visible)?,
+        ))
+    }
+}
 
 pub(super) fn chat_messages(
     message: anthropic::MessageParam,
@@ -184,7 +224,6 @@ fn assistant_blocks_message(
 
     Ok(assistant_message(
         non_empty(content_parts).map(Into::into),
-        (!reasoning_parts.is_empty()).then(|| reasoning_parts.concat()),
         non_empty(tool_calls),
     ))
 }
@@ -376,7 +415,7 @@ impl TryFrom<anthropic::DocumentBlockParam> for chat::ChatCompletionRequestUserM
     fn try_from(block: anthropic::DocumentBlockParam) -> TranslationResult<Self> {
         match block.source {
             anthropic::DocumentBlockParamSource::Base64(source) => Ok(Self::Array(vec![
-                base64_pdf_file_part(source, block.title),
+                base64_pdf_file_part(source, block.title.into_non_null()),
             ])),
             anthropic::DocumentBlockParamSource::PlainText(source) => Ok(Self::Text(source.data)),
             anthropic::DocumentBlockParamSource::Content(source) => Ok(source.into()),

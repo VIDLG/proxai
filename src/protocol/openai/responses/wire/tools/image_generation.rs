@@ -1,3 +1,5 @@
+use crate::protocol::RequiredNullable;
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -24,11 +26,20 @@ pub enum InputFidelity {
     Low,
 }
 
+/// OpenAPI schema: `#/components/schemas/ImageGenTool/properties/input_image_mask`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ImageGenToolInputImageMask {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub image_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub file_id: Option<String>,
 }
 
@@ -62,7 +73,7 @@ pub enum ImageGenToolQuality {
     Auto,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ImageGenToolSize {
     #[default]
@@ -73,8 +84,6 @@ pub enum ImageGenToolSize {
     Size1024x1536,
     #[serde(rename = "1536x1024")]
     Size1536x1024,
-    #[serde(untagged)]
-    Other(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Default, Serialize, Deserialize)]
@@ -91,29 +100,71 @@ pub enum ImageGenActionEnum {
 // Tool Definition
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ImageGenTool`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageGenTool {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub background: Option<ImageGenToolBackground>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_fidelity: Option<InputFidelity>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_image_mask: Option<ImageGenToolInputImageMask>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub moderation: Option<ImageGenToolModeration>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_compression: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub output_format: Option<ImageGenToolOutputFormat>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub partial_images: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub quality: Option<ImageGenToolQuality>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub size: Option<ImageGenToolSize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub output_format: Option<ImageGenToolOutputFormat>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub output_compression: Option<u8>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub moderation: Option<ImageGenToolModeration>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub background: Option<ImageGenToolBackground>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub input_fidelity: OptionalNullable<InputFidelity>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub input_image_mask: Option<ImageGenToolInputImageMask>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub partial_images: Option<u8>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub action: Option<ImageGenActionEnum>,
 }
 
@@ -135,9 +186,10 @@ pub enum ImageGenToolCallStatus {
 // Output / Resource Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ImageGenToolCall`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageGenToolCall {
     pub id: String,
-    pub result: Option<String>,
     pub status: ImageGenToolCallStatus,
+    pub result: RequiredNullable<String>,
 }

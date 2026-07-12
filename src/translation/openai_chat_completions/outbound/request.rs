@@ -51,15 +51,14 @@ pub(crate) fn user_message(
 
 pub(crate) fn assistant_message(
     content: Option<chat::ChatCompletionRequestAssistantMessageContent>,
-    reasoning_content: Option<String>,
     tool_calls: Option<Vec<chat::ChatCompletionMessageToolCalls>>,
 ) -> chat::ChatCompletionRequestMessage {
     chat::ChatCompletionRequestMessage::Assistant(chat::ChatCompletionRequestAssistantMessage {
-        content,
-        refusal: None,
+        content: content.into(),
+        refusal: None.into(),
         name: None,
-        audio: None,
-        reasoning_content,
+        audio: None.into(),
+        function_call: None.into(),
         tool_calls,
     })
 }
@@ -71,7 +70,6 @@ pub(crate) fn assistant_text_message(
         Some(chat::ChatCompletionRequestAssistantMessageContent::Text(
             text.into(),
         )),
-        None,
         None,
     )
 }

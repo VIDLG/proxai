@@ -1,3 +1,4 @@
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -25,14 +26,18 @@ pub enum ReasoningSummary {
     Detailed,
 }
 
+/// OpenAPI schema: `#/components/schemas/Reasoning`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Reasoning {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<ReasoningEffort>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<ReasoningSummary>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub effort: OptionalNullable<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub summary: OptionalNullable<ReasoningSummary>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub generate_summary: OptionalNullable<ReasoningSummary>,
 }
 
+/// OpenAPI schema: `#/components/schemas/SummaryTextContent`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SummaryTextContent {
     pub text: String,
@@ -44,6 +49,7 @@ pub enum SummaryPart {
     SummaryText(SummaryTextContent),
 }
 
+/// OpenAPI schema: `#/components/schemas/ReasoningTextContent`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningTextContent {
     pub text: String,
@@ -55,14 +61,23 @@ pub enum ReasoningItemContent {
     ReasoningText(ReasoningTextContent),
 }
 
+/// OpenAPI schema: `#/components/schemas/ReasoningItem`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReasoningItem {
-    pub id: Option<String>,
+    pub id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub encrypted_content: OptionalNullable<String>,
     pub summary: Vec<SummaryPart>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub content: Option<Vec<ReasoningItemContent>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encrypted_content: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub status: Option<OutputStatus>,
 }

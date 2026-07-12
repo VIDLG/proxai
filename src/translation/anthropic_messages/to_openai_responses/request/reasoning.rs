@@ -8,7 +8,8 @@ pub(super) fn request_reasoning(
 ) -> Option<responses::Reasoning> {
     let summary = thinking.and_then(reasoning_summary);
     let output_effort = output_config
-        .and_then(|config| config.effort)
+        .and_then(|config| config.effort.as_non_null())
+        .copied()
         .map(Into::into);
     let has_output_effort = output_effort.is_some();
     let effort = output_effort.or_else(|| thinking.and_then(thinking_effort));
@@ -17,7 +18,11 @@ pub(super) fn request_reasoning(
     }
 
     if effort.is_some() || summary.is_some() {
-        Some(responses::Reasoning { effort, summary })
+        Some(responses::Reasoning {
+            effort: effort.into(),
+            generate_summary: None.into(),
+            summary: summary.into(),
+        })
     } else {
         None
     }
@@ -61,8 +66,8 @@ fn reasoning_summary(
     thinking: &anthropic::ThinkingConfigParam,
 ) -> Option<responses::ReasoningSummary> {
     let display = match thinking {
-        anthropic::ThinkingConfigParam::Enabled(thinking) => thinking.display,
-        anthropic::ThinkingConfigParam::Adaptive(thinking) => thinking.display,
+        anthropic::ThinkingConfigParam::Enabled(thinking) => thinking.display.as_non_null(),
+        anthropic::ThinkingConfigParam::Adaptive(thinking) => thinking.display.as_non_null(),
         anthropic::ThinkingConfigParam::Disabled(_) => None,
     }?;
 

@@ -10,9 +10,9 @@ impl TryFrom<&responses::Tool> for anthropic::ToolUnion {
         match tool {
             responses::Tool::Function(tool) => Ok(custom_tool(
                 &tool.name,
-                tool.description.clone(),
-                tool.parameters.as_ref(),
-                tool.strict,
+                tool.description.as_non_null().cloned(),
+                tool.parameters.as_non_null(),
+                tool.strict.as_non_null().copied(),
                 tool.defer_loading,
             )),
             responses::Tool::Custom(tool) => Ok(custom_tool(

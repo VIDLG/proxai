@@ -6,7 +6,7 @@
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::protocol::openai::chat_completions::{
-    ChatChoiceStream, CreateChatCompletionStreamResponse, Role,
+    ChatChoiceStream, CreateChatCompletionStreamResponse,
 };
 
 use crate::translation::anthropic_messages::outbound::{message_start, message_stop};
@@ -34,6 +34,11 @@ pub(super) struct MessagesStreamTranslator {
 
 impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let reasoning =
+            crate::translation::openai_chat_completions::compatibility::stream_reasoning(
+                &event.data,
+            )
+            .map_err(StreamTranslationError::Semantic)?;
         let chunk = self.lifecycle.parse_stream_event(event.data)?;
 
         if chunk.choices.is_empty() {
@@ -59,7 +64,12 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
         let phase = self.lifecycle.streaming_phase_mut()?;
         phase.state_mut().register_choice_index(choice.index)?;
 
-        if let Some(content) = choice.delta.content.filter(|content| !content.is_empty()) {
+        if let Some(content) = choice
+            .delta
+            .content
+            .into_non_null()
+            .filter(|content| !content.is_empty())
+        {
             if phase.state().has_refusal() {
                 return Err(StreamTranslationError::Semantic(
                     "Chat stream contains both content and refusal deltas; Anthropic Messages requires refusal semantics to be represented by message-level stop fields"
@@ -69,7 +79,12 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             phase.mark_text();
             outputs.extend(phase.state_mut().text_delta(content));
         }
-        if let Some(refusal) = choice.delta.refusal.filter(|refusal| !refusal.is_empty()) {
+        if let Some(refusal) = choice
+            .delta
+            .refusal
+            .into_non_null()
+            .filter(|refusal| !refusal.is_empty())
+        {
             if phase.emitted_text() {
                 return Err(StreamTranslationError::Semantic(
                     "Chat stream contains both content and refusal deltas; Anthropic Messages requires refusal semantics to be represented by message-level stop fields"
@@ -79,11 +94,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             phase.mark_refusal();
             outputs.extend(phase.state_mut().refusal_delta(refusal));
         }
-        if let Some(reasoning) = choice
-            .delta
-            .reasoning_content
-            .filter(|reasoning| !reasoning.is_empty())
-        {
+        if let Some(reasoning) = reasoning {
             phase.mark_reasoning();
             outputs.extend(phase.state_mut().reasoning_delta(reasoning));
         }
@@ -96,7 +107,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                 outputs.extend(tool_outputs);
             }
         }
-        if let Some(finish_reason) = choice.finish_reason {
+        if let Some(finish_reason) = choice.finish_reason.as_non_null().copied() {
             if !phase.emitted_any() {
                 return Err(StreamTranslationError::Semantic(
                     "Chat stream completed without Anthropic-representable content, refusal, or function tool calls"
@@ -107,7 +118,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             let terminal = PendingAnthropicTerminal {
                 finish_reason,
                 refusal: phase.state_mut().take_refusal(),
-                usage: chunk.usage.clone(),
+                usage: chunk.usage.clone().into_non_null(),
             };
             self.lifecycle.receive_terminal_finish(terminal);
         }
@@ -135,7 +146,7 @@ impl MessagesStreamTranslator {
         &mut self,
         chunk: &CreateChatCompletionStreamResponse,
     ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
-        let Some(usage) = chunk.usage.as_ref() else {
+        let Some(usage) = chunk.usage.as_non_null() else {
             return Err(StreamTranslationError::Semantic(
                 "Chat stream emitted an empty choices chunk without usage; Anthropic message streams cannot represent it"
                     .to_string(),
@@ -178,8 +189,9 @@ impl MessagesStreamTranslator {
 /// represented as an Anthropic assistant message.
 ///
 /// Anthropic message streams describe a single assistant turn, so multiple
-/// parallel choices, logprobs, and non-assistant roles are all rejected as
-/// semantically unrepresentable rather than silently dropped.
+/// parallel choices and logprobs are rejected as semantically unrepresentable
+/// rather than silently dropped. Shared Chat translation lifecycle validation
+/// rejects non-assistant roles before this target-specific narrowing.
 fn single_representable_choice(
     mut choices: Vec<ChatChoiceStream>,
 ) -> StreamTranslationResult<ChatChoiceStream> {
@@ -197,19 +209,12 @@ fn single_representable_choice(
     }
 
     let choice = choices.remove(0);
-    if choice.logprobs.is_some() {
+    if choice.logprobs.as_non_null().is_some() {
         return Err(StreamTranslationError::Semantic(
             "Chat stream choice logprobs cannot be represented in Anthropic message streams"
                 .to_string(),
         ));
     }
-    match choice.delta.role {
-        Some(Role::Assistant) | None => {}
-        Some(role) => {
-            return Err(StreamTranslationError::Semantic(format!(
-                "Chat stream delta role {role} cannot be represented as an Anthropic assistant message"
-            )));
-        }
-    }
+
     Ok(choice)
 }

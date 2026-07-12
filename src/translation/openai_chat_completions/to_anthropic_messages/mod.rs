@@ -9,27 +9,33 @@ use serde_json::Value;
 
 use crate::http_support::ByteStream;
 
-use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
 use crate::protocol::openai::chat_completions::{
     CreateChatCompletionRequest, CreateChatCompletionResponse,
 };
-use crate::translation::{TranslationResult, json};
+use crate::translation::{TranslationError, TranslationResult, json};
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
+    let extensions =
+        crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions::extract(
+            payload,
+        )?;
     let request = json::from_value::<CreateChatCompletionRequest>(
         payload,
         "OpenAI Chat Completions request payload",
     )?;
-    let translated: MessageCreateParamsBase = (&request).try_into()?;
+    let translated = request::translate_request(&request, &extensions)?;
     Ok(serde_json::to_value(translated)?)
 }
 
 pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
+    let reasoning =
+        crate::translation::openai_chat_completions::compatibility::response_reasoning(&payload)
+            .map_err(TranslationError::InvalidPayload)?;
     let response = json::from_value::<CreateChatCompletionResponse>(
         &payload,
         "OpenAI Chat Completions response payload",
     )?;
-    let translated: Message = (&response).try_into()?;
+    let translated = response::translate_response(&response, reasoning.as_deref())?;
     Ok(serde_json::to_value(translated)?)
 }
 

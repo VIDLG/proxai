@@ -10,15 +10,25 @@ fn deserializes_basic_message_response_from_api_shape() {
         "content": [
             {
                 "type": "text",
+                "citations": null,
                 "text": "Hello!"
             }
         ],
         "model": "claude-opus-4-1-20250805",
+        "container": null,
+        "stop_details": null,
         "stop_reason": "end_turn",
         "stop_sequence": null,
         "usage": {
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "inference_geo": null,
             "input_tokens": 12,
-            "output_tokens": 6
+            "output_tokens": 6,
+            "output_tokens_details": null,
+            "server_tool_use": null,
+            "service_tier": null
         }
     });
 
@@ -27,11 +37,21 @@ fn deserializes_basic_message_response_from_api_shape() {
     assert_eq!(message.id, "msg_01XFDUDYJgAACzvnptvVoYEL");
     assert_eq!(message.type_, MessageType::Message);
     assert_eq!(message.role, MessageRole::Assistant);
-    assert_eq!(message.stop_reason, Some(StopReason::EndTurn));
+    assert_eq!(
+        message.stop_reason.as_non_null(),
+        Some(&StopReason::EndTurn)
+    );
     assert_eq!(message.usage.input_tokens, 12);
     assert_eq!(message.usage.output_tokens, 6);
     assert_eq!(message.content.len(), 1);
     assert!(matches!(message.content[0], ContentBlock::Text(_)));
+
+    let serialized = serde_json::to_value(message).expect("serialize message response");
+    assert_eq!(serialized["container"], Value::Null);
+    assert_eq!(serialized["stop_details"], Value::Null);
+    assert_eq!(serialized["stop_sequence"], Value::Null);
+    assert_eq!(serialized["usage"]["cache_creation"], Value::Null);
+    assert_eq!(serialized["usage"]["service_tier"], Value::Null);
 }
 
 #[test]
@@ -106,20 +126,33 @@ fn deserializes_common_stream_events_from_data_lines() {
         json!({
             "type": "message_start",
             "message": {
+                "refusal": null,
                 "id": "msg_01",
                 "type": "message",
                 "role": "assistant",
                 "content": [],
+                "container": null,
                 "model": "claude-sonnet-4-5",
+                "stop_details": null,
                 "stop_reason": null,
                 "stop_sequence": null,
-                "usage": {"input_tokens": 10, "output_tokens": 1}
+                "usage": {
+                    "cache_creation": null,
+                    "cache_creation_input_tokens": null,
+                    "cache_read_input_tokens": null,
+                    "inference_geo": null,
+                    "input_tokens": 10,
+                    "output_tokens": 1,
+                    "output_tokens_details": null,
+                    "server_tool_use": null,
+                    "service_tier": null
+                }
             }
         }),
         json!({
             "type": "content_block_start",
             "index": 0,
-            "content_block": {"type": "text", "text": ""}
+            "content_block": {"type": "text", "citations": null, "text": ""}
         }),
         json!({
             "type": "content_block_delta",
@@ -129,10 +162,19 @@ fn deserializes_common_stream_events_from_data_lines() {
         json!({
             "type": "message_delta",
             "delta": {
+                "container": null,
+                "stop_details": null,
                 "stop_reason": "end_turn",
                 "stop_sequence": null
             },
-            "usage": {"output_tokens": 6}
+            "usage": {
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "input_tokens": null,
+                "output_tokens": 6,
+                "output_tokens_details": null,
+                "server_tool_use": null
+            }
         }),
         json!({"type": "message_stop"}),
     ];

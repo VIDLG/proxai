@@ -6,7 +6,9 @@ pub(super) fn chat_max_tokens(request: &chat::CreateChatCompletionRequest) -> u3
     // in OpenAI-compatible clients, so keep it as a fallback.
     request
         .max_completion_tokens
-        .or(request.max_tokens)
+        .as_non_null()
+        .copied()
+        .or_else(|| request.max_tokens.as_non_null().copied())
         .unwrap_or(COMPATIBILITY_MAX_TOKENS_FALLBACK)
 }
 

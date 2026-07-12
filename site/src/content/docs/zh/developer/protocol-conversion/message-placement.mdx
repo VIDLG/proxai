@@ -237,7 +237,7 @@ OpenAI Chat Completions streaming 是 data-only SSE，并用非 JSON sentinel fr
 data: [DONE]
 ```
 
-OpenAI/async-openai schema 明确记录 Chat streaming 以 `data: [DONE]` 结束；
+OpenAI OpenAPI schema 明确记录 Chat streaming 以 `data: [DONE]` 结束；
 `stream_options.include_usage` 的最终 usage-only chunk 也出现在该 sentinel 之前。
 因此，凡是输出 Chat Completions stream 的转换器，都应在 terminal finish/usage
 chunks 之后追加 `[DONE]`；凡是消费 Chat Completions stream 的转换器，都应在已收到

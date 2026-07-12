@@ -13,13 +13,13 @@
 //! envelope: identity initialization, terminal detection, and source-side typed
 //! event parsing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use delegate::delegate;
 use serde_json::Value;
 use strum::Display;
 
-use crate::protocol::openai::responses::{OutputItem, ResponseStreamEvent};
+use crate::protocol::openai::responses::{OutputContent, OutputItem, ResponseStreamEvent};
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
@@ -36,7 +36,6 @@ use crate::translation::streaming::{
 pub(crate) struct ResponsesInboundLifecycle<S> {
     inner: InboundStreamLifecycle<S, S>,
     output_items: BTreeMap<u32, ObservedOutputItem>,
-    completed_output_items: BTreeSet<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -49,10 +48,32 @@ pub(crate) enum ResponsesOutputKind {
     Other,
 }
 
+impl From<&OutputItem> for ResponsesOutputKind {
+    fn from(item: &OutputItem) -> Self {
+        match item {
+            OutputItem::Message(_) => Self::Message,
+            OutputItem::Reasoning(_) => Self::Reasoning,
+            OutputItem::FunctionCall(_) => Self::FunctionCall,
+            OutputItem::CustomToolCall(_) => Self::CustomToolCall,
+            _ => Self::Other,
+        }
+    }
+}
+
+impl From<&OutputContent> for ResponsesOutputKind {
+    fn from(content: &OutputContent) -> Self {
+        match content {
+            OutputContent::OutputText(_) | OutputContent::Refusal(_) => Self::Message,
+            OutputContent::ReasoningText(_) => Self::Reasoning,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct ObservedOutputItem {
     kind: ResponsesOutputKind,
     item_id: Option<String>,
+    completed: bool,
 }
 
 impl<S> ResponsesInboundLifecycle<S> {
@@ -63,31 +84,31 @@ impl<S> ResponsesInboundLifecycle<S> {
         }
     }
 
-    /// Parse a Responses SSE event payload into the typed source event model.
-    ///
-    /// Responses exposes many semantic event kinds. This parser only decodes the
-    /// typed source event; source event ordering is enforced by the inbound
-    /// lifecycle and each pair translator's target-side state.
+    /// Parse a Responses SSE event payload and apply source-side output-item
+    /// lifecycle validation before returning the typed event.
     pub(crate) fn parse_stream_event(
-        &self,
+        &mut self,
         payload: Value,
     ) -> StreamTranslationResult<ResponseStreamEvent> {
-        serde_json::from_value::<ResponseStreamEvent>(payload).map_err(Into::into)
+        let parsed = serde_json::from_value::<ResponseStreamEvent>(payload)?;
+        self.apply_output_item_lifecycle(&parsed)?;
+        Ok(parsed)
     }
 
-    /// Observe a Responses lifecycle snapshot (`response.created` / `in_progress`).
+    /// Ensure a Responses stream is initialized for a lifecycle snapshot
+    /// (`response.created` / `in_progress`).
     ///
     /// The first snapshot initializes stream identity and pair state. Later
     /// snapshots are valid only while streaming and must refer to the same
     /// response identity; they do not reset pair state.
-    pub(crate) fn observe_response_stream(
+    pub(crate) fn ensure_response_stream(
         &mut self,
         identity: StreamIdentity,
-        state: impl FnOnce() -> S,
-    ) -> StreamTranslationResult<bool> {
+        state: S,
+    ) -> StreamTranslationResult<()> {
         if self.inner.is_waiting() {
-            self.inner.begin_streaming(identity, state());
-            return Ok(true);
+            self.inner.begin_streaming(identity, state);
+            return Ok(());
         }
 
         let current = self.inner.require_identity(|| {
@@ -114,10 +135,10 @@ impl<S> ResponsesInboundLifecycle<S> {
                 self.inner.phase_kind()
             )));
         }
-        Ok(false)
+        Ok(())
     }
 
-    pub(crate) fn validate_stream_event(
+    fn apply_output_item_lifecycle(
         &mut self,
         event: &ResponseStreamEvent,
     ) -> StreamTranslationResult<()> {
@@ -132,13 +153,13 @@ impl<S> ResponsesInboundLifecycle<S> {
             ResponseStreamEvent::ResponseContentPartAdded(event) => self.require_output_item(
                 event.output_index,
                 &event.item_id,
-                output_content_kind(&event.part),
+                ResponsesOutputKind::from(&event.part),
                 event_type,
             ),
             ResponseStreamEvent::ResponseContentPartDone(event) => self.require_output_item(
                 event.output_index,
                 &event.item_id,
-                output_content_kind(&event.part),
+                ResponsesOutputKind::from(&event.part),
                 event_type,
             ),
             ResponseStreamEvent::ResponseOutputTextDelta(event) => self.require_output_item(
@@ -237,15 +258,28 @@ impl<S> ResponsesInboundLifecycle<S> {
         }
     }
 
-    pub(crate) fn register_output_item(
+    fn require_streaming_output_item_event(&self, event: &str) -> StreamTranslationResult<()> {
+        if matches!(
+            self.inner.phase_kind(),
+            InboundStreamLifecyclePhase::Streaming
+        ) {
+            return Ok(());
+        }
+
+        Err(StreamTranslationError::Semantic(format!(
+            "Responses stream emitted {event} while lifecycle was {}; expected streaming",
+            self.inner.phase_kind()
+        )))
+    }
+
+    fn register_output_item(
         &mut self,
         output_index: u32,
         item: &OutputItem,
         event: &str,
     ) -> StreamTranslationResult<()> {
-        if self.output_items.contains_key(&output_index)
-            || self.completed_output_items.contains(&output_index)
-        {
+        self.require_streaming_output_item_event(event)?;
+        if self.output_items.contains_key(&output_index) {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted duplicate {event} for output_index {output_index}"
             )));
@@ -253,30 +287,32 @@ impl<S> ResponsesInboundLifecycle<S> {
         self.output_items.insert(
             output_index,
             ObservedOutputItem {
-                kind: output_kind(item),
-                item_id: output_item_id(item).map(ToOwned::to_owned),
+                kind: ResponsesOutputKind::from(item),
+                item_id: output_item_id(item)?.map(ToOwned::to_owned),
+                completed: false,
             },
         );
         Ok(())
     }
 
-    pub(crate) fn require_output_item(
+    fn require_output_item(
         &mut self,
         output_index: u32,
         item_id: &str,
         expected_kind: ResponsesOutputKind,
         event: &str,
     ) -> StreamTranslationResult<()> {
-        if self.completed_output_items.contains(&output_index) {
-            return Err(StreamTranslationError::Semantic(format!(
-                "Responses stream emitted {event} for output_index {output_index} after response.output_item.done"
-            )));
-        }
+        self.require_streaming_output_item_event(event)?;
         let observed = self.output_items.get_mut(&output_index).ok_or_else(|| {
             StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} for output_index {output_index} before response.output_item.added"
             ))
         })?;
+        if observed.completed {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Responses stream emitted {event} for output_index {output_index} after response.output_item.done"
+            )));
+        }
         if observed.kind != expected_kind {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} for {} output_index {output_index}; expected {expected_kind}",
@@ -295,30 +331,31 @@ impl<S> ResponsesInboundLifecycle<S> {
         Ok(())
     }
 
-    pub(crate) fn complete_output_item(
+    fn complete_output_item(
         &mut self,
         output_index: u32,
         item: &OutputItem,
         event: &str,
     ) -> StreamTranslationResult<()> {
-        if self.completed_output_items.contains(&output_index) {
-            return Err(StreamTranslationError::Semantic(format!(
-                "Responses stream emitted duplicate {event} for output_index {output_index}"
-            )));
-        }
+        self.require_streaming_output_item_event(event)?;
         let observed = self.output_items.get_mut(&output_index).ok_or_else(|| {
             StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} for output_index {output_index} before response.output_item.added"
             ))
         })?;
-        let completed_kind = output_kind(item);
+        if observed.completed {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Responses stream emitted duplicate {event} for output_index {output_index}"
+            )));
+        }
+        let completed_kind = ResponsesOutputKind::from(item);
         if observed.kind != completed_kind {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} with {completed_kind} item for {} output_index {output_index}",
                 observed.kind
             )));
         }
-        if let Some(item_id) = output_item_id(item) {
+        if let Some(item_id) = output_item_id(item)? {
             match observed.item_id.as_deref() {
                 Some(expected_item_id) if expected_item_id != item_id => {
                     return Err(StreamTranslationError::Semantic(format!(
@@ -329,7 +366,7 @@ impl<S> ResponsesInboundLifecycle<S> {
                 None => observed.item_id = Some(item_id.to_string()),
             }
         }
-        self.completed_output_items.insert(output_index);
+        observed.completed = true;
         Ok(())
     }
 
@@ -393,36 +430,38 @@ impl<S> ResponsesInboundLifecycle<S> {
     }
 }
 
-fn output_content_kind(
-    content: &crate::protocol::openai::responses::OutputContent,
-) -> ResponsesOutputKind {
-    match content {
-        crate::protocol::openai::responses::OutputContent::OutputText(_)
-        | crate::protocol::openai::responses::OutputContent::Refusal(_) => {
-            ResponsesOutputKind::Message
-        }
-        crate::protocol::openai::responses::OutputContent::ReasoningText(_) => {
-            ResponsesOutputKind::Reasoning
-        }
-    }
-}
-
-fn output_kind(item: &OutputItem) -> ResponsesOutputKind {
-    match item {
-        OutputItem::Message(_) => ResponsesOutputKind::Message,
-        OutputItem::Reasoning(_) => ResponsesOutputKind::Reasoning,
-        OutputItem::FunctionCall(_) => ResponsesOutputKind::FunctionCall,
-        OutputItem::CustomToolCall(_) => ResponsesOutputKind::CustomToolCall,
-        _ => ResponsesOutputKind::Other,
-    }
-}
-
-fn output_item_id(item: &OutputItem) -> Option<&str> {
-    match item {
-        OutputItem::Message(item) => Some(&item.id),
-        OutputItem::Reasoning(item) => item.id.as_deref(),
+fn output_item_id(item: &OutputItem) -> StreamTranslationResult<Option<&str>> {
+    let item_id = match item {
+        OutputItem::Message(item) => Some(item.id.as_str()),
+        OutputItem::FileSearchCall(item) => Some(item.id.as_str()),
         OutputItem::FunctionCall(item) => item.id.as_deref(),
-        OutputItem::CustomToolCall(item) => Some(&item.id),
-        _ => None,
-    }
+        OutputItem::FunctionCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::WebSearchCall(item) => Some(item.id.as_str()),
+        OutputItem::ComputerCall(item) => Some(item.id.as_str()),
+        OutputItem::ComputerCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::Reasoning(item) => Some(item.id.as_str()),
+        OutputItem::Compaction(item) => Some(item.id.as_str()),
+        OutputItem::ImageGenerationCall(item) => Some(item.id.as_str()),
+        OutputItem::CodeInterpreterCall(item) => Some(item.id.as_str()),
+        OutputItem::LocalShellCall(item) => Some(item.id.as_str()),
+        OutputItem::LocalShellCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::ShellCall(item) => Some(item.id.as_str()),
+        OutputItem::ShellCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::ApplyPatchCall(item) => Some(item.id.as_str()),
+        OutputItem::ApplyPatchCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::McpCall(item) => Some(item.id.as_str()),
+        OutputItem::McpListTools(item) => Some(item.id.as_str()),
+        OutputItem::McpApprovalRequest(item) => Some(item.id.as_str()),
+        OutputItem::McpApprovalResponse(item) => Some(item.id.as_str()),
+        OutputItem::CustomToolCall(item) => item.id.as_deref(),
+        OutputItem::CustomToolCallOutput(item) => Some(item.id.as_str()),
+        OutputItem::ToolSearchCall(item) => Some(item.id.as_str()),
+        OutputItem::ToolSearchOutput(item) => Some(item.id.as_str()),
+    };
+
+    Ok(item_id)
 }
+
+#[cfg(test)]
+#[path = "streaming_tests.rs"]
+mod tests;

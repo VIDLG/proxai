@@ -9,6 +9,7 @@ pub struct ChatResponseProjection {
     pub created: u32,
     pub model: String,
     pub service_tier: Option<ServiceTier>,
+    pub system_fingerprint: Option<String>,
     pub object: String,
     pub usage: Option<CompletionUsage>,
 }
@@ -20,6 +21,7 @@ pub struct ChatStreamResponseProjection {
     pub created: u32,
     pub model: String,
     pub service_tier: Option<ServiceTier>,
+    pub system_fingerprint: Option<String>,
     pub object: String,
     pub usage: Option<CompletionUsage>,
 }
@@ -31,8 +33,9 @@ impl From<super::super::CreateChatCompletionResponse> for ChatResponseProjection
             choices: response.choices,
             created: response.created,
             model: response.model,
-            service_tier: response.service_tier,
-            object: response.object,
+            service_tier: response.service_tier.into_non_null(),
+            system_fingerprint: response.system_fingerprint,
+            object: response.object.to_string(),
             usage: response.usage,
         }
     }
@@ -45,9 +48,10 @@ impl From<super::super::CreateChatCompletionStreamResponse> for ChatStreamRespon
             choices: response.choices,
             created: response.created,
             model: response.model,
-            service_tier: response.service_tier,
-            object: response.object,
-            usage: response.usage,
+            service_tier: response.service_tier.into_non_null(),
+            system_fingerprint: response.system_fingerprint,
+            object: response.object.to_string(),
+            usage: response.usage.into_non_null(),
         }
     }
 }

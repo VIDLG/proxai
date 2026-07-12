@@ -17,15 +17,15 @@ impl TryFrom<anthropic::OutputFormat> for responses::ResponseTextParam {
     fn try_from(format: anthropic::OutputFormat) -> TranslationResult<Self> {
         match format {
             anthropic::OutputFormat::JsonSchema(schema) => Ok(Self {
-                format: responses::TextResponseFormatConfiguration::JsonSchema(
-                    responses::ResponseFormatJsonSchema {
+                format: Some(responses::TextResponseFormatConfiguration::JsonSchema(
+                    responses::TextResponseFormatJsonSchema {
                         description: None,
                         name: "anthropic_json_schema".to_string(),
                         schema: schema.schema,
-                        strict: None,
+                        strict: None.into(),
                     },
-                ),
-                verbosity: None,
+                )),
+                verbosity: None.into(),
             }),
         }
     }
@@ -118,8 +118,8 @@ impl TryFrom<anthropic::ToolResultBlockParam> for responses::Item {
             responses::FunctionCallOutputItemParam {
                 call_id: block.tool_use_id,
                 output,
-                id: None, // No Anthropic equivalent; Responses item id is server-assigned.
-                status: Some(status),
+                id: None.into(), // No Anthropic equivalent; Responses item id is server-assigned.
+                status: Some(status).into(),
             },
         ))
     }
@@ -132,19 +132,19 @@ impl TryFrom<anthropic::DocumentBlockParam> for responses::InputContent {
         match doc_block.source {
             anthropic::DocumentBlockParamSource::Base64(source) => {
                 let data = format!("data:{};base64,{}", source.media_type.as_ref(), source.data);
-                Ok(input_file_data(data, doc_block.title))
+                Ok(input_file_data(data, doc_block.title.into_non_null()))
             }
             anthropic::DocumentBlockParamSource::Url(source) => {
-                Ok(input_file_url(source.url, doc_block.title))
+                Ok(input_file_url(source.url, doc_block.title.into_non_null()))
             }
             anthropic::DocumentBlockParamSource::PlainText(source) => {
                 let data = format!("data:{};base64,{}", source.media_type.as_ref(), source.data);
-                Ok(input_file_data(data, doc_block.title))
+                Ok(input_file_data(data, doc_block.title.into_non_null()))
             }
             anthropic::DocumentBlockParamSource::Content(content) => match content.content {
                 anthropic::ContentBlockSourceContentUnion::Text(text) => Ok(input_file_data(
                     format!("data:text/plain,{}", text),
-                    doc_block.title,
+                    doc_block.title.into_non_null(),
                 )),
                 anthropic::ContentBlockSourceContentUnion::Blocks(blocks) => {
                     if blocks.len() == 1 {

@@ -3,6 +3,7 @@
     reason = "Anthropic Messages request wire model includes fields reserved for protocol coverage and translation."
 )]
 
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -13,12 +14,15 @@ use super::{
 
 // ── Leaf type aliases ─────────────────────────────────────────────────────
 
+/// @sdk(shape = "Model")
 pub type Model = String;
 
+/// @sdk(shape = "MessageCountTokensTool")
 pub type MessageCountTokensTool = ToolUnion;
 
 // ── Thinking config types ────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// ThinkingConfigEnabled.display: `'summarized' | 'omitted' | null`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -27,22 +31,26 @@ pub enum ThinkingDisplay {
     Omitted,
 }
 
+/// @sdk(shape = "ThinkingConfigEnabled")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingConfigEnabled {
     pub budget_tokens: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<ThinkingDisplay>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub display: OptionalNullable<ThinkingDisplay>,
 }
 
+/// @sdk(shape = "ThinkingConfigDisabled")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingConfigDisabled;
 
+/// @sdk(shape = "ThinkingConfigAdaptive")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingConfigAdaptive {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<ThinkingDisplay>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub display: OptionalNullable<ThinkingDisplay>,
 }
 
+/// @sdk(shape = "ThinkingConfigParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ThinkingConfigParam {
@@ -53,11 +61,13 @@ pub enum ThinkingConfigParam {
 
 // ── Output config types ──────────────────────────────────────────────────
 
+/// @sdk(shape = "JSONOutputFormat")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonOutputFormat {
     pub schema: Value,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// OutputConfig.effort: `'low' | 'medium' | 'high' | 'xhigh' | 'max' | null`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -77,12 +87,13 @@ pub enum OutputFormat {
     JsonSchema(JsonOutputFormat),
 }
 
+/// @sdk(shape = "OutputConfig")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub effort: Option<OutputEffort>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub format: Option<OutputFormat>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub effort: OptionalNullable<OutputEffort>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub format: OptionalNullable<OutputFormat>,
 }
 
 // ── System prompt types ──────────────────────────────────────────────────
@@ -93,12 +104,13 @@ pub struct TypedTextBlockParam {
     #[serde(rename = "type")]
     pub type_: TextBlockType,
     pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub citations: Option<Vec<TextCitationParam>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub citations: OptionalNullable<Vec<TextCitationParam>>,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// MessageCreateParamsBase.system: `string | Array<TextBlockParam>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -109,54 +121,93 @@ pub enum SystemPrompt {
 
 // ── Message token types ──────────────────────────────────────────────────
 
+/// @sdk(shape = "MessageTokensCount")
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageTokensCount {
     pub input_tokens: u32,
 }
 
+/// @sdk(shape = "MessageCountTokensParams")
 /// @sdk(field_suppress = "user_profile_id")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageCountTokensParams {
     pub messages: Vec<MessageParam>,
     pub model: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub output_config: Option<OutputConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub system: Option<SystemPrompt>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub thinking: Option<ThinkingConfigParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub tool_choice: Option<ToolChoice>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub tools: Option<Vec<ToolUnion>>,
 }
 
 // ── Tool choice types ──────────────────────────────────────────────────────
 
+/// @sdk(shape = "ToolChoiceAuto")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceAuto {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub disable_parallel_tool_use: Option<bool>,
 }
 
+/// @sdk(shape = "ToolChoiceAny")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceAny {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub disable_parallel_tool_use: Option<bool>,
 }
 
+/// @sdk(shape = "ToolChoiceTool")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceTool {
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub disable_parallel_tool_use: Option<bool>,
 }
 
+/// @sdk(shape = "ToolChoiceNone")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceNone;
 
+/// @sdk(shape = "ToolChoice")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ToolChoice {
@@ -168,14 +219,16 @@ pub enum ToolChoice {
 
 // ── Request metadata ─────────────────────────────────────────────────────
 
+/// @sdk(shape = "Metadata")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Metadata {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub user_id: OptionalNullable<String>,
 }
 
 // ── Message create params ────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// MessageCreateParamsBase.service_tier: `'auto' | 'standard_only'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -184,44 +237,94 @@ pub enum RequestServiceTier {
     StandardOnly,
 }
 
+/// @sdk(shape = "MessageCreateParamsBase")
 /// @sdk(field_suppress = "user_profile_id")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageCreateParamsBase {
     pub max_tokens: u32,
     pub messages: Vec<MessageParam>,
     pub model: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub container: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub inference_geo: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub container: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub inference_geo: OptionalNullable<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub metadata: Option<Metadata>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub output_config: Option<OutputConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub service_tier: Option<RequestServiceTier>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub stop_sequences: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub stream: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub system: Option<SystemPrompt>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub temperature: Option<serde_json::Number>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub thinking: Option<ThinkingConfigParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub tool_choice: Option<ToolChoice>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub tools: Option<Vec<ToolUnion>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub top_k: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub top_p: Option<serde_json::Number>,
 }
 
+/// @sdk(shape = "MessageCreateParamsNonStreaming")
 /// @sdk(internal = "MessageCreateParams")
 /// @sdk(internal = "MessageStreamParams")
 /// @sdk(field_suppress = "stream")
@@ -232,6 +335,7 @@ pub struct MessageCreateParamsNonStreaming {
     pub base: MessageCreateParamsBase,
 }
 
+/// @sdk(shape = "MessageCreateParamsStreaming")
 /// @sdk(field_suppress = "stream")
 /// @sdk(field_suppress = "base")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

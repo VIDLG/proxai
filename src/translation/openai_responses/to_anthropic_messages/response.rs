@@ -30,14 +30,14 @@ pub(super) fn translate_response_payload(response: &responses::Response) -> Anth
 
     AnthropicMessage {
         id: response.id.clone(),
-        container: None,
+        container: None.into(),
         content,
         model: response.model.clone(),
         role: MessageRole::Assistant,
         type_: MessageType::Message,
-        stop_details: None,
-        stop_reason,
-        stop_sequence: None,
+        stop_details: None.into(),
+        stop_reason: stop_reason.into(),
+        stop_sequence: None.into(),
         usage: response.usage.as_ref().map(Into::into).unwrap_or_default(),
     }
 }
@@ -102,7 +102,7 @@ fn translate_reasoning_item(reasoning: &responses::ReasoningItem) -> Vec<Content
         }))
         .collect::<Vec<_>>();
 
-    if let Some(data) = &reasoning.encrypted_content {
+    if let Some(data) = reasoning.encrypted_content.as_non_null() {
         blocks.push(ContentBlock::RedactedThinking(redacted_thinking_block(
             data,
         )));
@@ -114,19 +114,19 @@ fn translate_reasoning_item(reasoning: &responses::ReasoningItem) -> Vec<Content
 impl From<&responses::ResponseUsage> for Usage {
     fn from(usage: &responses::ResponseUsage) -> Self {
         Self {
-            cache_creation: None,
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens),
-            inference_geo: None,
+            cache_creation: None.into(),
+            cache_creation_input_tokens: None.into(),
+            cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens).into(),
+            inference_geo: None.into(),
             input_tokens: usage.input_tokens,
             output_tokens: usage.output_tokens,
-            output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0).then_some(
-                OutputTokensDetails {
+            output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0)
+                .then_some(OutputTokensDetails {
                     thinking_tokens: usage.output_tokens_details.reasoning_tokens,
-                },
-            ),
-            server_tool_use: None,
-            service_tier: None,
+                })
+                .into(),
+            server_tool_use: None.into(),
+            service_tier: None.into(),
         }
     }
 }
@@ -134,16 +134,16 @@ impl From<&responses::ResponseUsage> for Usage {
 impl From<&responses::ResponseUsage> for MessageDeltaUsage {
     fn from(usage: &responses::ResponseUsage) -> Self {
         Self {
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens),
-            input_tokens: Some(usage.input_tokens),
+            cache_creation_input_tokens: None.into(),
+            cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens).into(),
+            input_tokens: Some(usage.input_tokens).into(),
             output_tokens: usage.output_tokens,
-            output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0).then_some(
-                OutputTokensDetails {
+            output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0)
+                .then_some(OutputTokensDetails {
                     thinking_tokens: usage.output_tokens_details.reasoning_tokens,
-                },
-            ),
-            server_tool_use: None,
+                })
+                .into(),
+            server_tool_use: None.into(),
         }
     }
 }

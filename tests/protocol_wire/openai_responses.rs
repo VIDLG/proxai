@@ -1,5 +1,5 @@
 use proxai::protocol::openai_responses::{
-    ReasoningEffort, RequestProjection, Response, ResponseCreateParams, Status,
+    CreateResponseRequest, ReasoningEffort, RequestProjection, Response, Status,
 };
 use serde_json::json;
 
@@ -18,14 +18,15 @@ fn deserializes_responses_request_wire_shape_into_local_protocol_type() {
         "tools": [{
             "type": "function",
             "name": "lookup",
-            "parameters": {"type": "object", "properties": {}}
+            "parameters": {"type": "object", "properties": {}},
+            "strict": null
         }],
         "tool_choice": "auto",
         "stream": false,
         "max_output_tokens": 128
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload)
+    let request = serde_json::from_value::<CreateResponseRequest>(payload)
         .expect("local protocol type should parse Responses wire request");
 
     assert_eq!(request.model.as_deref(), Some("gpt-5.5"));
@@ -54,7 +55,9 @@ fn projects_basic_responses_request_from_wire_shape() {
     assert_eq!(projection.max_output_tokens, Some(128));
     assert_eq!(projection.temperature, Some(0.2));
     assert_eq!(
-        projection.reasoning.and_then(|reasoning| reasoning.effort),
+        projection
+            .reasoning
+            .and_then(|reasoning| reasoning.effort.into_non_null()),
         Some(ReasoningEffort::High)
     );
 }
@@ -91,7 +94,8 @@ fn projects_responses_tools_and_text_config_from_wire_shape() {
                     "type": "object",
                     "properties": {"query": {"type": "string"}},
                     "required": ["query"]
-                }
+                },
+                "strict": null
             }
         ],
         "tool_choice": "auto"
@@ -113,11 +117,14 @@ fn deserializes_responses_reasoning_effort_as_snake_case() {
         "reasoning": {"effort": "high", "summary": "detailed"}
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload)
+    let request = serde_json::from_value::<CreateResponseRequest>(payload)
         .expect("Responses request should parse snake_case reasoning fields");
 
     assert_eq!(
-        request.reasoning.and_then(|reasoning| reasoning.effort),
+        request
+            .reasoning
+            .into_non_null()
+            .and_then(|reasoning| reasoning.effort.into_non_null()),
         Some(ReasoningEffort::High)
     );
 }
@@ -127,9 +134,18 @@ fn deserializes_responses_response_reasoning_effort_as_snake_case() {
     let payload = json!({
         "id": "resp_123",
         "object": "response",
-        "created_at": 0,
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "created_at": 0.0,
         "model": "gpt-5.5",
         "output": [],
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "status": "completed",
         "reasoning": {"effort": "high", "summary": "auto"}
     });
@@ -137,52 +153,47 @@ fn deserializes_responses_response_reasoning_effort_as_snake_case() {
     let response = serde_json::from_value::<Response>(payload.clone())
         .expect("Responses response should parse snake_case reasoning fields");
 
-    assert_eq!(response.status, Status::Completed);
+    assert_eq!(response.status, Some(Status::Completed));
     assert_eq!(
         response
             .reasoning
-            .as_ref()
-            .and_then(|reasoning| reasoning.effort),
+            .as_non_null()
+            .and_then(|reasoning| reasoning.effort.as_non_null())
+            .copied(),
         Some(ReasoningEffort::High)
     );
     assert_eq!(serde_json::to_value(response).unwrap(), payload);
 }
 
 #[test]
-fn defaults_responses_text_format_when_omitted_from_wire_request() {
+fn preserves_omitted_responses_text_format() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": "Hello",
         "text": {"verbosity": "low"}
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
-    assert_eq!(
-        serialized["text"],
-        json!({
-            "format": {"type": "text"},
-            "verbosity": "low"
-        })
-    );
+    assert_eq!(serialized["text"], json!({"verbosity": "low"}));
 }
 
 #[test]
-fn defaults_easy_input_message_type_when_omitted_from_wire_request() {
+fn preserves_omitted_easy_input_message_type() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [{"role": "user", "content": "Hello"}]
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
-    assert_eq!(serialized["input"][0]["type"], "message");
+    assert!(serialized["input"][0].get("type").is_none());
 }
 
 #[test]
-fn serializes_responses_request_side_defaults_without_null_fields() {
+fn serializes_responses_request_side_required_nullable_fields_as_null() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [{
@@ -200,10 +211,10 @@ fn serializes_responses_request_side_defaults_without_null_fields() {
                 "schema": {"type": "object"}
             }
         },
-        "tools": [{"type": "function", "name": "lookup"}]
+        "tools": [{"type": "function", "name": "lookup", "parameters": null, "strict": null}]
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
     assert_eq!(
@@ -232,7 +243,12 @@ fn serializes_responses_request_side_defaults_without_null_fields() {
     );
     assert_eq!(
         serialized["tools"][0],
-        json!({"type": "function", "name": "lookup"})
+        json!({
+            "type": "function",
+            "name": "lookup",
+            "parameters": null,
+            "strict": null
+        })
     );
 }
 
@@ -253,7 +269,7 @@ fn serializes_responses_hosted_tools_without_null_fields() {
         ]
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
     assert_eq!(
@@ -293,7 +309,7 @@ fn serializes_responses_deferred_and_environment_tools_without_null_fields() {
         ]
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
     assert_eq!(serialized["prompt"], json!({"id": "pmpt_1"}));
@@ -378,7 +394,7 @@ fn serializes_responses_context_items_with_upstream_optional_field_behavior() {
         ]
     });
 
-    let request = serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    let request = serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
     let serialized = serde_json::to_value(request).unwrap();
 
     assert_eq!(

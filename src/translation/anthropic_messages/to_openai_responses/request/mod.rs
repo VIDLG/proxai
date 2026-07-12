@@ -13,29 +13,32 @@ use self::messages::translate_message_param;
 use self::reasoning::request_reasoning;
 use self::tools::responses_tool_config;
 
-impl TryFrom<anthropic::MessageCreateParamsBase> for responses::ResponseCreateParams {
+impl TryFrom<anthropic::MessageCreateParamsBase> for responses::CreateResponseRequest {
     type Error = crate::translation::TranslationError;
 
     fn try_from(request: anthropic::MessageCreateParamsBase) -> TranslationResult<Self> {
         let mut input_items: Vec<responses::InputItem> = Vec::new();
 
-        let instructions = request.system.as_ref().map(Into::into);
+        let instructions = request.system.map(|system| String::from(&system));
         let reasoning =
             request_reasoning(request.output_config.as_ref(), request.thinking.as_ref());
         let text = request
             .output_config
-            .and_then(|config| config.format)
-            .map(TryInto::try_into)
+            .as_ref()
+            .and_then(|config| config.format.as_non_null())
+            .cloned()
+            .map(responses::ResponseTextParam::try_from)
             .transpose()?;
         let metadata = request.metadata.and_then(|metadata| {
             metadata
                 .user_id
+                .into_non_null()
                 .map(|user_id| std::collections::HashMap::from([("user_id".to_string(), user_id)]))
         });
         let safety_identifier = metadata
             .as_ref()
             .and_then(|metadata| metadata.get("user_id").cloned());
-        let service_tier = request.service_tier.map(Into::into);
+        let service_tier = request.service_tier.map(responses::ServiceTier::from);
         let tool_config = responses_tool_config(request.tools, request.tool_choice)?;
 
         for message in request.messages {
@@ -43,37 +46,41 @@ impl TryFrom<anthropic::MessageCreateParamsBase> for responses::ResponseCreatePa
         }
 
         Ok(Self {
-            background: None,
-            conversation: None,
-            include: None,
+            background: None.into(),
+            conversation: None.into(),
+            context_management: None.into(),
+            include: None.into(),
             input: Some(responses::InputParam::Items(input_items)),
-            instructions,
-            max_output_tokens: Some(request.max_tokens),
-            max_tool_calls: None,
-            metadata,
+            instructions: instructions.into(),
+            max_output_tokens: Some(request.max_tokens).into(),
+            max_tool_calls: None.into(),
+            metadata: metadata.into(),
             model: Some(request.model),
-            parallel_tool_calls: tool_config.parallel_tool_calls,
-            previous_response_id: None,
-            prompt: None,
+            parallel_tool_calls: tool_config.parallel_tool_calls.into(),
+            previous_response_id: None.into(),
+            prompt: None.into(),
             prompt_cache_key: None,
-            prompt_cache_retention: None,
-            reasoning,
+            prompt_cache_retention: None.into(),
+            reasoning: reasoning.into(),
             safety_identifier,
-            service_tier,
-            store: None,
-            stream: request.stream,
-            stream_options: None,
+            service_tier: service_tier.into(),
+            store: None.into(),
+            stream: request.stream.into(),
+            stream_options: None.into(),
             temperature: request
                 .temperature
-                .and_then(|number| number.as_f64().map(|value| value as f32)),
+                .and_then(|number| number.as_f64().map(|value| value as f32))
+                .into(),
             text,
             tool_choice: tool_config.tool_choice,
             tools: tool_config.tools,
             top_logprobs: None,
             top_p: request
                 .top_p
-                .and_then(|number| number.as_f64().map(|value| value as f32)),
-            truncation: None,
+                .and_then(|number| number.as_f64().map(|value| value as f32))
+                .into(),
+            truncation: None.into(),
+            user: None,
         })
     }
 }

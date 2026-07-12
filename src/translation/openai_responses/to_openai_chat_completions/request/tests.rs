@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::protocol::openai::chat_completions::CreateChatCompletionRequest;
-use crate::protocol::openai::responses::ResponseCreateParams;
+use crate::protocol::openai::responses::CreateResponseRequest;
 
 use super::super::translate_request_payload;
 
@@ -28,6 +28,10 @@ fn translates_responses_request_to_chat_completions_shape() {
         "tool_choice": "required",
         "tools": [{
             "type": "function",
+            "parameters": null,
+            "strict": null,
+            "parameters": null,
+            "strict": null,
             "name": "lookup",
             "description": "Look up a record",
             "parameters": {"type": "object", "properties": {"id": {"type": "string"}}}
@@ -154,7 +158,7 @@ fn translates_normalized_assistant_replay_with_output_text() {
                 "role": "assistant",
                 "status": "completed",
                 "phase": "final_answer",
-                "content": [{"type": "output_text", "text": "previous answer", "annotations": []}]
+                "content": [{"type": "output_text", "text": "previous answer", "annotations": [], "logprobs": []}]
             },
             {
                 "type": "message",
@@ -186,7 +190,7 @@ fn parses_responses_request_into_native_response_create_params() {
         "max_output_tokens": 16
     });
 
-    serde_json::from_value::<ResponseCreateParams>(payload).unwrap();
+    serde_json::from_value::<CreateResponseRequest>(payload).unwrap();
 }
 
 #[test]
@@ -254,7 +258,7 @@ fn skips_hosted_responses_tools_without_chat_equivalent() {
         "model": "glm-5.1",
         "input": [{"type": "message", "role": "user", "content": "search"}],
         "tools": [
-            {"type": "function", "name": "lookup", "parameters": {"type": "object"}},
+            {"type": "function", "parameters": null, "strict": null, "name": "lookup", "parameters": {"type": "object"}},
             {"type": "web_search"}
         ]
     });

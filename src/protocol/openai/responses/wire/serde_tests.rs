@@ -59,11 +59,77 @@ fn serializes_responses_nested_output_unions_as_type_tagged_wire() {
 
     assert_eq!(
         serde_json::to_value(WebSearchToolCallAction::OpenPage(WebSearchActionOpenPage {
-            url: Some("https://example.test".to_string()),
+            url: Some("https://example.test".to_string()).into(),
         },))
         .unwrap(),
         json!({"type": "open_page", "url": "https://example.test"})
     );
+}
+
+#[test]
+fn deserializes_recently_added_responses_output_item_variants() {
+    let local_shell_output = json!({
+        "type": "local_shell_call_output",
+        "id": "shell_output_1",
+        "output": "done",
+        "status": "completed"
+    });
+    let parsed = serde_json::from_value::<OutputItem>(local_shell_output.clone()).unwrap();
+    assert!(matches!(parsed, OutputItem::LocalShellCallOutput(_)));
+    assert_eq!(serde_json::to_value(parsed).unwrap(), local_shell_output);
+
+    let approval_response = json!({
+        "type": "mcp_approval_response",
+        "id": "approval_response_1",
+        "approval_request_id": "approval_request_1",
+        "approve": true,
+        "reason": "approved"
+    });
+    let parsed = serde_json::from_value::<OutputItem>(approval_response.clone()).unwrap();
+    assert!(matches!(parsed, OutputItem::McpApprovalResponse(_)));
+    assert_eq!(serde_json::to_value(parsed).unwrap(), approval_response);
+}
+
+#[test]
+fn deserializes_official_responses_audio_stream_events() {
+    let cases = [
+        (
+            json!({
+                "type": "response.audio.delta",
+                "sequence_number": 1,
+                "delta": "base64-audio"
+            }),
+            "response.audio.delta",
+        ),
+        (
+            json!({
+                "type": "response.audio.done",
+                "sequence_number": 2
+            }),
+            "response.audio.done",
+        ),
+        (
+            json!({
+                "type": "response.audio.transcript.delta",
+                "delta": "transcript",
+                "sequence_number": 3
+            }),
+            "response.audio.transcript.delta",
+        ),
+        (
+            json!({
+                "type": "response.audio.transcript.done",
+                "sequence_number": 4
+            }),
+            "response.audio.transcript.done",
+        ),
+    ];
+
+    for (payload, event_type) in cases {
+        let parsed = serde_json::from_value::<ResponseStreamEvent>(payload.clone()).unwrap();
+        assert_eq!(parsed.as_ref(), event_type);
+        assert_eq!(serde_json::to_value(parsed).unwrap(), payload);
+    }
 }
 
 #[test]
@@ -100,9 +166,9 @@ fn serializes_responses_shell_and_namespace_unions_as_type_tagged_wire() {
     assert_eq!(
         serde_json::to_value(NamespaceToolParamTool::Function(FunctionToolParam {
             name: "lookup".to_string(),
-            description: None,
-            parameters: None,
-            strict: None,
+            description: None.into(),
+            parameters: None.into(),
+            strict: None.into(),
             defer_loading: None,
         }))
         .unwrap(),

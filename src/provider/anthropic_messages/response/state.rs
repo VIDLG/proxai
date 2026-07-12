@@ -68,20 +68,28 @@ impl AnthropicResponseState {
     fn record_message(&mut self, message: &Message) {
         self.id = Some(message.id.clone());
         self.model = Some(message.model.clone());
-        self.service_tier = message.usage.service_tier;
-        self.stop_reason = message.stop_reason;
+        self.service_tier = message.usage.service_tier.as_non_null().copied();
+        self.stop_reason = message.stop_reason.as_non_null().copied();
         self.input_tokens = Some(message.usage.input_tokens);
-        self.cache_read_input_tokens = message.usage.cache_read_input_tokens;
-        self.cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
+        self.cache_read_input_tokens = message.usage.cache_read_input_tokens.as_non_null().copied();
+        self.cache_creation_input_tokens = message
+            .usage
+            .cache_creation_input_tokens
+            .as_non_null()
+            .copied();
         self.output_tokens = Some(message.usage.output_tokens);
     }
 
     fn record_message_delta(&mut self, event: &MessageDeltaEvent) {
-        self.input_tokens = event.usage.input_tokens;
-        self.cache_read_input_tokens = event.usage.cache_read_input_tokens;
-        self.cache_creation_input_tokens = event.usage.cache_creation_input_tokens;
+        self.input_tokens = event.usage.input_tokens.as_non_null().copied();
+        self.cache_read_input_tokens = event.usage.cache_read_input_tokens.as_non_null().copied();
+        self.cache_creation_input_tokens = event
+            .usage
+            .cache_creation_input_tokens
+            .as_non_null()
+            .copied();
         self.output_tokens = Some(event.usage.output_tokens);
-        self.stop_reason = event.delta.stop_reason;
+        self.stop_reason = event.delta.stop_reason.as_non_null().copied();
     }
 }
 

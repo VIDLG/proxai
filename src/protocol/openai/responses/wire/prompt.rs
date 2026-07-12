@@ -12,6 +12,7 @@ pub enum ResponsePromptVariables {
     Custom(Value),
 }
 
+/// OpenAPI schema: `#/components/schemas/Prompt`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Prompt {
     pub id: String,

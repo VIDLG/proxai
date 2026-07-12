@@ -1,13 +1,15 @@
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 
 // ============================================================
 // Input / Context Item Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CompactionSummaryItemParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompactionSummaryItemParam {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub id: OptionalNullable<String>,
     pub encrypted_content: String,
 }
 
@@ -15,11 +17,16 @@ pub struct CompactionSummaryItemParam {
 // Output / Resource Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CompactionBody`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompactionBody {
     pub id: String,
     pub encrypted_content: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub created_by: Option<String>,
 }
 
@@ -27,10 +34,10 @@ pub struct CompactionBody {
 // Request Parameters
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ContextManagementParam`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ContextManagementParam {
-    #[serde(rename = "type")]
-    pub type_: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compact_threshold: Option<u32>,
+    pub r#type: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub compact_threshold: OptionalNullable<u32>,
 }

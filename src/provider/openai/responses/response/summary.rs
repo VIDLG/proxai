@@ -20,6 +20,7 @@ pub(crate) enum ResponseOutputItemKind {
     ImageGenerationCall,
     CodeInterpreterCall,
     LocalShellCall,
+    LocalShellCallOutput,
     ShellCall,
     ShellCallOutput,
     ApplyPatchCall,
@@ -27,6 +28,7 @@ pub(crate) enum ResponseOutputItemKind {
     McpCall,
     McpListTools,
     McpApprovalRequest,
+    McpApprovalResponse,
     CustomToolCall,
     CustomToolCallOutput,
     ToolSearchCall,
@@ -85,6 +87,9 @@ impl ResponseSummary {
             OutputItem::LocalShellCall(_) => {
                 self.add_item_kind(ResponseOutputItemKind::LocalShellCall)
             }
+            OutputItem::LocalShellCallOutput(_) => {
+                self.add_item_kind(ResponseOutputItemKind::LocalShellCallOutput)
+            }
             OutputItem::ShellCall(_) => self.add_item_kind(ResponseOutputItemKind::ShellCall),
             OutputItem::ShellCallOutput(_) => {
                 self.add_item_kind(ResponseOutputItemKind::ShellCallOutput)
@@ -99,6 +104,9 @@ impl ResponseSummary {
             OutputItem::McpListTools(_) => self.add_item_kind(ResponseOutputItemKind::McpListTools),
             OutputItem::McpApprovalRequest(_) => {
                 self.add_item_kind(ResponseOutputItemKind::McpApprovalRequest)
+            }
+            OutputItem::McpApprovalResponse(_) => {
+                self.add_item_kind(ResponseOutputItemKind::McpApprovalResponse)
             }
             OutputItem::CustomToolCall(_) => {
                 self.add_item_kind(ResponseOutputItemKind::CustomToolCall)

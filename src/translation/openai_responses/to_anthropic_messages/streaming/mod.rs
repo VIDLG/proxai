@@ -38,7 +38,6 @@ pub(super) struct MessagesStreamTranslator {
 impl StreamingEventTranslator for MessagesStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
-        self.lifecycle.validate_stream_event(&parsed)?;
         let event_type = parsed.as_ref().to_string();
         let mut events = Vec::new();
 
@@ -221,7 +220,8 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                     "Responses stream error{}: {}",
                     event
                         .code
-                        .as_deref()
+                        .as_non_null()
+                        .map(String::as_str)
                         .map(|code| format!(" ({code})"))
                         .unwrap_or_default(),
                     event.message
@@ -258,7 +258,7 @@ impl MessagesStreamTranslator {
     ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
         let identity = response_identity(response);
         self.lifecycle
-            .observe_response_stream(identity.clone(), StreamingState::default)?;
+            .ensure_response_stream(identity.clone(), StreamingState::default())?;
         Ok(self
             .lifecycle
             .streaming_state_mut()?
@@ -271,7 +271,7 @@ impl MessagesStreamTranslator {
 fn response_failure_error(response: &Response) -> StreamTranslationError {
     let detail = response
         .error
-        .as_ref()
+        .as_non_null()
         .map(|error| format!("{}: {}", error.code, error.message))
         .unwrap_or_else(|| "upstream response failed without error details".to_string());
     StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))

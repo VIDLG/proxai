@@ -138,7 +138,9 @@ fn translate_input(
                         responses::Item::Reasoning(reasoning) => {
                             let mut restored_continuation = false;
                             let mut has_unrecognized_encrypted_content = false;
-                            if let Some(encrypted_content) = &reasoning.encrypted_content {
+                            if let Some(encrypted_content) =
+                                reasoning.encrypted_content.as_non_null()
+                            {
                                 match ContinuationEnvelope::decode(encrypted_content)? {
                                     Some(envelope) => {
                                         restored_continuation = true;
@@ -273,9 +275,9 @@ impl TryFrom<&responses::InputImageContent> for anthropic::ImageBlockParam {
     type Error = crate::translation::TranslationError;
 
     fn try_from(image: &responses::InputImageContent) -> TranslationResult<Self> {
-        let Some(url) = image.image_url.as_deref() else {
+        let Some(url) = image.image_url.as_non_null() else {
             return Err(TranslationError::InvalidPayload(
-                if image.file_id.is_some() {
+                if image.file_id.as_non_null().is_some() {
                     "OpenAI Responses input_image.file_id cannot be translated to Anthropic Messages image content; file IDs are provider-scoped"
                 } else {
                     "OpenAI Responses input_image must include image_url as either a URL or data:image/<type>;base64,<data> value to translate to Anthropic Messages"
@@ -296,7 +298,7 @@ impl TryFrom<&responses::InputFileContent> for anthropic::DocumentBlockParam {
             document_source_from_file_data(data)?
         } else if let Some(url) = file.file_url.as_deref() {
             document_source_from_url(url)?
-        } else if file.file_id.is_some() {
+        } else if file.file_id.as_non_null().is_some() {
             return Err(TranslationError::InvalidPayload(
                 "OpenAI Responses input_file.file_id cannot be translated to Anthropic Messages document content; file IDs are provider-scoped"
                     .to_string(),
@@ -310,10 +312,10 @@ impl TryFrom<&responses::InputFileContent> for anthropic::DocumentBlockParam {
 
         Ok(anthropic::DocumentBlockParam {
             source,
-            title: file.filename.clone(),
-            cache_control: None,
-            citations: None,
-            context: None,
+            title: file.filename.clone().into(),
+            cache_control: None.into(),
+            citations: None.into(),
+            context: None.into(),
         })
     }
 }
@@ -344,7 +346,7 @@ impl TryFrom<&responses::FunctionCallOutputItemParam> for anthropic::ToolResultB
             tool_use_id: output.call_id.clone(),
             content: Some(anthropic::ToolResultContentParam::try_from(&output.output)?),
             is_error: Some(false),
-            cache_control: None,
+            cache_control: None.into(),
         })
     }
 }
@@ -398,7 +400,7 @@ impl TryFrom<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockPar
                 }
             }),
             is_error: Some(false),
-            cache_control: None,
+            cache_control: None.into(),
         })
     }
 }

@@ -4,8 +4,9 @@ use strum::AsRefStr;
 use super::{
     ApplyPatchToolCall, ApplyPatchToolCallOutput, CompactionBody, CustomToolCall,
     CustomToolCallOutputResource, FileSearchToolCall, FunctionToolCall,
-    FunctionToolCallOutputResource, MCPApprovalRequest, MCPListTools, MCPToolCall, OutputMessage,
-    ReasoningItem, ToolSearchCall, ToolSearchOutput, WebSearchToolCall,
+    FunctionToolCallOutputResource, LocalShellToolCallOutput, MCPApprovalRequest,
+    MCPApprovalResponseResource, MCPListTools, MCPToolCall, OutputMessage, ReasoningItem,
+    ToolSearchCall, ToolSearchOutput, WebSearchToolCall,
 };
 use super::{CodeInterpreterToolCall, ComputerToolCall, ComputerToolCallOutputResource};
 use super::{FunctionShellCall, FunctionShellCallOutput, ImageGenToolCall, LocalShellToolCall};
@@ -26,6 +27,7 @@ pub enum OutputItem {
     ImageGenerationCall(ImageGenToolCall),
     CodeInterpreterCall(CodeInterpreterToolCall),
     LocalShellCall(LocalShellToolCall),
+    LocalShellCallOutput(LocalShellToolCallOutput),
     ShellCall(FunctionShellCall),
     ShellCallOutput(FunctionShellCallOutput),
     ApplyPatchCall(ApplyPatchToolCall),
@@ -33,6 +35,7 @@ pub enum OutputItem {
     McpCall(MCPToolCall),
     McpListTools(MCPListTools),
     McpApprovalRequest(MCPApprovalRequest),
+    McpApprovalResponse(MCPApprovalResponseResource),
     CustomToolCall(CustomToolCall),
     CustomToolCallOutput(CustomToolCallOutputResource),
     ToolSearchCall(ToolSearchCall),

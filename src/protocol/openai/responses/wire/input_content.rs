@@ -1,3 +1,4 @@
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -20,32 +21,53 @@ pub enum FileInputDetail {
     High,
 }
 
+/// OpenAPI schema: `#/components/schemas/InputTextContent`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputTextContent {
     pub text: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/InputImageContent`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct InputImageContent {
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub image_url: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub file_id: OptionalNullable<String>,
+
     #[serde(default)]
     pub detail: ImageDetail,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image_url: Option<String>,
 }
 
+/// OpenAPI schema: `#/components/schemas/InputFileContent`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputFileContent {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_data: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub file_id: OptionalNullable<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub filename: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub file_data: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub file_url: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub detail: Option<FileInputDetail>,
 }
 

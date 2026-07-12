@@ -73,7 +73,12 @@ fn normalize_zed_assistant_replay(item: &mut Value, input_index: usize) {
         if part.get("type").and_then(Value::as_str) == Some("output_text")
             && let Some(part) = part.as_object_mut()
         {
+            // `OutputTextContent` requires both arrays in the official Responses
+            // schema. Only Zed's recognized compact replay gets these lossless
+            // defaults; malformed or unknown content remains a protocol error.
             part.entry("annotations".to_string())
+                .or_insert_with(|| Value::Array(Vec::new()));
+            part.entry("logprobs".to_string())
                 .or_insert_with(|| Value::Array(Vec::new()));
         }
     }

@@ -66,15 +66,9 @@ impl ObservedUpdate {
                     name: item.name.clone(),
                 },
             ),
-            OutputItem::Reasoning(item) => item.id.as_ref().map_or_else(
-                || {
-                    Self::from_summary_only_item_kind(
-                        ResponseOutputItemKind::Reasoning,
-                        output_index,
-                    )
-                },
-                |id| Self::Reasoning { id: id.clone() },
-            ),
+            OutputItem::Reasoning(item) => Self::Reasoning {
+                id: item.id.clone(),
+            },
             OutputItem::FunctionCallOutput(_) => Self::from_summary_only_item_kind(
                 ResponseOutputItemKind::FunctionCallOutput,
                 output_index,
@@ -107,6 +101,10 @@ impl ObservedUpdate {
                 ResponseOutputItemKind::LocalShellCall,
                 output_index,
             ),
+            OutputItem::LocalShellCallOutput(_) => Self::from_summary_only_item_kind(
+                ResponseOutputItemKind::LocalShellCallOutput,
+                output_index,
+            ),
             OutputItem::ShellCall(_) => {
                 Self::from_summary_only_item_kind(ResponseOutputItemKind::ShellCall, output_index)
             }
@@ -132,6 +130,10 @@ impl ObservedUpdate {
             },
             OutputItem::McpApprovalRequest(_) => Self::from_summary_only_item_kind(
                 ResponseOutputItemKind::McpApprovalRequest,
+                output_index,
+            ),
+            OutputItem::McpApprovalResponse(_) => Self::from_summary_only_item_kind(
+                ResponseOutputItemKind::McpApprovalResponse,
                 output_index,
             ),
             OutputItem::CustomToolCall(_) => Self::from_summary_only_item_kind(

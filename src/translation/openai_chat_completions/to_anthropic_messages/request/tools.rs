@@ -12,7 +12,7 @@ impl TryFrom<&chat::ChatCompletionTools> for anthropic::ToolUnion {
                 &tool.function.name,
                 tool.function.description.clone(),
                 tool.function.parameters.as_ref(),
-                tool.function.strict,
+                tool.function.strict.as_non_null().copied(),
                 None,
             )),
             chat::ChatCompletionTools::Custom(_) => Err(TranslationError::InvalidPayload(

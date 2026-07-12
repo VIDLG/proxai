@@ -96,7 +96,7 @@ fn extract_tool_inventory(items: Option<&[Tool]>) -> Vec<ToolInventoryItem> {
 }
 
 fn mcp_tool_names(tool: &MCPTool) -> Vec<String> {
-    match tool.allowed_tools.as_ref() {
+    match tool.allowed_tools.as_non_null() {
         Some(MCPToolAllowedTools::List(names)) => {
             prefixed_mcp_tool_names(&tool.server_label, names)
         }

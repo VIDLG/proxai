@@ -15,8 +15,8 @@ use crate::protocol::openai::chat_completions::{
     FinishReason,
 };
 use crate::protocol::openai_responses::{
-    IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails, Response,
-    ResponseStreamEvent, ResponseUsage, Status,
+    IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails, Response, ResponseObject,
+    ResponseStreamEvent, ResponseUsage, Status, ToolChoiceOptions, ToolChoiceParam,
 };
 use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
 
@@ -36,7 +36,7 @@ pub(super) struct StreamingState {
     pub(super) sequence_number: u64,
     pub(super) response_id: String,
     pub(super) model: String,
-    pub(super) created_at: u64,
+    pub(super) created_at: f64,
     next_output_index: u32,
     pub(super) text_item: Option<StreamTextItem>,
     pub(super) refusal_item: Option<StreamTextItem>,
@@ -78,7 +78,7 @@ impl StreamingState {
         }
         let response_id = response_id(&chunk.id);
         let model = chunk.model.clone();
-        let created_at = chunk.created as u64;
+        let created_at = chunk.created as f64;
 
         Ok(Self {
             sequence_number: 0,
@@ -194,7 +194,7 @@ impl StreamingState {
                         sequence_number,
                         item.item_id.clone(),
                         output_index,
-                        Some(item.name.clone()),
+                        item.name.clone(),
                         item.arguments.clone(),
                     ));
                     let output_item = completed_function_call_item_with_id(
@@ -225,36 +225,38 @@ impl StreamingState {
             .unwrap_or_else(|| input_tokens.saturating_add(output_tokens));
 
         Response {
-            background: None,
-            billing: None,
-            conversation: None,
+            background: None.into(),
+            conversation: None.into(),
             created_at: self.created_at,
-            completed_at: None,
-            error: None,
+            completed_at: None.into(),
+            error: None.into(),
             id: self.response_id.clone(),
-            incomplete_details,
-            instructions: None,
-            max_output_tokens: None,
-            metadata: None,
+            incomplete_details: incomplete_details.into(),
+            instructions: None.into(),
+            max_output_tokens: None.into(),
+            max_tool_calls: None.into(),
+            metadata: None.into(),
             model: self.model.clone(),
-            object: "response".to_string(),
+            object: ResponseObject::Response,
             output: self.output_items.clone(),
-            parallel_tool_calls: None,
-            previous_response_id: None,
-            prompt: None,
+            output_text: None.into(),
+            parallel_tool_calls: false,
+            previous_response_id: None.into(),
+            prompt: None.into(),
             prompt_cache_key: None,
-            prompt_cache_retention: None,
-            reasoning: None,
+            prompt_cache_retention: None.into(),
+            reasoning: None.into(),
             safety_identifier: None,
-            service_tier: None,
-            status,
-            temperature: None,
+            service_tier: None.into(),
+            status: Some(status),
+            temperature: None.into(),
             text: None,
-            tool_choice: None,
-            tools: None,
-            top_logprobs: None,
-            top_p: None,
-            truncation: None,
+            tool_choice: ToolChoiceParam::Mode(ToolChoiceOptions::Auto),
+            tools: Vec::new(),
+            top_logprobs: None.into(),
+            top_p: None.into(),
+            truncation: None.into(),
+            user: None,
             usage: Some(ResponseUsage {
                 input_tokens,
                 input_tokens_details: InputTokenDetails { cached_tokens: 0 },

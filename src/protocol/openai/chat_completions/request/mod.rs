@@ -5,7 +5,8 @@ pub mod wire;
 
 pub use projection::RequestProjection;
 pub use wire::{
-    ChatCompletionAudio, ChatCompletionStreamOptions, ChatCompletionToolChoiceOption,
-    ChatCompletionTools, PredictionContent, ReasoningEffort, ResponseFormat, ResponseModalities,
+    ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
+    ChatCompletionStreamOptions, ChatCompletionToolChoiceOption, ChatCompletionTools,
+    PredictionContent, PromptCacheRetention, ReasoningEffort, ResponseFormat, ResponseModalities,
     StopConfiguration, ToolChoiceOptions, Verbosity, WebSearchOptions,
 };

@@ -1,6 +1,7 @@
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 use crate::protocol::openai_responses as responses;
+use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
 use crate::translation::openai_responses::outbound::{easy_message, function_call_output_item};
 use crate::translation::text::join_text_parts;
 use crate::translation::{TranslationError, TranslationResult};
@@ -12,6 +13,7 @@ pub(super) struct ResponsesInput {
 
 pub(super) fn responses_input_from_messages(
     chat_messages: &[chat::ChatCompletionRequestMessage],
+    extensions: &ChatRequestExtensions,
 ) -> TranslationResult<ResponsesInput> {
     let mut instruction_parts = Vec::new();
     let mut items = Vec::new();
@@ -31,7 +33,11 @@ pub(super) fn responses_input_from_messages(
                 ));
             }
             chat::ChatCompletionRequestMessage::Assistant(message) => {
-                items.extend(assistant_input_items(message, message_index)?);
+                items.extend(assistant_input_items(
+                    message,
+                    message_index,
+                    extensions.reasoning(message_index),
+                )?);
             }
             chat::ChatCompletionRequestMessage::Tool(message) => {
                 items.push(responses::InputItem::Item(function_call_output_item(
@@ -134,35 +140,38 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContent> for responses::Easy
 fn assistant_input_items(
     message: &chat::ChatCompletionRequestAssistantMessage,
     message_index: usize,
+    reasoning_content: Option<&str>,
 ) -> TranslationResult<Vec<responses::InputItem>> {
+    if message.function_call.is_non_null() {
+        return Err(TranslationError::InvalidPayload(
+            "deprecated Chat assistant function_call cannot be translated to OpenAI Responses because it has no tool_call_id"
+                .to_string(),
+        ));
+    }
     let mut items = Vec::new();
     let mut content = Vec::new();
 
-    if let Some(reasoning) = message
-        .reasoning_content
-        .as_deref()
-        .filter(|reasoning| !reasoning.is_empty())
-    {
+    if let Some(reasoning) = reasoning_content.filter(|reasoning| !reasoning.is_empty()) {
         items.push(responses::InputItem::Item(responses::Item::Reasoning(
             responses::ReasoningItem {
-                id: Some(format!("rs_chat_assistant_{message_index}")),
+                id: format!("rs_chat_assistant_{message_index}"),
                 summary: Vec::new(),
                 content: Some(vec![responses::ReasoningItemContent::ReasoningText(
                     responses::ReasoningTextContent {
                         text: reasoning.to_string(),
                     },
                 )]),
-                encrypted_content: None,
+                encrypted_content: None.into(),
                 status: Some(responses::OutputStatus::Completed),
             },
         )));
     }
 
-    if let Some(message_content) = message.content.as_ref() {
+    if let Some(message_content) = message.content.as_non_null() {
         content.extend(assistant_output_content(message_content)?);
     }
 
-    if let Some(refusal) = message.refusal.as_ref() {
+    if let Some(refusal) = message.refusal.as_non_null() {
         if refusal.is_empty() {
             return Err(TranslationError::InvalidPayload(
                 "Chat Completions assistant refusal content cannot be empty when translating to OpenAI Responses input"
@@ -183,7 +192,7 @@ fn assistant_input_items(
                 role: responses::AssistantRole::Assistant,
                 status: responses::OutputStatus::Completed,
                 content,
-                phase: None,
+                phase: None.into(),
             }),
         )));
     }
@@ -219,7 +228,7 @@ fn assistant_output_content(
                 responses::OutputTextContent {
                     text: text.clone(),
                     annotations: Vec::new(),
-                    logprobs: None,
+                    logprobs: Vec::new(),
                 },
             )])
         }
@@ -274,7 +283,7 @@ impl From<&ChatCompletionRequestMessageContentPartText> for responses::OutputMes
         Self::OutputText(responses::OutputTextContent {
             text: part.text.clone(),
             annotations: Vec::new(),
-            logprobs: None,
+            logprobs: Vec::new(),
         })
     }
 }
@@ -308,14 +317,14 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContentPart> for responses::
             chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(part) => {
                 Ok(responses::InputContent::InputImage(responses::InputImageContent {
                     detail: part.image_url.detail.map(Into::into).unwrap_or_default(),
-                    file_id: None,
-                    image_url: Some(part.image_url.url.clone()),
+                    file_id: None.into(),
+                    image_url: Some(part.image_url.url.clone()).into(),
                 }))
             }
             chat::ChatCompletionRequestUserMessageContentPart::File(part) => {
                 Ok(responses::InputContent::InputFile(responses::InputFileContent {
                     file_data: part.file.file_data.clone(),
-                    file_id: part.file.file_id.clone(),
+                    file_id: part.file.file_id.clone().into(),
                     file_url: None,
                     filename: part.file.filename.clone(),
                     detail: None,
@@ -345,7 +354,6 @@ impl From<chat::ImageDetail> for responses::ImageDetail {
             chat::ImageDetail::Auto => Self::Auto,
             chat::ImageDetail::Low => Self::Low,
             chat::ImageDetail::High => Self::High,
-            chat::ImageDetail::Original => Self::Original,
         }
     }
 }
@@ -367,9 +375,9 @@ impl From<&chat::ChatCompletionMessageToolCalls> for responses::Item {
                 responses::Item::CustomToolCall(responses::CustomToolCall {
                     call_id: call.id.clone(),
                     namespace: None,
-                    input: call.custom_tool.input.clone(),
-                    name: call.custom_tool.name.clone(),
-                    id: call.id.clone(),
+                    input: call.custom.input.clone(),
+                    name: call.custom.name.clone(),
+                    id: Some(call.id.clone()),
                 })
             }
         }

@@ -28,8 +28,17 @@ fn supports_responses_to_chat_completions_non_streaming_translation() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
-            {"type": "message", "id": "m", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "hi", "annotations": []}]}
+            {"type": "message", "id": "m", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "hi", "annotations": [], "logprobs": []}]}
         ]
     });
 

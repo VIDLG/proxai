@@ -14,7 +14,7 @@ pub(crate) fn output_text(
     responses::OutputTextContent {
         text: text.into(),
         annotations,
-        logprobs: None,
+        logprobs: Vec::new(),
     }
 }
 
@@ -29,7 +29,7 @@ pub(crate) fn assistant_message(
         role: responses::AssistantRole::Assistant,
         status: responses::OutputStatus::Completed,
         content,
-        phase: None,
+        phase: None.into(),
     }
 }
 
@@ -39,7 +39,7 @@ pub(crate) fn in_progress_message_item(id: impl Into<String>) -> responses::Outp
         role: responses::AssistantRole::Assistant,
         status: responses::OutputStatus::InProgress,
         content: Vec::new(),
-        phase: None,
+        phase: None.into(),
     })
 }
 
@@ -131,32 +131,32 @@ pub(crate) fn reasoning_item(
     text: impl Into<String>,
 ) -> responses::OutputItem {
     responses::OutputItem::Reasoning(responses::ReasoningItem {
-        id: Some(id.into()),
+        id: id.into(),
         summary: Vec::new(),
         content: Some(vec![responses::ReasoningItemContent::ReasoningText(
             responses::ReasoningTextContent { text: text.into() },
         )]),
-        encrypted_content: None,
+        encrypted_content: None.into(),
         status: Some(responses::OutputStatus::Completed),
     })
 }
 
 pub(crate) fn in_progress_reasoning_item(id: impl Into<String>) -> responses::OutputItem {
     responses::OutputItem::Reasoning(responses::ReasoningItem {
-        id: Some(id.into()),
+        id: id.into(),
         summary: Vec::new(),
         content: Some(Vec::new()),
-        encrypted_content: None,
+        encrypted_content: None.into(),
         status: Some(responses::OutputStatus::InProgress),
     })
 }
 
 pub(crate) fn in_progress_redacted_reasoning_item(id: impl Into<String>) -> responses::OutputItem {
     responses::OutputItem::Reasoning(responses::ReasoningItem {
-        id: Some(id.into()),
+        id: id.into(),
         summary: Vec::new(),
         content: None,
-        encrypted_content: None,
+        encrypted_content: None.into(),
         status: Some(responses::OutputStatus::InProgress),
     })
 }
@@ -165,11 +165,12 @@ pub(crate) fn redacted_reasoning_item(
     id: impl Into<String>,
     data: impl Into<String>,
 ) -> responses::OutputItem {
+    let data: String = data.into();
     responses::OutputItem::Reasoning(responses::ReasoningItem {
-        id: Some(id.into()),
+        id: id.into(),
         summary: Vec::new(),
         content: None,
-        encrypted_content: Some(data.into()),
+        encrypted_content: Some(data).into(),
         status: Some(responses::OutputStatus::Completed),
     })
 }

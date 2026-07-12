@@ -5,12 +5,13 @@
 //! of its own beyond the inbound lifecycle wrapper.
 
 use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, MessageStreamEvent};
-use crate::protocol::openai::chat_completions::FunctionType;
+use crate::protocol::openai::chat_completions::{CompletionUsage, FinishReason, FunctionType};
 
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::openai_chat_completions::outbound::{
-    assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
-    reasoning_delta, refusal_delta, tool_arguments_delta, tool_call_start_delta,
+    assistant_role_delta as message_start_delta, chat_choice_chunk as build_chat_choice_chunk,
+    chat_usage_chunk as build_chat_usage_chunk, refusal_delta, tool_arguments_delta,
+    tool_call_start_delta,
 };
 use crate::translation::streaming::{
     SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
@@ -23,6 +24,41 @@ mod state;
 use super::types::chat_finish_reason_from_anthropic_stop_reason;
 use output::chat_terminal_delta;
 use state::StreamingState;
+
+fn chat_choice_chunk(
+    identity: &StreamIdentity,
+    delta: crate::protocol::openai::chat_completions::ChatCompletionStreamResponseDelta,
+    finish_reason: Option<FinishReason>,
+) -> StreamTranslationResult<serde_json::Value> {
+    Ok(serde_json::to_value(build_chat_choice_chunk(
+        identity,
+        delta,
+        finish_reason,
+    ))?)
+}
+
+fn chat_usage_chunk(
+    identity: &StreamIdentity,
+    usage: CompletionUsage,
+) -> StreamTranslationResult<serde_json::Value> {
+    Ok(serde_json::to_value(build_chat_usage_chunk(
+        identity, usage,
+    ))?)
+}
+
+fn chat_reasoning_chunk(
+    identity: &StreamIdentity,
+    reasoning: String,
+) -> StreamTranslationResult<serde_json::Value> {
+    let mut payload =
+        serde_json::to_value(build_chat_choice_chunk(identity, Default::default(), None))?;
+    crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning(
+        &mut payload,
+        reasoning,
+    )
+    .map_err(|error| StreamTranslationError::Semantic(error.to_string()))?;
+    Ok(payload)
+}
 
 #[derive(Debug, Default)]
 pub(super) struct ChatCompletionStreamTranslator {
@@ -43,7 +79,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 );
                 self.lifecycle
                     .begin_message_stream(identity.clone(), StreamingState::new())?;
-                chunks.push(chat_choice_chunk(&identity, message_start_delta(), None));
+                chunks.push(chat_choice_chunk(&identity, message_start_delta(), None)?);
             }
             MessageStreamEvent::Ping(_) => {}
 
@@ -57,7 +93,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         if !block.text.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_text();
                             let identity = self.lifecycle.stream_identity()?;
-                            chunks.push(chat_choice_chunk(identity, block.into(), None));
+                            chunks.push(chat_choice_chunk(identity, block.into(), None)?);
                         }
                     }
                     ContentBlock::ToolUse(block) => {
@@ -76,7 +112,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                                 Some(FunctionType::Function),
                             ),
                             None,
-                        ));
+                        )?);
                     }
 
                     ContentBlock::Thinking(block) => {
@@ -88,7 +124,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         if !block.thinking.is_empty() {
                             self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                             let identity = self.lifecycle.stream_identity()?;
-                            chunks.push(chat_choice_chunk(identity, block.into(), None));
+                            chunks.push(chat_reasoning_chunk(identity, block.thinking)?);
                         }
                     }
                     ContentBlock::RedactedThinking(block) => {
@@ -121,7 +157,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     if !delta.text.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_text();
                         let identity = self.lifecycle.stream_identity()?;
-                        chunks.push(chat_choice_chunk(identity, delta.into(), None));
+                        chunks.push(chat_choice_chunk(identity, delta.into(), None)?);
                     }
                 }
                 ContentBlockDelta::InputJsonDelta(delta) => {
@@ -135,7 +171,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         identity,
                         tool_arguments_delta(tool_call_index, delta.partial_json),
                         None,
-                    ));
+                    )?);
                 }
 
                 ContentBlockDelta::ThinkingDelta(delta) => {
@@ -145,7 +181,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     if !delta.thinking.is_empty() {
                         self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                         let identity = self.lifecycle.stream_identity()?;
-                        chunks.push(chat_choice_chunk(identity, delta.into(), None));
+                        chunks.push(chat_reasoning_chunk(identity, delta.thinking)?);
                     }
                 }
                 ContentBlockDelta::SignatureDelta(delta) => {
@@ -162,7 +198,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 }
             },
             MessageStreamEvent::MessageDelta(event) => {
-                let Some(stop_reason) = event.delta.stop_reason else {
+                let Some(stop_reason) = event.delta.stop_reason.as_non_null().copied() else {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted message_delta without stop_reason".to_string(),
                     ));
@@ -176,23 +212,20 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let finish_reason = chat_finish_reason_from_anthropic_stop_reason(stop_reason);
 
                 if let Some(continuation) = phase.state_mut().take_continuation() {
-                    chunks.push(chat_choice_chunk(
+                    chunks.push(chat_reasoning_chunk(
                         &identity,
-                        reasoning_delta(
-                            continuation.append_to_chat_reasoning_content(String::new())?,
-                        ),
-                        None,
-                    ));
+                        continuation.append_to_chat_reasoning_content(String::new())?,
+                    )?);
                 }
 
                 if let Some(refusal) = terminal_delta {
                     phase.mark_refusal();
-                    chunks.push(chat_choice_chunk(&identity, refusal_delta(refusal), None));
+                    chunks.push(chat_choice_chunk(&identity, refusal_delta(refusal), None)?);
                     chunks.push(chat_choice_chunk(
                         &identity,
                         Default::default(),
                         Some(finish_reason),
-                    ));
+                    )?);
                 } else {
                     if !emitted_representable_content {
                         return Err(StreamTranslationError::Semantic(
@@ -204,14 +237,14 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         &identity,
                         Default::default(),
                         Some(finish_reason),
-                    ));
+                    )?);
                 }
 
                 // Chat streaming usage is a response-level update. Keep it
                 // in a separate `choices: []` chunk, matching OpenAI's
                 // `stream_options.include_usage` shape, instead of merging it
                 // into a content or terminal choice chunk.
-                chunks.push(chat_usage_chunk(&identity, event.usage.into()));
+                chunks.push(chat_usage_chunk(&identity, event.usage.into())?);
 
                 self.lifecycle.receive_terminal_delta(phase);
             }

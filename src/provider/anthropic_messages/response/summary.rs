@@ -47,7 +47,7 @@ impl From<&Message> for AnthropicResponseSummary {
         for block in &message.content {
             summary.record_content_block(block);
         }
-        if let Some(reason) = message.stop_reason {
+        if let Some(reason) = message.stop_reason.as_non_null().copied() {
             summary.increment_stop_reason(reason);
         }
         summary
@@ -62,7 +62,7 @@ impl From<&MessageStreamEvent> for AnthropicResponseSummary {
                 for block in &event.message.content {
                     summary.record_content_block(block);
                 }
-                if let Some(reason) = event.message.stop_reason {
+                if let Some(reason) = event.message.stop_reason.as_non_null().copied() {
                     summary.increment_stop_reason(reason);
                 }
             }
@@ -112,10 +112,10 @@ impl AnthropicResponseSummary {
     }
 
     fn observe_message_delta(&mut self, event: &MessageDeltaEvent) {
-        if let Some(reason) = event.delta.stop_reason {
+        if let Some(reason) = event.delta.stop_reason.as_non_null().copied() {
             self.increment_stop_reason(reason);
         }
-        if let Some(server_tool_use) = event.usage.server_tool_use.as_ref() {
+        if let Some(server_tool_use) = event.usage.server_tool_use.as_non_null() {
             if server_tool_use.web_search_requests > 0 {
                 self.increment_server_tool_use("web_search", server_tool_use.web_search_requests);
             }

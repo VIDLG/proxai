@@ -1,3 +1,4 @@
+use crate::protocol::OptionalNullable;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 
@@ -17,10 +18,11 @@ pub enum ItemReferenceType {
     ItemReference,
 }
 
+/// OpenAPI schema: `#/components/schemas/ItemReferenceParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ItemReference {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub r#type: Option<ItemReferenceType>,
+pub struct ItemReferenceParam {
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub r#type: OptionalNullable<ItemReferenceType>,
     pub id: String,
 }
 
@@ -72,7 +74,7 @@ pub enum InputParam {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum InputItem {
-    ItemReference(ItemReference),
+    ItemReference(ItemReferenceParam),
     Item(Item),
     EasyMessage(EasyInputMessage),
 }

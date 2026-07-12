@@ -46,6 +46,7 @@ fn non_stream_chat_completion_observation_summarizes_usage() {
         "choices": [{
             "index": 0,
             "message": {
+                "refusal": null,
                 "role": "assistant",
                 "content": "ok",
                 "tool_calls": [{
@@ -54,7 +55,8 @@ fn non_stream_chat_completion_observation_summarizes_usage() {
                     "function": {"name": "lookup", "arguments": "{}"}
                 }]
             },
-            "finish_reason": "stop"
+            "finish_reason": "stop",
+            "logprobs": null
         }],
         "usage": {
             "prompt_tokens": 10,
@@ -74,10 +76,7 @@ fn non_stream_chat_completion_observation_summarizes_usage() {
     assert_eq!(projection.id, "chatcmpl_123");
     assert_eq!(projection.model, "gpt-4.1");
     assert_eq!(projection.choices.len(), 1);
-    assert_eq!(
-        projection.choices[0].finish_reason,
-        Some(FinishReason::Stop)
-    );
+    assert_eq!(projection.choices[0].finish_reason, FinishReason::Stop);
     let usage = projection.usage.as_ref().expect("usage");
     assert_eq!(usage.total_tokens, 13);
     assert_eq!(

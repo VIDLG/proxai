@@ -33,8 +33,11 @@ for the full matrix.
 
 For Chat-compatible clients such as Zed, plain reasoning text is preserved through
 the `reasoning_content` extension in assistant history, non-streaming messages,
-and streaming deltas. Redacted or encrypted reasoning is never exposed as ordinary
-visible content.
+and streaming deltas. Zed also accepts `reasoning` in streaming deltas, while it
+replays assistant history as `reasoning_content`. These compatibility fields are
+injected and extracted at the translation boundary; the official OpenAI Chat wire
+types remain aligned with the OpenAPI schema. Redacted or encrypted reasoning is
+never exposed as ordinary visible content.
 
 When translating Anthropic thinking across turns, ProxAI uses a versioned,
 client-carried continuation envelope: Responses uses `reasoning.encrypted_content`,
@@ -115,16 +118,16 @@ Common commands:
 - `just build` — release build
 - `cargo run -- check-update` — check for updates
 
-Protocol coverage comparison against official SDKs:
+Protocol coverage comparison against official protocol references:
 
-- `just protocol-compare` — fast OpenAI protocol drift gate used by `just check`
+- `just protocol-compare` — OpenAI schema required-field drift gate used by `just check`
+- `just compare-openai-protocol` — detailed required-field check against the official OpenAPI schema; pass `--structural` for the manual schema-first audit of unmapped wire types and unmodeled properties (not part of CI)
 - `just compare-anthropic-protocol` — Anthropic Messages types vs official TS SDK
-- `just compare-openai-protocol` — detailed OpenAI types vs `async-openai` v0.41.1
 
-The referenced SDK checkouts are git submodules under `contrib/`:
+The referenced protocol checkouts are git submodules under `contrib/`:
 
+- `contrib/openai-openapi`
 - `contrib/anthropic-sdk-typescript`
-- `contrib/async-openai`
 
 For the alignment rules enforced by these scripts, see
 [Protocol Conversion](https://vidlg.github.io/proxai/developer/protocol-conversion).

@@ -76,9 +76,9 @@ impl TryFrom<anthropic::ToolUnion> for responses::Tool {
         match tool {
             anthropic::ToolUnion::Custom(tool) => Ok(Self::Function(responses::FunctionTool {
                 name: tool.name,
-                parameters: Some(serde_json::to_value(tool.input_schema)?),
-                strict: tool.strict,
-                description: tool.description,
+                parameters: Some(serde_json::to_value(tool.input_schema)?).into(),
+                strict: tool.strict.into(),
+                description: tool.description.into(),
                 defer_loading: tool.defer_loading,
             })),
             other => Err(TranslationError::InvalidPayload(format!(

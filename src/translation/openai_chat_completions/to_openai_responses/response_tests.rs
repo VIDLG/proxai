@@ -13,6 +13,7 @@ fn translates_chat_completion_response_to_responses_shape() {
         "choices": [{
             "index": 0,
             "message": {
+                "refusal": null,
                 "role": "assistant",
                 "content": "hello",
                 "tool_calls": [{
@@ -22,6 +23,7 @@ fn translates_chat_completion_response_to_responses_shape() {
                 }]
             },
             "finish_reason": "tool_calls",
+            "logprobs": null,
             "logprobs": null
         }],
         "usage": {
@@ -52,6 +54,33 @@ fn translates_chat_completion_response_to_responses_shape() {
 }
 
 #[test]
+fn translates_zed_non_streaming_reasoning_extension_to_responses_item() {
+    let upstream = json!({
+        "id": "chatcmpl_reasoning",
+        "object": "chat.completion",
+        "created": 1234,
+        "model": "gpt-test",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "refusal": null,
+                "role": "assistant",
+                "content": "answer",
+                "reasoning_content": "thinking"
+            },
+            "finish_reason": "stop",
+            "logprobs": null,
+            "logprobs": null
+        }]
+    });
+
+    let translated = super::super::translate_non_streaming_response(upstream).unwrap();
+    assert_eq!(translated["output"][0]["type"], "reasoning");
+    assert_eq!(translated["output"][0]["content"][0]["text"], "thinking");
+    assert_eq!(translated["output"][1]["type"], "message");
+}
+
+#[test]
 fn rejects_chat_response_without_choices() {
     let no_choices = json!({
         "id": "chatcmpl_empty_choices",
@@ -77,14 +106,20 @@ fn rejects_chat_response_with_multiple_choices() {
         "choices": [
             {
                 "index": 0,
-                "message": {"role": "assistant", "content": "first"},
+                "message": {"content": null, "refusal": null, "role": "assistant", "content": "first"},
+                    "content": null,
+                    "refusal": null,
                 "finish_reason": "stop",
+                "logprobs": null,
                 "logprobs": null
             },
             {
                 "index": 1,
-                "message": {"role": "assistant", "content": "second"},
+                "message": {"content": null, "refusal": null, "role": "assistant", "content": "second"},
+                    "content": null,
+                    "refusal": null,
                 "finish_reason": "stop",
+                "logprobs": null,
                 "logprobs": null
             }
         ]
@@ -105,8 +140,11 @@ fn rejects_chat_response_without_responses_output() {
         "model": "MiniMax-M3",
         "choices": [{
             "index": 0,
-            "message": {"role": "assistant", "content": ""},
+            "message": {"content": null, "refusal": null, "role": "assistant", "content": ""},
+                "content": null,
+                "refusal": null,
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }]
     });

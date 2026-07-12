@@ -1,3 +1,4 @@
+pub(crate) mod compatibility;
 pub(crate) mod outbound;
 pub(crate) mod response;
 pub(crate) mod streaming;

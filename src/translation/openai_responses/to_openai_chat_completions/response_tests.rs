@@ -11,6 +11,15 @@ fn translates_responses_message_response_to_chat_completion() {
         "created_at": 1700000000,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
             {
                 "type": "message",
@@ -18,8 +27,8 @@ fn translates_responses_message_response_to_chat_completion() {
                 "role": "assistant",
                 "status": "completed",
                 "content": [
-                    {"type": "output_text", "text": "hello", "annotations": []},
-                    {"type": "output_text", "text": " world", "annotations": []}
+                    {"type": "output_text", "text": "hello", "annotations": [], "logprobs": []},
+                    {"type": "output_text", "text": " world", "annotations": [], "logprobs": []}
                 ]
             }
         ],
@@ -60,6 +69,15 @@ fn translates_responses_function_call_to_chat_tool_calls() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
             {"type": "function_call", "id": "fc_1", "call_id": "call_abc", "name": "lookup", "arguments": "{\"id\":\"42\"}"}
         ]
@@ -93,8 +111,17 @@ fn translates_responses_incomplete_status_to_length_finish_reason() {
         "created_at": 0,
         "status": "incomplete",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
-            {"type": "message", "id": "m", "role": "assistant", "status": "incomplete", "content": [{"type": "output_text", "text": "partial", "annotations": []}]}
+            {"type": "message", "id": "m", "role": "assistant", "status": "incomplete", "content": [{"type": "output_text", "text": "partial", "annotations": [], "logprobs": []}]}
         ]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
@@ -105,23 +132,33 @@ fn translates_responses_incomplete_status_to_length_finish_reason() {
 }
 
 #[test]
-fn leaves_unknown_responses_incomplete_reason_without_chat_finish_reason() {
+fn rejects_unknown_responses_incomplete_reason_at_protocol_boundary() {
     let upstream = json!({
         "id": "resp_1",
         "model": "glm-5.1",
         "created_at": 0,
         "status": "incomplete",
-        "incomplete_details": {"reason": "provider_shutdown"},
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": {"reason": "provider_shutdown"},
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
-            {"type": "message", "id": "m", "role": "assistant", "status": "incomplete", "content": [{"type": "output_text", "text": "partial", "annotations": []}]}
+            {"type": "message", "id": "m", "role": "assistant", "status": "incomplete", "content": [{"type": "output_text", "text": "partial", "annotations": [], "logprobs": []}]}
         ]
     });
-    let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
-    let value = serde_json::to_value(translated).unwrap();
+    let error = serde_json::from_value::<Response>(upstream).unwrap_err();
 
-    assert!(value["choices"][0]["finish_reason"].is_null());
+    assert!(
+        error
+            .to_string()
+            .contains("unknown variant `provider_shutdown`")
+    );
 }
 
 #[test]
@@ -132,6 +169,15 @@ fn translates_responses_refusal_to_chat_refusal_message() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [{
             "type": "message",
             "id": "m",
@@ -160,13 +206,22 @@ fn rejects_mixed_responses_text_and_refusal_for_chat_response() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [{
             "type": "message",
             "id": "m",
             "role": "assistant",
             "status": "completed",
             "content": [
-                {"type": "output_text", "text": "partial", "annotations": []},
+                {"type": "output_text", "text": "partial", "annotations": [], "logprobs": []},
                 {"type": "refusal", "refusal": "I can't help with that."}
             ]
         }]
@@ -186,6 +241,15 @@ fn translates_responses_reasoning_output_to_chat_reasoning_content() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [{
             "type": "reasoning",
             "id": "r",
@@ -194,15 +258,13 @@ fn translates_responses_reasoning_output_to_chat_reasoning_content() {
             "status": "completed"
         }]
     });
-    let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
-    let value = serde_json::to_value(translated).unwrap();
+    let value = super::super::translate_non_streaming_response(upstream).unwrap();
 
     assert_eq!(
         value["choices"][0]["message"]["reasoning_content"],
         "Summary. Details."
     );
-    assert!(value["choices"][0]["message"].get("content").is_none());
+    assert!(value["choices"][0]["message"]["content"].is_null());
 }
 
 #[test]
@@ -213,6 +275,15 @@ fn rejects_responses_output_without_chat_content() {
         "created_at": 0,
         "status": "completed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "output": [
             {"type": "reasoning", "id": "r", "summary": [], "content": []}
         ]

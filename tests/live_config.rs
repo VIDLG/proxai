@@ -835,7 +835,7 @@ async fn live_openai_chat_completions_roundtrip_with_model(
         projection
             .choices
             .iter()
-            .filter_map(|choice| choice.message.content.as_deref())
+            .filter_map(|choice| choice.message.content.as_non_null().map(String::as_str))
             .any(|content| content.contains(expected_text)),
         "Chat Completions response should contain `{expected_text}`; projection: {projection:?}"
     );

@@ -27,8 +27,8 @@ pub(crate) fn json_number_from_f32(value: f32) -> Option<serde_json::Number> {
 pub(crate) fn text_block_param(text: impl Into<String>) -> anthropic::TextBlockParam {
     anthropic::TextBlockParam {
         text: text.into(),
-        cache_control: None,
-        citations: None,
+        cache_control: None.into(),
+        citations: None.into(),
     }
 }
 
@@ -36,8 +36,8 @@ pub(crate) fn typed_text_block(text: impl Into<String>) -> anthropic::TypedTextB
     anthropic::TypedTextBlockParam {
         type_: anthropic::TextBlockType::Text,
         text: text.into(),
-        cache_control: None,
-        citations: None,
+        cache_control: None.into(),
+        citations: None.into(),
     }
 }
 
@@ -138,8 +138,8 @@ fn is_tool_message(message: &anthropic::MessageParam) -> bool {
 
 pub(crate) fn output_config(effort: anthropic::OutputEffort) -> anthropic::OutputConfig {
     anthropic::OutputConfig {
-        effort: Some(effort),
-        format: None,
+        effort: Some(effort).into(),
+        format: None.into(),
     }
 }
 
@@ -186,7 +186,7 @@ pub(crate) fn image_block_from_url(url: &str) -> TranslationResult<anthropic::Im
 
     Ok(anthropic::ImageBlockParam {
         source,
-        cache_control: None,
+        cache_control: None.into(),
     })
 }
 
@@ -321,7 +321,7 @@ pub(crate) fn tool_use_block_param(
         id: id.into(),
         input,
         name: name.into(),
-        cache_control: None,
+        cache_control: None.into(),
         caller: None,
     }
 }
@@ -348,8 +348,8 @@ pub(crate) fn input_schema(parameters: Option<&Value>) -> anthropic::InputSchema
 
     anthropic::InputSchema {
         type_,
-        properties,
-        required,
+        properties: properties.into(),
+        required: required.into(),
         extra: Value::Object(extra),
     }
 }
@@ -370,13 +370,13 @@ pub(crate) fn custom_tool(
         input_schema: input_schema(parameters),
         name: name.into(),
         allowed_callers: None,
-        cache_control: None,
+        cache_control: None.into(),
         defer_loading,
         description,
-        eager_input_streaming: None,
+        eager_input_streaming: None.into(),
         input_examples: None,
         strict,
-        type_: None,
+        type_: None.into(),
     })
 }
 

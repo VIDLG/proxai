@@ -15,7 +15,7 @@ fn translates_anthropic_message_to_openai_responses_shape() {
         "role": "assistant",
         "model": "glm-5.1",
         "content": [
-            {"type": "text", "text": "hello", "citations": null},
+            {"type": "text", "citations": null, "text": "hello"},
             {
                 "type": "tool_use",
                 "id": "toolu_1",
@@ -28,6 +28,7 @@ fn translates_anthropic_message_to_openai_responses_shape() {
         "stop_reason": "tool_use",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 10,
             "output_tokens": 6,
             "cache_creation": null,
@@ -70,7 +71,7 @@ fn preserves_interleaved_text_reasoning_and_tool_order() {
         "model": "glm-5.1",
         "content": [
             {"type": "thinking", "thinking": "plan", "signature": "sig"},
-            {"type": "text", "text": "before tool", "citations": null},
+            {"type": "text", "citations": null, "text": "before tool"},
             {
                 "type": "tool_use",
                 "id": "toolu_1",
@@ -78,12 +79,13 @@ fn preserves_interleaved_text_reasoning_and_tool_order() {
                 "name": "lookup",
                 "input": {"q": "proxai"}
             },
-            {"type": "text", "text": "after tool", "citations": null}
+            {"type": "text", "citations": null, "text": "after tool"}
         ],
         "stop_details": null,
         "stop_reason": "tool_use",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 10,
             "output_tokens": 6,
             "cache_creation": null,
@@ -143,6 +145,7 @@ fn translates_anthropic_tool_result_to_function_call_output() {
         "stop_reason": "end_turn",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 10,
             "output_tokens": 6,
             "cache_creation": null,
@@ -174,11 +177,12 @@ fn translates_max_tokens_stop_to_incomplete_details() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "partial", "citations": null}],
+        "content": [{"type": "text", "citations": null, "text": "partial"}],
         "stop_details": null,
         "stop_reason": "max_tokens",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 10,
             "output_tokens": 6,
             "cache_creation": null,
@@ -207,11 +211,12 @@ fn translates_anthropic_refusal_stop_to_completed_responses_status() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "I can't help with that.", "citations": null}],
+        "content": [{"type": "text", "citations": null, "text": "I can't help with that."}],
         "stop_details": null,
         "stop_reason": "refusal",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 10,
             "output_tokens": 6,
             "cache_creation": null,
@@ -239,11 +244,12 @@ fn omits_unrepresentable_anthropic_batch_service_tier() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "ok", "citations": null}],
+        "content": [{"type": "text", "citations": null, "text": "ok"}],
         "stop_details": null,
         "stop_reason": "end_turn",
         "stop_sequence": null,
         "usage": {
+            "output_tokens_details": null,
             "input_tokens": 1,
             "output_tokens": 1,
             "cache_creation": null,
@@ -288,6 +294,7 @@ fn translates_anthropic_message_payload_to_openai_responses() {
                 "stop_reason": "tool_use",
                 "stop_sequence": null,
                 "usage": {
+                    "output_tokens_details": null,
                     "input_tokens": 10,
                     "output_tokens": 6,
                     "cache_creation": null,
@@ -321,6 +328,8 @@ fn translates_anthropic_web_citations_to_responses_url_annotations() {
         "model": "glm-5.1",
         "content": [{
             "type": "text",
+            "citations": null,
+            "citations": null,
             "text": "See ProxAI docs for details.",
             "citations": [{
                 "type": "web_search_result_location",
@@ -334,7 +343,7 @@ fn translates_anthropic_web_citations_to_responses_url_annotations() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 

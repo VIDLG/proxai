@@ -23,12 +23,12 @@ impl From<&CompletionUsage> for Usage {
 impl From<&CompletionUsage> for MessageDeltaUsage {
     fn from(usage: &CompletionUsage) -> Self {
         Self {
-            cache_creation_input_tokens: None,
-            cache_read_input_tokens: None,
-            input_tokens: Some(usage.prompt_tokens),
+            cache_creation_input_tokens: None.into(),
+            cache_read_input_tokens: None.into(),
+            input_tokens: Some(usage.prompt_tokens).into(),
             output_tokens: usage.completion_tokens,
-            output_tokens_details: None,
-            server_tool_use: None,
+            output_tokens_details: None.into(),
+            server_tool_use: None.into(),
         }
     }
 }

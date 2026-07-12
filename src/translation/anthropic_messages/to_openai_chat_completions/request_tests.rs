@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::super::translate_request_payload;
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
 #[test]
 fn translates_anthropic_request_to_chat_completion_shape() {
@@ -8,16 +9,16 @@ fn translates_anthropic_request_to_chat_completion_shape() {
         "model": "claude-sonnet-4-5",
         "max_tokens": 128,
         "stream": true,
-        "system": [{"type": "text", "text": "You are concise."}],
+        "system": [{"type": "text", "citations": null, "text": "You are concise."}],
         "messages": [
             {
                 "role": "user",
-                "content": [{"type": "text", "text": "Call the tool."}]
+                "content": [{"type": "text", "citations": null, "text": "Call the tool."}]
             },
             {
                 "role": "assistant",
                 "content": [
-                    {"type": "text", "text": "Sure."},
+                    {"type": "text", "citations": null, "text": "Sure."},
                     {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"query": "proxai"}}
                 ]
             },
@@ -102,7 +103,7 @@ fn preserves_anthropic_assistant_thinking_in_chat_history() {
             "role": "assistant",
             "content": [
                 {"type": "thinking", "thinking": "Need a tool.", "signature": "sig"},
-                {"type": "text", "text": "Checking."},
+                {"type": "text", "citations": null, "text": "Checking."},
                 {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {}}
             ]
         }]
@@ -110,9 +111,19 @@ fn preserves_anthropic_assistant_thinking_in_chat_history() {
 
     let translated = translate_request_payload(&payload).unwrap();
 
+    let (visible, continuation) = ContinuationEnvelope::split_chat_reasoning_content(
+        translated["messages"][0]["reasoning_content"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(visible, "Need a tool.");
     assert_eq!(
-        translated["messages"][0]["reasoning_content"],
-        "Need a tool."
+        continuation,
+        Some(ContinuationEnvelope::from(vec![Continuation::Thinking {
+            thinking: "Need a tool.".to_string(),
+            signature: "sig".to_string(),
+        }]))
     );
     assert_eq!(translated["messages"][0]["content"], "Checking.");
     assert_eq!(translated["messages"][0]["tool_calls"][0]["id"], "toolu_1");
@@ -126,7 +137,7 @@ fn splits_mixed_anthropic_user_content_and_tool_result_into_chat_messages() {
         "messages": [{
             "role": "user",
             "content": [
-                {"type": "text", "text": "Here is context."},
+                {"type": "text", "citations": null, "text": "Here is context."},
                 {"type": "tool_result", "tool_use_id": "toolu_1", "content": "found"}
             ]
         }]
@@ -152,8 +163,8 @@ fn translates_anthropic_tool_result_text_blocks_to_chat_tool_message_array() {
                 "type": "tool_result",
                 "tool_use_id": "toolu_1",
                 "content": [
-                    {"type": "text", "text": "found"},
-                    {"type": "text", "text": " it"}
+                    {"type": "text", "citations": null, "text": "found"},
+                    {"type": "text", "citations": null, "text": " it"}
                 ]
             }]
         }]
@@ -207,14 +218,14 @@ fn rejects_anthropic_assistant_text_after_tool_use_for_chat_completion() {
         "messages": [{
             "role": "assistant",
             "content": [
-                {"type": "text", "text": "Before."},
+                {"type": "text", "citations": null, "text": "Before."},
                 {
                     "type": "tool_use",
                     "id": "toolu_1",
                     "name": "lookup",
                     "input": {"query": "proxai"}
                 },
-                {"type": "text", "text": "After."}
+                {"type": "text", "citations": null, "text": "After."}
             ]
         }]
     });

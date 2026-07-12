@@ -10,7 +10,7 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
 Different protocols use different names for “the model stopped producing output”. ProxAI treats these as related protocol concepts, not interchangeable raw fields.
 
 <ProxaiCallout type="note" title="One response does not mean one stop reason shape">
-  Non-streaming Anthropic Messages returns one final `message` object. That object normally includes stop-related fields, but wire types still model them as nullable/missing-compatible because SDK schemas and intermediate upstreams may omit nullable fields.
+  Non-streaming Anthropic Messages returns one final `message` object whose stop-related fields follow the official required/nullable contract. Measured provider omissions are repaired, when supported, by provider normalization before strict wire deserialization.
 </ProxaiCallout>
 
 ## Terminal concepts
@@ -52,22 +52,22 @@ Different protocols use different names for “the model stopped producing outpu
   ]}
 />
 
-## Why nullable fields exist
+## Presence and nullability
 
-Wire structs often use nullable/missing-compatible shapes even when provider documentation says a field is required. This is deliberate:
+Wire structs mirror official field contracts rather than accepting missing and null interchangeably:
 
 <ReferenceTable
-  columns={['Case', 'Why ProxAI accepts it']}
+  columns={['Case', 'Representation or handling']}
   rows={[
-    ['SDK schemas mark required-nullable fields', 'Some SDK-generated types allow the field to be omitted while still treating null as valid.'],
-    ['Upstream compatibility layers omit null fields', 'OpenAI-compatible or Anthropic-compatible proxies may drop fields whose value is null.'],
-    ['Streaming accumulation is partial before terminal event', 'Before the terminal event, stop information may not be known yet.'],
-    ['Error or interrupted responses are not normal final messages', 'A failed upstream response should be handled as an error, not forced into a fake stop reason.'],
+    ['Official required-nullable field', '`RequiredNullable<T>`: missing is rejected, explicit null and values are accepted.'],
+    ['Official optional field', '`Option<T>` with explicit serde presence handling.'],
+    ['Known provider omits a required-nullable field', 'A narrow provider normalization may insert explicit null before protocol deserialization when a measured fixture documents the deviation.'],
+    ['Streaming state before a terminal event', 'Internal accumulation state uses its own optional fields; the official wire event remains strict.'],
   ]}
   codeFirstColumn={false}
 />
 
-From a logical non-streaming success path, a final Anthropic `message` should include stop information. The parser still accepts missing/null values so ProxAI can produce a clear translation or upstream error instead of crashing on an overly strict model.
+A successful final Anthropic `message` therefore follows the official requiredness of stop fields. Failed or interrupted upstream responses are handled as errors rather than by weakening the protocol carrier or inventing a stop reason.
 
 ## Contract
 

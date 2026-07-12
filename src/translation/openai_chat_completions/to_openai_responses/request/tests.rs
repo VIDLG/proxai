@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::protocol::openai_responses::ResponseCreateParams;
+use crate::protocol::openai_responses::CreateResponseRequest;
 
 use super::super::translate_request_payload;
 
@@ -26,6 +26,10 @@ fn translates_chat_completions_request_to_responses_shape() {
                 "tool_calls": [{
                     "id": "call_1",
                     "type": "function",
+                    "parameters": null,
+                    "strict": null,
+                    "parameters": null,
+                    "strict": null,
                     "function": {"name": "lookup", "arguments": "{\"id\":\"42\"}"}
                 }]
             },
@@ -38,6 +42,10 @@ fn translates_chat_completions_request_to_responses_shape() {
         "tool_choice": {"type": "function", "function": {"name": "lookup"}},
         "tools": [{
             "type": "function",
+            "parameters": null,
+            "strict": null,
+            "parameters": null,
+            "strict": null,
             "function": {
                 "name": "lookup",
                 "description": "Look up a record",
@@ -52,7 +60,7 @@ fn translates_chat_completions_request_to_responses_shape() {
     });
 
     let translated = translate_request_payload(&payload).unwrap();
-    serde_json::from_value::<ResponseCreateParams>(translated.clone())
+    serde_json::from_value::<CreateResponseRequest>(translated.clone())
         .expect("translated payload must match Responses request schema");
 
     assert_eq!(translated["model"], "gpt-5.1");
@@ -111,6 +119,10 @@ fn preserves_chat_tool_message_array_as_function_call_output_content() {
                 "tool_calls": [{
                     "id": "call_1",
                     "type": "function",
+                    "parameters": null,
+                    "strict": null,
+                    "parameters": null,
+                    "strict": null,
                     "function": {"name": "lookup", "arguments": "{}"}
                 }]
             },
@@ -174,16 +186,19 @@ fn rejects_empty_chat_user_text_for_request_translation() {
 }
 
 #[test]
-fn flattens_same_mode_allowed_tools_tool_choice_for_request_translation() {
+fn translates_allowed_tools_tool_choice_for_request_translation() {
     let payload = json!({
         "model": "gpt-5.1",
         "messages": [{"role": "user", "content": "hi"}],
         "tool_choice": {
             "type": "allowed_tools",
-            "allowed_tools": [
-                {"mode": "auto", "tools": [{"type": "function", "name": "a"}]},
-                {"mode": "auto", "tools": [{"type": "function", "name": "b"}]}
-            ]
+            "allowed_tools": {
+                "mode": "auto",
+                "tools": [
+                    {"type": "function", "parameters": null, "strict": null, "name": "a"},
+                    {"type": "function", "parameters": null, "strict": null, "name": "b"}
+                ]
+            }
         }
     });
 
@@ -192,25 +207,6 @@ fn flattens_same_mode_allowed_tools_tool_choice_for_request_translation() {
     assert_eq!(translated["tool_choice"]["mode"], "auto");
     assert_eq!(translated["tool_choice"]["tools"][0]["name"], "a");
     assert_eq!(translated["tool_choice"]["tools"][1]["name"], "b");
-}
-
-#[test]
-fn rejects_mixed_mode_allowed_tools_tool_choice_for_request_translation() {
-    let payload = json!({
-        "model": "gpt-5.1",
-        "messages": [{"role": "user", "content": "hi"}],
-        "tool_choice": {
-            "type": "allowed_tools",
-            "allowed_tools": [
-                {"mode": "auto", "tools": [{"type": "function", "name": "a"}]},
-                {"mode": "required", "tools": [{"type": "function", "name": "b"}]}
-            ]
-        }
-    });
-
-    let error = translate_request_payload(&payload).unwrap_err().to_string();
-
-    assert!(error.contains("allowed_tools tool_choice cannot mix modes"));
 }
 
 #[test]

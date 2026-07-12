@@ -7,18 +7,17 @@ use crate::protocol::openai::chat_completions as chat;
 
 pub(crate) fn assistant_response_message(
     content: Option<String>,
-    reasoning_content: Option<String>,
     refusal: Option<String>,
     tool_calls: Option<Vec<chat::ChatCompletionMessageToolCalls>>,
     annotations: Option<Vec<chat::ChatCompletionResponseMessageAnnotation>>,
 ) -> chat::ChatCompletionResponseMessage {
     chat::ChatCompletionResponseMessage {
-        content,
-        reasoning_content,
-        refusal,
+        content: content.into(),
+        refusal: refusal.into(),
         tool_calls,
         annotations,
-        role: chat::Role::Assistant,
-        audio: None,
+        role: chat::AssistantRole::Assistant,
+        function_call: None,
+        audio: None.into(),
     }
 }

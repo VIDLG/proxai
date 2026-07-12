@@ -28,7 +28,7 @@ pub(crate) fn render_summary_compact(
 
 pub(crate) fn render_projection_compact(projection: &MessageCreateParamsBase) -> String {
     let mut parts = vec![];
-    if projection.container.is_some() {
+    if projection.container.is_non_null() {
         parts.push("container".to_string());
     }
     if projection.metadata.is_some() {

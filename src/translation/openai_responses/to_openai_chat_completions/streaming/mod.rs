@@ -17,7 +17,7 @@ use crate::protocol::openai::responses::{
 };
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
-    reasoning_delta, refusal_delta, text_delta, tool_arguments_delta, tool_call_start_delta,
+    refusal_delta, text_delta, tool_arguments_delta, tool_call_start_delta,
 };
 use crate::translation::openai_responses::streaming::ResponsesInboundLifecycle;
 use crate::translation::streaming::{
@@ -27,6 +27,19 @@ use crate::translation::streaming::{
 
 use state::StreamingState;
 
+fn reasoning_event(
+    identity: &StreamIdentity,
+    reasoning: String,
+) -> StreamTranslationResult<StreamEvent> {
+    let mut payload = serde_json::to_value(chat_choice_chunk(identity, Default::default(), None))?;
+    crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning(
+        &mut payload,
+        reasoning,
+    )
+    .map_err(|error| StreamTranslationError::Semantic(error.to_string()))?;
+    StreamEvent::message(payload)
+}
+
 #[derive(Debug, Default)]
 pub(super) struct ChatCompletionStreamTranslator {
     lifecycle: ResponsesInboundLifecycle<StreamingState>,
@@ -35,7 +48,6 @@ pub(super) struct ChatCompletionStreamTranslator {
 impl StreamingEventTranslator for ChatCompletionStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
-        self.lifecycle.validate_stream_event(&parsed)?;
         let mut chunks = Vec::new();
 
         match parsed {
@@ -109,11 +121,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 }
                 self.lifecycle.streaming_state_mut()?.mark_reasoning();
                 let identity = self.lifecycle.stream_identity()?.clone();
-                chunks.push(StreamEvent::message(chat_choice_chunk(
-                    &identity,
-                    reasoning_delta(event.delta),
-                    None,
-                ))?);
+                chunks.push(reasoning_event(&identity, event.delta)?);
             }
             ResponseStreamEvent::ResponseReasoningTextDelta(event) => {
                 if event.delta.is_empty() {
@@ -121,11 +129,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 }
                 self.lifecycle.streaming_state_mut()?.mark_reasoning();
                 let identity = self.lifecycle.stream_identity()?.clone();
-                chunks.push(StreamEvent::message(chat_choice_chunk(
-                    &identity,
-                    reasoning_delta(event.delta),
-                    None,
-                ))?);
+                chunks.push(reasoning_event(&identity, event.delta)?);
             }
             ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(event) => {
                 let tool_call_index = self
@@ -162,7 +166,8 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     "Responses stream error{}: {}",
                     event
                         .code
-                        .as_deref()
+                        .as_non_null()
+                        .map(String::as_str)
                         .map(|code| format!(" ({code})"))
                         .unwrap_or_default(),
                     event.message
@@ -198,7 +203,7 @@ impl ChatCompletionStreamTranslator {
     ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let identity = response_identity(response);
         self.lifecycle
-            .observe_response_stream(identity.clone(), StreamingState::new)?;
+            .ensure_response_stream(identity.clone(), StreamingState::new())?;
         if self.lifecycle.streaming_state_mut()?.start_message() {
             Ok(vec![StreamEvent::message(chat_choice_chunk(
                 &identity,
@@ -259,7 +264,7 @@ impl ChatCompletionStreamTranslator {
 fn response_failure_error(response: &Response) -> StreamTranslationError {
     let detail = response
         .error
-        .as_ref()
+        .as_non_null()
         .map(|error| format!("{}: {}", error.code, error.message))
         .unwrap_or_else(|| "upstream response failed without error details".to_string());
     StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))

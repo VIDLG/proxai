@@ -1,11 +1,13 @@
 use axum::body::{Body, to_bytes};
 use axum::http::{Response, header};
+use serde_json::Value;
 
 use crate::http_support::into_byte_stream;
 
 use super::translate_streaming_response;
 
 async fn translate_body(body: &'static str) -> String {
+    let body = complete_response_snapshots(body);
     let response = Response::builder()
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(body))
@@ -18,19 +20,47 @@ async fn translate_body(body: &'static str) -> String {
     String::from_utf8(body.to_vec()).unwrap()
 }
 
+fn complete_response_snapshots(body: &str) -> String {
+    let mut completed = String::new();
+    for line in body.lines() {
+        if let Some(data) = line.strip_prefix("data: ")
+            && let Ok(mut event) = serde_json::from_str::<Value>(data)
+        {
+            if let Some(response) = event.get_mut("response").and_then(Value::as_object_mut) {
+                for field in [
+                    "metadata",
+                    "temperature",
+                    "top_p",
+                    "error",
+                    "incomplete_details",
+                    "instructions",
+                ] {
+                    response.entry(field.to_string()).or_insert(Value::Null);
+                }
+            }
+            completed.push_str("data: ");
+            completed.push_str(&event.to_string());
+        } else {
+            completed.push_str(line);
+        }
+        completed.push('\n');
+    }
+    completed
+}
+
 #[tokio::test]
 async fn translates_openai_responses_stream_to_anthropic_messages_sse() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
 event: response.output_text.delta\n\
-data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\"}\n\n\
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"logprobs\":[],\"delta\":\"ok\"}\n\n\
 event: response.output_text.done\n\
-data: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"text\":\"ok\"}\n\n\
+data: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"text\":\"ok\",\"logprobs\":[]}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n",
     )
     .await;
 
@@ -48,7 +78,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
 async fn translates_reasoning_summary_stream_to_thinking_block() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.reasoning_summary_part.added\n\
@@ -60,7 +90,7 @@ data: {\"type\":\"response.reasoning_summary_text.done\",\"sequence_number\":5,\
 event: response.reasoning_summary_part.done\n\
 data: {\"type\":\"response.reasoning_summary_part.done\",\"sequence_number\":6,\"item_id\":\"rs_1\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"thought\"}}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"resp_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"resp_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
     )
     .await;
 
@@ -76,9 +106,9 @@ data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\
 async fn rejects_output_text_delta_before_output_item_added() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
 event: response.output_text.delta\n\
-data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\"}\n\n",
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\",\"logprobs\":[]}\n\n",
     )
     .await;
 
@@ -92,11 +122,11 @@ data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_in
 async fn rejects_output_delta_with_mismatched_item_id() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mismatch\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mismatch\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_expected\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
 event: response.output_text.delta\n\
-data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_wrong\",\"output_index\":0,\"content_index\":0,\"delta\":\"bad\"}\n\n",
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_wrong\",\"output_index\":0,\"content_index\":0,\"delta\":\"bad\",\"logprobs\":[]}\n\n",
     )
     .await;
 
@@ -110,7 +140,7 @@ data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\"
 async fn reports_unexpected_eof_before_responses_terminal_event() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_eof\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n",
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_eof\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
     )
     .await;
 
@@ -121,18 +151,49 @@ data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":
 }
 
 #[tokio::test]
+async fn skips_responses_audio_events_and_continues_anthropic_stream_translation() {
+    let body = translate_body(
+        "event: response.created\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_audio\",\"object\":\"response\",\"created_at\":0,\"model\":\"gpt-audio\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
+event: response.output_item.added\n\
+data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_audio\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
+event: response.audio.delta\n\
+data: {\"type\":\"response.audio.delta\",\"sequence_number\":3,\"delta\":\"base64-audio\"}\n\n\
+event: response.audio.done\n\
+data: {\"type\":\"response.audio.done\",\"sequence_number\":4}\n\n\
+event: response.audio.transcript.delta\n\
+data: {\"type\":\"response.audio.transcript.delta\",\"sequence_number\":5,\"delta\":\"hidden transcript\"}\n\n\
+event: response.audio.transcript.done\n\
+data: {\"type\":\"response.audio.transcript.done\",\"sequence_number\":6}\n\n\
+event: response.output_text.delta\n\
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":7,\"item_id\":\"msg_audio\",\"output_index\":0,\"content_index\":0,\"delta\":\"visible text\",\"logprobs\":[]}\n\n\
+event: response.output_text.done\n\
+data: {\"type\":\"response.output_text.done\",\"sequence_number\":8,\"item_id\":\"msg_audio\",\"output_index\":0,\"content_index\":0,\"text\":\"visible text\",\"logprobs\":[]}\n\n\
+event: response.completed\n\
+data: {\"type\":\"response.completed\",\"sequence_number\":9,\"response\":{\"id\":\"resp_audio\",\"object\":\"response\",\"created_at\":0,\"model\":\"gpt-audio\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
+    )
+    .await;
+
+    assert!(body.contains("\"text\":\"visible text\""));
+    assert!(body.contains("event: message_stop"), "{body}");
+    assert!(!body.contains("base64-audio"));
+    assert!(!body.contains("hidden transcript"));
+    assert!(!body.contains("stream translation error"));
+}
+
+#[tokio::test]
 async fn propagates_response_error_as_stream_error() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_error\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_error\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: error\n\
-data: {\"type\":\"error\",\"sequence_number\":2,\"message\":\"upstream failed\"}\n\n",
+data: {\"type\":\"error\",\"sequence_number\":2,\"code\":null,\"param\":null,\"message\":\"upstream failed\"}\n\n",
     )
     .await;
 
     assert!(body.contains("event: message_start"));
     assert!(body.contains("event: error"));
-    assert!(body.contains("Responses stream error"));
+    assert!(body.contains("Responses stream error"), "{body}");
     assert!(body.contains("upstream failed"));
     assert!(!body.contains("event: message_delta"));
     assert!(!body.contains("event: message_stop"));
@@ -142,29 +203,29 @@ data: {\"type\":\"error\",\"sequence_number\":2,\"message\":\"upstream failed\"}
 async fn translates_multiple_message_content_parts_to_distinct_anthropic_blocks() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_multi\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_multi\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
 event: response.content_part.added\n\
-data: {\"type\":\"response.content_part.added\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n\
+data: {\"type\":\"response.content_part.added\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[],\"logprobs\":[]}}\n\n\
 event: response.output_text.delta\n\
-data: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"first\"}\n\n\
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"first\",\"logprobs\":[]}\n\n\
 event: response.output_text.done\n\
-data: {\"type\":\"response.output_text.done\",\"sequence_number\":5,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"text\":\"first\"}\n\n\
+data: {\"type\":\"response.output_text.done\",\"sequence_number\":5,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"text\":\"first\",\"logprobs\":[]}\n\n\
 event: response.content_part.done\n\
-data: {\"type\":\"response.content_part.done\",\"sequence_number\":6,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"first\",\"annotations\":[]}}\n\n\
+data: {\"type\":\"response.content_part.done\",\"sequence_number\":6,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"first\",\"annotations\":[],\"logprobs\":[]}}\n\n\
 event: response.content_part.added\n\
-data: {\"type\":\"response.content_part.added\",\"sequence_number\":7,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n\
+data: {\"type\":\"response.content_part.added\",\"sequence_number\":7,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[],\"logprobs\":[]}}\n\n\
 event: response.output_text.delta\n\
-data: {\"type\":\"response.output_text.delta\",\"sequence_number\":8,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"delta\":\"second\"}\n\n\
+data: {\"type\":\"response.output_text.delta\",\"sequence_number\":8,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"delta\":\"second\",\"logprobs\":[]}\n\n\
 event: response.output_text.done\n\
-data: {\"type\":\"response.output_text.done\",\"sequence_number\":9,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"text\":\"second\"}\n\n\
+data: {\"type\":\"response.output_text.done\",\"sequence_number\":9,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"text\":\"second\",\"logprobs\":[]}\n\n\
 event: response.content_part.done\n\
-data: {\"type\":\"response.content_part.done\",\"sequence_number\":10,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"part\":{\"type\":\"output_text\",\"text\":\"second\",\"annotations\":[]}}\n\n\
+data: {\"type\":\"response.content_part.done\",\"sequence_number\":10,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"part\":{\"type\":\"output_text\",\"text\":\"second\",\"annotations\":[],\"logprobs\":[]}}\n\n\
 event: response.output_item.done\n\
-data: {\"type\":\"response.output_item.done\",\"sequence_number\":11,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"first\",\"annotations\":[]},{\"type\":\"output_text\",\"text\":\"second\",\"annotations\":[]}]}}\n\n\
+data: {\"type\":\"response.output_item.done\",\"sequence_number\":11,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"first\",\"annotations\":[],\"logprobs\":[]},{\"type\":\"output_text\",\"text\":\"second\",\"annotations\":[],\"logprobs\":[]}]}}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":12,\"response\":{\"id\":\"resp_multi\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":12,\"response\":{\"id\":\"resp_multi\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
     )
     .await;
 
@@ -179,7 +240,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":12,\"response\":{\"id
 async fn translates_responses_refusal_to_text_block_and_refusal_stop_reason() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_refusal\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
 event: response.content_part.added\n\
@@ -191,7 +252,7 @@ data: {\"type\":\"response.refusal.done\",\"sequence_number\":5,\"item_id\":\"ms
 event: response.content_part.done\n\
 data: {\"type\":\"response.content_part.done\",\"sequence_number\":6,\"item_id\":\"msg_refusal\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"refusal\",\"refusal\":\"cannot comply\"}}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"resp_refusal\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
     )
     .await;
 
@@ -205,13 +266,13 @@ data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\
 async fn uses_function_arguments_done_to_fill_missing_argument_deltas() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_function\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_function\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"\",\"status\":\"in_progress\"}}\n\n\
 event: response.function_call_arguments.done\n\
 data: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":3,\"item_id\":\"fc_1\",\"output_index\":0,\"name\":\"lookup\",\"arguments\":\"{\\\"id\\\":\\\"42\\\"}\"}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_function\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_function\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
     )
     .await;
 
@@ -226,7 +287,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\
 async fn translates_custom_tool_input_to_json_string_and_closes_tool_block() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_custom\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"in_progress\"}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_custom\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ct_1\",\"call_id\":\"call_custom\",\"name\":\"shell\",\"input\":\"\"}}\n\n\
 event: response.custom_tool_call_input.delta\n\
@@ -234,7 +295,7 @@ data: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":3,
 event: response.custom_tool_call_input.done\n\
 data: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"ct_1\",\"input\":\"pwd\"}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_custom\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"status\":\"completed\"}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_custom\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
     )
     .await;
 

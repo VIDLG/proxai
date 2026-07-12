@@ -10,6 +10,15 @@ fn translates_openai_response_to_anthropic_message_shape() {
     let response: Response = serde_json::from_value(json!({
         "id": "resp_123",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "created_at": 0,
         "model": "glm-5.1",
         "status": "completed",
@@ -19,7 +28,7 @@ fn translates_openai_response_to_anthropic_message_shape() {
                 "id": "msg_1",
                 "role": "assistant",
                 "status": "completed",
-                "content": [{"type": "output_text", "text": "hello", "annotations": []}]
+                "content": [{"type": "output_text", "text": "hello", "annotations": [], "logprobs": []}]
             },
             {
                 "type": "function_call",
@@ -77,6 +86,15 @@ fn maps_failed_responses_status_without_refusal_to_missing_anthropic_stop_reason
     let response: Response = serde_json::from_value(json!({
         "id": "resp_failed",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "created_at": 0,
         "model": "glm-5.1",
         "status": "failed",
@@ -86,7 +104,7 @@ fn maps_failed_responses_status_without_refusal_to_missing_anthropic_stop_reason
             "id": "msg_1",
             "role": "assistant",
             "status": "completed",
-            "content": [{"type": "output_text", "text": "partial", "annotations": []}]
+            "content": [{"type": "output_text", "text": "partial", "annotations": [], "logprobs": []}]
         }]
     }))
     .unwrap();
@@ -98,10 +116,19 @@ fn maps_failed_responses_status_without_refusal_to_missing_anthropic_stop_reason
 }
 
 #[test]
-fn leaves_unknown_responses_incomplete_reason_without_anthropic_stop_reason() {
-    let response: Response = serde_json::from_value(json!({
+fn rejects_unknown_responses_incomplete_reason_at_protocol_boundary() {
+    let error = serde_json::from_value::<Response>(json!({
         "id": "resp_unknown_incomplete",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "created_at": 0,
         "model": "glm-5.1",
         "status": "incomplete",
@@ -111,15 +138,16 @@ fn leaves_unknown_responses_incomplete_reason_without_anthropic_stop_reason() {
             "id": "msg_1",
             "role": "assistant",
             "status": "incomplete",
-            "content": [{"type": "output_text", "text": "partial", "annotations": []}]
+            "content": [{"type": "output_text", "text": "partial", "annotations": [], "logprobs": []}]
         }]
     }))
-    .unwrap();
+    .unwrap_err();
 
-    let translated = translate_response_payload(&response);
-    let serialized = serde_json::to_value(&translated).unwrap();
-
-    assert!(serialized["stop_reason"].is_null());
+    assert!(
+        error
+            .to_string()
+            .contains("unknown variant `provider_shutdown`")
+    );
 }
 
 #[test]
@@ -127,6 +155,15 @@ fn maps_responses_refusal_content_to_anthropic_refusal_stop_reason() {
     let response: Response = serde_json::from_value(json!({
         "id": "resp_refusal",
         "object": "response",
+        "metadata": null,
+        "temperature": null,
+        "top_p": null,
+        "error": null,
+        "incomplete_details": null,
+        "instructions": null,
+        "parallel_tool_calls": false,
+        "tool_choice": "auto",
+        "tools": [],
         "created_at": 0,
         "model": "glm-5.1",
         "status": "completed",

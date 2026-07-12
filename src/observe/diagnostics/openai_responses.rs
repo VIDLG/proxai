@@ -8,7 +8,7 @@ use crate::request::RequestId;
 use crate::upstream::UpstreamStreamMetrics;
 
 use crate::protocol::ErrorObject;
-use crate::protocol::openai_responses::{Billing, Conversation};
+use crate::protocol::openai_responses::Conversation;
 use crate::provider::openai::responses::{ResponseSummary, ResponsesUpstreamStreamSnapshot};
 use crate::sse::SseEventScanner;
 
@@ -131,7 +131,6 @@ impl DiagnosticStreamSection {
 #[derive(Serialize)]
 struct DiagnosticResponseSection {
     background: Option<bool>,
-    billing: Option<Billing>,
     conversation: Option<Conversation>,
     id: String,
     model: String,
@@ -166,7 +165,6 @@ impl DiagnosticResponseSection {
 
         Self {
             background: response_snapshot.and_then(|value| value.background),
-            billing: response_snapshot.and_then(|value| value.billing.clone()),
             conversation: response_snapshot.and_then(|value| value.conversation.clone()),
             id: response_snapshot
                 .map(|value| value.id.clone())

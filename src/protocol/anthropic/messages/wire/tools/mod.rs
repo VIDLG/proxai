@@ -17,6 +17,7 @@ pub use text_editor::*;
 pub use tool_use::*;
 pub use web::*;
 
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::AsRefStr;
@@ -24,6 +25,7 @@ use strum::AsRefStr;
 use super::citations::CitationsConfigParam;
 use super::common::CacheControlEphemeral;
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Tool.allowed_callers: `Array< 'direct' | 'code_execution_20250825' | 'code_execution_20260120' | 'code_execution_20260521' >`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,15 +41,16 @@ pub enum AllowedCaller {
 // ─────────────────────────────────────────────────────────────────────────────
 // ── Custom tool definition ───────────────────────────────────────────────────
 
+/// @sdk(shape = "InputSchema")
 /// @sdk(field_suppress = "extra")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputSchema {
     #[serde(rename = "type")]
     pub type_: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub properties: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub required: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub properties: OptionalNullable<Value>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub required: OptionalNullable<Vec<String>>,
     #[serde(flatten)]
     pub extra: Value,
 }
@@ -56,13 +59,14 @@ impl Default for InputSchema {
     fn default() -> Self {
         Self {
             type_: "object".to_string(),
-            properties: Some(serde_json::json!({})),
-            required: Some(Vec::new()),
+            properties: Some(serde_json::json!({})).into(),
+            required: Some(Vec::new()).into(),
             extra: serde_json::json!({}),
         }
     }
 }
 
+/// @sdk(shape = "Tool")
 /// A user-defined ("custom") function the model can call. Define the schema and description
 /// to tell the model when and how to invoke the tool.
 ///
@@ -70,23 +74,46 @@ impl Default for InputSchema {
 pub struct Tool {
     pub input_schema: InputSchema,
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub allowed_callers: Option<Vec<AllowedCaller>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub defer_loading: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub eager_input_streaming: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub eager_input_streaming: OptionalNullable<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub input_examples: Option<Vec<Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub strict: Option<bool>,
-    #[serde(rename = "type")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub type_: Option<String>,
+    #[serde(
+        rename = "type",
+        default,
+        skip_serializing_if = "OptionalNullable::is_missing"
+    )]
+    pub type_: OptionalNullable<String>,
 }
 
 // ── Server tool definition (unified) ────────────────────────────────────────
@@ -126,6 +153,7 @@ pub struct ServerToolDef {
 
 // ── Shared types for web tool definitions ─────────────────────────────────
 
+/// @sdk(proxai_internal = "discriminator")
 /// Discriminator value used by `UserLocation.type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -141,18 +169,19 @@ pub enum ResponseInclusion {
     Excluded,
 }
 
+/// @sdk(shape = "UserLocation")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserLocation {
     #[serde(rename = "type")]
     pub type_: ApproximateType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub city: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub country: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub region: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub timezone: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub city: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub country: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub region: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub timezone: OptionalNullable<String>,
 }
 
 /// Unified struct for all web search/fetch tool versions.
@@ -195,6 +224,7 @@ pub struct WebToolDef {
     pub response_inclusion: Option<ResponseInclusion>,
 }
 
+/// @sdk(shape = "ToolUnion")
 /// 🎯 @use: union of all built-in and custom tool definitions supported by the API.
 /// Used by: request
 ///

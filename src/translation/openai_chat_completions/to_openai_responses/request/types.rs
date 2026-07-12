@@ -14,6 +14,15 @@ impl From<chat::ServiceTier> for responses::ServiceTier {
     }
 }
 
+impl From<chat::PromptCacheRetention> for responses::PromptCacheRetention {
+    fn from(value: chat::PromptCacheRetention) -> Self {
+        match value {
+            chat::PromptCacheRetention::InMemory => Self::InMemory,
+            chat::PromptCacheRetention::Hours24 => Self::Hours24,
+        }
+    }
+}
+
 impl From<chat::ReasoningEffort> for responses::Reasoning {
     fn from(effort: chat::ReasoningEffort) -> Self {
         Self {
@@ -24,8 +33,10 @@ impl From<chat::ReasoningEffort> for responses::Reasoning {
                 chat::ReasoningEffort::Medium => responses::ReasoningEffort::Medium,
                 chat::ReasoningEffort::High => responses::ReasoningEffort::High,
                 chat::ReasoningEffort::Xhigh => responses::ReasoningEffort::Xhigh,
-            }),
-            summary: None,
+            })
+            .into(),
+            generate_summary: None.into(),
+            summary: None.into(),
         }
     }
 }
@@ -38,11 +49,11 @@ impl TryFrom<&chat::ResponseFormat> for responses::TextResponseFormatConfigurati
             chat::ResponseFormat::Text => Ok(Self::Text),
             chat::ResponseFormat::JsonObject => Ok(Self::JsonObject),
             chat::ResponseFormat::JsonSchema { json_schema } => {
-                Ok(Self::JsonSchema(responses::ResponseFormatJsonSchema {
+                Ok(Self::JsonSchema(responses::TextResponseFormatJsonSchema {
                     description: json_schema.description.clone(),
                     name: json_schema.name.clone(),
                     schema: json_schema.schema.clone(),
-                    strict: json_schema.strict,
+                    strict: json_schema.strict.into(),
                 }))
             }
         }

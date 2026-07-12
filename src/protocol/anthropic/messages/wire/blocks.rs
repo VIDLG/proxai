@@ -5,6 +5,8 @@
     reason = "Anthropic Messages cross-reference types shared by tools/ and content/."
 )]
 
+use crate::protocol::OptionalNullable;
+use crate::protocol::RequiredNullable;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display};
 
@@ -13,6 +15,7 @@ use super::{
     common::CacheControlEphemeral,
 };
 
+/// @sdk(proxai_internal = "discriminator")
 /// 🎯 @use: shared discriminator for text blocks.
 /// Used by: request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,6 +24,7 @@ pub enum TextBlockType {
     Text,
 }
 
+/// @sdk(proxai_internal = "discriminator")
 /// Discriminator value used by `DocumentBlock.type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -28,6 +32,7 @@ pub enum DocumentBlockType {
     Document,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Media type enum used by `Base64ImageSource.media_type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum ImageMediaType {
@@ -45,6 +50,7 @@ pub enum ImageMediaType {
     Webp,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Media type enum used by `Base64PDFSource.media_type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum PdfMediaType {
@@ -53,6 +59,7 @@ pub enum PdfMediaType {
     ApplicationPdf,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Media type enum used by `PlainTextSource.media_type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, Serialize, Deserialize)]
 pub enum PlainTextMediaType {
@@ -61,29 +68,34 @@ pub enum PlainTextMediaType {
     TextPlain,
 }
 
+/// @sdk(shape = "Base64ImageSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Base64ImageSource {
     pub data: String,
     pub media_type: ImageMediaType,
 }
 
+/// @sdk(shape = "Base64PDFSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Base64PdfSource {
     pub data: String,
     pub media_type: PdfMediaType,
 }
 
+/// @sdk(shape = "PlainTextSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlainTextSource {
     pub data: String,
     pub media_type: PlainTextMediaType,
 }
 
+/// @sdk(shape = "URLImageSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UrlImageSource {
     pub url: String,
 }
 
+/// @sdk(shape = "URLPDFSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UrlPdfSource {
     pub url: String,
@@ -100,26 +112,29 @@ pub enum ImageBlockSource {
 
 // ── Cross-reference param types ──────────────────────────────────────────
 
+/// @sdk(shape = "TextBlockParam")
 /// 🎯 @use: text content block param.
 /// Used by: content, search, self, tool_use
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextBlockParam {
     pub text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub citations: Option<Vec<TextCitationParam>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub citations: OptionalNullable<Vec<TextCitationParam>>,
 }
 
+/// @sdk(shape = "ImageBlockParam")
 /// 🎯 @use: image content block param.
 /// Used by: content, self, tool_use
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageBlockParam {
     pub source: ImageBlockSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
 }
 
+/// @sdk(shape = "ContentBlockSourceContent")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlockSourceContent {
@@ -127,6 +142,7 @@ pub enum ContentBlockSourceContent {
     Image(ImageBlockParam),
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// ContentBlockSource.content: `string | Array<ContentBlockSourceContent>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -135,11 +151,13 @@ pub enum ContentBlockSourceContentUnion {
     Blocks(Vec<ContentBlockSourceContent>),
 }
 
+/// @sdk(shape = "ContentBlockSource")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentBlockSource {
     pub content: ContentBlockSourceContentUnion,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// DocumentBlockParam.source: `Base64PDFSource | PlainTextSource | ContentBlockSource | URLPDFSource`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -154,21 +172,23 @@ pub enum DocumentBlockParamSource {
     Url(UrlPdfSource),
 }
 
+/// @sdk(shape = "DocumentBlockParam")
 /// 🎯 @use: document content block param.
 /// Used by: content, tool_use, web
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentBlockParam {
     pub source: DocumentBlockParamSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub citations: Option<CitationsConfigParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub citations: OptionalNullable<CitationsConfigParam>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub context: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub title: OptionalNullable<String>,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// DocumentBlock.source: `Base64PDFSource | PlainTextSource`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -179,15 +199,14 @@ pub enum DocumentBlockSource {
     PlainText(PlainTextSource),
 }
 
+/// @sdk(shape = "DocumentBlock")
 /// 🎯 @use: response-side document block.
 /// Used by: web
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentBlock {
-    /// @sdk(required_nullable_accepts_missing)
-    pub citations: Option<CitationsConfig>,
+    pub citations: RequiredNullable<CitationsConfig>,
     pub source: DocumentBlockSource,
-    /// @sdk(required_nullable_accepts_missing)
-    pub title: Option<String>,
+    pub title: RequiredNullable<String>,
     #[serde(rename = "type")]
     pub type_: DocumentBlockType,
 }

@@ -1,15 +1,22 @@
 import re
 
-from .common import SDK_FILE, norm, out
+from tools.protocol_compare import (
+    CarrierKind,
+    classify_rust_carrier,
+    expected_carrier,
+    validate_field_contract,
+)
+
+from .common import norm
 from .rust import (
     _field_by_wire_name,
-    _rust_type_is_option,
+    _sdk_shape_marker,
     _rust_variant_wire_name,
     _serde_attr_has,
     _serde_rename,
-    _serde_skip_if_none,
     _type_names_from_text,
     rust_field_shape_comments,
+    rust_doc_items,
     rust_item_shape_bindings,
     rust_sdk_markers,
     rust_serde_items,
@@ -131,7 +138,7 @@ def _sdk_type_is_complex_union(type_text):
 
 
 def serde_field_diffs(sdk_text, only_marked=False):
-    """Check Rust field serde names and optional/null semantics against SDK shapes."""
+    """Check Rust field wire names and reject unmodeled complex unions."""
     sdk_shapes = sdk_comment_shapes(sdk_text)
     rust_items = rust_serde_items()
     sdk_markers = rust_sdk_markers()
@@ -174,50 +181,6 @@ def serde_field_diffs(sdk_text, only_marked=False):
                         ],
                     )
                 )
-            ts_nullable = _ts_type_has_null(sdk_field["type"])
-            ts_optional = sdk_field["optional"]
-            rust_optional = _rust_type_is_option(rust_field.get("type"))
-            rust_skips_none = _serde_skip_if_none(rust_field.get("attrs", []))
-            if (ts_optional or ts_nullable) and not rust_optional:
-                diffs.append(
-                    (
-                        binding["item"],
-                        f"{item['file']}:{rust_field['line']}",
-                        [
-                            f"SDK field `{binding['sdk_name']}.{wire_name}` is optional/nullable but Rust type is not `Option<_>`"
-                        ],
-                    )
-                )
-            if not ts_optional and not ts_nullable and rust_optional:
-                diffs.append(
-                    (
-                        binding["item"],
-                        f"{item['file']}:{rust_field['line']}",
-                        [
-                            f"SDK field `{binding['sdk_name']}.{wire_name}` is required and non-null but Rust uses `Option<_>`"
-                        ],
-                    )
-                )
-            if ts_optional and not rust_skips_none:
-                diffs.append(
-                    (
-                        binding["item"],
-                        f"{item['file']}:{rust_field['line']}",
-                        [
-                            f"SDK field `{binding['sdk_name']}.{wire_name}` is optional but Rust field does not skip `None` when serializing"
-                        ],
-                    )
-                )
-            if not ts_optional and ts_nullable and rust_skips_none:
-                diffs.append(
-                    (
-                        binding["item"],
-                        f"{item['file']}:{rust_field['line']}",
-                        [
-                            f"SDK field `{binding['sdk_name']}.{wire_name}` is nullable but required; Rust should not skip `None`"
-                        ],
-                    )
-                )
             rust_type = rust_field.get("type")
             if (
                 wire_name not in item_suppressed
@@ -236,66 +199,52 @@ def serde_field_diffs(sdk_text, only_marked=False):
     return diffs
 
 
-def required_nullable_accepts_missing_diffs(sdk_text, only_marked=False):
-    """Require markers for SDK required-nullable fields represented by plain Option.
+def _sdk_field_carrier(sdk_field):
+    return expected_carrier(
+        required=not sdk_field["optional"],
+        nullable=_ts_type_has_null(sdk_field["type"]),
+    )
 
-    Rust `Option<T>` accepts both missing and null during deserialization, while
-    SDK `field: T | null` requires the field to be present. The marker records
-    intentional compatibility leniency.
-    """
+
+def field_carrier_diffs(sdk_text, only_marked=False):
+    """Compare SDK presence/nullability with explicit Rust wire carriers."""
     sdk_shapes = sdk_comment_shapes(sdk_text)
     rust_items = rust_serde_items()
-    sdk_markers = rust_sdk_markers()
-    marked_by_item = sdk_markers.get("required_nullable_accepts_missing", {})
     diffs = []
-    marked = []
-    valid_markers = {}
+    required_nullable_modeled = []
 
     for binding in rust_item_shape_bindings(sdk_shapes, only_marked=only_marked):
         sdk_shape = binding["sdk_shape"]
         item = rust_items.get(binding["item"])
         if not sdk_shape or not item or sdk_shape.get("kind") != "interface":
             continue
-        item_markers = marked_by_item.get(binding["item"], set())
         for sdk_field in sdk_shape.get("fields", []):
             wire_name = sdk_field["name"]
-            if sdk_field["optional"] or not _ts_type_has_null(sdk_field["type"]):
-                continue
             _rust_name, rust_field = _field_by_wire_name(item, wire_name)
-            if not rust_field or not _rust_type_is_option(rust_field.get("type")):
+            if not rust_field:
                 continue
 
-            valid_markers.setdefault(binding["item"], set()).add(wire_name)
-            row = (binding["item"], wire_name, item["file"], rust_field["line"])
-            if wire_name in item_markers:
-                marked.append(row)
-            else:
-                diffs.append(
-                    (
-                        binding["item"],
-                        f"{item['file']}:{rust_field['line']}",
-                        [
-                            f'SDK field `{binding["sdk_name"]}.{wire_name}` is required nullable, but Rust `Option<_>` also accepts missing; add `@sdk(required_nullable_accepts_missing = "{wire_name}")` if intentional'
-                        ],
-                    )
+            expected = _sdk_field_carrier(sdk_field)
+            rust_type = rust_field.get("type")
+            actual = classify_rust_carrier(rust_type)
+            location = f"{item['file']}:{rust_field['line']}"
+            field_name = f"{binding['sdk_name']}.{wire_name}"
+
+            if expected == CarrierKind.REQUIRED_NULLABLE and actual == expected:
+                required_nullable_modeled.append(
+                    (binding["item"], wire_name, item["file"], rust_field["line"])
                 )
 
-    for item_name, fields in marked_by_item.items():
-        stale = sorted(fields - valid_markers.get(item_name, set()))
-        if stale:
-            item = rust_items.get(item_name)
-            locn = f"{item['file']}:{item['line']}" if item else "?"
-            diffs.append(
-                (
-                    item_name,
-                    locn,
-                    [
-                        f"`@sdk(required_nullable_accepts_missing)` does not match a required-nullable `Option<_>` field: {', '.join(stale)}"
-                    ],
-                )
-            )
+            for message in validate_field_contract(
+                expected=expected,
+                actual=actual,
+                attributes=rust_field.get("attrs", []),
+                source=f"SDK field `{field_name}`",
+                rust_type=rust_type,
+            ):
+                diffs.append((binding["item"], location, [message]))
 
-    return diffs, marked
+    return diffs, required_nullable_modeled
 
 
 def field_suppress_diffs(sdk_text, only_marked=False):
@@ -462,35 +411,6 @@ def _shape_diffs(sdk_shape, rust_shape):
     return diffs
 
 
-def _format_sdk_shape_doc(shape):
-    lines = []
-    if shape["kind"] == "type":
-        parts = _split_top_level_union(shape["rhs"])
-        if len(parts) <= 1:
-            return [f"/// export type {shape['name']} = {shape['rhs']};"]
-        lines.append(f"/// export type {shape['name']} =")
-        for i, part in enumerate(parts):
-            suffix = ";" if i == len(parts) - 1 else ""
-            lines.append(f"///   | {part}{suffix}")
-        return lines
-    extends = f" extends {shape['extends']}" if shape.get("extends") else ""
-    lines.append(f"/// export interface {shape['name']}{extends} {{")
-    for field in shape.get("fields", []):
-        opt = "?" if field.get("optional") else ""
-        lines.append(f"///   {field['name']}{opt}: {field['type']};")
-    lines.append("/// }")
-    return lines
-
-
-def emit_sdk_docs(only_marked=False):
-    sdk_shapes = sdk_comment_shapes(SDK_FILE.read_text(encoding="utf-8"))
-    for binding in rust_item_shape_bindings(sdk_shapes, only_marked=only_marked):
-        out(
-            f"{binding['file']}:{binding['line']} {binding['item']} -> {binding['sdk_name']}"
-        )
-        for line in _format_sdk_shape_doc(binding["sdk_shape"]):
-            out(line)
-        out()
 
 
 def comment_shape_diffs(sdk_text, only_marked=False):
@@ -556,6 +476,46 @@ def comment_shape_diffs(sdk_text, only_marked=False):
             diffs.append((f"shape binding for {name}", locn, binding_diffs))
     for name, locn, marker_diffs in sdk_markers.get("legacy", []):
         diffs.append((f"sdk marker for {name}", locn, marker_diffs))
+    return diffs
+
+
+def explicit_provenance_diffs(sdk_text, only_marked=False):
+    """Require every public wire type to declare its Anthropic SDK provenance."""
+    if only_marked:
+        return []
+
+    sdk_shapes = sdk_comment_shapes(sdk_text)
+    doc_items = {item["name"]: item for item in rust_doc_items()}
+    rust_items = rust_serde_items()
+    markers = rust_sdk_markers()
+    aliased_items = set(markers["aliases"].values())
+    internal_items = set(markers["proxai_internals"])
+    diffs = []
+
+    for name, item in rust_items.items():
+        doc_item = doc_items.get(name, {"doc": []})
+        if (
+            _sdk_shape_marker(doc_item)
+            or name in aliased_items
+            or name in internal_items
+        ):
+            continue
+
+        matching_shapes = [
+            sdk_name for sdk_name in sdk_shapes if norm(sdk_name) == norm(name)
+        ]
+        suggestion = (
+            f'add `@sdk(shape = "{matching_shapes[0]}")`'
+            if matching_shapes
+            else 'add `@sdk(proxai_internal = "...")`'
+        )
+        diffs.append(
+            (
+                name,
+                f"{item['file']}:{item['line']}",
+                [f"public wire type has no explicit SDK provenance; {suggestion}"],
+            )
+        )
     return diffs
 
 

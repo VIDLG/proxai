@@ -31,7 +31,10 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 
 对于 Zed 等 Chat-compatible 客户端，普通 reasoning 文本会通过
 `reasoning_content` 扩展保留在 assistant 历史消息、非流式 message 和流式
-delta 中。Redacted 或 encrypted reasoning 不会伪装成普通可见正文。
+delta 中。Zed 的流式响应还接受 `reasoning`，但 assistant 历史回放使用
+`reasoning_content`。这些兼容字段只在 translation 边界提取和注入，官方
+OpenAI Chat wire types 仍严格对齐 OpenAPI schema。Redacted 或 encrypted
+reasoning 不会伪装成普通可见正文。
 
 Anthropic thinking 的跨轮续接使用带版本的、由客户端携带的 continuation envelope：
 Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在
@@ -110,16 +113,16 @@ proxai --config <path> \
 - `just build` —— release 构建
 - `cargo run -- check-update` —— 检查更新
 
-与官方 SDK 的协议类型覆盖率对比：
+与官方协议参考的覆盖率对比：
 
-- `just protocol-compare` —— `just check` 使用的快速 OpenAI 协议漂移检查
-- `just compare-anthropic-protocol` —— Anthropic Messages 协议类型 vs 官方 TS SDK
-- `just compare-openai-protocol` —— OpenAI 协议类型详细对比 vs `async-openai` v0.41.1
+- `just protocol-compare` —— `just check` 使用的 OpenAI schema required-field 漂移检查
+- `just compare-openai-protocol` —— 基于官方 OpenAPI schema 的详细 required-field 检查；传入 `--structural` 可执行手动 schema-first 结构审计，检查未映射 wire 类型与未建模属性（不纳入 CI）
+- `just compare-anthropic-protocol` —— Anthropic Messages 类型 vs 官方 TS SDK
 
-这些用于对比的 SDK checkout 作为 git submodule 放在 `contrib/`：
+这些协议参考 checkout 作为 git submodule 放在 `contrib/`：
 
+- `contrib/openai-openapi`
 - `contrib/anthropic-sdk-typescript`
-- `contrib/async-openai`
 
 这些脚本强制执行的对齐规则见 [协议转换](https://vidlg.github.io/proxai/zh/developer/protocol-conversion)。
 

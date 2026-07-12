@@ -3,7 +3,7 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::protocol::openai::responses::{
     FunctionCallOutput, FunctionCallOutputStatusEnum, FunctionToolCallOutputResource, OutputItem,
-    ReasoningItem, Response, Status,
+    Response, ResponseObject, ServiceTier, Status, ToolChoiceOptions, ToolChoiceParam,
 };
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{response_id, text_message_item};
@@ -12,47 +12,58 @@ use crate::translation::{TranslationError, TranslationResult};
 use super::citations::text_block_annotations;
 use super::ids::OutputItemIdAllocator;
 use super::types::{
-    incomplete_details_from_stop_reason, responses_status_from_anthropic_stop_reason,
+    incomplete_details_from_stop_reason, reasoning_item_from_redacted_thinking,
+    reasoning_item_from_thinking, responses_status_from_anthropic_stop_reason,
 };
 
 impl TryFrom<&Message> for Response {
     type Error = TranslationError;
 
     fn try_from(message: &Message) -> TranslationResult<Self> {
-        let stop_reason = message.stop_reason;
+        let stop_reason = message.stop_reason.as_non_null().copied();
         Ok(Response {
-            background: None,
-            billing: None,
-            conversation: None,
-            created_at: 0,
-            completed_at: None,
-            error: None,
+            background: None.into(),
+            conversation: None.into(),
+            created_at: 0.0,
+            completed_at: None.into(),
+            error: None.into(),
             id: response_id(&message.id),
-            incomplete_details: incomplete_details_from_stop_reason(stop_reason),
-            instructions: None,
-            max_output_tokens: None,
-            metadata: None,
+            incomplete_details: incomplete_details_from_stop_reason(stop_reason).into(),
+            instructions: None.into(),
+            max_output_tokens: None.into(),
+            max_tool_calls: None.into(),
+            metadata: None.into(),
             model: message.model.clone(),
-            object: "response".to_string(),
+            object: ResponseObject::Response,
             output: translate_output(message)?,
-            parallel_tool_calls: None,
-            previous_response_id: None,
-            prompt: None,
+            output_text: None.into(),
+            parallel_tool_calls: false,
+            previous_response_id: None.into(),
+            prompt: None.into(),
             prompt_cache_key: None,
-            prompt_cache_retention: None,
-            reasoning: None,
+            prompt_cache_retention: None.into(),
+            reasoning: None.into(),
             safety_identifier: None,
-            service_tier: message.usage.service_tier.and_then(Into::into),
-            status: stop_reason
-                .map(responses_status_from_anthropic_stop_reason)
-                .unwrap_or(Status::InProgress),
-            temperature: None,
+            service_tier: message
+                .usage
+                .service_tier
+                .as_non_null()
+                .copied()
+                .and_then(Option::<ServiceTier>::from)
+                .into(),
+            status: Some(
+                stop_reason
+                    .map(responses_status_from_anthropic_stop_reason)
+                    .unwrap_or(Status::InProgress),
+            ),
+            temperature: None.into(),
             text: None,
-            tool_choice: None,
-            tools: None,
-            top_logprobs: None,
-            top_p: None,
-            truncation: None,
+            tool_choice: ToolChoiceParam::Mode(ToolChoiceOptions::Auto),
+            tools: Vec::new(),
+            top_logprobs: None.into(),
+            top_p: None.into(),
+            truncation: None.into(),
+            user: None,
             usage: Some((&message.usage).into()),
         })
     }
@@ -81,26 +92,26 @@ fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
                 text_char_offset = text_char_offset.saturating_add(block.text.chars().count());
             }
             ContentBlock::Thinking(block) => {
-                let mut item: ReasoningItem = block.into();
-                item.id = Some(ids.reasoning());
+                let mut item = reasoning_item_from_thinking(ids.reasoning(), block);
                 item.encrypted_content = Some(
                     ContinuationEnvelope::from(vec![Continuation::Thinking {
                         thinking: block.thinking.clone(),
                         signature: block.signature.clone(),
                     }])
                     .encode()?,
-                );
+                )
+                .into();
                 output.push(OutputItem::Reasoning(item));
             }
             ContentBlock::RedactedThinking(block) => {
-                let mut item: ReasoningItem = block.into();
-                item.id = Some(ids.reasoning());
+                let mut item = reasoning_item_from_redacted_thinking(ids.reasoning(), block);
                 item.encrypted_content = Some(
                     ContinuationEnvelope::from(vec![Continuation::RedactedThinking {
                         data: block.data.clone(),
                     }])
                     .encode()?,
-                );
+                )
+                .into();
                 output.push(OutputItem::Reasoning(item));
             }
             ContentBlock::ToolUse(block) => {

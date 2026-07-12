@@ -14,14 +14,14 @@ pub(super) fn message_delta(terminal: &PendingAnthropicTerminal) -> MessageStrea
     let usage = terminal.usage.as_ref().map(Into::into).unwrap_or_default();
     let stop = chat_stop_state(
         (!terminal.refusal.is_empty()).then_some(terminal.refusal.as_str()),
-        Some(terminal.finish_reason),
+        terminal.finish_reason,
     );
     message_delta_event(
         MessageDelta {
-            container: None,
-            stop_details: stop.details,
-            stop_reason: stop.reason,
-            stop_sequence: stop.sequence,
+            container: None.into(),
+            stop_details: stop.details.into(),
+            stop_reason: stop.reason.into(),
+            stop_sequence: stop.sequence.into(),
         },
         usage,
     )

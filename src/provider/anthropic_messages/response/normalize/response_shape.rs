@@ -29,6 +29,7 @@ pub(super) fn normalize_message_usage(usage: &mut Map<String, Value>) {
             "cache_creation_input_tokens",
             "cache_read_input_tokens",
             "inference_geo",
+            "output_tokens_details",
             "server_tool_use",
             "service_tier",
         ],
@@ -42,6 +43,7 @@ pub(super) fn normalize_message_delta_usage(usage: &mut Map<String, Value>) {
             "cache_creation_input_tokens",
             "cache_read_input_tokens",
             "input_tokens",
+            "output_tokens_details",
             "server_tool_use",
         ],
     );

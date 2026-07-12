@@ -57,7 +57,7 @@ fn state_extracts_stream_chat_completion_chunks_and_ignores_done() {
     assert_eq!(projection.id, "chatcmpl_stream");
     assert_eq!(projection.object, "chat.completion.chunk");
     assert_eq!(
-        projection.choices[0].finish_reason,
+        projection.choices[0].finish_reason.as_non_null().copied(),
         Some(FinishReason::Stop)
     );
     assert_eq!(projection.usage.as_ref().expect("usage").total_tokens, 10);

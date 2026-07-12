@@ -3,11 +3,14 @@
     reason = "Anthropic Messages wire model includes protocol fields not yet observed by runtime summaries."
 )]
 
+use crate::protocol::RequiredNullable;
+use crate::protocol::deserialize_present;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
 // ── Primitive enums ───────────────────────────────────────────────────────
 
+/// @sdk(shape = "StopReason")
 /// 🎯 @use: stop reason — explains why the model stopped generating.
 /// Used by: message, stream
 ///
@@ -30,6 +33,7 @@ pub enum StopReason {
     Refusal,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// response service tier — 'standard' | 'priority' | 'batch' | null.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[strum(serialize_all = "lowercase")]
@@ -40,6 +44,7 @@ pub enum ResponseServiceTier {
     Batch,
 }
 
+/// @sdk(shape = "Container")
 /// 🎯 @use: container reference — references a previously uploaded file container.
 /// Used by: message, stream
 ///
@@ -55,6 +60,7 @@ pub struct Container {
 
 // ── Cache types ───────────────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "discriminator")
 /// Discriminator value used by `CacheControlEphemeral.type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -62,6 +68,7 @@ pub enum CacheControlType {
     Ephemeral,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// TTL value used by `CacheControlEphemeral.ttl`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CacheControlTtl {
@@ -71,6 +78,7 @@ pub enum CacheControlTtl {
     OneHour,
 }
 
+/// @sdk(shape = "CacheCreation")
 /// cache creation stats — counts of input tokens cached at
 /// different TTLs, returned as a sub-field of Usage.
 ///
@@ -82,18 +90,24 @@ pub struct CacheCreation {
     pub ephemeral_5m_input_tokens: u32,
 }
 
+/// @sdk(shape = "CacheControlEphemeral")
 /// 🎯 @use: ephemeral cache control marker applied to a content block.
 /// Used by: bash, blocks, code_execution, content, request, search, text_editor, tool_use, tools, web
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CacheControlEphemeral {
     #[serde(rename = "type")]
     pub type_: CacheControlType,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub ttl: Option<CacheControlTtl>,
 }
 
 // ── Refusal types ─────────────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Category value used by `RefusalStopDetails.category`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -102,6 +116,7 @@ pub enum RefusalCategory {
     Bio,
 }
 
+/// @sdk(proxai_internal = "discriminator")
 /// Discriminator value used by `RefusalStopDetails.type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -109,20 +124,20 @@ pub enum RefusalStopDetailsType {
     Refusal,
 }
 
+/// @sdk(shape = "RefusalStopDetails")
 /// 🎯 @use: refusal stop details — explains why the model refused to respond.
 /// Used by: message, stream
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefusalStopDetails {
     #[serde(rename = "type")]
     pub type_: RefusalStopDetailsType,
-    /// @sdk(required_nullable_accepts_missing)
-    pub category: Option<RefusalCategory>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub explanation: Option<String>,
+    pub category: RequiredNullable<RefusalCategory>,
+    pub explanation: RequiredNullable<String>,
 }
 
 // ── Usage ─────────────────────────────────────────────────────────────────
 
+/// @sdk(shape = "ServerToolUsage")
 /// 🎯 @use: server tool usage — counts for built-in tool invocations.
 /// Used by: stream, self
 ///
@@ -136,11 +151,13 @@ pub struct ServerToolUsage {
     pub web_search_requests: u32,
 }
 
+/// @sdk(shape = "OutputTokensDetails")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputTokensDetails {
     pub thinking_tokens: u32,
 }
 
+/// @sdk(shape = "Usage")
 /// 🎯 @use: input/output token usage summary — cost tracking and billing info.
 /// Used by: message
 ///
@@ -151,20 +168,13 @@ pub struct OutputTokensDetails {
 ///
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Usage {
-    /// @sdk(required_nullable_accepts_missing)
-    pub cache_creation: Option<CacheCreation>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub cache_creation_input_tokens: Option<u32>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub cache_read_input_tokens: Option<u32>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub inference_geo: Option<String>,
+    pub cache_creation: RequiredNullable<CacheCreation>,
+    pub cache_creation_input_tokens: RequiredNullable<u32>,
+    pub cache_read_input_tokens: RequiredNullable<u32>,
+    pub inference_geo: RequiredNullable<String>,
     pub input_tokens: u32,
     pub output_tokens: u32,
-    /// @sdk(required_nullable_accepts_missing)
-    pub output_tokens_details: Option<OutputTokensDetails>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub server_tool_use: Option<ServerToolUsage>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub service_tier: Option<ResponseServiceTier>,
+    pub output_tokens_details: RequiredNullable<OutputTokensDetails>,
+    pub server_tool_use: RequiredNullable<ServerToolUsage>,
+    pub service_tier: RequiredNullable<ResponseServiceTier>,
 }

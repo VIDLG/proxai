@@ -5,8 +5,8 @@ use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CompletionUsage, FinishReason,
 };
 use crate::protocol::openai::responses::{
-    CustomToolCall, IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails,
-    ResponseUsage, Status,
+    CustomToolCall, IncompleteDetails, IncompleteDetailsReason, InputTokenDetails, OutputItem,
+    OutputTokenDetails, ResponseUsage, Status,
 };
 use crate::translation::openai_responses::outbound::function_call_item;
 
@@ -15,10 +15,10 @@ pub(super) fn incomplete_details_from_finish_reason(
 ) -> Option<IncompleteDetails> {
     match finish_reason {
         Some(FinishReason::Length) => Some(IncompleteDetails {
-            reason: "max_output_tokens".to_string(),
+            reason: Some(IncompleteDetailsReason::MaxOutputTokens),
         }),
         Some(FinishReason::ContentFilter) => Some(IncompleteDetails {
-            reason: "content_filter".to_string(),
+            reason: Some(IncompleteDetailsReason::ContentFilter),
         }),
         _ => None,
     }
@@ -62,10 +62,10 @@ impl From<&ChatCompletionMessageToolCalls> for OutputItem {
                 function_call_item(&call.id, &call.function.name, &call.function.arguments)
             }
             ChatCompletionMessageToolCalls::Custom(call) => Self::CustomToolCall(CustomToolCall {
-                id: call.id.clone(),
+                id: Some(call.id.clone()),
                 call_id: call.id.clone(),
-                name: call.custom_tool.name.clone(),
-                input: call.custom_tool.input.clone(),
+                name: call.custom.name.clone(),
+                input: call.custom.input.clone(),
                 namespace: None,
             }),
         }

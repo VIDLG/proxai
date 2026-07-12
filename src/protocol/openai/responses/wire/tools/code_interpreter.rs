@@ -1,3 +1,6 @@
+use super::{ContainerMemoryLimit, ContainerNetworkPolicy};
+use crate::protocol::RequiredNullable;
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -5,18 +8,29 @@ use strum::Display;
 // Tool Definition Supporting Types
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/AutoCodeInterpreterToolParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CodeInterpreterContainerAuto {
-    #[serde(skip_serializing_if = "Option::is_none")]
+pub struct AutoCodeInterpreterToolParam {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub file_ids: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub memory_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub memory_limit: OptionalNullable<ContainerMemoryLimit>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub network_policy: Option<ContainerNetworkPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CodeInterpreterToolContainer {
-    Auto(CodeInterpreterContainerAuto),
+    Auto(AutoCodeInterpreterToolParam),
     #[serde(untagged)]
     ContainerID(String),
 }
@@ -25,6 +39,7 @@ pub enum CodeInterpreterToolContainer {
 // Tool Definition
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CodeInterpreterTool`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeInterpreterTool {
     pub container: CodeInterpreterToolContainer,
@@ -34,11 +49,13 @@ pub struct CodeInterpreterTool {
 // Output / Resource Supporting Types
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CodeInterpreterOutputLogs`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeInterpreterOutputLogs {
     pub logs: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/CodeInterpreterOutputImage`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeInterpreterOutputImage {
     pub url: String,
@@ -69,13 +86,13 @@ pub enum CodeInterpreterToolCallStatus {
 // Output / Resource Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CodeInterpreterToolCall`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeInterpreterToolCall {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
-    pub container_id: String,
     pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub outputs: Option<Vec<CodeInterpreterToolCallOutput>>,
     pub status: CodeInterpreterToolCallStatus,
+    pub container_id: String,
+
+    pub code: RequiredNullable<String>,
+    pub outputs: RequiredNullable<Vec<CodeInterpreterToolCallOutput>>,
 }

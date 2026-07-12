@@ -16,10 +16,10 @@ impl TryFrom<&chat::FileObject> for anthropic::DocumentBlockParam {
 
         Ok(anthropic::DocumentBlockParam {
             source: pdf_document_source_from_file_data_or_url(file_data)?,
-            cache_control: None,
-            citations: None,
-            context: None,
-            title: file.filename.clone(),
+            cache_control: None.into(),
+            citations: None.into(),
+            context: None.into(),
+            title: file.filename.clone().into(),
         })
     }
 }

@@ -16,7 +16,8 @@ pub(super) fn text_block_annotations(
     let mut search_start_byte = 0;
     block
         .citations
-        .iter()
+        .as_non_null()
+        .into_iter()
         .flatten()
         .filter_map(|citation| {
             citation_annotation(citation, block, base_char_offset, &mut search_start_byte)
@@ -57,7 +58,7 @@ fn citation_annotation(
     Some(Annotation::UrlCitation(UrlCitationBody {
         start_index,
         end_index,
-        title: citation.title.clone().unwrap_or_default(),
+        title: citation.title.as_non_null().cloned().unwrap_or_default(),
         url: citation.url.clone(),
     }))
 }

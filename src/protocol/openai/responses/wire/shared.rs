@@ -9,6 +9,7 @@ pub enum Filter {
     Compound(CompoundFilter),
 }
 
+/// OpenAPI schema: `#/components/schemas/ComparisonFilter`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComparisonFilter {
     pub r#type: ComparisonType,
@@ -44,6 +45,7 @@ pub enum ComparisonType {
     NotIn,
 }
 
+/// OpenAPI schema: `#/components/schemas/CompoundFilter`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CompoundFilter {
     pub r#type: CompoundType,

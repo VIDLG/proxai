@@ -1,154 +1,37 @@
-import json
-import sys
+"""Human-readable rendering for Anthropic protocol comparison results."""
 
-from .checks import (
-    comment_shape_diffs,
-    enum_literal_diffs,
-    field_suppress_diffs,
-    proxai_internal_diffs,
-    required_nullable_accepts_missing_diffs,
-    serde_field_diffs,
-    serde_wire_diffs,
-    untagged_union_diffs,
-)
-from .common import PROTO_DIR, SDK_FILE, SDK_PKG, h2, hr, norm, out
-from .rust import px_enum_variants, px_types, rust_sdk_markers
-from .sdk import sdk_tool_union, sdk_types
+from .common import PROTO_DIR, SDK_FILE, h2, hr, norm, out
 
 
-def run_report(level=2, only_marked=False):
-    sdk_ver = ""
-    if SDK_PKG.exists():
-        try:
-            sdk_ver = json.loads(SDK_PKG.read_text()).get("version", "")
-        except Exception:
-            pass
-
-    text = SDK_FILE.read_text(encoding="utf-8")
-    sdk_raw = sdk_types(text)
-    px = px_types()
-    comment_diffs = comment_shape_diffs(text, only_marked=only_marked)
-    serde_diffs = serde_wire_diffs(text, only_marked=only_marked)
-    serde_field_semantic_diffs = serde_field_diffs(text, only_marked=only_marked)
-    required_nullable_missing_diffs, required_nullable_missing_marked = (
-        required_nullable_accepts_missing_diffs(text, only_marked=only_marked)
-    )
-    field_suppress_marker_diffs = field_suppress_diffs(text, only_marked=only_marked)
-    enum_semantic_diffs = enum_literal_diffs(text)
-    union_semantic_diffs = untagged_union_diffs(text, only_marked=only_marked)
-    proxai_only_diffs = proxai_internal_diffs(text, only_marked=only_marked)
-    sdk_markers = rust_sdk_markers()
-    naming_map = sdk_markers["aliases"]
-    external_types = sdk_markers["externals"]
-    skip_types = sdk_markers["internals"]
-    union_variant_map = sdk_markers["union_variants"]
-
-    sn = {}
-    for tag, info in sdk_raw.items():
-        base = tag.split(".")[-1]
-        sn[norm(base)] = (base, info, tag)
-
-    pn = {}
-    for name, info in px.items():
-        pn[norm(name)] = (name, info)
-
-    sk = set(sn)
-    pk = set(pn)
-    matched = sk & pk
-
-    reverse_alias = {}
-    for tag, info in sdk_raw.items():
-        alias_of = info.get("alias_of")
-        if alias_of:
-            reverse_alias.setdefault(norm(alias_of), []).append(
-                info.get("alias_name", "")
-            )
-
-    covered = set()
-    for nk in sorted(sk - pk):
-        base, info, tag = sn[nk]
-        if (
-            "." in tag
-            or info["kind"] == "class"
-            or base in external_types
-            or base in skip_types
-        ):
-            continue
-        alias_names = reverse_alias.get(nk, [])
-        for alias_name in alias_names:
-            if alias_name and norm(alias_name) in pk:
-                covered.add(nk)
-                break
-        else:
-            alias_of = info.get("alias_of")
-            if alias_of and norm(alias_of) in pk:
-                covered.add(nk)
-            elif base.startswith("Raw") and len(base) > 3 and norm(base[3:]) in pk:
-                covered.add(nk)
-            elif base in naming_map and norm(naming_map[base]) in pk:
-                covered.add(nk)
-
-    missing_schema = []
-    namespaced = []
-    external = []
-    api_class = []
-    aliased = []
-    skipped = []
-
-    for nk in sorted(sk - pk):
-        base, info, tag = sn[nk]
-        if info["kind"] == "class":
-            api_class.append((base, info, tag))
-        elif base in external_types:
-            external.append((base, info, tag))
-        elif base in skip_types:
-            skipped.append((base, info, tag))
-        elif "." in tag:
-            parent = tag.rsplit(".", 1)[0]
-            parent_base = parent.split(".")[-1]
-            parent_nk = norm(parent_base)
-            if parent_nk in pk or parent_nk in covered:
-                namespaced.append((base, info, tag, parent_base))
-            else:
-                missing_schema.append((base, info, tag))
-        elif nk in covered:
-            matched_name = ""
-            for alias_name in reverse_alias.get(nk, []):
-                if alias_name and norm(alias_name) in pk:
-                    matched_name = alias_name
-                    break
-            if not matched_name and base.startswith("Raw") and len(base) > 3:
-                matched_name = base[3:]
-            if not matched_name and base in naming_map:
-                matched_name = naming_map[base]
-            if not matched_name:
-                alias_of = info.get("alias_of", "")
-                if alias_of and norm(alias_of) in pk:
-                    matched_name = alias_of
-            aliased.append((base, info, tag, matched_name))
-        else:
-            missing_schema.append((base, info, tag))
-
-    struct_diffs, matched_ok = _structural_diffs(matched, sn, pn, sdk_markers)
-    sdk_tu = sdk_tool_union(text)
-    px_tu_raw = px_enum_variants("tools/mod.rs", "ToolUnion")
-    tu_missing = _missing_tool_union_variants(sdk_tu, px_tu_raw, union_variant_map)
-
-    has_missing_fields = any(missing for _, _, missing, _, _ in struct_diffs)
-    has_gaps = bool(
-        missing_schema
-        or tu_missing
-        or has_missing_fields
-        or comment_diffs
-        or serde_diffs
-        or serde_field_semantic_diffs
-        or required_nullable_missing_diffs
-        or field_suppress_marker_diffs
-        or enum_semantic_diffs
-        or union_semantic_diffs
-        or proxai_only_diffs
-    )
-
+def render_report(result, level=2):
+    sdk_ver = result.sdk_version
+    sdk_raw = result.sdk_types
+    px = result.rust_types
+    matched = result.matched
+    sn = result.sdk_index
+    sk_minus_pk_count = result.sdk_only_count
+    missing_schema = result.missing_types
+    namespaced = result.namespaced_types
+    external = result.external_types
+    api_class = result.api_classes
+    aliased = result.aliases
+    skipped = result.skipped_types
+    struct_diffs = result.structural_diffs
+    has_missing_fields = result.has_missing_fields
+    sdk_tu = result.sdk_tool_union
+    px_tu_raw = result.rust_tool_union
+    tu_missing = result.missing_tool_variants
+    comment_diffs = result.comment_diffs
+    provenance_diffs = result.provenance_diffs
+    serde_diffs = result.serde_diffs
+    serde_field_semantic_diffs = result.serde_field_diffs
+    field_carrier_semantic_diffs = result.field_carrier_diffs
+    required_nullable_modeled = result.required_nullable_fields
+    field_suppress_marker_diffs = result.field_suppress_diffs
+    enum_semantic_diffs = result.enum_diffs
+    union_semantic_diffs = result.union_diffs
+    proxai_only_diffs = result.proxai_only_diffs
+    has_gaps = result.has_gaps
     hr()
     out(f"  Anthropic Messages Protocol  vs  SDK {sdk_ver}")
     out(f"  SDK:  {SDK_FILE}")
@@ -157,7 +40,7 @@ def run_report(level=2, only_marked=False):
     px_only = len(px) - len(matched)
     out(f"  SDK types: {len(sdk_raw)}  |  Ours: {len(px)}  |  Matched: {len(matched)}")
     if level >= 2:
-        other = len(sk - pk)
+        other = sk_minus_pk_count
         out(
             f"  (SDK {len(sdk_raw)} = matched {len(matched)} + namespaced/class/external {other})"
         )
@@ -175,6 +58,13 @@ def run_report(level=2, only_marked=False):
             drift_word="drift",
         )
         _print_diff_section(
+            "SDK provenance",
+            "Every public wire type has explicit Anthropic SDK provenance",
+            provenance_diffs,
+            level,
+            drift_word="missing provenance",
+        )
+        _print_diff_section(
             "Serde wire semantics",
             "Serde discriminator handling matches SDK shape comments",
             serde_diffs,
@@ -182,22 +72,20 @@ def run_report(level=2, only_marked=False):
             drift_word="drift",
         )
         _print_diff_section(
-            "Serde field semantics",
-            "Serde field names and optional/null semantics match SDK shape comments",
+            "Serde field structure",
+            "Serde field names and structured unions match SDK shape comments",
             serde_field_semantic_diffs,
             level,
             drift_word="drift",
         )
         _print_diff_section(
-            "Required-nullable Option markers",
-            "Required-nullable Option fields are explicitly marked",
-            required_nullable_missing_diffs,
+            "Field carrier semantics",
+            "Required, optional, and required-nullable fields use the enforced carriers",
+            field_carrier_semantic_diffs,
             level,
-            drift_word="missing marker",
+            drift_word="carrier mismatch",
         )
-        _print_required_nullable_accepts_missing_section(
-            required_nullable_missing_marked
-        )
+        _print_required_nullable_section(required_nullable_modeled, level)
         _print_diff_section(
             "Field suppress markers",
             "Field suppress markers correspond to real SDK/Rust shape differences",
@@ -238,87 +126,12 @@ def run_report(level=2, only_marked=False):
         hr()
         if has_gaps:
             out("\n  ⚠  Gaps found — see sections above")
-            sys.exit(1)
-        out("\n  ✅  Anthropic protocol coverage complete — no gaps")
+        else:
+            out("\n  ✅  Anthropic protocol coverage complete — no gaps")
         hr()
         out()
 
 
-def _norm_field(name):
-    value = name.lower().replace("_", "").replace("-", "").replace("#", "").rstrip(";")
-    if value.startswith("r"):
-        value = value.lstrip("r")
-    return value
-
-
-def _structural_diffs(matched, sn, pn, sdk_markers):
-    struct_diffs = []
-    matched_ok = 0
-    field_suppressed = sdk_markers.get("field_suppressed", {})
-    for nk in sorted(matched):
-        base_sdk, sdk_info, _tag = sn[nk]
-        name_px, px_info = pn[nk]
-        if sdk_info["kind"] != "interface" or px_info["kind"] != "struct":
-            matched_ok += 1
-            continue
-
-        sdk_fields = sdk_info.get("fields", [])
-        px_fields = px_info.get("fields", [])
-        sdk_norm = {_norm_field(f): f for f in sdk_fields}
-        px_norm = {_norm_field(f): f for f in px_fields}
-        sdk_nk = set(sdk_norm)
-        px_nk = set(px_norm)
-        exclusions = {
-            _norm_field(f)
-            for f in sdk_info.get("deprecated_fields", set())
-            | px_info.get("deprecated_fields", set())
-        }
-        missing_f = [sdk_norm[nk] for nk in sorted(sdk_nk - px_nk - exclusions)]
-        extra_f = [px_norm[nk] for nk in sorted(px_nk - sdk_nk)]
-
-        common_sdk = []
-        common_px = []
-        for common_nk in sorted(sdk_nk & px_nk):
-            common_sdk.extend(f for f in sdk_fields if _norm_field(f) == common_nk)
-            common_px.extend(f for f in px_fields if _norm_field(f) == common_nk)
-        sdk_order = [_norm_field(f) for f in common_sdk]
-        px_order = [_norm_field(f) for f in common_px]
-        order_mismatch = (
-            (common_sdk, common_px)
-            if common_sdk and common_px and sdk_order != px_order
-            else None
-        )
-
-        suppressed = {_norm_field(f) for f in field_suppressed.get(name_px, set())}
-        missing_f = [
-            f
-            for f in missing_f
-            if not _is_structural_discriminator_gap(f)
-            and _norm_field(f) not in suppressed
-        ]
-        extra_f = [f for f in extra_f if _norm_field(f) not in suppressed]
-
-        if missing_f or extra_f or order_mismatch:
-            struct_diffs.append((base_sdk, name_px, missing_f, extra_f, order_mismatch))
-        else:
-            matched_ok += 1
-    return struct_diffs, matched_ok
-
-
-def _is_structural_discriminator_gap(field):
-    return _norm_field(field) == "type"
-
-
-def _missing_tool_union_variants(sdk_tu, px_tu_raw, union_variant_map):
-    tu_sdk_n = {norm(v): v for v in sdk_tu}
-    tu_px_n = {norm(v): v for v in px_tu_raw}
-    tu_missing = []
-    for key in sorted(set(tu_sdk_n) - set(tu_px_n)):
-        variant = tu_sdk_n[key]
-        if variant in union_variant_map and norm(union_variant_map[variant]) in tu_px_n:
-            continue
-        tu_missing.append(variant)
-    return tu_missing
 
 
 def _print_schema_sections(missing_schema, tu_missing, aliased, skipped, level):
@@ -386,11 +199,15 @@ def _print_diff_section(title, ok_message, diffs, level, drift_word):
     out()
 
 
-def _print_required_nullable_accepts_missing_section(marked):
-    if not marked:
+def _print_required_nullable_section(modeled, level):
+    if not modeled:
         return
-    h2(f"Required-nullable fields accepting missing ({len(marked)})")
-    for item, field, file, line in marked:
+    if level < 3:
+        out(f"  Required-nullable carriers modeled: {len(modeled)}")
+        out()
+        return
+    h2(f"Explicit required-nullable carriers ({len(modeled)})")
+    for item, field, file, line in modeled:
         out(f"  ~ {item}.{field} @ {file}:{line}")
     out()
 

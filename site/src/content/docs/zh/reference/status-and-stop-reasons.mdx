@@ -10,7 +10,7 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
 不同协议用不同名称表达“模型停止继续输出”。ProxAI 把这些视为相关的协议概念，而不是可以直接互换的原始字段。
 
 <ProxaiCallout type="note" title="一个响应不等于一种 stop 字段形态">
-  非流式 Anthropic Messages 会返回一个最终 `message` 对象。这个对象通常包含 stop 相关字段，但 wire type 仍然用 nullable / accepts-missing 形态建模，因为 SDK schema 和中间兼容层可能省略 nullable 字段。
+  非流式 Anthropic Messages 会返回一个最终 `message` 对象，其中 stop 相关字段遵循官方 required/nullable 契约。对于已测量且受支持的 provider 字段省略，由 provider normalization 在严格 wire 反序列化之前修复。
 </ProxaiCallout>
 
 ## 终止概念
@@ -53,22 +53,22 @@ import { ProxaiCallout, ReasonMap, ReferenceTable } from '@components/ProxaiDocs
   ]}
 />
 
-## 为什么字段是 nullable
+## 字段 presence 与 nullability
 
-即使 provider 文档说某字段必填，wire struct 也经常使用 nullable / accepts-missing 形态。这是有意的：
+Wire struct 会精确映射官方字段契约，不会把字段缺失和 null 当成可以互换的状态：
 
 <ReferenceTable
-  columns={['情况', '为什么 ProxAI 接受']}
+  columns={['情况', '表示或处理方式']}
   rows={[
-    ['SDK schema 标记 required-nullable 字段', '有些 SDK 生成类型允许字段缺失，同时也认为 null 有效。'],
-    ['上游兼容层省略 null 字段', 'OpenAI-compatible 或 Anthropic-compatible 代理可能丢弃值为 null 的字段。'],
-    ['流式累积在终止事件前是不完整的', '在终止事件之前，stop 信息可能尚不可知。'],
-    ['错误或中断响应不是正常最终 message', '上游失败应作为错误处理，而不是强行构造假的 stop reason。'],
+    ['官方 required-nullable 字段', '`RequiredNullable<T>`：拒绝 missing，接受显式 null 和具体值。'],
+    ['官方 optional 字段', '使用带显式 serde presence 处理的 `Option<T>`。'],
+    ['已知 provider 省略 required-nullable 字段', '只有已测量 fixture 记录该偏差时，窄范围 provider normalization 才能在 protocol 反序列化前补成显式 null。'],
+    ['终止事件之前的流式状态', '内部累积 state 使用自己的 optional 字段；官方 wire event 仍保持严格。'],
   ]}
   codeFirstColumn={false}
 />
 
-从逻辑上的非流式成功路径看，最终 Anthropic `message` 应该包含 stop 信息。解析器仍接受缺失/null，是为了让 ProxAI 产生清晰的转换错误或上游错误，而不是因为过严模型直接崩溃。
+因此，成功的最终 Anthropic `message` 会遵守官方 stop 字段的 requiredness。失败或中断的上游响应应作为错误处理，而不是放宽 protocol carrier 或伪造 stop reason。
 
 ## 契约
 

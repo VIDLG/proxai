@@ -315,7 +315,7 @@ non-JSON sentinel frame:
 data: [DONE]
 ```
 
-The OpenAI/async-openai schema documents Chat streaming as ending with
+The OpenAI OpenAPI schema documents Chat streaming as ending with
 `data: [DONE]`, and `stream_options.include_usage` sends its final usage-only
 chunk before that sentinel. Therefore translators that emit Chat Completions
 streams must append `[DONE]` after the terminal finish/usage chunks, and

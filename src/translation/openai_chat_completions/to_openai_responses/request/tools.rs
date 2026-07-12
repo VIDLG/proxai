@@ -13,9 +13,9 @@ impl TryFrom<&chat::ChatCompletionTools> for responses::Tool {
             chat::ChatCompletionTools::Function(tool) => {
                 Ok(responses::Tool::Function(responses::FunctionTool {
                     name: tool.function.name.clone(),
-                    parameters: tool.function.parameters.clone(),
-                    strict: tool.function.strict,
-                    description: tool.function.description.clone(),
+                    parameters: tool.function.parameters.clone().into(),
+                    strict: tool.function.strict.unwrap_or_default().into(),
+                    description: tool.function.description.clone().into(),
                     defer_loading: None,
                 }))
             }
@@ -23,7 +23,7 @@ impl TryFrom<&chat::ChatCompletionTools> for responses::Tool {
                 Ok(responses::Tool::Custom(responses::CustomToolParam {
                     name: tool.custom.name.clone(),
                     description: tool.custom.description.clone(),
-                    format: tool.custom.format.clone().into(),
+                    format: tool.custom.format.clone().map(Into::into),
                     defer_loading: None,
                 }))
             }
@@ -35,7 +35,7 @@ impl From<CustomToolPropertiesFormat> for responses::CustomToolParamFormat {
     fn from(value: CustomToolPropertiesFormat) -> Self {
         match value {
             CustomToolPropertiesFormat::Text => Self::Text,
-            CustomToolPropertiesFormat::Grammar { grammar } => {
+            CustomToolPropertiesFormat::Grammar(grammar) => {
                 Self::Grammar(responses::CustomGrammarFormatParam {
                     definition: grammar.definition,
                     syntax: grammar.syntax.into(),
@@ -88,28 +88,11 @@ impl TryFrom<&chat::ChatCompletionToolChoiceOption> for responses::ToolChoicePar
                 }),
             ),
             chat::ChatCompletionToolChoiceOption::AllowedTools(choice) => {
-                let first = choice.allowed_tools.first().ok_or_else(|| {
-                    TranslationError::InvalidPayload(
-                        "Chat Completions allowed_tools tool_choice must contain at least one entry to translate to OpenAI Responses"
-                            .to_string(),
-                    )
-                })?;
-
-                let mut tools = Vec::new();
-                for allowed_tools in &choice.allowed_tools {
-                    if allowed_tools.mode != first.mode {
-                        return Err(TranslationError::InvalidPayload(
-                            "Chat Completions allowed_tools tool_choice cannot mix modes when translating to OpenAI Responses"
-                                .to_string(),
-                        ));
-                    }
-                    tools.extend(allowed_tools.tools.iter().cloned());
-                }
-
+                let allowed = &choice.allowed_tools;
                 Ok(responses::ToolChoiceParam::AllowedTools(
                     responses::ToolChoiceAllowed {
-                        mode: first.mode.into(),
-                        tools,
+                        mode: allowed.mode.into(),
+                        tools: allowed.tools.clone(),
                     },
                 ))
             }

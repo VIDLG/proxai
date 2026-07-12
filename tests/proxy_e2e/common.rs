@@ -241,7 +241,7 @@ data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"
             )),
             Ok(Bytes::from_static(
                 b"event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\",\"citations\":null}}\n\n",
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
             )),
             Ok(Bytes::from_static(
                 b"event: content_block_delta\n\
@@ -253,7 +253,7 @@ data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
             )),
             Ok(Bytes::from_static(
                 b"event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2}}\n\n",
             )),
             Ok(Bytes::from_static(
                 b"event: message_stop\n\
@@ -457,19 +457,16 @@ fn typed_responses_response(status: &str, completed_at: Option<u64>, output_toke
         "model": "gpt-5.5",
         "object": "response",
         "output": [],
-        "parallel_tool_calls": null,
+        "parallel_tool_calls": false,
         "previous_response_id": null,
         "prompt": null,
-        "prompt_cache_key": null,
         "prompt_cache_retention": null,
         "reasoning": null,
-        "safety_identifier": null,
         "service_tier": null,
         "status": status,
         "temperature": null,
-        "text": null,
-        "tool_choice": null,
-        "tools": null,
+        "tool_choice": "auto",
+        "tools": [],
         "top_logprobs": null,
         "top_p": null,
         "truncation": null,
@@ -524,6 +521,7 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                         "type": "output_text",
                         "text": "",
                         "annotations": [],
+                        "logprobs": [],
                     },
                 }),
             ),
@@ -536,7 +534,7 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                     "output_index": 0,
                     "content_index": 0,
                     "delta": "hello",
-                    "logprobs": null,
+                    "logprobs": [],
                 }),
             ),
             typed_responses_sse_event(
@@ -548,7 +546,7 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                     "output_index": 0,
                     "content_index": 0,
                     "text": "hello",
-                    "logprobs": null,
+                    "logprobs": [],
                 }),
             ),
             typed_responses_sse_event(
@@ -563,6 +561,7 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                         "type": "output_text",
                         "text": "hello",
                         "annotations": [],
+                        "logprobs": [],
                     },
                 }),
             ),
@@ -581,6 +580,7 @@ pub(super) async fn spawn_typed_responses_sse_upstream() -> SocketAddr {
                             "type": "output_text",
                             "text": "hello",
                             "annotations": [],
+                            "logprobs": [],
                         }],
                     },
                 }),

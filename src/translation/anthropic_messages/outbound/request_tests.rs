@@ -79,7 +79,7 @@ fn tool_result_block(id: &str, text: &str) -> anthropic::ToolResultBlockParam {
         tool_use_id: id.to_string(),
         content: Some(anthropic::ToolResultContentParam::Text(text.to_string())),
         is_error: Some(false),
-        cache_control: None,
+        cache_control: None.into(),
     }
 }
 

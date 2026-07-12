@@ -1,3 +1,4 @@
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::Display;
@@ -10,8 +11,9 @@ use super::super::Filter;
 // Tool Definition Supporting Types
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/HybridSearchOptions`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct HybridSearch {
+pub struct HybridSearchOptions {
     pub embedding_weight: f32,
     pub text_weight: f32,
 }
@@ -25,28 +27,52 @@ pub enum RankVersionType {
     Default20241115,
 }
 
+/// OpenAPI schema: `#/components/schemas/RankingOptions`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RankingOptions {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hybrid_search: Option<HybridSearch>,
-    pub ranker: RankVersionType,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub ranker: Option<RankVersionType>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub score_threshold: Option<f32>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub hybrid_search: Option<HybridSearchOptions>,
 }
 
 // ============================================================
 // Tool Definition
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/FileSearchTool`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileSearchTool {
     pub vector_store_ids: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub max_num_results: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub filters: Option<Filter>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub ranking_options: Option<RankingOptions>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub filters: OptionalNullable<Filter>,
 }
 
 // ============================================================
@@ -64,24 +90,48 @@ pub enum FileSearchToolCallStatus {
     Completed,
 }
 
+/// OpenAPI schema: `#/components/schemas/FileSearchToolCall/properties/results/anyOf/0/items`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileSearchToolCallResult {
-    pub attributes: HashMap<String, Value>,
-    pub file_id: String,
-    pub filename: String,
-    pub score: f32,
-    pub text: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub file_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub text: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub filename: Option<String>,
+
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub attributes: OptionalNullable<HashMap<String, Value>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub score: Option<f32>,
 }
 
 // ============================================================
 // Output / Resource Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/FileSearchToolCall`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileSearchToolCall {
     pub id: String,
-    pub queries: Vec<String>,
     pub status: FileSearchToolCallStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub results: Option<Vec<FileSearchToolCallResult>>,
+    pub queries: Vec<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub results: OptionalNullable<Vec<FileSearchToolCallResult>>,
 }

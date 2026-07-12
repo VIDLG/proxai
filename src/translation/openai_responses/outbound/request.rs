@@ -13,9 +13,9 @@ pub(crate) fn input_text(text: impl Into<String>) -> responses::InputContent {
 
 pub(crate) fn input_image_url(url: impl Into<String>) -> responses::InputContent {
     responses::InputContent::InputImage(responses::InputImageContent {
-        image_url: Some(url.into()),
+        image_url: Some(url.into()).into(),
         detail: responses::ImageDetail::Auto,
-        file_id: None,
+        file_id: None.into(),
     })
 }
 
@@ -25,7 +25,7 @@ pub(crate) fn input_file_data(
 ) -> responses::InputContent {
     responses::InputContent::InputFile(responses::InputFileContent {
         file_data: Some(data.into()),
-        file_id: None,
+        file_id: None.into(),
         file_url: None,
         filename,
         detail: None,
@@ -38,7 +38,7 @@ pub(crate) fn input_file_url(
 ) -> responses::InputContent {
     responses::InputContent::InputFile(responses::InputFileContent {
         file_data: None,
-        file_id: None,
+        file_id: None.into(),
         file_url: Some(url.into()),
         filename,
         detail: None,
@@ -52,14 +52,14 @@ pub(crate) fn easy_message(
     content: responses::EasyInputContent,
 ) -> responses::InputItem {
     responses::InputItem::EasyMessage(responses::EasyInputMessage {
-        r#type: responses::MessageType::Message,
+        r#type: Some(responses::MessageType::Message),
         role,
         content,
-        phase: None,
+        phase: None.into(),
     })
 }
 
-/// Build a request-side `FunctionToolCall` (status: None,
+/// Build a request-side `FunctionToolCall` (status: None.into(),
 /// because the tool has not been executed yet).
 pub(crate) fn pending_function_tool_call(
     call_id: impl Into<String>,
@@ -84,8 +84,8 @@ pub(crate) fn function_call_output_item(
     responses::Item::FunctionCallOutput(responses::FunctionCallOutputItemParam {
         call_id: call_id.into(),
         output,
-        id: None,
-        status: None,
+        id: None.into(),
+        status: None.into(),
     })
 }
 

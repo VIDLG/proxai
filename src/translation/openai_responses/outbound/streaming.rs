@@ -73,7 +73,7 @@ pub(crate) fn output_text_done(
         output_index,
         content_index: 0,
         text,
-        logprobs: None,
+        logprobs: Vec::new(),
     })
 }
 
@@ -98,7 +98,7 @@ pub(crate) fn tool_arguments_done(
     sequence_number: u64,
     item_id: String,
     output_index: u32,
-    name: Option<String>,
+    name: String,
     arguments: String,
 ) -> responses::ResponseStreamEvent {
     responses::ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
@@ -124,7 +124,7 @@ pub(crate) fn output_text_delta(
         output_index,
         content_index: 0,
         delta,
-        logprobs: None,
+        logprobs: Vec::new(),
     })
 }
 

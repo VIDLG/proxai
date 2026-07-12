@@ -40,6 +40,11 @@ pub(super) struct ResponsesStreamTranslator {
 
 impl StreamingEventTranslator for ResponsesStreamTranslator {
     fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+        let reasoning =
+            crate::translation::openai_chat_completions::compatibility::stream_reasoning(
+                &event.data,
+            )
+            .map_err(StreamTranslationError::Semantic)?;
         let chunk = self.lifecycle.parse_stream_event(event.data)?;
         let mut events = Vec::new();
 
@@ -48,7 +53,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
         if let Some(choice) = chunk.choices.first() {
             let delta = &choice.delta;
 
-            if let Some(content) = delta.content.as_deref()
+            if let Some(content) = delta.content.as_non_null()
                 && !content.is_empty()
             {
                 self.lifecycle.streaming_phase_mut()?.mark_text();
@@ -68,7 +73,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 }
             }
 
-            if let Some(refusal) = delta.refusal.as_deref()
+            if let Some(refusal) = delta.refusal.as_non_null()
                 && !refusal.is_empty()
             {
                 self.lifecycle.streaming_phase_mut()?.mark_refusal();
@@ -88,9 +93,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 }
             }
 
-            if let Some(reasoning) = delta.reasoning_content.as_deref()
-                && !reasoning.is_empty()
-            {
+            if let Some(reasoning) = reasoning.as_deref() {
                 self.lifecycle.streaming_phase_mut()?.mark_reasoning();
                 let state = self.streaming_state_mut()?;
                 if let Some(event) = state.ensure_reasoning_item() {
@@ -138,7 +141,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 }
             }
 
-            if let Some(finish_reason) = choice.finish_reason {
+            if let Some(finish_reason) = choice.finish_reason.as_non_null().copied() {
                 let phase = self.lifecycle.take_streaming_phase(|| {
                     StreamTranslationError::Semantic(
                         "Chat stream emitted terminal finish_reason outside streaming state"
@@ -159,7 +162,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
             }
         }
 
-        if let Some(usage) = chunk.usage.clone() {
+        if let Some(usage) = chunk.usage.as_non_null().cloned() {
             self.state_accepting_usage_mut()?.usage = Some(usage);
         }
 
@@ -192,7 +195,7 @@ impl ResponsesStreamTranslator {
                         .to_string(),
                 ));
             }
-            if chunk.usage.is_none() {
+            if !chunk.usage.is_non_null() {
                 return Err(StreamTranslationError::Semantic(
                     "Chat stream emitted an empty choices chunk without usage".to_string(),
                 ));

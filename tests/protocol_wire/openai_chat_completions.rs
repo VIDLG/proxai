@@ -117,7 +117,7 @@ fn projects_chat_completions_tools_and_response_format_from_wire_shape() {
 }
 
 #[test]
-fn preserves_zed_chat_reasoning_content_wire_extensions() {
+fn official_chat_wire_types_do_not_serialize_zed_reasoning_extensions() {
     let request_payload = json!({
         "model": "gpt-4.1",
         "messages": [
@@ -129,28 +129,33 @@ fn preserves_zed_chat_reasoning_content_wire_extensions() {
             }
         ]
     });
-    let request =
-        serde_json::from_value::<CreateChatCompletionRequest>(request_payload.clone()).unwrap();
-    assert_eq!(serde_json::to_value(request).unwrap(), request_payload);
+    let request = serde_json::from_value::<CreateChatCompletionRequest>(request_payload).unwrap();
+    let serialized = serde_json::to_value(request).unwrap();
+    assert!(serialized["messages"][1].get("reasoning_content").is_none());
 
     let response_message = serde_json::from_value::<ChatCompletionResponseMessage>(json!({
         "role": "assistant",
         "content": "Answer.",
+        "refusal": null,
         "reasoning_content": "Hidden reasoning."
     }))
     .unwrap();
-    assert_eq!(
-        response_message.reasoning_content.as_deref(),
-        Some("Hidden reasoning.")
+    assert!(
+        serde_json::to_value(response_message)
+            .unwrap()
+            .get("reasoning_content")
+            .is_none()
     );
 
     let stream_delta = serde_json::from_value::<ChatCompletionStreamResponseDelta>(json!({
         "reasoning_content": "Hidden reasoning."
     }))
     .unwrap();
-    assert_eq!(
-        stream_delta.reasoning_content.as_deref(),
-        Some("Hidden reasoning.")
+    assert!(
+        serde_json::to_value(stream_delta)
+            .unwrap()
+            .get("reasoning_content")
+            .is_none()
     );
 }
 

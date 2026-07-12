@@ -12,14 +12,14 @@ async fn translates_anthropic_message_to_chat_completion_shape() {
         "role": "assistant",
         "model": "glm-5.1",
         "content": [
-            {"type": "text", "text": "hello"},
+            {"type": "text", "citations": null, "text": "hello"},
             {"type": "tool_use", "id": "toolu_1", "caller": {"type": "direct"}, "name": "lookup", "input": {"query": "proxai"}}
         ],
         "stop_reason": "tool_use",
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 5}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 5}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -55,7 +55,7 @@ async fn translates_parallel_anthropic_tool_uses_to_chat_tool_calls() {
         "role": "assistant",
         "model": "glm-5.1",
         "content": [
-            {"type": "text", "text": "I'll check both."},
+            {"type": "text", "citations": null, "text": "I'll check both."},
             {"type": "tool_use", "id": "toolu_weather", "caller": {"type": "direct"}, "name": "weather", "input": {"city": "Shanghai"}},
             {"type": "tool_use", "id": "toolu_news", "caller": {"type": "direct"}, "name": "news", "input": {"topic": "AI"}}
         ],
@@ -63,7 +63,7 @@ async fn translates_parallel_anthropic_tool_uses_to_chat_tool_calls() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 4, "output_tokens": 6}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 4, "output_tokens": 6}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -98,6 +98,8 @@ async fn translates_anthropic_web_citations_to_chat_url_annotations() {
         "model": "glm-5.1",
         "content": [{
             "type": "text",
+            "citations": null,
+            "citations": null,
             "text": "See ProxAI docs for details.",
             "citations": [{
                 "type": "web_search_result_location",
@@ -111,7 +113,7 @@ async fn translates_anthropic_web_citations_to_chat_url_annotations() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -138,6 +140,8 @@ async fn skips_unmatched_anthropic_web_citations() {
         "model": "glm-5.1",
         "content": [{
             "type": "text",
+            "citations": null,
+            "citations": null,
             "text": "See ProxAI docs for details.",
             "citations": [{
                 "type": "web_search_result_location",
@@ -151,7 +155,7 @@ async fn skips_unmatched_anthropic_web_citations() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -166,9 +170,11 @@ async fn translates_citation_offsets_across_joined_unicode_text_blocks() {
         "role": "assistant",
         "model": "glm-5.1",
         "content": [
-            {"type": "text", "text": "前缀🙂"},
+            {"type": "text", "citations": null, "text": "前缀🙂"},
             {
                 "type": "text",
+                "citations": null,
+                "citations": null,
                 "text": "见 ProxAI 文档。",
                 "citations": [{
                     "type": "web_search_result_location",
@@ -183,7 +189,7 @@ async fn translates_citation_offsets_across_joined_unicode_text_blocks() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -211,6 +217,8 @@ async fn maps_repeated_cited_text_to_later_occurrences_in_order() {
         "model": "glm-5.1",
         "content": [{
             "type": "text",
+            "citations": null,
+            "citations": null,
             "text": "ProxAI docs and ProxAI docs",
             "citations": [
                 {
@@ -233,7 +241,7 @@ async fn maps_repeated_cited_text_to_later_occurrences_in_order() {
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -269,7 +277,7 @@ async fn translates_anthropic_thinking_only_response_to_chat_reasoning_content()
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
 
     let translated = translate_non_streaming_response(upstream).unwrap();
@@ -288,7 +296,7 @@ async fn translates_anthropic_thinking_only_response_to_chat_reasoning_content()
             signature: "sig".to_string(),
         }])),
     );
-    assert!(translated["choices"][0]["message"].get("content").is_none());
+    assert!(translated["choices"][0]["message"]["content"].is_null());
 }
 
 #[tokio::test]
@@ -298,12 +306,18 @@ async fn translates_anthropic_cache_read_usage_to_chat_prompt_details() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "cached"}],
+        "content": [{"type": "text", "citations": null, "text": "cached"}],
         "stop_reason": "end_turn",
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
         "usage": {
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "inference_geo": null,
+            "output_tokens_details": null,
+            "server_tool_use": null,
+            "service_tier": null,
             "input_tokens": 10,
             "output_tokens": 2,
             "cache_read_input_tokens": 7
@@ -313,7 +327,7 @@ async fn translates_anthropic_cache_read_usage_to_chat_prompt_details() {
 
     assert_eq!(
         translated["usage"]["prompt_tokens_details"],
-        json!({"audio_tokens": null, "cached_tokens": 7})
+        json!({"cached_tokens": 7})
     );
     assert!(translated["usage"]["completion_tokens_details"].is_null());
 }
@@ -325,7 +339,7 @@ async fn prefers_refusal_content_over_refusal_details_explanation() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "I can't help with that."}],
+        "content": [{"type": "text", "citations": null, "text": "I can't help with that."}],
         "stop_reason": "refusal",
         "stop_details": {
             "type": "refusal",
@@ -334,7 +348,7 @@ async fn prefers_refusal_content_over_refusal_details_explanation() {
         },
         "stop_sequence": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -362,7 +376,7 @@ async fn uses_refusal_details_explanation_when_refusal_content_is_empty() {
         },
         "stop_sequence": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 0}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 0}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -380,7 +394,7 @@ async fn uses_refusal_text_when_refusal_details_have_no_explanation() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "I can't help with that."}],
+        "content": [{"type": "text", "citations": null, "text": "I can't help with that."}],
         "stop_reason": "refusal",
         "stop_details": {
             "type": "refusal",
@@ -389,7 +403,7 @@ async fn uses_refusal_text_when_refusal_details_have_no_explanation() {
         },
         "stop_sequence": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 
@@ -407,12 +421,12 @@ async fn translates_anthropic_refusal_stop_reason_to_chat_stop() {
         "type": "message",
         "role": "assistant",
         "model": "glm-5.1",
-        "content": [{"type": "text", "text": "I can't help with that."}],
+        "content": [{"type": "text", "citations": null, "text": "I can't help with that."}],
         "stop_reason": "refusal",
         "stop_sequence": null,
         "stop_details": null,
         "container": null,
-        "usage": {"input_tokens": 3, "output_tokens": 4}
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 3, "output_tokens": 4}
     });
     let translated = translate_non_streaming_response(upstream).unwrap();
 

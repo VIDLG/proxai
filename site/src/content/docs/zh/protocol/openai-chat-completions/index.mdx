@@ -63,6 +63,14 @@ enum ChatCompletionRequestMessage {
 - `tool`：工具结果，通过 `tool_call_id` 关联。
 - `function`：旧版函数消息，保留兼容但不是新路径重点。
 
+### Zed reasoning 兼容扩展
+
+`reasoning_content` 不属于官方 OpenAI Chat Completions OpenAPI schema，因此不会出现在 `src/protocol/openai/chat_completions/wire` 的 official wire structs 中。proxai 在 translation 边界从 Zed assistant 历史中提取该字段，并在生成非流式 message 或 SSE delta 后再注入。
+
+当前 Zed 源码的行为是：assistant 历史使用 `reasoning_content`；流式响应同时接受 `delta.reasoning` 和 `delta.reasoning_content`，并将二者转换为 thinking events。proxai 出站统一使用 `reasoning_content`，以便 Zed 在下一轮 assistant history 中原样回放。这里没有 `reasoning_context` 字段。
+
+Anthropic signature 和 redacted thinking 仍通过附加在 `reasoning_content` 后的 versioned continuation envelope 由客户端携带，proxai 不维护服务端 continuation 状态。
+
 ## 非流式响应
 
 非流式响应是 `CreateChatCompletionResponse`：
@@ -273,7 +281,7 @@ proxai 的 Chat Completions provider 使用通用 stream mechanics 保留 SSE by
 
 `openai_chat_completions -> openai_chat_completions` 是已接入路径：
 
-1. ingress 用 `async-openai` typed parse 校验请求并提取 model。
+1. ingress 用 ProxAI 的 OpenAI-compatible typed parse 校验请求并提取 model。
 2. request preparation 替换上游 model 等转发字段。
 3. provider 转发到 `/v1/chat/completions`。
 4. 非流式响应解析摘要。

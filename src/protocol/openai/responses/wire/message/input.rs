@@ -1,3 +1,4 @@
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -40,20 +41,32 @@ pub enum EasyInputContent {
     ContentList(Vec<InputContent>),
 }
 
+/// OpenAPI schema: `#/components/schemas/EasyInputMessage`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EasyInputMessage {
-    #[serde(default)]
-    pub r#type: MessageType,
     pub role: Role,
     pub content: EasyInputContent,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub phase: Option<MessagePhase>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub phase: OptionalNullable<MessagePhase>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub r#type: Option<MessageType>,
 }
 
+/// OpenAPI schema: `#/components/schemas/InputMessage`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputMessage {
-    pub content: Vec<InputContent>,
     pub role: InputRole,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub status: Option<OutputStatus>,
+
+    pub content: Vec<InputContent>,
 }

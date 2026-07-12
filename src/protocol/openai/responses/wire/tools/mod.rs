@@ -66,9 +66,9 @@ pub enum Tool {
     Computer(ComputerTool),
     Namespace(NamespaceToolParam),
     ToolSearch(ToolSearchToolParam),
-    WebSearchPreview(WebSearchTool),
+    WebSearchPreview(WebSearchPreviewTool),
     #[serde(rename = "web_search_preview_2025_03_11")]
     #[strum(serialize = "web_search_preview_2025_03_11")]
-    WebSearchPreview20250311(WebSearchTool),
+    WebSearchPreview20250311(WebSearchPreviewTool),
     ApplyPatch,
 }

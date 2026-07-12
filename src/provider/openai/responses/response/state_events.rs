@@ -52,18 +52,14 @@ impl From<&ResponseStreamEvent> for StateEvent {
             ResponseStreamEvent::ResponseOutputItemDone(event) => Self::Observed(
                 ObservedUpdate::from_output_item(&event.item, event.output_index),
             ),
-            ResponseStreamEvent::ResponseFunctionCallArgumentsDone(event) => {
-                event.name.as_deref().map_or(Self::Ignored, |name| {
-                    Self::Observed(ObservedUpdate::from_function_call_arguments_done(
-                        &event.item_id,
-                        name,
-                    ))
-                })
-            }
+            ResponseStreamEvent::ResponseFunctionCallArgumentsDone(event) => Self::Observed(
+                ObservedUpdate::from_function_call_arguments_done(&event.item_id, &event.name),
+            ),
             ResponseStreamEvent::ResponseError(event) => Self::ObservedError(ErrorObject {
                 code: event
                     .code
-                    .clone()
+                    .as_non_null()
+                    .cloned()
                     .unwrap_or_else(|| "upstream_error".to_string()),
                 message: event.message.clone(),
             }),
@@ -120,6 +116,10 @@ impl From<&ResponseStreamEvent> for StateEvent {
             ResponseStreamEvent::ResponseOutputTextAnnotationAdded(_) => Self::Ignored,
             ResponseStreamEvent::ResponseCustomToolCallInputDelta(_) => Self::Ignored,
             ResponseStreamEvent::ResponseCustomToolCallInputDone(_) => Self::Ignored,
+            ResponseStreamEvent::ResponseAudioDelta(_)
+            | ResponseStreamEvent::ResponseAudioDone(_)
+            | ResponseStreamEvent::ResponseAudioTranscriptDelta(_)
+            | ResponseStreamEvent::ResponseAudioTranscriptDone(_) => Self::Ignored,
         }
     }
 }
@@ -173,12 +173,14 @@ fn nested_error_event(event: &SseEvent) -> Option<ResponseErrorEvent> {
         code: error
             .get("code")
             .and_then(Value::as_str)
-            .map(ToString::to_string),
+            .map(ToString::to_string)
+            .into(),
         message: error.get("message")?.as_str()?.to_string(),
         param: error
             .get("param")
             .and_then(Value::as_str)
-            .map(ToString::to_string),
+            .map(ToString::to_string)
+            .into(),
     })
 }
 

@@ -108,7 +108,7 @@ fn render_tool_choice_compact(choice: &ChatCompletionToolChoiceOption) -> String
             format!("tc:custom:{}", choice.custom.name)
         }
         ChatCompletionToolChoiceOption::AllowedTools(choice) => {
-            format!("tc:allowed_tools:{}", choice.allowed_tools.len())
+            format!("tc:allowed_tools:{}", choice.allowed_tools.tools.len())
         }
     }
 }

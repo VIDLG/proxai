@@ -47,6 +47,20 @@ pub enum Verbosity {
     High,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum PromptCacheRetention {
+    #[default]
+    #[serde(rename = "in_memory")]
+    #[strum(to_string = "in_memory")]
+    InMemory,
+    #[serde(rename = "24h")]
+    #[strum(to_string = "24h")]
+    Hours24,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseFormatJsonSchemaSchema`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResponseFormatJsonSchema {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -67,6 +81,7 @@ pub enum ResponseFormat {
     },
 }
 
+/// OpenAPI schema: `#/components/schemas/ChatCompletionRequestMessageContentPartText`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestMessageContentPartText {
     pub text: String,
@@ -85,6 +100,7 @@ pub enum PredictionContent {
     Content(PredictionContentContent),
 }
 
+/// OpenAPI schema: `#/components/schemas/ChatCompletionStreamOptions`
 #[allow(
     dead_code,
     reason = "Retained for full request schema projection coverage."

@@ -9,7 +9,10 @@
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::{StopReason, TextCitation, Usage};
-use crate::protocol::openai_responses::{OutputItem, Response, ResponseUsage, Status};
+use crate::protocol::openai_responses::{
+    OutputItem, Response, ResponseObject, ResponseUsage, ServiceTier, Status, ToolChoiceOptions,
+    ToolChoiceParam,
+};
 use crate::translation::streaming::{
     StreamIdentity, StreamTranslationError, StreamTranslationResult,
 };
@@ -103,36 +106,44 @@ impl StreamingState {
     pub(super) fn response_snapshot(&self, identity: &StreamIdentity, status: Status) -> Response {
         let incomplete_details = incomplete_details_from_stop_reason(self.stop_reason);
         Response {
-            background: None,
-            billing: None,
-            conversation: None,
-            created_at: 0,
-            completed_at: None,
-            error: None,
+            background: None.into(),
+            conversation: None.into(),
+            created_at: 0.0,
+            completed_at: None.into(),
+            error: None.into(),
             id: identity.id().to_string(),
-            incomplete_details,
-            instructions: None,
-            max_output_tokens: None,
-            metadata: None,
+            incomplete_details: incomplete_details.into(),
+            instructions: None.into(),
+            max_output_tokens: None.into(),
+            max_tool_calls: None.into(),
+            metadata: None.into(),
             model: identity.model().to_string(),
-            object: "response".to_string(),
+            object: ResponseObject::Response,
             output: self.output_items.clone(),
-            parallel_tool_calls: None,
-            previous_response_id: None,
-            prompt: None,
+            output_text: None.into(),
+            parallel_tool_calls: false,
+            previous_response_id: None.into(),
+            prompt: None.into(),
             prompt_cache_key: None,
-            prompt_cache_retention: None,
-            reasoning: None,
+            prompt_cache_retention: None.into(),
+            reasoning: None.into(),
             safety_identifier: None,
-            service_tier: self.usage.service_tier.and_then(Into::into),
-            status,
-            temperature: None,
+            service_tier: self
+                .usage
+                .service_tier
+                .as_non_null()
+                .copied()
+                .and_then(Option::<ServiceTier>::from)
+                .into(),
+            status: Some(status),
+            temperature: None.into(),
             text: None,
-            tool_choice: None,
-            tools: None,
-            top_logprobs: None,
-            top_p: None,
-            truncation: None,
+            tool_choice: ToolChoiceParam::Mode(ToolChoiceOptions::Auto),
+            tools: Vec::new(),
+            top_logprobs: None.into(),
+            top_p: None.into(),
+            truncation: None.into(),
+            user: None,
             usage: Some(ResponseUsage::from(&self.usage)),
         }
     }

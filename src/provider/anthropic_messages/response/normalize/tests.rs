@@ -27,6 +27,12 @@ fn normalizes_non_stream_provider_message_required_nullable_fields() {
         "stop_reason": "tool_use",
         "stop_sequence": null,
         "usage": {
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "inference_geo": null,
+            "output_tokens_details": null,
+            "service_tier": null,
             "input_tokens": 10,
             "output_tokens": 4,
             "server_tool_use": {"web_search_requests": 1, "web_fetch_requests": 0}
@@ -87,6 +93,12 @@ fn normalizes_stream_tool_and_usage_required_nullable_fields() {
             "stop_sequence": null
         },
         "usage": {
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "inference_geo": null,
+            "output_tokens_details": null,
+            "service_tier": null,
             "output_tokens": 2,
             "server_tool_use": {"web_search_requests": 1, "web_fetch_requests": 0}
         }
@@ -112,6 +124,7 @@ fn normalizes_text_block_required_nullable_fields() {
         "index": 0,
         "content_block": {
             "type": "text",
+            "citations": null,
             "text": "hello"
         }
     });
@@ -128,7 +141,7 @@ fn normalizes_text_block_required_nullable_fields() {
     else {
         panic!("expected text block");
     };
-    assert_eq!(block.citations, None);
+    assert_eq!(block.citations.as_non_null(), None);
 }
 
 #[test]
@@ -140,6 +153,10 @@ fn normalizes_glm5_partial_server_tool_usage_counters() {
             "stop_sequence": null
         },
         "usage": {
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "inference_geo": null,
+            "output_tokens_details": null,
             "input_tokens": 165,
             "output_tokens": 8,
             "cache_read_input_tokens": 0,
@@ -166,6 +183,7 @@ fn normalizes_glm5_partial_server_tool_usage_counters() {
         event
             .usage
             .server_tool_use
+            .as_non_null()
             .expect("server tool usage")
             .web_fetch_requests,
         0

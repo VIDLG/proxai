@@ -17,10 +17,11 @@ pub(super) fn chat_terminal_delta(delta: MessageDelta, emitted_text: bool) -> Op
     // retract text deltas that were already sent without buffering the whole
     // response, so only emit `delta.refusal` when no text content has been
     // streamed yet.
-    if emitted_text || !matches!(delta.stop_reason, Some(StopReason::Refusal)) {
+    let stop_reason = delta.stop_reason.into_non_null();
+    if emitted_text || !matches!(stop_reason, Some(StopReason::Refusal)) {
         return None;
     }
 
-    let stop_details = delta.stop_details?;
-    stop_details.explanation
+    let stop_details = delta.stop_details.into_non_null()?;
+    stop_details.explanation.into_non_null()
 }

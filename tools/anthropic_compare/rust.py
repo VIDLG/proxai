@@ -101,7 +101,6 @@ def rust_sdk_markers():
     proxai_internals = {}
     externals = set()
     field_suppressed = {}
-    required_nullable_accepts_missing = {}
     legacy = []
     for item in rust_doc_items():
         for line in item["doc"]:
@@ -134,15 +133,7 @@ def rust_sdk_markers():
             if m:
                 field_suppressed.setdefault(item["name"], set()).add(m.group(1))
                 continue
-            m = re.match(
-                r'^@sdk\(required_nullable_accepts_missing\s*=\s*"([A-Za-z_]\w*)"\)$',
-                text,
-            )
-            if m:
-                required_nullable_accepts_missing.setdefault(item["name"], set()).add(
-                    m.group(1)
-                )
-                continue
+
             if text.startswith("SDK "):
                 legacy.append(
                     (
@@ -171,13 +162,6 @@ def rust_sdk_markers():
                 externals.add(m.group(1))
                 continue
 
-    for item_name, item in rust_serde_items().items():
-        for field_name, field in item.get("fields", {}).items():
-            for line in field.get("doc", []):
-                if line["text"] == "@sdk(required_nullable_accepts_missing)":
-                    required_nullable_accepts_missing.setdefault(item_name, set()).add(
-                        field_name
-                    )
 
     return {
         "aliases": aliases,
@@ -185,7 +169,6 @@ def rust_sdk_markers():
         "proxai_internals": proxai_internals,
         "externals": externals,
         "field_suppressed": field_suppressed,
-        "required_nullable_accepts_missing": required_nullable_accepts_missing,
         "union_variants": union_variants,
         "legacy": legacy,
     }
@@ -391,8 +374,6 @@ def _serde_rename_all(attrs):
     return None
 
 
-def _serde_skip_if_none(attrs):
-    return 'skip_serializing_if = "Option::is_none"' in " ".join(attrs)
 
 
 def _snake_case(name):
@@ -434,10 +415,6 @@ def _field_by_wire_name(item, wire_name):
     return None, None
 
 
-def _rust_type_is_option(type_text):
-    if not type_text:
-        return False
-    return re.search(r"(^|::)\bOption\s*<", type_text) is not None
 
 
 def rust_tagged_variant_literals():
@@ -849,9 +826,11 @@ def _collect_px(node, buf, types, rel):
             continue
 
         kinds = {"struct_item": "struct", "enum_item": "enum", "type_item": "type"}
-        info = dict(
-            kind=kinds.get(child.type, "?"), line=child.start_point[0] + 1, file=rel
-        )
+        info: dict[str, object] = {
+            "kind": kinds.get(child.type, "?"),
+            "line": child.start_point[0] + 1,
+            "file": rel,
+        }
 
         # #[deprecated] on preceding attributes
         deprecated = False

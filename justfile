@@ -102,15 +102,19 @@ capture-disable:
 
 # Fast OpenAI protocol drift gate used by the full local check.
 protocol-compare:
+    {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.openai_compare.tests
     {{ pixi }} run -- python tools/compare_openai_protocol.py --quiet
 
 # Compare proxai Anthropic protocol types against official SDK
 compare-anthropic-protocol level="2":
+    {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.anthropic_compare.tests
     {{ pixi }} run -- python tools/compare_anthropic_protocol.py --level {{ level }}
 
-# Compare proxai OpenAI protocol types against async-openai v0.41.1
-compare-openai-protocol level="2":
-    {{ pixi }} run -- python tools/compare_openai_protocol.py --level {{ level }}
+# Compare proxai OpenAI protocol types against the official OpenAPI schema.
+# Pass `--structural` for the manual schema-first coverage audit; this is not part of CI.
+compare-openai-protocol *args:
+    {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.openai_compare.tests
+    {{ pixi }} run -- python tools/compare_openai_protocol.py {{ args }}
 
 # Alias for backward compatibility
 compare-protocol: compare-anthropic-protocol

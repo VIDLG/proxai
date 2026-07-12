@@ -1,6 +1,5 @@
 use crate::protocol::anthropic::messages::{
-    MessageDeltaUsage, StopReason, TextBlock, TextDelta, ThinkingBlock, ThinkingDelta,
-    ToolUseBlock, Usage,
+    MessageDeltaUsage, StopReason, TextBlock, TextDelta, ToolUseBlock, Usage,
 };
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
@@ -30,7 +29,7 @@ impl TryFrom<&ToolUseBlock> for ChatCompletionMessageToolCalls {
 impl From<TextBlock> for ChatCompletionStreamResponseDelta {
     fn from(block: TextBlock) -> Self {
         Self {
-            content: Some(block.text),
+            content: Some(block.text).into(),
             ..Self::default()
         }
     }
@@ -39,25 +38,7 @@ impl From<TextBlock> for ChatCompletionStreamResponseDelta {
 impl From<TextDelta> for ChatCompletionStreamResponseDelta {
     fn from(delta: TextDelta) -> Self {
         Self {
-            content: Some(delta.text),
-            ..Self::default()
-        }
-    }
-}
-
-impl From<ThinkingBlock> for ChatCompletionStreamResponseDelta {
-    fn from(block: ThinkingBlock) -> Self {
-        Self {
-            reasoning_content: Some(block.thinking),
-            ..Self::default()
-        }
-    }
-}
-
-impl From<ThinkingDelta> for ChatCompletionStreamResponseDelta {
-    fn from(delta: ThinkingDelta) -> Self {
-        Self {
-            reasoning_content: Some(delta.thinking),
+            content: Some(delta.text).into(),
             ..Self::default()
         }
     }
@@ -68,7 +49,7 @@ impl From<&Usage> for CompletionUsage {
         completion_usage_from_anthropic(
             usage.input_tokens,
             usage.output_tokens,
-            usage.cache_read_input_tokens,
+            usage.cache_read_input_tokens.as_non_null().copied(),
         )
     }
 }
@@ -76,9 +57,9 @@ impl From<&Usage> for CompletionUsage {
 impl From<MessageDeltaUsage> for CompletionUsage {
     fn from(usage: MessageDeltaUsage) -> Self {
         completion_usage_from_anthropic(
-            usage.input_tokens.unwrap_or(0),
+            usage.input_tokens.as_non_null().copied().unwrap_or(0),
             usage.output_tokens,
-            usage.cache_read_input_tokens,
+            usage.cache_read_input_tokens.into_non_null(),
         )
     }
 }

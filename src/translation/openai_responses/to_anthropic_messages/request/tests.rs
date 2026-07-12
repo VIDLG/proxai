@@ -15,6 +15,10 @@ fn translates_text_request_with_instructions_and_function_tool() {
         "tool_choice": "required",
         "tools": [{
             "type": "function",
+            "parameters": null,
+            "strict": null,
+            "parameters": null,
+            "strict": null,
             "name": "lookup",
             "description": "Look up a record",
             "parameters": {
@@ -130,7 +134,8 @@ fn skips_unsigned_responses_reasoning_history() {
                 "content": [{
                     "type": "output_text",
                     "text": "Hi!",
-                    "annotations": []
+                    "annotations": [],
+                    "logprobs": []
                 }]
             }
         ]

@@ -53,14 +53,11 @@ impl ChatResponseObservation {
 
     pub(crate) fn has_finish_reason(&self) -> bool {
         match self {
-            Self::NonStream(projection) => projection
-                .choices
-                .iter()
-                .any(|choice| choice.finish_reason.is_some()),
+            Self::NonStream(projection) => !projection.choices.is_empty(),
             Self::StreamChunk(projection) => projection
                 .choices
                 .iter()
-                .any(|choice| choice.finish_reason.is_some()),
+                .any(|choice| choice.finish_reason.is_non_null()),
         }
     }
 
@@ -120,12 +117,12 @@ pub(crate) fn observed_updates_from_stream_projection(
         updates.push(ObservedChatUpdate::Choice {
             index: choice.index,
         });
-        if choice.delta.content.is_some() {
+        if choice.delta.content.is_non_null() {
             updates.push(ObservedChatUpdate::Text {
                 index: choice.index,
             });
         }
-        if choice.delta.refusal.is_some() {
+        if choice.delta.refusal.is_non_null() {
             updates.push(ObservedChatUpdate::Refusal {
                 index: choice.index,
             });
@@ -142,7 +139,7 @@ pub(crate) fn observed_updates_from_stream_projection(
                 });
             }
         }
-        if let Some(reason) = choice.finish_reason {
+        if let Some(reason) = choice.finish_reason.as_non_null().copied() {
             updates.push(ObservedChatUpdate::FinishReason {
                 index: choice.index,
                 reason: reason.to_string(),

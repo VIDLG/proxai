@@ -52,7 +52,7 @@ Multiple output pieces live in `content: Vec<ContentBlock>`, not in multiple top
 - `pause_turn` — turn paused
 - `refusal` — model refused
 
-Wire structs use `Option<T>` for nullable/missing upstream fields, including compatibility providers and streaming start events.
+Wire structs mirror official presence and nullability: required-nullable fields use `RequiredNullable<T>` and reject missing fields. Narrow provider normalization may insert explicit `null` before protocol deserialization for a measured compatibility deviation; it does not loosen the wire carrier.
 
 ## Streaming
 

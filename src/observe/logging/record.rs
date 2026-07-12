@@ -136,8 +136,8 @@ impl From<&ProviderRequestView<'_>> for ProviderRequestCommonFields {
                 reasoning_effort: projection
                     .reasoning
                     .as_ref()
-                    .and_then(|value| value.effort)
-                    .map(|value| value.to_string())
+                    .and_then(|value| value.effort.as_non_null())
+                    .map(ToString::to_string)
                     .unwrap_or_default(),
                 stream: projection.stream,
                 max_output_tokens: projection.max_output_tokens,
@@ -162,7 +162,8 @@ impl From<&ProviderRequestView<'_>> for ProviderRequestCommonFields {
                 reasoning_effort: projection
                     .output_config
                     .as_ref()
-                    .and_then(|config| config.effort)
+                    .and_then(|config| config.effort.as_non_null())
+                    .copied()
                     .map(render_anthropic_output_effort_common_field)
                     .or_else(|| {
                         projection

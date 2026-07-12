@@ -1,7 +1,9 @@
 pub mod anthropic;
 mod error;
+mod field_presence;
 pub mod openai;
 pub use error::ErrorObject;
+pub use field_presence::{Nullable, OptionalNullable, RequiredNullable, deserialize_present};
 pub use openai::responses as openai_responses;
 
 use serde::{Deserialize, Serialize};

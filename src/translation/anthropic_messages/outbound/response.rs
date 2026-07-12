@@ -11,7 +11,7 @@ use crate::protocol::anthropic::messages as anthropic;
 pub(crate) fn text_block(text: impl Into<String>) -> anthropic::TextBlock {
     anthropic::TextBlock {
         text: text.into(),
-        citations: None,
+        citations: None.into(),
     }
 }
 

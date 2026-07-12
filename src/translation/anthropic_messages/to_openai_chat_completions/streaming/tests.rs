@@ -11,13 +11,13 @@ use super::super::translate_streaming_response;
 async fn translates_anthropic_stream_to_chat_completion_sse() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -57,9 +57,9 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
 async fn translates_anthropic_stream_refusal_details_to_chat_refusal_delta() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_refusal_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_refusal_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\",\"stop_sequence\":null,\"stop_details\":{\"type\":\"refusal\",\"category\":\"cyber\",\"explanation\":\"I can't help with cyber abuse.\"},\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":0,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"refusal\",\"stop_sequence\":null,\"stop_details\":{\"type\":\"refusal\",\"category\":\"cyber\",\"explanation\":\"I can't help with cyber abuse.\"},\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -105,7 +105,7 @@ async fn translates_anthropic_stream_refusal_details_to_chat_refusal_delta() {
 async fn translates_anthropic_stream_with_only_thinking_blocks() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_thinking_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_thinking_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
         "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"hidden\",\"signature\":\"sig\"}}\n\n",
         "event: content_block_delta\n",
@@ -113,7 +113,7 @@ async fn translates_anthropic_stream_with_only_thinking_blocks() {
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig2\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -147,7 +147,7 @@ async fn translates_anthropic_stream_with_only_thinking_blocks() {
 async fn streams_signature_only_thinking_as_continuation() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_signature_only\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_signature_only\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
         "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n",
         "event: content_block_delta\n",
@@ -155,7 +155,7 @@ async fn streams_signature_only_thinking_as_continuation() {
         "event: content_block_stop\n",
         "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -195,7 +195,7 @@ async fn streams_signature_only_thinking_as_continuation() {
 async fn translates_anthropic_thinking_blocks_before_text() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_thinking_then_text\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_thinking_then_text\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
         "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"hidden\",\"signature\":\"sig\"}}\n\n",
         "event: content_block_delta\n",
@@ -203,9 +203,9 @@ async fn translates_anthropic_thinking_blocks_before_text() {
         "event: content_block_stop\n",
         "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"hello\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"hello\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -255,9 +255,9 @@ async fn translates_anthropic_thinking_blocks_before_text() {
 async fn maps_anthropic_tool_block_indexes_to_chat_tool_call_indexes() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_tool_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_tool_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"intro\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"intro\"}}\n\n",
         "event: content_block_start\n",
         "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"lookup\",\"input\":{}}}\n\n",
         "event: content_block_delta\n",
@@ -291,13 +291,13 @@ async fn maps_anthropic_tool_block_indexes_to_chat_tool_call_indexes() {
 async fn rejects_anthropic_stream_eof_after_terminal_delta_before_message_stop() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_no_stop\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_no_stop\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n"
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n"
     );
     let mut response = Response::new(Body::from(stream));
     response.headers_mut().insert(
@@ -319,9 +319,9 @@ async fn rejects_anthropic_stream_eof_after_terminal_delta_before_message_stop()
 async fn rejects_anthropic_stream_eof_before_terminal_delta() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_no_delta\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_no_delta\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n"
     );
@@ -345,7 +345,7 @@ async fn rejects_anthropic_stream_eof_before_terminal_delta() {
 async fn rejects_anthropic_message_stop_before_terminal_delta() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stop_early\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stop_early\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
@@ -369,13 +369,13 @@ async fn rejects_anthropic_message_stop_before_terminal_delta() {
 async fn rejects_anthropic_event_after_terminal_delta_before_message_stop() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_after_delta\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_after_delta\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"late\"}}\n\n"
     );
@@ -399,13 +399,13 @@ async fn rejects_anthropic_event_after_terminal_delta_before_message_stop() {
 async fn rejects_anthropic_event_after_message_stop() {
     let stream = concat!(
         "event: message_start\n",
-        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_after_stop\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_after_stop\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":0}}}\n\n",
         "event: content_block_start\n",
-        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+        "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n",
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
         "event: message_delta\n",
-        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n",
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n",
         "event: content_block_delta\n",

@@ -12,9 +12,9 @@ impl TryFrom<&responses::Tool> for chat::ChatCompletionTools {
                 Ok(Self::Function(chat_request::ChatCompletionTool {
                     function: chat_request::FunctionObject {
                         name: tool.name.clone(),
-                        parameters: tool.parameters.clone(),
-                        strict: tool.strict,
-                        description: tool.description.clone(),
+                        parameters: tool.parameters.as_non_null().cloned(),
+                        strict: tool.strict.as_non_null().copied().into(),
+                        description: tool.description.as_non_null().cloned(),
                     },
                 }))
             }
@@ -23,7 +23,7 @@ impl TryFrom<&responses::Tool> for chat::ChatCompletionTools {
                     custom: chat_request::CustomToolProperties {
                         name: tool.name.clone(),
                         description: tool.description.clone(),
-                        format: tool.format.clone().into(),
+                        format: tool.format.clone().map(Into::into),
                     },
                 }))
             }
@@ -42,12 +42,12 @@ impl From<responses::CustomToolParamFormat> for chat_request::CustomToolProperti
     fn from(value: responses::CustomToolParamFormat) -> Self {
         match value {
             responses::CustomToolParamFormat::Text => Self::Text,
-            responses::CustomToolParamFormat::Grammar(grammar) => Self::Grammar {
-                grammar: chat_request::CustomGrammarFormatParam {
+            responses::CustomToolParamFormat::Grammar(grammar) => {
+                Self::Grammar(chat_request::CustomGrammarFormatParam {
                     definition: grammar.definition,
                     syntax: grammar.syntax.into(),
-                },
-            },
+                })
+            }
         }
     }
 }
@@ -116,20 +116,14 @@ impl TryFrom<&responses::ToolChoiceParam> for chat::ChatCompletionToolChoiceOpti
                     },
                 },
             )),
-            responses::ToolChoiceParam::AllowedTools(allowed) => {
-                // Responses `allowed_tools` already groups same-mode tools into a
-                // single entry, but emit a Chat choice per entry to keep the
-                // projection faithful. Chat itself supports a single
-                // `allowed_tools` array of same-mode entries.
-                Ok(Self::AllowedTools(
-                    chat_request::ChatCompletionAllowedToolsChoice {
-                        allowed_tools: vec![chat_request::ChatCompletionAllowedTools {
-                            mode: allowed.mode.into(),
-                            tools: allowed.tools.clone(),
-                        }],
+            responses::ToolChoiceParam::AllowedTools(allowed) => Ok(Self::AllowedTools(
+                chat_request::ChatCompletionAllowedToolsChoice {
+                    allowed_tools: chat_request::ChatCompletionAllowedTools {
+                        mode: allowed.mode.into(),
+                        tools: allowed.tools.clone(),
                     },
-                ))
-            }
+                },
+            )),
             // Hosted tool choices (apply_patch, shell, mcp, file_search, etc.)
             // have no Chat representation.
             other => Err(TranslationError::InvalidPayload(format!(

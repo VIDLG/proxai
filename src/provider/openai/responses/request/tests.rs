@@ -39,11 +39,15 @@ fn request_projection_uses_typed_parse_for_standard_response_fields() {
         ],
         "tool_choice": {
             "type": "function",
+            "parameters": null,
+            "strict": null,
             "name": "edit_file"
         },
         "tools": [
             {
                 "type": "function",
+                "parameters": null,
+                "strict": null,
                 "name": "edit_file"
             },
             {
@@ -73,8 +77,9 @@ fn request_projection_uses_typed_parse_for_standard_response_fields() {
     assert_eq!(
         projection.reasoning,
         Some(Reasoning {
-            effort: Some(ReasoningEffort::High),
-            summary: Some(ReasoningSummary::Auto),
+            effort: Some(ReasoningEffort::High).into(),
+            generate_summary: None.into(),
+            summary: Some(ReasoningSummary::Auto).into(),
         })
     );
     assert_eq!(projection.stream, Some(true));
@@ -95,8 +100,8 @@ fn request_projection_uses_typed_parse_for_standard_response_fields() {
     assert_eq!(
         projection.text,
         Some(ResponseTextParam {
-            format: TextResponseFormatConfiguration::Text,
-            verbosity: Some(Verbosity::Low),
+            format: Some(TextResponseFormatConfiguration::Text),
+            verbosity: Some(Verbosity::Low).into(),
         })
     );
 }
@@ -248,6 +253,8 @@ fn prepare_provider_request_uses_provider_payload_model_and_builds_summary() {
         "tools": [
             {
                 "type": "function",
+                "parameters": null,
+                "strict": null,
                 "name": "shell",
                 "description": "Run a command",
                 "parameters": { "type": "object", "properties": {} }

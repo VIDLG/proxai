@@ -13,6 +13,7 @@
 //! followed by `message_stop`. `ping` events may appear between semantic
 //! events as connection heartbeats.
 
+use crate::protocol::RequiredNullable;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 
@@ -25,30 +26,35 @@ use super::{
     message::{Message, MessageRole, MessageType},
 };
 
+/// @sdk(shape = "TextDelta")
 /// Text chunk emitted while streaming a `text` content block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextDelta {
     pub text: String,
 }
 
+/// @sdk(shape = "InputJSONDelta")
 /// Partial JSON fragment emitted while streaming a tool input object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputJsonDelta {
     pub partial_json: String,
 }
 
+/// @sdk(shape = "CitationsDelta")
 /// Citation emitted after text has streamed for a citeable content block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CitationsDelta {
     pub citation: TextCitation,
 }
 
+/// @sdk(shape = "ThinkingDelta")
 /// Thinking text chunk emitted when extended thinking is enabled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingDelta {
     pub thinking: String,
 }
 
+/// @sdk(shape = "SignatureDelta")
 /// Signature emitted after streamed thinking content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignatureDelta {
@@ -111,30 +117,22 @@ pub struct ContentBlockStopEvent {
 /// @sdk(shape = "Delta")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageDelta {
-    /// @sdk(required_nullable_accepts_missing)
-    pub container: Option<Container>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_details: Option<RefusalStopDetails>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_reason: Option<StopReason>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_sequence: Option<String>,
+    pub container: RequiredNullable<Container>,
+    pub stop_details: RequiredNullable<RefusalStopDetails>,
+    pub stop_reason: RequiredNullable<StopReason>,
+    pub stop_sequence: RequiredNullable<String>,
 }
 
+/// @sdk(shape = "MessageDeltaUsage")
 /// Token usage update emitted with a message-level stream delta.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MessageDeltaUsage {
-    /// @sdk(required_nullable_accepts_missing)
-    pub cache_creation_input_tokens: Option<u32>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub cache_read_input_tokens: Option<u32>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub input_tokens: Option<u32>,
+    pub cache_creation_input_tokens: RequiredNullable<u32>,
+    pub cache_read_input_tokens: RequiredNullable<u32>,
+    pub input_tokens: RequiredNullable<u32>,
     pub output_tokens: u32,
-    /// @sdk(required_nullable_accepts_missing)
-    pub output_tokens_details: Option<OutputTokensDetails>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub server_tool_use: Option<ServerToolUsage>,
+    pub output_tokens_details: RequiredNullable<OutputTokensDetails>,
+    pub server_tool_use: RequiredNullable<ServerToolUsage>,
 }
 
 /// SSE event carrying message-level delta and usage updates.
@@ -160,14 +158,14 @@ impl MessageStartEvent {
         Self {
             message: Message {
                 id: id.into(),
-                container: None,
+                container: None.into(),
                 content: Vec::new(),
                 model: model.into(),
                 role: MessageRole::Assistant,
                 type_: MessageType::Message,
-                stop_details: None,
-                stop_reason: None,
-                stop_sequence: None,
+                stop_details: None.into(),
+                stop_reason: None.into(),
+                stop_sequence: None.into(),
                 usage: Usage::default(),
             },
         }

@@ -19,8 +19,6 @@ pub enum ChatCompletionAudioVoice {
     Onyx,
     Sage,
     Shimmer,
-    #[serde(untagged)]
-    Other(String),
 }
 
 #[allow(
@@ -39,6 +37,7 @@ pub enum ChatCompletionAudioFormat {
     Pcm16,
 }
 
+/// OpenAPI schema: `#/components/schemas/CreateChatCompletionRequest/allOf/1/properties/audio`
 #[allow(
     dead_code,
     reason = "Retained for full request schema projection coverage."

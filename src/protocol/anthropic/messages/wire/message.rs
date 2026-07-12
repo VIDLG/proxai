@@ -5,6 +5,7 @@
     reason = "Anthropic Messages envelope schema mirrors upstream generated types."
 )]
 
+use crate::protocol::RequiredNullable;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -13,6 +14,7 @@ use super::{
     content::{ContentBlock, ContentBlockParam},
 };
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// Message.role: `'assistant'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -20,6 +22,7 @@ pub enum MessageRole {
     Assistant,
 }
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// MessageParam.role: `'user' | 'assistant' | 'system'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -31,6 +34,7 @@ pub enum MessageParamRole {
 
 // ── Leaf types ───────────────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "discriminator")
 /// Message.type: `'message'`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -38,6 +42,7 @@ pub enum MessageType {
     Message,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// MessageParam.content: `string | Array<ContentBlockParam>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -48,27 +53,25 @@ pub enum MessageParamContent {
 
 // ── Message types ────────────────────────────────────────────────────────
 
+/// @sdk(shape = "Message")
 /// 🎯 @use: message response.
 /// Used by: stream
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,
-    /// @sdk(required_nullable_accepts_missing)
-    pub container: Option<Container>,
+    pub container: RequiredNullable<Container>,
     pub content: Vec<ContentBlock>,
     pub model: String,
     pub role: MessageRole,
     #[serde(rename = "type")]
     pub type_: MessageType,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_details: Option<RefusalStopDetails>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_reason: Option<StopReason>,
-    /// @sdk(required_nullable_accepts_missing)
-    pub stop_sequence: Option<String>,
+    pub stop_details: RequiredNullable<RefusalStopDetails>,
+    pub stop_reason: RequiredNullable<StopReason>,
+    pub stop_sequence: RequiredNullable<String>,
     pub usage: Usage,
 }
 
+/// @sdk(shape = "MessageParam")
 /// 🎯 @use: request-side conversation message.
 /// Used by: request
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

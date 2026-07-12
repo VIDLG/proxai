@@ -11,14 +11,14 @@ use serde_json::Value;
 
 use crate::http_support::ByteStream;
 use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
-use crate::protocol::openai_responses::{Response, ResponseCreateParams};
+use crate::protocol::openai_responses::{CreateResponseRequest, Response};
 use crate::translation::streaming::translate_sse_stream;
 use crate::translation::{TranslationResult, json};
 
 pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let request =
         json::from_value::<MessageCreateParamsBase>(payload, "Anthropic Messages request payload")?;
-    let translated: ResponseCreateParams = request.try_into()?;
+    let translated: CreateResponseRequest = request.try_into()?;
     Ok(serde_json::to_value(translated)?)
 }
 

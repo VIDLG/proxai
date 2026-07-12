@@ -80,7 +80,7 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
     if let Some(value) = projection
         .reasoning
         .as_ref()
-        .and_then(|reasoning| reasoning.summary)
+        .and_then(|reasoning| reasoning.summary.as_non_null())
         && !matches!(value, ReasoningSummary::Auto)
     {
         parts.push(format!("rs:{value}"));
@@ -105,10 +105,17 @@ pub(crate) fn render_projection_compact(projection: &RequestProjection) -> Strin
                 .join(" ")
         ));
     }
-    if let Some(value) = projection.text.as_ref().and_then(|text| text.verbosity) {
+    if let Some(value) = projection
+        .text
+        .as_ref()
+        .and_then(|text| text.verbosity.as_non_null())
+    {
         parts.push(format!("tv:{value}"));
     }
-    if let Some(value) = projection.text.as_ref().map(|text| &text.format)
+    if let Some(value) = projection
+        .text
+        .as_ref()
+        .and_then(|text| text.format.as_ref())
         && !matches!(value, TextResponseFormatConfiguration::Text)
     {
         parts.push(format!("tf:{value}"));
@@ -138,7 +145,13 @@ fn render_tool_choice_compact(choice: &ToolChoiceParam) -> String {
     match choice {
         ToolChoiceParam::AllowedTools(_) => "tc:allowed_tools".to_string(),
         ToolChoiceParam::Function(tool) => format!("tc:function:{}", tool.name),
-        ToolChoiceParam::Mcp(tool) => format!("tc:mcp:{}", tool.name),
+        ToolChoiceParam::Mcp(tool) => format!(
+            "tc:mcp:{}",
+            tool.name
+                .as_non_null()
+                .map(String::as_str)
+                .unwrap_or(&tool.server_label)
+        ),
         ToolChoiceParam::Custom(tool) => format!("tc:custom:{}", tool.name),
         ToolChoiceParam::ApplyPatch => "tc:apply_patch".to_string(),
         ToolChoiceParam::Shell => "tc:shell".to_string(),

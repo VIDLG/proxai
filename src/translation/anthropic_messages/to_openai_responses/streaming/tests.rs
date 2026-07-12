@@ -30,15 +30,15 @@ async fn translates_anthropic_message_stream_to_openai_responses_sse() {
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":null}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\",\"citations\":null}}\n\n\
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n\
 event: content_block_delta\n\
 data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n\
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
 data: {\"type\":\"message_stop\"}\n\n",
         ))
@@ -66,7 +66,7 @@ async fn translates_thinking_stream_to_openai_responses_sse() {
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_minimax\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"MiniMax-M2.7-highspeed\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":null}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_minimax\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"MiniMax-M2.7-highspeed\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n\
 event: content_block_delta\n\
@@ -74,7 +74,7 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinki
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
 data: {\"type\":\"message_stop\"}\n\n",
         ))
@@ -106,7 +106,7 @@ async fn translates_provider_tool_stream_with_required_nullable_normalization() 
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_tool\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":null}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_tool\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"lookup\",\"input\":{}}}\n\n\
 event: content_block_delta\n\
@@ -116,7 +116,7 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":{\"web_search_requests\":1,\"web_fetch_requests\":0}}}\n\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":{\"web_search_requests\":1,\"web_fetch_requests\":0}}}\n\n\
 event: message_stop\n\
 data: {\"type\":\"message_stop\"}\n\n",
         ))
@@ -143,7 +143,7 @@ async fn translates_interrupted_thinking_then_tool_start_stream_to_parseable_eve
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mimo\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5-pro\",\"content\":[],\"usage\":{\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mimo\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5-pro\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n\
 event: content_block_delta\n\
@@ -188,13 +188,13 @@ async fn translates_max_tokens_stream_to_response_incomplete() {
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_incomplete\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":0,\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"server_tool_use\":null,\"service_tier\":null}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_incomplete\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"partial\",\"citations\":null}}\n\n\
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"partial\"}}\n\n\
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
 data: {\"type\":\"message_stop\"}\n\n",
         ))
@@ -220,13 +220,13 @@ async fn allocates_unique_item_ids_for_multiple_text_and_thinking_blocks() {
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_multi\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"usage\":{\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_multi\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"a\",\"citations\":null}}\n\n\
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"a\"}}\n\n\
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"b\",\"citations\":null}}\n\n\
+data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"b\"}}\n\n\
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":1}\n\n\
 event: content_block_start\n\
@@ -238,7 +238,7 @@ data: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":3}\n\n\
 event: message_delta\n\
-data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"input_tokens\":8,\"output_tokens\":4,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":null}}\n\n\
+data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":4}}\n\n\
 event: message_stop\n\
 data: {\"type\":\"message_stop\"}\n\n",
         ))
@@ -264,7 +264,7 @@ async fn rejects_unopened_content_block_delta() {
         .header(header::CONTENT_TYPE, "text/event-stream")
         .body(Body::from(
             "event: message_start\n\
-data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_bad\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"usage\":{\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_bad\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_delta\n\
 data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"oops\"}}\n\n",
         ))

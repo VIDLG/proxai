@@ -3,6 +3,7 @@
     reason = "Anthropic Messages tool-use block schema mirrors upstream generated types."
 )]
 
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::{AsRefStr, Display};
@@ -15,19 +16,23 @@ use super::search::SearchResultBlockParam;
 
 // ── Caller identity types ──────────────────────────────────────────────────
 
+/// @sdk(shape = "DirectCaller")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirectCaller;
 
+/// @sdk(shape = "ServerToolCaller")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerToolCaller {
     pub tool_id: String,
 }
 
+/// @sdk(shape = "ServerToolCaller20260120")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerToolCaller20260120 {
     pub tool_id: String,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 /// 🎯 @use: caller identity — discriminator for Direct/Server-tool callers.
 /// Used by: web, self
 /// ToolUseBlock.caller: `DirectCaller | ServerToolCaller | ServerToolCaller20260120`.
@@ -44,6 +49,7 @@ pub enum ToolCaller {
 
 // ── Server tool name ───────────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "field_literal_wrapper")
 /// ServerToolUseBlock.name:
 ///   `'web_search' | 'web_fetch' | 'code_execution' | 'bash_code_execution' | 'text_editor_code_execution' | 'tool_search_tool_regex' | 'tool_search_tool_bm25'`.
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -61,6 +67,7 @@ pub enum ServerToolName {
 
 // ── Response-side tool blocks ──────────────────────────────────────────────
 
+/// @sdk(shape = "ToolUseBlock")
 /// 🎯 @use: tool-use block — the model decided to call a tool.
 /// Used by: content
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,6 +78,7 @@ pub struct ToolUseBlock {
     pub name: String,
 }
 
+/// @sdk(shape = "ServerToolUseBlock")
 /// 🎯 @use: server-tool-use block — the server decided to call a built-in tool
 /// Used by: content
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +89,7 @@ pub struct ServerToolUseBlock {
     pub name: ServerToolName,
 }
 
+/// @sdk(shape = "ToolReferenceBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolReferenceBlock {
     pub tool_name: String,
@@ -90,6 +99,7 @@ pub struct ToolReferenceBlock {
 
 // ── Request-side tool block params ─────────────────────────────────────────
 
+/// @sdk(shape = "ToolUseBlockParam")
 /// 🎯 @use: tool-use param — forwards a previously received `ToolUseBlock`
 /// Used by: content
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,12 +107,17 @@ pub struct ToolUseBlockParam {
     pub id: String,
     pub input: Value,
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub caller: Option<ToolCaller>,
 }
 
+/// @sdk(shape = "ServerToolUseBlockParam")
 /// 🎯 @use: server-tool-use param — forwards a previously received
 /// Used by: content
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,12 +125,17 @@ pub struct ServerToolUseBlockParam {
     pub id: String,
     pub input: Value,
     pub name: ServerToolName,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub caller: Option<ToolCaller>,
 }
 
+/// @sdk(shape = "ToolReferenceBlockParam")
 /// 🎯 @use: tool-reference param — references a tool defined in an earlier
 /// Used by: content, search, self
 /// turn's `tools` array.
@@ -125,10 +145,11 @@ pub struct ServerToolUseBlockParam {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolReferenceBlockParam {
     pub tool_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
 }
 
+/// @sdk(proxai_internal = "union_wrapper")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ToolResultContentParam {
@@ -159,16 +180,25 @@ pub struct ToolResultBlock {
     pub is_error: Option<bool>,
 }
 
+/// @sdk(shape = "ToolResultBlockParam")
 /// 🎯 @use: tool-result param
 /// Used by: content
 ///
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolResultBlockParam {
     pub tool_use_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub content: Option<ToolResultContentParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub is_error: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
 }

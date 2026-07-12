@@ -8,8 +8,9 @@ use crate::protocol::anthropic::messages::{
     RedactedThinkingBlock, ResponseServiceTier, StopReason, ThinkingBlock, ToolUseBlock, Usage,
 };
 use crate::protocol::openai_responses::{
-    FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputStatus, OutputTokenDetails,
-    ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseUsage, ServiceTier, Status,
+    FunctionToolCall, IncompleteDetails, IncompleteDetailsReason, InputTokenDetails, OutputStatus,
+    OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseUsage,
+    ServiceTier, Status,
 };
 use crate::translation::TranslationResult;
 
@@ -22,7 +23,7 @@ pub(super) fn incomplete_details_from_stop_reason(
 ) -> Option<IncompleteDetails> {
     match stop_reason {
         Some(StopReason::MaxTokens) => Some(IncompleteDetails {
-            reason: "max_output_tokens".to_string(),
+            reason: Some(IncompleteDetailsReason::MaxOutputTokens),
         }),
         _ => None,
     }
@@ -33,13 +34,17 @@ impl From<&Usage> for ResponseUsage {
         Self {
             input_tokens: usage.input_tokens,
             input_tokens_details: InputTokenDetails {
-                cached_tokens: usage.cache_read_input_tokens.unwrap_or_default(),
+                cached_tokens: usage
+                    .cache_read_input_tokens
+                    .as_non_null()
+                    .copied()
+                    .unwrap_or_default(),
             },
             output_tokens: usage.output_tokens,
             output_tokens_details: OutputTokenDetails {
                 reasoning_tokens: usage
                     .output_tokens_details
-                    .as_ref()
+                    .as_non_null()
                     .map_or(0, |d| d.thinking_tokens),
             },
             total_tokens: usage.input_tokens.saturating_add(usage.output_tokens),
@@ -83,30 +88,32 @@ impl TryFrom<&ToolUseBlock> for FunctionToolCall {
     }
 }
 
-impl From<&ThinkingBlock> for ReasoningItem {
-    fn from(block: &ThinkingBlock) -> Self {
-        Self {
-            id: None,
-            summary: Vec::new(),
-            content: Some(vec![ReasoningItemContent::ReasoningText(
-                ReasoningTextContent {
-                    text: block.thinking.clone(),
-                },
-            )]),
-            encrypted_content: None,
-            status: Some(OutputStatus::Completed),
-        }
+pub(super) fn reasoning_item_from_thinking(
+    id: impl Into<String>,
+    block: &ThinkingBlock,
+) -> ReasoningItem {
+    ReasoningItem {
+        id: id.into(),
+        summary: Vec::new(),
+        content: Some(vec![ReasoningItemContent::ReasoningText(
+            ReasoningTextContent {
+                text: block.thinking.clone(),
+            },
+        )]),
+        encrypted_content: None.into(),
+        status: Some(OutputStatus::Completed),
     }
 }
 
-impl From<&RedactedThinkingBlock> for ReasoningItem {
-    fn from(block: &RedactedThinkingBlock) -> Self {
-        Self {
-            id: None,
-            summary: Vec::new(),
-            encrypted_content: Some(block.data.clone()),
-            content: None,
-            status: Some(OutputStatus::Completed),
-        }
+pub(super) fn reasoning_item_from_redacted_thinking(
+    id: impl Into<String>,
+    block: &RedactedThinkingBlock,
+) -> ReasoningItem {
+    ReasoningItem {
+        id: id.into(),
+        summary: Vec::new(),
+        encrypted_content: Some(block.data.clone()).into(),
+        content: None,
+        status: Some(OutputStatus::Completed),
     }
 }

@@ -81,7 +81,7 @@ impl TryFrom<anthropic::ToolUnion> for chat::ChatCompletionTools {
                         name: tool.name,
                         description: tool.description,
                         parameters: Some(serde_json::to_value(tool.input_schema)?),
-                        strict: tool.strict,
+                        strict: tool.strict.into(),
                     },
                 }))
             }

@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::{Message, MessageStreamEvent};
+use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_chat_completions::to_anthropic_messages::{
     translate_non_streaming_response, translate_streaming_response,
 };
@@ -23,19 +24,16 @@ fn translates_chat_response_to_anthropic_message() {
                 "role": "assistant",
                 "content": "hello",
                 "refusal": null,
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }],
         "usage": {
             "prompt_tokens": 3,
             "completion_tokens": 2,
             "total_tokens": 5,
-            "prompt_tokens_details": null,
-            "completion_tokens_details": null
         },
         "service_tier": null
     });
@@ -47,7 +45,14 @@ fn translates_chat_response_to_anthropic_message() {
 
     assert_eq!(message.id, "msg_chatcmpl_123");
     assert_eq!(message.model, "gpt-test");
-    assert_eq!(message.stop_reason.unwrap().to_string(), "end_turn");
+    assert_eq!(
+        message
+            .stop_reason
+            .as_non_null()
+            .expect("stop reason")
+            .to_string(),
+        "end_turn"
+    );
     assert_eq!(message.usage.input_tokens, 3);
     assert_eq!(message.usage.output_tokens, 2);
     assert_eq!(message.content.len(), 1);
@@ -55,11 +60,46 @@ fn translates_chat_response_to_anthropic_message() {
         message.content[0],
         serde_json::from_value(json!({
             "type": "text",
+            "citations": null,
             "text": "hello",
             "citations": null
         }))
         .unwrap()
     );
+}
+
+#[test]
+fn restores_anthropic_thinking_signature_from_zed_non_streaming_history() {
+    let reasoning_content = ContinuationEnvelope::from(vec![Continuation::Thinking {
+        thinking: "thinking".to_string(),
+        signature: "sig".to_string(),
+    }])
+    .append_to_chat_reasoning_content("thinking".to_string())
+    .unwrap();
+    let payload = json!({
+        "id": "chatcmpl_reasoning",
+        "object": "chat.completion",
+        "created": 1,
+        "model": "gpt-test",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "refusal": null,
+                "role": "assistant",
+                "content": "answer",
+                "reasoning_content": reasoning_content
+            },
+            "finish_reason": "stop",
+            "logprobs": null,
+            "logprobs": null
+        }],
+    });
+
+    let translated = translate_non_streaming_response(payload).unwrap();
+    assert_eq!(translated["content"][0]["type"], "thinking");
+    assert_eq!(translated["content"][0]["thinking"], "thinking");
+    assert_eq!(translated["content"][0]["signature"], "sig");
+    assert_eq!(translated["content"][1]["type"], "text");
 }
 
 #[test]
@@ -83,13 +123,12 @@ fn translates_chat_function_tool_call_to_anthropic_tool_use() {
                         "arguments": "{\"q\":\"zed\"}"
                     }
                 }],
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "tool_calls",
+            "logprobs": null,
             "logprobs": null
         }],
-        "usage": null,
         "service_tier": null
     });
 
@@ -120,14 +159,12 @@ fn translates_chat_refusal_to_anthropic_refusal_stop_reason() {
                 "role": "assistant",
                 "content": null,
                 "refusal": "I can't help with that.",
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }],
-        "usage": null,
         "service_tier": null
     });
 
@@ -146,6 +183,7 @@ fn translates_chat_refusal_to_anthropic_refusal_stop_reason() {
         translated["content"][0],
         json!({
             "type": "text",
+            "citations": null,
             "text": "I can't help with that.",
             "citations": null
         })
@@ -165,14 +203,12 @@ fn rejects_chat_response_with_both_content_and_refusal() {
                 "role": "assistant",
                 "content": "ordinary text",
                 "refusal": "I can't help with that.",
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }],
-        "usage": null,
         "service_tier": null
     });
 
@@ -198,14 +234,12 @@ fn rejects_chat_response_without_anthropic_representable_content() {
                 "role": "assistant",
                 "content": null,
                 "refusal": null,
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }],
-        "usage": null,
         "service_tier": null
     });
 
@@ -231,11 +265,10 @@ fn rejects_chat_response_with_multiple_choices() {
                     "role": "assistant",
                     "content": "first",
                     "refusal": null,
-                    "tool_calls": null,
-                    "annotations": null,
                     "audio": null
                 },
                 "finish_reason": "stop",
+                "logprobs": null,
                 "logprobs": null
             },
             {
@@ -244,15 +277,13 @@ fn rejects_chat_response_with_multiple_choices() {
                     "role": "assistant",
                     "content": "second",
                     "refusal": null,
-                    "tool_calls": null,
-                    "annotations": null,
                     "audio": null
                 },
                 "finish_reason": "stop",
+                "logprobs": null,
                 "logprobs": null
             }
         ],
-        "usage": null,
         "service_tier": null
     });
 
@@ -279,23 +310,19 @@ fn rejects_chat_response_non_assistant_role() {
                 "role": "user",
                 "content": "hello",
                 "refusal": null,
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": null
         }],
-        "usage": null,
         "service_tier": null
     });
 
     let error = translate_non_streaming_response(payload).expect_err("role should fail");
-    assert!(
-        error
-            .to_string()
-            .contains("role user cannot be represented")
-    );
+    let message = error.to_string();
+    assert!(message.contains("failed to deserialize"));
+    assert!(message.contains("unknown variant `user`, expected `assistant`"));
 }
 
 #[test]
@@ -311,14 +338,12 @@ fn rejects_chat_response_choice_logprobs() {
                 "role": "assistant",
                 "content": "hello",
                 "refusal": null,
-                "tool_calls": null,
-                "annotations": null,
                 "audio": null
             },
             "finish_reason": "stop",
+            "logprobs": null,
             "logprobs": {"content": [], "refusal": null}
         }],
-        "usage": null,
         "service_tier": null
     });
 
@@ -335,9 +360,9 @@ async fn translates_chat_stream_to_anthropic_messages_sse() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();
@@ -378,9 +403,9 @@ async fn translates_chat_refusal_stream_to_anthropic_refusal_stop_reason() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();
@@ -411,9 +436,9 @@ async fn delays_chat_stream_stop_until_usage_only_chunk() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":99,\"completion_tokens\":88,\"total_tokens\":187,\"prompt_tokens_details\":null,\"completion_tokens_details\":null},\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5,\"prompt_tokens_details\":null,\"completion_tokens_details\":null},\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":99,\"completion_tokens\":88,\"total_tokens\":187},\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();
@@ -437,7 +462,7 @@ async fn rejects_chat_stream_done_before_finish_reason() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_done_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_done_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();
@@ -458,7 +483,7 @@ async fn rejects_chat_stream_eof_before_finish_reason() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_eof_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_eof_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -478,7 +503,7 @@ async fn rejects_chat_stream_chunk_with_multiple_choices() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_multi_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null},{\"index\":1,\"delta\":{\"content\":\"second\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_multi_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null},{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -499,8 +524,8 @@ async fn rejects_chat_stream_that_changes_id() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_a\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_a\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -520,8 +545,8 @@ async fn rejects_chat_stream_that_changes_model() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -541,8 +566,8 @@ async fn rejects_chat_stream_that_switches_choice_index() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":1,\"delta\":{\"content\":\"second\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -562,9 +587,9 @@ async fn rejects_chat_stream_choice_after_message_stop() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5,\"prompt_tokens_details\":null,\"completion_tokens_details\":null},\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -586,8 +611,8 @@ async fn rejects_chat_stream_with_both_content_and_refusal() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ordinary\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ordinary\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -607,7 +632,7 @@ async fn rejects_chat_stream_without_anthropic_representable_content() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_empty\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_empty\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -627,9 +652,9 @@ async fn puts_first_chat_text_delta_in_content_block_start() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();
@@ -662,8 +687,8 @@ async fn rejects_chat_stream_usage_only_chunk_before_finish_reason() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5,\"prompt_tokens_details\":null,\"completion_tokens_details\":null},\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -683,7 +708,7 @@ async fn rejects_chat_stream_choice_logprobs() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_logprobs\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":{\"content\":[],\"refusal\":null}}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_logprobs\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":{\"content\":[],\"refusal\":null}}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -703,7 +728,7 @@ async fn rejects_chat_stream_non_assistant_delta_role() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_role\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"tool_calls\":null,\"role\":\"user\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
+            "data: {\"id\":\"chatcmpl_role\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"role\":\"user\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
         ))
         .unwrap();
 
@@ -715,7 +740,7 @@ async fn rejects_chat_stream_non_assistant_delta_role() {
     let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
 
     assert!(text.contains("stream translation error"));
-    assert!(text.contains("delta role user cannot be represented"));
+    assert!(text.contains("Chat stream emitted user role"));
 }
 
 #[tokio::test]
@@ -723,9 +748,9 @@ async fn translates_chat_stream_tool_arguments_as_input_json_delta() {
     let response = Response::builder()
         .header("content-type", "text/event-stream")
         .body(Body::from(
-            "data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\"\"}}],\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":null,\"type\":null,\"function\":{\"name\":null,\"arguments\":\":\\\"zed\\\"}\"}}],\"role\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":null,\"role\":null,\"refusal\":null},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+            "data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\"\"}}],\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\":\\\"zed\\\"}\"}}],\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: [DONE]\n\n",
         ))
         .unwrap();

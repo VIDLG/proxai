@@ -97,6 +97,8 @@ fn project_payload_supports_request_summary_extraction() {
         "tools": [
             {
                 "type": "function",
+                "parameters": null,
+                "strict": null,
                 "name": "edit_file"
             },
             {

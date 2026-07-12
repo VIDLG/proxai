@@ -17,22 +17,25 @@ pub(crate) fn infer_response_stop_kind(
     if response_has_tool_call(response) {
         return Some(ResponsesStopKind::ToolUse);
     }
-    if let Some(details) = response.incomplete_details.as_ref() {
-        return response_incomplete_stop_kind(details);
+    if let Some(details) = response.incomplete_details.as_non_null()
+        && let Some(kind) = response_incomplete_stop_kind(details)
+    {
+        return Some(kind);
     }
 
     match response.status {
-        responses::Status::Completed => Some(ResponsesStopKind::EndTurn),
-        responses::Status::Incomplete => {
+        Some(responses::Status::Completed) => Some(ResponsesStopKind::EndTurn),
+        Some(responses::Status::Incomplete) => {
             tracing::trace!(
                 reason = "Responses response is incomplete without incomplete_details.reason; treating as max_tokens"
             );
             Some(ResponsesStopKind::MaxTokens)
         }
-        responses::Status::Failed
-        | responses::Status::Cancelled
-        | responses::Status::Queued
-        | responses::Status::InProgress => None,
+        Some(responses::Status::Failed)
+        | Some(responses::Status::Cancelled)
+        | Some(responses::Status::Queued)
+        | Some(responses::Status::InProgress)
+        | None => None,
     }
 }
 
@@ -58,16 +61,11 @@ fn response_has_tool_call(response: &responses::Response) -> bool {
 fn response_incomplete_stop_kind(
     details: &responses::IncompleteDetails,
 ) -> Option<ResponsesStopKind> {
-    let reason = details.reason.as_str();
-    match reason {
-        "max_output_tokens" => Some(ResponsesStopKind::MaxTokens),
-        "content_filter" => Some(ResponsesStopKind::Refusal),
-        _ => {
-            tracing::trace!(
-                reason,
-                "Responses incomplete_details.reason has no target stop-reason representation"
-            );
-            None
+    match details.reason {
+        Some(responses::IncompleteDetailsReason::MaxOutputTokens) => {
+            Some(ResponsesStopKind::MaxTokens)
         }
+        Some(responses::IncompleteDetailsReason::ContentFilter) => Some(ResponsesStopKind::Refusal),
+        None => None,
     }
 }

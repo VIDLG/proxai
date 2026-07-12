@@ -1,283 +1,353 @@
+use crate::protocol::RequiredNullable;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::AsRefStr;
 
 use super::{OutputContent, OutputItem, Response, ResponseLogProb, SummaryPart};
 
+/// OpenAPI schema: `#/components/schemas/ResponseCreatedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCreatedEvent {
-    pub sequence_number: u64,
     pub response: Response,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseInProgressEvent {
-    pub sequence_number: u64,
     pub response: Response,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCompletedEvent {
-    pub sequence_number: u64,
     pub response: Response,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFailedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFailedEvent {
     pub sequence_number: u64,
     pub response: Response,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseIncompleteEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseIncompleteEvent {
-    pub sequence_number: u64,
     pub response: Response,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseOutputItemAddedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseOutputItemAddedEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
+
+    pub sequence_number: u64,
     pub item: OutputItem,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseOutputItemDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseOutputItemDoneEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
+
+    pub sequence_number: u64,
     pub item: OutputItem,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseContentPartAddedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseContentPartAddedEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub part: OutputContent,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseContentPartDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseContentPartDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
+
+    pub sequence_number: u64,
     pub part: OutputContent,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseTextDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseTextDeltaEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub delta: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub logprobs: Option<Vec<ResponseLogProb>>,
+
+    pub sequence_number: u64,
+    pub logprobs: Vec<ResponseLogProb>,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseTextDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseTextDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub text: String,
-    pub logprobs: Option<Vec<ResponseLogProb>>,
+
+    pub sequence_number: u64,
+    pub logprobs: Vec<ResponseLogProb>,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseRefusalDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseRefusalDeltaEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub delta: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseRefusalDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseRefusalDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub refusal: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFunctionCallArgumentsDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFunctionCallArgumentsDeltaEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
+
+    pub sequence_number: u64,
     pub delta: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFunctionCallArgumentsDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFunctionCallArgumentsDoneEvent {
-    pub name: Option<String>,
-    pub sequence_number: u64,
     pub item_id: String,
+
+    pub name: String,
     pub output_index: u32,
+    pub sequence_number: u64,
     pub arguments: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFileSearchCallInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFileSearchCallInProgressEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFileSearchCallSearchingEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFileSearchCallSearchingEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseFileSearchCallCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseFileSearchCallCompletedEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseWebSearchCallInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseWebSearchCallInProgressEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseWebSearchCallSearchingEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseWebSearchCallSearchingEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseWebSearchCallCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseWebSearchCallCompletedEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningSummaryPartAddedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningSummaryPartAddedEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub summary_index: u32,
+
+    pub sequence_number: u64,
     pub part: SummaryPart,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningSummaryPartDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningSummaryPartDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub summary_index: u32,
+
+    pub sequence_number: u64,
     pub part: SummaryPart,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningSummaryTextDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningSummaryTextDeltaEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub summary_index: u32,
     pub delta: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningSummaryTextDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningSummaryTextDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub summary_index: u32,
     pub text: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningTextDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningTextDeltaEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub delta: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseReasoningTextDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningTextDoneEvent {
-    pub sequence_number: u64,
     pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub text: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseImageGenCallCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseImageGenCallCompletedEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
+
+    pub sequence_number: u64,
     pub item_id: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseImageGenCallGeneratingEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseImageGenCallGeneratingEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseImageGenCallInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseImageGenCallInProgressEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseImageGenCallPartialImageEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseImageGenCallPartialImageEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
     pub partial_image_index: u32,
     pub partial_image_b64: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPCallArgumentsDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPCallArgumentsDeltaEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
     pub delta: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPCallArgumentsDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPCallArgumentsDoneEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
     pub arguments: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPCallCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPCallCompletedEvent {
-    pub sequence_number: u64,
-    pub output_index: u32,
     pub item_id: String,
+    pub output_index: u32,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPCallFailedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPCallFailedEvent {
-    pub sequence_number: u64,
-    pub output_index: u32,
     pub item_id: String,
+    pub output_index: u32,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPCallInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPCallInProgressEvent {
     pub sequence_number: u64,
@@ -285,80 +355,101 @@ pub struct ResponseMCPCallInProgressEvent {
     pub item_id: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPListToolsCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPListToolsCompletedEvent {
-    pub sequence_number: u64,
-    pub output_index: u32,
     pub item_id: String,
+    pub output_index: u32,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPListToolsFailedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPListToolsFailedEvent {
-    pub sequence_number: u64,
-    pub output_index: u32,
     pub item_id: String,
+    pub output_index: u32,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseMCPListToolsInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseMCPListToolsInProgressEvent {
-    pub sequence_number: u64,
-    pub output_index: u32,
     pub item_id: String,
+    pub output_index: u32,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCodeInterpreterCallInProgressEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCodeInterpreterCallInProgressEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCodeInterpreterCallInterpretingEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCodeInterpreterCallInterpretingEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCodeInterpreterCallCompletedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCodeInterpreterCallCompletedEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCodeInterpreterCallCodeDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCodeInterpreterCallCodeDeltaEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
     pub delta: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCodeInterpreterCallCodeDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCodeInterpreterCallCodeDoneEvent {
-    pub sequence_number: u64,
     pub output_index: u32,
     pub item_id: String,
     pub code: String,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseOutputTextAnnotationAddedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseOutputTextAnnotationAddedEvent {
-    pub sequence_number: u64,
+    pub item_id: String,
     pub output_index: u32,
     pub content_index: u32,
     pub annotation_index: u32,
-    pub item_id: String,
+
+    pub sequence_number: u64,
     pub annotation: Value,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseQueuedEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseQueuedEvent {
-    pub sequence_number: u64,
     pub response: Response,
+
+    pub sequence_number: u64,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCustomToolCallInputDeltaEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCustomToolCallInputDeltaEvent {
     pub sequence_number: u64,
@@ -367,6 +458,7 @@ pub struct ResponseCustomToolCallInputDeltaEvent {
     pub delta: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseCustomToolCallInputDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseCustomToolCallInputDoneEvent {
     pub sequence_number: u64,
@@ -375,12 +467,40 @@ pub struct ResponseCustomToolCallInputDoneEvent {
     pub input: String,
 }
 
+/// OpenAPI schema: `#/components/schemas/ResponseAudioDeltaEvent`
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResponseAudioDeltaEvent {
+    pub sequence_number: u64,
+    pub delta: String,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseAudioDoneEvent`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResponseAudioDoneEvent {
+    pub sequence_number: u64,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseAudioTranscriptDeltaEvent`
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResponseAudioTranscriptDeltaEvent {
+    pub delta: String,
+    pub sequence_number: u64,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseAudioTranscriptDoneEvent`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResponseAudioTranscriptDoneEvent {
+    pub sequence_number: u64,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseErrorEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseErrorEvent {
-    pub sequence_number: u64,
-    pub code: Option<String>,
+    pub code: RequiredNullable<String>,
     pub message: String,
-    pub param: Option<String>,
+    pub param: RequiredNullable<String>,
+
+    pub sequence_number: u64,
 }
 
 #[allow(
@@ -534,6 +654,18 @@ pub enum ResponseStreamEvent {
     #[serde(rename = "response.custom_tool_call_input.done")]
     #[strum(serialize = "response.custom_tool_call_input.done")]
     ResponseCustomToolCallInputDone(ResponseCustomToolCallInputDoneEvent),
+    #[serde(rename = "response.audio.delta")]
+    #[strum(serialize = "response.audio.delta")]
+    ResponseAudioDelta(ResponseAudioDeltaEvent),
+    #[serde(rename = "response.audio.done")]
+    #[strum(serialize = "response.audio.done")]
+    ResponseAudioDone(ResponseAudioDoneEvent),
+    #[serde(rename = "response.audio.transcript.delta")]
+    #[strum(serialize = "response.audio.transcript.delta")]
+    ResponseAudioTranscriptDelta(ResponseAudioTranscriptDeltaEvent),
+    #[serde(rename = "response.audio.transcript.done")]
+    #[strum(serialize = "response.audio.transcript.done")]
+    ResponseAudioTranscriptDone(ResponseAudioTranscriptDoneEvent),
     #[serde(rename = "error")]
     #[strum(serialize = "error")]
     ResponseError(ResponseErrorEvent),
@@ -590,6 +722,10 @@ impl ResponseStreamEvent {
             Self::ResponseQueued(event) => event.sequence_number,
             Self::ResponseCustomToolCallInputDelta(event) => event.sequence_number,
             Self::ResponseCustomToolCallInputDone(event) => event.sequence_number,
+            Self::ResponseAudioDelta(event) => event.sequence_number,
+            Self::ResponseAudioDone(event) => event.sequence_number,
+            Self::ResponseAudioTranscriptDelta(event) => event.sequence_number,
+            Self::ResponseAudioTranscriptDone(event) => event.sequence_number,
             Self::ResponseError(event) => event.sequence_number,
         }
     }
@@ -597,6 +733,7 @@ impl ResponseStreamEvent {
 
 // ── Stream request options ────────────────────────────────────
 
+/// OpenAPI schema: `#/components/schemas/ResponseStreamOptions`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ResponseStreamOptions {
     #[serde(skip_serializing_if = "Option::is_none")]

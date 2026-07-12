@@ -3,6 +3,8 @@
     reason = "Anthropic Messages content block aggregation enums and content-only types."
 )]
 
+use crate::protocol::OptionalNullable;
+use crate::protocol::RequiredNullable;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 
@@ -53,54 +55,62 @@ pub enum ContainerUploadType {
     ContainerUpload,
 }
 
+/// @sdk(shape = "TextBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextBlock {
-    /// @sdk(required_nullable_accepts_missing)
-    pub citations: Option<Vec<TextCitation>>,
+    pub citations: RequiredNullable<Vec<TextCitation>>,
     pub text: String,
 }
 
+/// @sdk(shape = "ThinkingBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingBlock {
     pub signature: String,
     pub thinking: String,
 }
 
+/// @sdk(shape = "RedactedThinkingBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RedactedThinkingBlock {
     pub data: String,
 }
 
+/// @sdk(shape = "ContainerUploadBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContainerUploadBlock {
     pub file_id: String,
 }
 
+/// @sdk(shape = "ContainerUploadBlockParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContainerUploadBlockParam {
     pub file_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
 }
 
+/// @sdk(shape = "MidConversationSystemBlockParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MidConversationSystemBlockParam {
     pub content: Vec<TextBlockParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_control: Option<CacheControlEphemeral>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub cache_control: OptionalNullable<CacheControlEphemeral>,
 }
 
+/// @sdk(shape = "ThinkingBlockParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThinkingBlockParam {
     pub signature: String,
     pub thinking: String,
 }
 
+/// @sdk(shape = "RedactedThinkingBlockParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RedactedThinkingBlockParam {
     pub data: String,
 }
 
+/// @sdk(shape = "ContentBlock")
 /// 🎯 @use: response-side content block union.
 /// Used by: message, stream
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]
@@ -122,6 +132,7 @@ pub enum ContentBlock {
     ContainerUpload(ContainerUploadBlock),
 }
 
+/// @sdk(shape = "ContentBlockParam")
 /// 🎯 @use: request-side content block union.
 /// Used by: message
 #[derive(Debug, Clone, PartialEq, Eq, AsRefStr, Serialize, Deserialize)]

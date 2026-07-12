@@ -1,3 +1,5 @@
+use crate::protocol::RequiredNullable;
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
@@ -23,6 +25,7 @@ pub enum ComputerEnvironment {
 // Tool Definition Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ComputerUsePreviewTool`
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ComputerUsePreviewTool {
     pub environment: ComputerEnvironment,
@@ -30,6 +33,7 @@ pub struct ComputerUsePreviewTool {
     pub display_height: u32,
 }
 
+/// OpenAPI schema: `#/components/schemas/ComputerTool`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ComputerTool {}
 
@@ -37,6 +41,7 @@ pub struct ComputerTool {}
 // Output / Resource Supporting Types
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/CoordParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CoordParam {
     pub x: i32,
@@ -54,52 +59,60 @@ pub enum ClickButtonType {
     Forward,
 }
 
+/// OpenAPI schema: `#/components/schemas/ClickParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClickParam {
     pub button: ClickButtonType,
     pub x: i32,
     pub y: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub keys: OptionalNullable<Vec<String>>,
 }
 
+/// OpenAPI schema: `#/components/schemas/DoubleClickAction`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DoubleClickAction {
     pub x: i32,
     pub y: i32,
-    pub keys: Option<Vec<String>>,
+    pub keys: RequiredNullable<Vec<String>>,
 }
 
+/// OpenAPI schema: `#/components/schemas/DragParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DragParam {
     pub path: Vec<CoordParam>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub keys: OptionalNullable<Vec<String>>,
 }
 
+/// OpenAPI schema: `#/components/schemas/KeyPressAction`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyPressAction {
     pub keys: Vec<String>,
 }
 
+/// OpenAPI schema: `#/components/schemas/MoveParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MoveParam {
     pub x: i32,
     pub y: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keys: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub keys: OptionalNullable<Vec<String>>,
 }
 
+/// OpenAPI schema: `#/components/schemas/ScrollParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScrollParam {
-    pub scroll_x: i32,
-    pub scroll_y: i32,
     pub x: i32,
     pub y: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keys: Option<Vec<String>>,
+
+    pub scroll_x: i32,
+    pub scroll_y: i32,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub keys: OptionalNullable<Vec<String>>,
 }
 
+/// OpenAPI schema: `#/components/schemas/TypeParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypeParam {
     pub text: String,
@@ -119,20 +132,20 @@ pub enum ComputerAction {
     Wait,
 }
 
+/// OpenAPI schema: `#/components/schemas/ComputerCallSafetyCheckParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerCallSafetyCheckParam {
     pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub code: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub code: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub message: OptionalNullable<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerCallOutputStatus {
-    InProgress,
     Completed,
     Incomplete,
     Failed,
@@ -145,55 +158,86 @@ pub enum ComputerScreenshotImageType {
     ComputerScreenshot,
 }
 
+/// OpenAPI schema: `#/components/schemas/ComputerScreenshotImage`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerScreenshotImage {
     pub r#type: ComputerScreenshotImageType,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub file_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub image_url: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub file_id: Option<String>,
 }
 
 // ============================================================
 // Input / Context Item Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ComputerCallOutputItemParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerCallOutputItemParam {
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub id: OptionalNullable<String>,
+
     pub call_id: String,
     pub output: ComputerScreenshotImage,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub acknowledged_safety_checks: Option<Vec<ComputerCallSafetyCheckParam>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<OutputStatus>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub acknowledged_safety_checks: OptionalNullable<Vec<ComputerCallSafetyCheckParam>>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub status: OptionalNullable<OutputStatus>,
 }
 
 // ============================================================
 // Output / Resource Shapes
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/ComputerToolCall`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerToolCall {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub action: Option<ComputerAction>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actions: Option<Vec<ComputerAction>>,
-    pub call_id: String,
     pub id: String,
+    pub call_id: String,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub action: Option<ComputerAction>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub actions: Option<Vec<ComputerAction>>,
     pub pending_safety_checks: Vec<ComputerCallSafetyCheckParam>,
     pub status: OutputStatus,
 }
 
+/// OpenAPI schema: `#/components/schemas/ComputerToolCallOutputResource`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputerToolCallOutputResource {
-    pub call_id: String,
-    pub output: ComputerScreenshotImage,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub acknowledged_safety_checks: Option<Vec<ComputerCallSafetyCheckParam>>,
     pub id: String,
+
+    pub call_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub acknowledged_safety_checks: Option<Vec<ComputerCallSafetyCheckParam>>,
+    pub output: ComputerScreenshotImage,
     pub status: ComputerCallOutputStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub created_by: Option<String>,
 }

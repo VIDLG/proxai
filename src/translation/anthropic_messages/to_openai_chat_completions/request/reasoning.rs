@@ -6,7 +6,10 @@ pub(super) fn request_reasoning_effort(
     output_config: Option<&anthropic::OutputConfig>,
     thinking: Option<&anthropic::ThinkingConfigParam>,
 ) -> Option<chat::ReasoningEffort> {
-    let output_reasoning_effort = output_config.and_then(|config| config.effort.map(Into::into));
+    let output_reasoning_effort = output_config
+        .and_then(|config| config.effort.as_non_null())
+        .copied()
+        .map(Into::into);
     let has_output_reasoning_effort = output_reasoning_effort.is_some();
     let reasoning_effort = output_reasoning_effort.or_else(|| {
         thinking_effort(thinking).map(|(budget_tokens, effort)| {

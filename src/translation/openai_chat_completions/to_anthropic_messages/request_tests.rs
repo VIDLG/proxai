@@ -436,10 +436,10 @@ fn rejects_chat_allowed_tools_choice_for_anthropic_messages() {
         "messages": [{"role": "user", "content": "hello"}],
         "tool_choice": {
             "type": "allowed_tools",
-            "allowed_tools": [{
+            "allowed_tools": {
                 "mode": "auto",
                 "tools": [{"type": "function", "function": {"name": "lookup"}}]
-            }]
+            }
         }
     });
 
@@ -470,7 +470,7 @@ fn rejects_chat_custom_tool_calls_for_anthropic_messages() {
             "tool_calls": [{
                 "id": "call_1",
                 "type": "custom",
-                "custom_tool": {"name": "shell", "input": "pwd"}
+                "custom": {"name": "shell", "input": "pwd"}
             }]
         }]
     });

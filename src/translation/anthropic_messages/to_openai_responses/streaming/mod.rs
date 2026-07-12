@@ -61,7 +61,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                         self.lifecycle.streaming_state_mut()?.register_text_block(
                             index,
                             item_id.clone(),
-                            block.citations.clone(),
+                            block.citations.into_non_null(),
                         )?;
                         let sequence_number = self.next_sequence_number();
                         chunks.push(output_item_added(
@@ -252,7 +252,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 chunks.push(done_event);
             }
             MessageStreamEvent::MessageDelta(event) => {
-                let stop_reason = event.delta.stop_reason.ok_or_else(|| {
+                let stop_reason = event.delta.stop_reason.into_non_null().ok_or_else(|| {
                     StreamTranslationError::Semantic(
                         "Anthropic stream emitted message_delta without stop_reason".to_string(),
                     )
@@ -268,15 +268,17 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                 // MessageDelta carries an updated usage snapshot for the whole
                 // message. Some fields are nullable in the wire model and may
                 // be omitted; keep the last non-null value we already had.
-                if let Some(input_tokens) = event.usage.input_tokens {
+                if let Some(input_tokens) = event.usage.input_tokens.into_non_null() {
                     state.usage.input_tokens = input_tokens;
                 }
                 state.usage.output_tokens = event.usage.output_tokens;
-                if let Some(cache_read) = event.usage.cache_read_input_tokens {
-                    state.usage.cache_read_input_tokens = Some(cache_read);
+                if let Some(cache_read) = event.usage.cache_read_input_tokens.into_non_null() {
+                    state.usage.cache_read_input_tokens = Some(cache_read).into();
                 }
-                if let Some(cache_creation) = event.usage.cache_creation_input_tokens {
-                    state.usage.cache_creation_input_tokens = Some(cache_creation);
+                if let Some(cache_creation) =
+                    event.usage.cache_creation_input_tokens.into_non_null()
+                {
+                    state.usage.cache_creation_input_tokens = Some(cache_creation).into();
                 }
                 state.usage.output_tokens_details = event.usage.output_tokens_details;
                 state.stop_reason = Some(stop_reason);

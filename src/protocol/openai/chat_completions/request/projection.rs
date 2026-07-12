@@ -7,8 +7,8 @@ use super::super::ServiceTier;
 use super::super::wire::CreateChatCompletionRequest;
 use super::{
     ChatCompletionAudio, ChatCompletionStreamOptions, ChatCompletionToolChoiceOption,
-    ChatCompletionTools, PredictionContent, ReasoningEffort, ResponseFormat, ResponseModalities,
-    StopConfiguration, Verbosity, WebSearchOptions,
+    ChatCompletionTools, PredictionContent, PromptCacheRetention, ReasoningEffort, ResponseFormat,
+    ResponseModalities, StopConfiguration, Verbosity, WebSearchOptions,
 };
 
 /// Protocol-focused OpenAI Chat Completions request projection.
@@ -39,7 +39,8 @@ pub struct RequestProjection {
     pub max_tokens: Option<u32>,
     pub n: Option<u8>,
     pub prediction: Option<PredictionContent>,
-    // Deprecated upstream: `seed`.
+    pub prompt_cache_retention: Option<PromptCacheRetention>,
+    pub seed: Option<i64>,
     pub stream_options: Option<ChatCompletionStreamOptions>,
     pub service_tier: Option<ServiceTier>,
     pub temperature: Option<f32>,
@@ -47,9 +48,9 @@ pub struct RequestProjection {
     pub tools: Option<Vec<ChatCompletionTools>>,
     pub tool_choice: Option<ChatCompletionToolChoiceOption>,
     pub parallel_tool_calls: Option<bool>,
-    // Deprecated upstream: `user`.
     pub safety_identifier: Option<String>,
     pub prompt_cache_key: Option<String>,
+    pub user: Option<String>,
     // Deprecated upstream: `function_call`, `functions`.
     pub metadata: Option<HashMap<String, String>>,
 }
@@ -63,40 +64,43 @@ impl RequestProjection {
 impl From<CreateChatCompletionRequest> for RequestProjection {
     fn from(request: CreateChatCompletionRequest) -> Self {
         #[allow(deprecated)]
-        let max_tokens = request.max_tokens;
+        let max_tokens = request.max_tokens.into_non_null();
         let prompt_cache_key = request
             .prompt_cache_key
             .filter(|value| !value.trim().is_empty());
         Self {
             model: Some(request.model),
-            modalities: request.modalities,
-            verbosity: request.verbosity,
-            reasoning_effort: request.reasoning_effort,
-            max_completion_tokens: request.max_completion_tokens,
-            frequency_penalty: request.frequency_penalty,
-            presence_penalty: request.presence_penalty,
+            modalities: request.modalities.into_non_null(),
+            verbosity: request.verbosity.into_non_null(),
+            reasoning_effort: request.reasoning_effort.into_non_null(),
+            max_completion_tokens: request.max_completion_tokens.into_non_null(),
+            frequency_penalty: request.frequency_penalty.into_non_null(),
+            presence_penalty: request.presence_penalty.into_non_null(),
             web_search_options: request.web_search_options,
-            top_logprobs: request.top_logprobs,
+            top_logprobs: request.top_logprobs.into_non_null(),
             response_format: request.response_format,
-            audio: request.audio,
-            store: request.store,
-            stream: request.stream,
-            stop: request.stop,
-            logit_bias: request.logit_bias,
-            logprobs: request.logprobs,
+            audio: request.audio.into_non_null(),
+            store: request.store.into_non_null(),
+            stream: request.stream.into_non_null(),
+            stop: request.stop.into_non_null(),
+            logit_bias: request.logit_bias.into_non_null(),
+            logprobs: request.logprobs.into_non_null(),
             max_tokens,
-            n: request.n,
-            prediction: request.prediction,
-            stream_options: request.stream_options,
-            service_tier: request.service_tier,
-            temperature: request.temperature,
-            top_p: request.top_p,
+            n: request.n.into_non_null(),
+            prediction: request.prediction.into_non_null(),
+            prompt_cache_retention: request.prompt_cache_retention.into_non_null(),
+            seed: request.seed.into_non_null(),
+            stream_options: request.stream_options.into_non_null(),
+            service_tier: request.service_tier.into_non_null(),
+            temperature: request.temperature.into_non_null(),
+            top_p: request.top_p.into_non_null(),
             tools: request.tools,
             tool_choice: request.tool_choice,
             parallel_tool_calls: request.parallel_tool_calls,
             safety_identifier: request.safety_identifier,
             prompt_cache_key,
-            metadata: request.metadata,
+            user: request.user,
+            metadata: request.metadata.into_non_null(),
         }
     }
 }

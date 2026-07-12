@@ -19,6 +19,7 @@ fn state_extracts_stream_message_events() {
         json!({
             "type": "message_start",
             "message": {
+                "refusal": null,
                 "id": "msg_stream",
                 "type": "message",
                 "role": "assistant",
@@ -29,6 +30,7 @@ fn state_extracts_stream_message_events() {
                 "stop_details": null,
                 "container": null,
                 "usage": {
+                    "output_tokens_details": null,
                     "input_tokens": 8,
                     "output_tokens": 0,
                     "cache_creation": null,
@@ -54,6 +56,10 @@ fn state_extracts_stream_message_events() {
                 "container": null
             },
             "usage": {
+                "cache_creation": null,
+                "inference_geo": null,
+                "output_tokens_details": null,
+                "service_tier": null,
                 "input_tokens": 8,
                 "output_tokens": 2,
                 "cache_creation_input_tokens": null,
@@ -84,6 +90,7 @@ fn state_normalizes_provider_stream_event_before_observing() {
         json!({
             "type": "message_start",
             "message": {
+                "refusal": null,
                 "id": "msg_stream",
                 "type": "message",
                 "role": "assistant",
@@ -92,6 +99,13 @@ fn state_normalizes_provider_stream_event_before_observing() {
                 "stop_reason": null,
                 "stop_sequence": null,
                 "usage": {
+                    "cache_creation": null,
+                    "cache_creation_input_tokens": null,
+                    "cache_read_input_tokens": null,
+                    "inference_geo": null,
+                    "output_tokens_details": null,
+                    "server_tool_use": null,
+                    "service_tier": null,
                     "input_tokens": 8,
                     "output_tokens": 0
                 }
@@ -106,6 +120,12 @@ fn state_normalizes_provider_stream_event_before_observing() {
             "type": "message_delta",
             "delta": {"stop_reason": "tool_use", "stop_sequence": null},
             "usage": {
+                "cache_creation": null,
+                "cache_creation_input_tokens": null,
+                "cache_read_input_tokens": null,
+                "inference_geo": null,
+                "output_tokens_details": null,
+                "service_tier": null,
                 "output_tokens": 2,
                 "server_tool_use": {"web_search_requests": 1, "web_fetch_requests": 0}
             }

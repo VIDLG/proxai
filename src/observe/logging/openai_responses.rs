@@ -78,8 +78,8 @@ impl ResponseFields {
                 .unwrap_or_default(),
             reasoning_effort: snapshot
                 .and_then(|value| value.reasoning.as_ref())
-                .and_then(|value| value.effort)
-                .map(|value| value.to_string())
+                .and_then(|value| value.effort.as_non_null())
+                .map(ToString::to_string)
                 .unwrap_or_default(),
             status: snapshot
                 .map(|value| value.status.to_string())
@@ -90,7 +90,8 @@ impl ResponseFields {
                 .unwrap_or_default(),
             incomplete_reason: snapshot
                 .and_then(|value| value.incomplete_details.as_ref())
-                .map(|value| value.reason.clone())
+                .and_then(|value| value.reason)
+                .map(|reason| reason.to_string())
                 .unwrap_or_default(),
             error_code: error.0,
             error_message: error.1,

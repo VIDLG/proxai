@@ -13,50 +13,60 @@ use crate::translation::anthropic_messages::outbound::{
 };
 use crate::translation::{TranslationError, TranslationResult};
 
-impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParamsBase {
+impl TryFrom<&responses::CreateResponseRequest> for anthropic::MessageCreateParamsBase {
     type Error = TranslationError;
 
-    fn try_from(request: &responses::ResponseCreateParams) -> TranslationResult<Self> {
+    fn try_from(request: &responses::CreateResponseRequest) -> TranslationResult<Self> {
         let model = request.model.clone().ok_or_else(|| {
             TranslationError::InvalidPayload(
                 "openai_responses -> anthropic_messages request requires `model`".to_string(),
             )
         })?;
-        let (system, messages) =
-            translate_messages(request.instructions.as_deref(), request.input.as_ref())?;
+        let (system, messages) = translate_messages(
+            request.instructions.as_non_null().map(String::as_str),
+            request.input.as_ref(),
+        )?;
 
         Ok(Self {
             max_tokens: request
                 .max_output_tokens
+                .as_non_null()
+                .copied()
                 .unwrap_or(COMPATIBILITY_MAX_TOKENS_FALLBACK),
             messages,
             model,
-            cache_control: None,
-            container: None,
-            inference_geo: None,
-            metadata: request.metadata.as_ref().and_then(|metadata| {
+            cache_control: None.into(),
+            container: None.into(),
+            inference_geo: None.into(),
+            metadata: request.metadata.as_non_null().and_then(|metadata| {
                 metadata.get("user_id").map(|user_id| anthropic::Metadata {
-                    user_id: Some(user_id.clone()),
+                    user_id: Some(user_id.clone()).into(),
                 })
             }),
             output_config: request
                 .reasoning
-                .as_ref()
-                .and_then(|reasoning| reasoning.effort)
+                .as_non_null()
+                .and_then(|reasoning| reasoning.effort.as_non_null())
+                .copied()
                 .map(|effort| effort.try_into().map(output_config))
                 .transpose()?,
             service_tier: None,
             stop_sequences: None,
-            stream: request.stream,
+            stream: request.stream.as_non_null().copied(),
             system,
-            temperature: request.temperature.and_then(json_number_from_f32),
+            temperature: request
+                .temperature
+                .as_non_null()
+                .copied()
+                .and_then(json_number_from_f32),
             thinking: request
                 .reasoning
-                .as_ref()
-                .and_then(|reasoning| reasoning.summary)
+                .as_non_null()
+                .and_then(|reasoning| reasoning.summary.as_non_null())
+                .copied()
                 .map(|summary| {
                     anthropic::ThinkingConfigParam::Adaptive(anthropic::ThinkingConfigAdaptive {
-                        display: Some(summary.into()),
+                        display: Some(anthropic::ThinkingDisplay::from(summary)).into(),
                     })
                 }),
             tool_choice: request
@@ -65,7 +75,8 @@ impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParam
                 .map(|choice| {
                     translate_tool_choice(
                         choice,
-                        (request.parallel_tool_calls == Some(false)).then_some(true),
+                        (request.parallel_tool_calls.as_non_null().copied() == Some(false))
+                            .then_some(true),
                     )
                 })
                 .transpose()?,
@@ -81,7 +92,11 @@ impl TryFrom<&responses::ResponseCreateParams> for anthropic::MessageCreateParam
                 .transpose()?
                 .filter(|tools| !tools.is_empty()),
             top_k: None,
-            top_p: request.top_p.and_then(json_number_from_f32),
+            top_p: request
+                .top_p
+                .as_non_null()
+                .copied()
+                .and_then(json_number_from_f32),
         })
     }
 }

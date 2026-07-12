@@ -90,12 +90,14 @@ struct Message {
     model: String,
     role: Role,
     type: MessageType,
-    stop_reason: Option<StopReason>,
-    stop_sequence: Option<String>,
+    stop_reason: RequiredNullable<StopReason>,
+    stop_sequence: RequiredNullable<String>,
     usage: Usage,
     ...
 }
 ```
+
+Required-nullable 响应字段使用 `RequiredNullable<T>`，并严格拒绝字段缺失。只有已测量到的 provider 兼容性偏差，才能在 protocol 反序列化之前由窄范围 normalization 补成显式 `null`；wire carrier 本身不会因此放宽。
 
 响应内容是 `ContentBlock`：
 

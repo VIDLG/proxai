@@ -8,6 +8,7 @@ use crate::protocol::openai::chat_completions::{
 use crate::protocol::openai::responses::{
     CustomToolCall, FunctionToolCall, ImageDetail as ResponsesImageDetail, ResponseUsage,
 };
+use crate::translation::{TranslationError, TranslationResult};
 
 /// Normalize a Responses id into a Chat-shaped id.
 ///
@@ -21,13 +22,18 @@ pub(super) fn chat_id(response_id: &str) -> String {
     }
 }
 
-impl From<ResponsesImageDetail> for ChatImageDetail {
-    fn from(value: ResponsesImageDetail) -> Self {
+impl TryFrom<ResponsesImageDetail> for ChatImageDetail {
+    type Error = TranslationError;
+
+    fn try_from(value: ResponsesImageDetail) -> TranslationResult<Self> {
         match value {
-            ResponsesImageDetail::Auto => Self::Auto,
-            ResponsesImageDetail::Low => Self::Low,
-            ResponsesImageDetail::High => Self::High,
-            ResponsesImageDetail::Original => Self::Original,
+            ResponsesImageDetail::Auto => Ok(Self::Auto),
+            ResponsesImageDetail::Low => Ok(Self::Low),
+            ResponsesImageDetail::High => Ok(Self::High),
+            ResponsesImageDetail::Original => Err(TranslationError::InvalidPayload(
+                "OpenAI Responses image detail `original` cannot be represented by Chat Completions"
+                    .to_string(),
+            )),
         }
     }
 }
@@ -82,8 +88,8 @@ impl From<&CustomToolCall> for ChatCompletionMessageToolCalls {
     fn from(call: &CustomToolCall) -> Self {
         Self::Custom(
             crate::protocol::openai::chat_completions::ChatCompletionMessageCustomToolCall {
-                id: call.id.clone(),
-                custom_tool: crate::protocol::openai::chat_completions::CustomTool {
+                id: call.id.clone().unwrap_or_else(|| call.call_id.clone()),
+                custom: crate::protocol::openai::chat_completions::CustomTool {
                     name: call.name.clone(),
                     input: call.input.clone(),
                 },

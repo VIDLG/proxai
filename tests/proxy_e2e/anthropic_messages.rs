@@ -263,7 +263,10 @@ async fn proxy_translates_openai_responses_stream_to_anthropic_messages_stream()
         Some("text/event-stream")
     );
     let body = response.text().await.unwrap();
-    assert!(body.contains("event: content_block_delta"));
+    assert!(
+        body.contains("event: content_block_delta"),
+        "translated SSE body: {body}"
+    );
     assert!(body.contains("\"type\":\"text_delta\""));
     assert!(body.contains("\"text\":\"hello\""));
     assert!(body.contains("event: message_stop"));

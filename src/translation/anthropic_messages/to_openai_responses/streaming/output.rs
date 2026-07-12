@@ -61,7 +61,7 @@ pub(super) fn finalize_block(
             // items, mirroring the non-streaming conversion in response.rs.
             let synthetic_block = TextBlock {
                 text: text.clone(),
-                citations,
+                citations: citations.into(),
             };
             let annotations = text_block_annotations(&synthetic_block, *text_char_offset);
             *text_char_offset = text_char_offset.saturating_add(text.chars().count());
@@ -83,7 +83,8 @@ pub(super) fn finalize_block(
                         signature,
                     }])
                     .encode()?,
-                );
+                )
+                .into();
             }
             (item, vec![done])
         }
@@ -93,7 +94,8 @@ pub(super) fn finalize_block(
                 item.encrypted_content = Some(
                     ContinuationEnvelope::from(vec![Continuation::RedactedThinking { data }])
                         .encode()?,
-                );
+                )
+                .into();
             }
             (item, Vec::new())
         }
@@ -106,7 +108,7 @@ pub(super) fn finalize_block(
                 sequence_number,
                 item_id.clone(),
                 output_index,
-                Some(name.clone()),
+                name.clone(),
                 arguments.clone(),
             );
             let item = completed_function_call_item_with_id(item_id, name, arguments);

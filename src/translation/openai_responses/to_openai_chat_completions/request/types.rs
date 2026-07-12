@@ -15,9 +15,23 @@ impl From<responses::ServiceTier> for chat::ServiceTier {
     }
 }
 
+impl From<responses::PromptCacheRetention> for chat::PromptCacheRetention {
+    fn from(value: responses::PromptCacheRetention) -> Self {
+        match value {
+            responses::PromptCacheRetention::InMemory => Self::InMemory,
+            responses::PromptCacheRetention::Hours24 => Self::Hours24,
+        }
+    }
+}
+
 impl From<&responses::Reasoning> for chat::ReasoningEffort {
     fn from(reasoning: &responses::Reasoning) -> Self {
-        reasoning.effort.map(Into::into).unwrap_or_default()
+        reasoning
+            .effort
+            .as_non_null()
+            .copied()
+            .map(Into::into)
+            .unwrap_or_default()
     }
 }
 
@@ -47,7 +61,7 @@ impl TryFrom<&responses::TextResponseFormatConfiguration> for chat::ResponseForm
                         description: schema.description.clone(),
                         name: schema.name.clone(),
                         schema: schema.schema.clone(),
-                        strict: schema.strict,
+                        strict: schema.strict.as_non_null().copied(),
                     },
                 })
             }

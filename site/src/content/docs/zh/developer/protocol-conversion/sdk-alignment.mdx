@@ -17,41 +17,64 @@ Anthropic Messages wire model 会与 vendored 官方 TypeScript SDK（位于 `co
 just compare-anthropic-protocol
 ```
 
-比较内容包括类型覆盖、字段覆盖和顺序、serde discriminator 处理、枚举字面量、untagged union、结构化 SDK marker，以及选定的 serde 字段语义。
+比较内容包括类型覆盖、字段覆盖和顺序、serde discriminator 处理、枚举字面量、untagged union、字段 carrier 和结构化 SDK marker。每个 public wire type 还必须在 doc comment 中声明显式溯源：
 
+```rust
+/// @sdk(shape = "SearchResultBlockParam")
+pub struct SearchResultBlockParam { /* ... */ }
 
-## Required-nullable 字段
+/// @sdk(alias = "ToolBash20250124")
+pub struct ServerToolDef { /* ... */ }
 
-TypeScript 区分以下两种 shape：
-
-```ts
-field?: T          // optional：字段可以不存在
-field: T | null    // required nullable：字段应该存在，但可以为 null
+/// @sdk(proxai_internal = "field_literal_wrapper")
+pub enum ImageMediaType { /* ... */ }
 ```
 
-Rust `Option<T>` 在反序列化时同时接受缺失和 `null`，因此它既不比任一 shape 更严格。对 SDK optional 字段来说足够精确；但对 SDK required-nullable 字段来说，它是有意更宽松的表示。
+`shape` 把本地类型绑定到具名 SDK export；`alias` 记录刻意的多对一建模；`proxai_internal` 用于分类承载 SDK inline shape、union、discriminator 或字段字面量的本地类型。即使 Rust 名称恰好匹配，缺少显式 provenance marker 也会被 compare 拒绝。
 
-当 SDK required-nullable 字段用 `Option<T>` 表示时，应直接在 Rust 字段上标记：
+
+## 字段 presence 与 nullability
+
+官方 schema 区分四种字段契约：
+
+<ProtocolCompare
+  columns={['官方 shape', 'Rust carrier']}
+  rows={[
+    ['`field: T`', '`T`'],
+    ['`field?: T`', '`Option<T>`'],
+    ['`field: T | null`', '`RequiredNullable<T>`'],
+    ['`field?: T | null`', '`OptionalNullable<T>`'],
+  ]}
+/>
+
+`RequiredNullable<T>` 是自包含的。它的 JSON 反序列化会拒绝字段缺失，把显式 `null` 接受为 `Nullable::null()`，并把非 null 值交给 `T`，同时保留 unknown enum variant 等有用的内部错误。字段不需要额外 serde 属性：
 
 ```rust
 pub struct Usage {
     pub output_tokens: u32,
-    /// @sdk(required_nullable_accepts_missing)
-    pub server_tool_use: Option<ServerToolUsage>,
+    pub server_tool_use: RequiredNullable<ServerToolUsage>,
 }
 ```
 
-这个 marker 表示：
+只有使用 Rust 外层 `Option<T>` 的 optional 字段仍需要字段级 presence 处理：否则 serde 会把字段缺失和显式 `null` 折叠在一起。optional non-nullable 字段使用：
 
-- SDK shape：`field: T | null`
-- Rust shape：`Option<T>`
-- 有意差异：ProxAI 也接受字段缺失，作为兼容性容忍
+```rust
+#[serde(
+    default,
+    skip_serializing_if = "Option::is_none",
+    deserialize_with = "deserialize_present"
+)]
+pub field: Option<T>;
+```
 
-当 SDK 字段是 optional（`field?: T` 或 `field?: T | null`）时，不要使用这个 marker。缺失本来就是官方 shape 的一部分。
+`OptionalNullable<T>` 是自包含的三态 carrier：`Missing`、`Null` 或 `Value(T)`。它的反序列化处理字段已出现时的 `null` 或 value，而 `#[serde(default)]` 在字段缺失时提供 `Missing`：
 
-不要用这个 marker 为 SDK required non-null 字段（`field: T`）使用 `Option<T>` 找理由。这类字段应该在 Rust 中保持非 optional，除非有另一个单独记录的协议决策。
+```rust
+#[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+pub field: OptionalNullable<T>;
+```
 
-Compare 脚本会在 `Required-nullable fields accepting missing` 小节中紧凑打印被标记字段。未标记的 required-nullable `Option<T>` 字段会导致比较失败。
+OpenAI 与 Anthropic 共用的 protocol compare 规则会强制检查这些命名 carrier 及其不同的 serde 契约。裸 `Option<Nullable<T>>`、用 `Option<T>` 建模 required-nullable，以及两个 nullable carrier 上已经废弃的字段级反序列化器都会导致比较失败。
 
 
 ## 兼容性归一化

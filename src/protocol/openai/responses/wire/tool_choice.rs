@@ -12,6 +12,7 @@ pub enum ToolChoiceAllowedMode {
     Required,
 }
 
+/// OpenAPI schema: `#/components/schemas/ToolChoiceAllowed`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolChoiceAllowed {
     pub mode: ToolChoiceAllowedMode,

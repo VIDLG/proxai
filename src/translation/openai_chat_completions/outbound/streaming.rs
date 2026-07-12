@@ -5,37 +5,28 @@
 
 use crate::protocol::openai::chat_completions::{
     ChatChoiceStream, ChatCompletionMessageToolCallChunk, ChatCompletionStreamResponseDelta,
-    CompletionUsage, CreateChatCompletionStreamResponse, FinishReason, FunctionCallStream,
-    FunctionType, Role,
+    ChatCompletionStreamRole, CompletionUsage, CreateChatCompletionStreamResponse,
+    CreateChatCompletionStreamResponseObject, FinishReason, FunctionCallStream, FunctionType,
 };
 use crate::translation::streaming::StreamIdentity;
 
-use super::CHAT_COMPLETION_CHUNK_OBJECT;
-
 pub(crate) fn assistant_role_delta() -> ChatCompletionStreamResponseDelta {
     ChatCompletionStreamResponseDelta {
-        role: Some(Role::Assistant),
+        role: Some(ChatCompletionStreamRole::Assistant),
         ..Default::default()
     }
 }
 
 pub(crate) fn text_delta(text: String) -> ChatCompletionStreamResponseDelta {
     ChatCompletionStreamResponseDelta {
-        content: Some(text),
-        ..Default::default()
-    }
-}
-
-pub(crate) fn reasoning_delta(reasoning: String) -> ChatCompletionStreamResponseDelta {
-    ChatCompletionStreamResponseDelta {
-        reasoning_content: Some(reasoning),
+        content: Some(text).into(),
         ..Default::default()
     }
 }
 
 pub(crate) fn refusal_delta(refusal: String) -> ChatCompletionStreamResponseDelta {
     ChatCompletionStreamResponseDelta {
-        refusal: Some(refusal),
+        refusal: Some(refusal).into(),
         ..Default::default()
     }
 }
@@ -88,14 +79,15 @@ pub(crate) fn chat_choice_chunk(
         choices: vec![ChatChoiceStream {
             index: 0,
             delta,
-            finish_reason,
-            logprobs: None,
+            finish_reason: finish_reason.into(),
+            logprobs: None.into(),
         }],
         created: 0,
         model: identity.model().to_string(),
-        service_tier: None,
-        object: CHAT_COMPLETION_CHUNK_OBJECT.to_string(),
-        usage: None,
+        service_tier: None.into(),
+        system_fingerprint: None,
+        object: CreateChatCompletionStreamResponseObject::ChatCompletionChunk,
+        usage: None.into(),
     }
 }
 
@@ -108,8 +100,9 @@ pub(crate) fn chat_usage_chunk(
         choices: Vec::new(),
         created: 0,
         model: identity.model().to_string(),
-        service_tier: None,
-        object: CHAT_COMPLETION_CHUNK_OBJECT.to_string(),
-        usage: Some(usage),
+        service_tier: None.into(),
+        system_fingerprint: None,
+        object: CreateChatCompletionStreamResponseObject::ChatCompletionChunk,
+        usage: Some(usage).into(),
     }
 }

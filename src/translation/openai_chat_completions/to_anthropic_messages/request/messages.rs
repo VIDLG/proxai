@@ -9,6 +9,7 @@ use crate::translation::anthropic_messages::outbound::{
     redacted_thinking_content_block, system_prompt_from_text_parts, text_block_param,
     thinking_content_block, tool_use_block_param, user_message,
 };
+use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
 use crate::translation::{TranslationError, TranslationResult};
 
 pub(super) struct AnthropicMessages {
@@ -16,14 +17,15 @@ pub(super) struct AnthropicMessages {
     pub messages: Vec<anthropic::MessageParam>,
 }
 
-impl TryFrom<&[chat::ChatCompletionRequestMessage]> for AnthropicMessages {
-    type Error = TranslationError;
-
-    fn try_from(chat_messages: &[chat::ChatCompletionRequestMessage]) -> TranslationResult<Self> {
+impl AnthropicMessages {
+    pub(super) fn from_chat(
+        chat_messages: &[chat::ChatCompletionRequestMessage],
+        extensions: &ChatRequestExtensions,
+    ) -> TranslationResult<Self> {
         let mut system_parts = Vec::new();
         let mut messages = Vec::new();
 
-        for message in chat_messages {
+        for (message_index, message) in chat_messages.iter().enumerate() {
             match message {
                 chat::ChatCompletionRequestMessage::Developer(message) => {
                     // Anthropic Messages has no developer role, so Chat developer
@@ -39,8 +41,9 @@ impl TryFrom<&[chat::ChatCompletionRequestMessage]> for AnthropicMessages {
                     )?));
                 }
                 chat::ChatCompletionRequestMessage::Assistant(message) => {
-                    messages.push(assistant_message(anthropic::MessageParamContent::try_from(
+                    messages.push(assistant_message(assistant_content(
                         message,
+                        extensions.reasoning(message_index),
                     )?));
                 }
                 chat::ChatCompletionRequestMessage::Tool(message) => {
@@ -174,100 +177,105 @@ impl TryFrom<&chat::ImageUrl> for anthropic::ImageBlockParam {
     }
 }
 
-impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::MessageParamContent {
-    type Error = TranslationError;
+fn assistant_content(
+    message: &chat::ChatCompletionRequestAssistantMessage,
+    reasoning_content: Option<&str>,
+) -> TranslationResult<anthropic::MessageParamContent> {
+    if message.function_call.is_non_null() {
+        return Err(TranslationError::InvalidPayload(
+                "deprecated Chat assistant function_call cannot be translated to Anthropic Messages because it has no tool_call_id"
+                    .to_string(),
+            ));
+    }
+    let mut blocks = Vec::new();
 
-    fn try_from(message: &chat::ChatCompletionRequestAssistantMessage) -> TranslationResult<Self> {
-        let mut blocks = Vec::new();
-
-        if let Some(reasoning) = message.reasoning_content.as_deref() {
-            let (visible_reasoning, continuations) =
-                ContinuationEnvelope::split_chat_reasoning_content(reasoning)?;
-            if let Some(envelope) = continuations {
-                for continuation in envelope {
-                    match continuation {
-                        Continuation::Thinking {
-                            thinking,
-                            signature,
-                        } if !signature.is_empty() => {
-                            blocks.push(thinking_content_block(thinking, signature));
-                        }
-                        Continuation::Thinking { .. } => {
-                            return Err(TranslationError::InvalidPayload(
-                                "Anthropic thinking continuation is missing its signature"
-                                    .to_string(),
-                            ));
-                        }
-                        Continuation::RedactedThinking { data } => {
-                            blocks.push(redacted_thinking_content_block(data));
-                        }
+    if let Some(reasoning) = reasoning_content {
+        let (visible_reasoning, continuations) =
+            ContinuationEnvelope::split_chat_reasoning_content(reasoning)?;
+        if let Some(envelope) = continuations {
+            for continuation in envelope {
+                match continuation {
+                    Continuation::Thinking {
+                        thinking,
+                        signature,
+                    } if !signature.is_empty() => {
+                        blocks.push(thinking_content_block(thinking, signature));
+                    }
+                    Continuation::Thinking { .. } => {
+                        return Err(TranslationError::InvalidPayload(
+                            "Anthropic thinking continuation is missing its signature".to_string(),
+                        ));
+                    }
+                    Continuation::RedactedThinking { data } => {
+                        blocks.push(redacted_thinking_content_block(data));
                     }
                 }
-            }
-            if !visible_reasoning.is_empty() {
-                tracing::trace!(
-                    reason = "Chat reasoning_content has no Anthropic thinking signature",
-                    "skipping unsigned Chat assistant reasoning during Anthropic Messages request translation"
-                );
             }
         }
+        if !visible_reasoning.is_empty() {
+            tracing::trace!(
+                reason = "Chat reasoning_content has no Anthropic thinking signature",
+                "skipping unsigned Chat assistant reasoning during Anthropic Messages request translation"
+            );
+        }
+    }
 
-        if let Some(content) = &message.content {
-            match content {
-                chat::ChatCompletionRequestAssistantMessageContent::Text(text) => {
-                    if !text.is_empty() {
-                        blocks.push(anthropic::ContentBlockParam::Text(text_block_param(text)));
-                    }
+    if let Some(content) = message.content.as_non_null() {
+        match content {
+            chat::ChatCompletionRequestAssistantMessageContent::Text(text) => {
+                if !text.is_empty() {
+                    blocks.push(anthropic::ContentBlockParam::Text(text_block_param(text)));
                 }
-                chat::ChatCompletionRequestAssistantMessageContent::Array(parts) => {
-                    for part in parts {
-                        match part {
-                            chat::ChatCompletionRequestAssistantMessageContentPart::Text(part)
-                                if !part.text.is_empty() =>
-                            {
-                                blocks.push(anthropic::ContentBlockParam::Text(text_block_param(
-                                    &part.text,
-                                )));
-                            }
-                            chat::ChatCompletionRequestAssistantMessageContentPart::Text(_) => {}
-                            chat::ChatCompletionRequestAssistantMessageContentPart::Refusal(_) => {
-                                return Err(TranslationError::InvalidPayload(
+            }
+            chat::ChatCompletionRequestAssistantMessageContent::Array(parts) => {
+                for part in parts {
+                    match part {
+                        chat::ChatCompletionRequestAssistantMessageContentPart::Text(part)
+                            if !part.text.is_empty() =>
+                        {
+                            blocks.push(anthropic::ContentBlockParam::Text(text_block_param(
+                                &part.text,
+                            )));
+                        }
+                        chat::ChatCompletionRequestAssistantMessageContentPart::Text(_) => {}
+                        chat::ChatCompletionRequestAssistantMessageContentPart::Refusal(_) => {
+                            return Err(TranslationError::InvalidPayload(
                                     "Chat Completions assistant refusal content cannot be translated to Anthropic Messages request content"
                                         .to_string(),
                                 ));
-                            }
                         }
                     }
                 }
             }
         }
+    }
 
-        for tool_call in message.tool_calls.iter().flatten() {
-            match tool_call {
-                chat::ChatCompletionMessageToolCalls::Function(tool_call) => {
-                    let input = serde_json::from_str::<Value>(&tool_call.function.arguments)
+    for tool_call in message.tool_calls.iter().flatten() {
+        match tool_call {
+            chat::ChatCompletionMessageToolCalls::Function(tool_call) => {
+                let input = serde_json::from_str::<Value>(&tool_call.function.arguments)
                         .map_err(|error| {
                             TranslationError::InvalidPayload(format!(
                                 "Chat Completions tool call `{}` arguments must be valid JSON to translate to Anthropic Messages: {error}",
                                 tool_call.id
                             ))
                         })?;
-                    blocks.push(anthropic::ContentBlockParam::ToolUse(tool_use_block_param(
-                        &tool_call.id,
-                        &tool_call.function.name,
-                        input,
-                    )));
-                }
-                chat::ChatCompletionMessageToolCalls::Custom(_) => {
-                    return Err(TranslationError::InvalidPayload(
+                blocks.push(anthropic::ContentBlockParam::ToolUse(tool_use_block_param(
+                    &tool_call.id,
+                    &tool_call.function.name,
+                    input,
+                )));
+            }
+            chat::ChatCompletionMessageToolCalls::Custom(_) => {
+                return Err(TranslationError::InvalidPayload(
                         "Chat Completions custom tool calls cannot be translated to Anthropic Messages tool_use blocks"
                             .to_string(),
                     ));
-                }
             }
         }
+    }
 
-        match blocks.len() {
+    match blocks.len() {
             0 => Err(TranslationError::InvalidPayload(
                 "Chat Completions assistant message without content or tool calls cannot be translated to Anthropic Messages"
                     .to_string(),
@@ -284,7 +292,6 @@ impl TryFrom<&chat::ChatCompletionRequestAssistantMessage> for anthropic::Messag
             },
             _ => Ok(anthropic::MessageParamContent::Blocks(blocks)),
         }
-    }
 }
 
 impl From<&chat::ChatCompletionRequestToolMessage> for anthropic::ToolResultBlockParam {
@@ -313,7 +320,7 @@ impl From<&chat::ChatCompletionRequestToolMessage> for anthropic::ToolResultBloc
             // Chat tool messages have no standard error marker, so translate
             // them as successful Anthropic tool results.
             is_error: Some(false),
-            cache_control: None,
+            cache_control: None.into(),
         }
     }
 }

@@ -18,6 +18,7 @@ pub enum NamespaceToolParamTool {
 // Tool Definition
 // ============================================================
 
+/// OpenAPI schema: `#/components/schemas/NamespaceToolParam`
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NamespaceToolParam {
     pub name: String,

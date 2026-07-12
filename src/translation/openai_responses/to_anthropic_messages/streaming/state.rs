@@ -546,10 +546,10 @@ impl StreamingState {
         Ok(vec![
             message_delta_event(
                 MessageDelta {
-                    container: None,
-                    stop_details: None,
-                    stop_reason: Some(stop_reason),
-                    stop_sequence: None,
+                    container: None.into(),
+                    stop_details: None.into(),
+                    stop_reason: Some(stop_reason).into(),
+                    stop_sequence: None.into(),
                 },
                 usage.map(Into::into).unwrap_or_default(),
             ),

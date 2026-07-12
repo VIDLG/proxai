@@ -38,14 +38,12 @@ impl From<&ChatResponseProjection> for ChatResponseSummary {
         let mut summary = Self::default();
         for choice in &projection.choices {
             summary.add_item_kind(ChatResponseOutputKind::Choice);
-            if let Some(reason) = choice.finish_reason {
-                summary.add_item_kind(ChatResponseOutputKind::FinishedChoice);
-                summary.add_finish_reason(reason.to_string());
-            }
-            if choice.message.content.is_some() {
+            summary.add_item_kind(ChatResponseOutputKind::FinishedChoice);
+            summary.add_finish_reason(choice.finish_reason.to_string());
+            if choice.message.content.is_non_null() {
                 summary.add_item_kind(ChatResponseOutputKind::Text);
             }
-            if choice.message.refusal.is_some() {
+            if choice.message.refusal.is_non_null() {
                 summary.add_item_kind(ChatResponseOutputKind::Refusal);
             }
             if let Some(tool_calls) = choice.message.tool_calls.as_deref() {
@@ -55,7 +53,7 @@ impl From<&ChatResponseProjection> for ChatResponseSummary {
                             summary.add_tool_call(&tool_call.function.name);
                         }
                         ChatCompletionMessageToolCalls::Custom(tool_call) => {
-                            summary.add_custom_tool_call(&tool_call.custom_tool.name);
+                            summary.add_custom_tool_call(&tool_call.custom.name);
                         }
                     }
                 }
@@ -66,7 +64,7 @@ impl From<&ChatResponseProjection> for ChatResponseSummary {
                     annotations.len() as u64,
                 );
             }
-            if choice.message.audio.is_some() {
+            if choice.message.audio.is_non_null() {
                 summary.add_item_kind(ChatResponseOutputKind::Audio);
             }
         }
@@ -80,14 +78,14 @@ impl From<&ChatStreamResponseProjection> for ChatResponseSummary {
         for choice in &projection.choices {
             summary.add_item_kind(ChatResponseOutputKind::Choice);
             summary.add_item_kind(ChatResponseOutputKind::StreamDelta);
-            if let Some(reason) = choice.finish_reason {
+            if let Some(reason) = choice.finish_reason.as_non_null().copied() {
                 summary.add_item_kind(ChatResponseOutputKind::FinishedChoice);
                 summary.add_finish_reason(reason.to_string());
             }
-            if choice.delta.content.is_some() {
+            if choice.delta.content.is_non_null() {
                 summary.add_item_kind(ChatResponseOutputKind::StreamTextDelta);
             }
-            if choice.delta.refusal.is_some() {
+            if choice.delta.refusal.is_non_null() {
                 summary.add_item_kind(ChatResponseOutputKind::StreamRefusalDelta);
             }
             if let Some(tool_calls) = choice.delta.tool_calls.as_deref() {

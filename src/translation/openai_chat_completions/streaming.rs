@@ -17,7 +17,9 @@
 use delegate::delegate;
 use serde_json::Value;
 
-use crate::protocol::openai::chat_completions::CreateChatCompletionStreamResponse;
+use crate::protocol::openai::chat_completions::{
+    ChatCompletionStreamRole, CreateChatCompletionStreamResponse,
+};
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
@@ -59,7 +61,18 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         &self,
         payload: Value,
     ) -> StreamTranslationResult<CreateChatCompletionStreamResponse> {
-        serde_json::from_value::<CreateChatCompletionStreamResponse>(payload).map_err(Into::into)
+        let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload)?;
+        if let Some(role) = chunk
+            .choices
+            .iter()
+            .find_map(|choice| choice.delta.role)
+            .filter(|role| *role != ChatCompletionStreamRole::Assistant)
+        {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Chat stream emitted {role} role; cross-protocol translation requires an assistant choice"
+            )));
+        }
+        Ok(chunk)
     }
 
     pub(super) fn register_chunk_stream(
