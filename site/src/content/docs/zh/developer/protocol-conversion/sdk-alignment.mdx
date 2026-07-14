@@ -81,7 +81,8 @@ OpenAI 与 Anthropic 共用的 protocol compare 规则会强制检查这些命�
 
 Provider 兼容性归一化只能把保守或已测量到的上游偏差修复为最接近的官方协议 shape。当前保守修复包括：JSON 对象中缺失的 SDK required-nullable 响应字段（`missing -> null`），以及裸 `message_start` 事件归一化为官方嵌套 `message` shape。当前已测量的 provider 修复包括：
 
-- MiniMax-compatible streams 可能在 thinking `content_block_start` 上省略 `signature`，因此 ProxAI 只针对这个窄场景插入空 signature。
+- MiniMax-compatible Anthropic streams 可能在 thinking `content_block_start` 上省略 `signature`，因此 ProxAI 只针对这个窄场景插入空 signature。
+- MiniMax-compatible Chat Completions streams 可能在终止 chunk 前省略 required-nullable 的 `choices[].finish_reason`，因此 ProxAI 会为缺失字段插入 `null`。
 - GLM 5.1 Anthropic-compatible streams 可能只在 `server_tool_use` 中发出一个 counter，因此 ProxAI 会把缺失的 `web_fetch_requests` 或 `web_search_requests` counter 填为 `0`。
 
 不要添加其他 provider-specific 业务默认值，例如缺失 tool caller，除非有已测量的上游案例和聚焦 fixture 记录该行为。

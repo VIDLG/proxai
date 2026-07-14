@@ -257,6 +257,7 @@ fn format_event_line(
 
     match fields.text("event").as_deref() {
         Some("fwd") => format_forward(writer, fields, color)?,
+        Some("fwd-error") => format_forward_error(writer, fields, color)?,
         Some("hdr") => format_headers(writer, fields, color, duration_thresholds)?,
         Some("wait") => format_wait(writer, fields, color, duration_thresholds)?,
         Some("end" | "closed") => format_stream_end(writer, fields, color, duration_thresholds)?,
@@ -362,6 +363,31 @@ fn format_forward(writer: &mut dyn fmt::Write, fields: &LogFields, color: bool) 
     }
     if let Some(request_id) = fields.text("request_id") {
         write!(writer, " req={}", short_request_id(&request_id))?;
+    }
+    Ok(())
+}
+
+fn format_forward_error(
+    writer: &mut dyn fmt::Write,
+    fields: &LogFields,
+    color: bool,
+) -> fmt::Result {
+    format_forward(writer, fields, color)?;
+    if let Some(value) = fields.u64("inbound_request_bytes") {
+        write!(writer, " in={}", format_bytes(value))?;
+    }
+    if let Some(value) = fields.text("json_path") {
+        write!(writer, " at={value}")?;
+    }
+    if let Some(value) = fields.text("diagnostic_path") {
+        write!(writer, " diag={value}")?;
+    }
+    if let Some(value) = fields.text("err") {
+        write!(
+            writer,
+            " {}",
+            paint(color, value, style(ColorToken::EventError))
+        )?;
     }
     Ok(())
 }
@@ -552,6 +578,29 @@ fn format_error(
             " {}",
             paint(color, error, style(ColorToken::EventError))
         )?;
+    }
+    if fields.text("kind").as_deref() == Some("translation") {
+        if let Some(translation) = fields.text("translation_alias") {
+            write!(writer, " {translation}")?;
+        }
+        if let Some(stage) = fields.text("stage") {
+            write!(writer, " stage={stage}")?;
+        }
+        if let Some(event_type) = fields
+            .text("upstream_event_type")
+            .filter(|event_type| !event_type.is_empty())
+        {
+            write!(writer, " sse={event_type}")?;
+        }
+        if let Some(end) = fields.text("stream_end").filter(|end| !end.is_empty()) {
+            write!(writer, " end={end}")?;
+        }
+        if let Some(path) = fields
+            .text("diagnostic_path")
+            .filter(|path| !path.is_empty())
+        {
+            write!(writer, " diag={path}")?;
+        }
     }
     Ok(())
 }

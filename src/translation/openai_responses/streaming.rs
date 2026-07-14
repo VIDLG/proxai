@@ -16,10 +16,13 @@
 use std::collections::BTreeMap;
 
 use delegate::delegate;
+use derive_more::From;
 use serde_json::Value;
 use strum::Display;
 
-use crate::protocol::openai::responses::{OutputContent, OutputItem, ResponseStreamEvent};
+use crate::protocol::openai::responses::{
+    OutputContent, OutputItem, Response, ResponseStreamEvent,
+};
 use crate::translation::streaming::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
     SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
@@ -74,6 +77,130 @@ struct ObservedOutputItem {
     kind: ResponsesOutputKind,
     item_id: Option<String>,
     completed: bool,
+}
+
+pub(crate) fn response_failure_error(response: &Response) -> StreamTranslationError {
+    let detail = response
+        .error
+        .as_non_null()
+        .map(|error| format!("{}: {}", error.code, error.message))
+        .unwrap_or_else(|| "upstream response failed without error details".to_string());
+    StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))
+}
+
+/// Source-side identity for one incremental Responses output segment.
+///
+/// This is a wire-coordinate key only: it deliberately contains neither an
+/// Anthropic `content_block.index` nor a Chat tool-call index. Target pairs may
+/// use it to track projection state or reconcile authoritative `*.done`
+/// snapshots without duplicating their source coordinate model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum ResponsesOutputSegmentKey {
+    Text {
+        output_index: u32,
+        content_index: u32,
+    },
+    Refusal {
+        output_index: u32,
+        content_index: u32,
+    },
+    ReasoningText {
+        output_index: u32,
+        content_index: u32,
+    },
+    ReasoningSummary {
+        output_index: u32,
+        summary_index: u32,
+    },
+    FunctionArguments {
+        output_index: u32,
+    },
+    CustomToolInput {
+        output_index: u32,
+    },
+}
+
+impl ResponsesOutputSegmentKey {
+    pub(crate) fn output_index(self) -> u32 {
+        match self {
+            Self::Text { output_index, .. }
+            | Self::Refusal { output_index, .. }
+            | Self::ReasoningText { output_index, .. }
+            | Self::ReasoningSummary { output_index, .. }
+            | Self::FunctionArguments { output_index }
+            | Self::CustomToolInput { output_index } => output_index,
+        }
+    }
+
+    pub(crate) fn is_reasoning(self) -> bool {
+        matches!(
+            self,
+            Self::ReasoningText { .. } | Self::ReasoningSummary { .. }
+        )
+    }
+
+    pub(crate) fn is_tool_input(self) -> bool {
+        matches!(
+            self,
+            Self::FunctionArguments { .. } | Self::CustomToolInput { .. }
+        )
+    }
+
+    pub(crate) fn context(self) -> String {
+        match self {
+            Self::Text {
+                output_index,
+                content_index,
+            } => format!("text output_index {output_index} content_index {content_index}"),
+            Self::Refusal {
+                output_index,
+                content_index,
+            } => format!("refusal output_index {output_index} content_index {content_index}"),
+            Self::ReasoningText {
+                output_index,
+                content_index,
+            } => format!("reasoning output_index {output_index} content_index {content_index}"),
+            Self::ReasoningSummary {
+                output_index,
+                summary_index,
+            } => format!(
+                "reasoning summary output_index {output_index} summary_index {summary_index}"
+            ),
+            Self::FunctionArguments { output_index } => {
+                format!("function arguments output_index {output_index}")
+            }
+            Self::CustomToolInput { output_index } => {
+                format!("custom tool input output_index {output_index}")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, From)]
+pub(crate) struct ForwardedContent(String);
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ForwardedContentDivergence;
+
+impl ForwardedContent {
+    pub(crate) fn append(&mut self, content: &str) {
+        self.0.push_str(content);
+    }
+
+    pub(crate) fn reconcile_snapshot(
+        &mut self,
+        final_content: &str,
+    ) -> Result<Option<String>, ForwardedContentDivergence> {
+        if !final_content.starts_with(&self.0) {
+            return Err(ForwardedContentDivergence);
+        }
+        let suffix = final_content[self.0.len()..].to_string();
+        if suffix.is_empty() {
+            return Ok(None);
+        }
+        self.append(&suffix);
+        Ok(Some(suffix))
+    }
 }
 
 impl<S> ResponsesInboundLifecycle<S> {
@@ -147,17 +274,7 @@ impl<S> ResponsesInboundLifecycle<S> {
             ResponseStreamEvent::ResponseOutputItemAdded(event) => {
                 self.register_output_item(event.output_index, &event.item, event_type)
             }
-            ResponseStreamEvent::ResponseOutputItemDone(event) => {
-                self.complete_output_item(event.output_index, &event.item, event_type)
-            }
             ResponseStreamEvent::ResponseContentPartAdded(event) => self
-                .observe_required_output_item(
-                    event.output_index,
-                    &event.item_id,
-                    ResponsesOutputKind::from(&event.part),
-                    event_type,
-                ),
-            ResponseStreamEvent::ResponseContentPartDone(event) => self
                 .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
@@ -190,14 +307,28 @@ impl<S> ResponsesInboundLifecycle<S> {
                 ResponsesOutputKind::Message,
                 event_type,
             ),
-            ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => self
+            ResponseStreamEvent::ResponseReasoningTextDelta(event) => self
                 .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
-            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => self
+            ResponseStreamEvent::ResponseReasoningTextDone(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Reasoning,
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseContentPartDone(event) => self
+                .observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::from(&event.part),
+                    event_type,
+                ),
+            ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => self
                 .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
@@ -218,14 +349,7 @@ impl<S> ResponsesInboundLifecycle<S> {
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
-            ResponseStreamEvent::ResponseReasoningTextDelta(event) => self
-                .observe_required_output_item(
-                    event.output_index,
-                    &event.item_id,
-                    ResponsesOutputKind::Reasoning,
-                    event_type,
-                ),
-            ResponseStreamEvent::ResponseReasoningTextDone(event) => self
+            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => self
                 .observe_required_output_item(
                     event.output_index,
                     &event.item_id,
@@ -260,6 +384,9 @@ impl<S> ResponsesInboundLifecycle<S> {
                     ResponsesOutputKind::CustomToolCall,
                     event_type,
                 ),
+            ResponseStreamEvent::ResponseOutputItemDone(event) => {
+                self.complete_output_item(event.output_index, &event.item, event_type)
+            }
             _ => Ok(()),
         }
     }
@@ -285,6 +412,25 @@ impl<S> ResponsesInboundLifecycle<S> {
         event: &str,
     ) -> StreamTranslationResult<()> {
         self.require_streaming_output_item_event(event)?;
+        match item {
+            OutputItem::Message(message) if !message.content.is_empty() => {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Responses stream emitted {event} with non-empty message content; content must be emitted through response.content_part.* events"
+                )));
+            }
+            OutputItem::Reasoning(reasoning)
+                if !reasoning.summary.is_empty()
+                    || reasoning
+                        .content
+                        .as_ref()
+                        .is_some_and(|content| !content.is_empty()) =>
+            {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Responses stream emitted {event} with reasoning content or summary; reasoning must be emitted through response.reasoning_* events"
+                )));
+            }
+            _ => {}
+        }
         if self.output_items.contains_key(&output_index) {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted duplicate {event} for output_index {output_index}"
@@ -414,6 +560,15 @@ impl<S> ResponsesInboundLifecycle<S> {
                 "Responses stream finalized before a terminal response event".to_string(),
             )
         })
+    }
+
+    /// Validate a carrier stream ending after a Responses stream has already
+    /// emitted its semantic terminal event.
+    pub(crate) fn finish_stream(&self, end: SseStreamEnd) -> StreamTranslationResult<()> {
+        if self.is_stopped() {
+            return Ok(());
+        }
+        Err(self.unexpected_stream_end_error(end))
     }
 
     /// Build an error describing why the carrier stream ended unexpectedly.

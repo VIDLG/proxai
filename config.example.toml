@@ -93,9 +93,10 @@ base_url = "https://api.anthropic.com"
 api_key = "replace-with-your-api-key"
 # strict: do not rewrite successful upstream Anthropic Messages response bodies.
 # anthropic_compatible: fill conservative compatibility gaps, currently
-# missing SDK required-nullable response fields, bare message_start events,
-# measured MiniMax thinking block missing-signature events, and measured
-# GLM 5.1 partial server_tool_use counters.
+# missing SDK required-nullable response fields (including Chat stream
+# choices[].finish_reason), bare message_start events, measured MiniMax
+# thinking block missing-signature events, and measured GLM 5.1 partial
+# server_tool_use counters.
 compatibility = "strict"
 read_idle_timeout_secs = 120
 

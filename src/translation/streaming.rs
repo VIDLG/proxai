@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_stream::try_stream;
 use axum::body::Bytes;
 use delegate::delegate;
@@ -6,7 +8,7 @@ use getset::{Getters, MutGetters};
 
 use serde::Serialize;
 use serde_json::Value;
-use strum::Display;
+use strum::{AsRefStr, Display};
 
 use crate::error::ErrorResponseFields;
 use crate::http_support::{ByteStream, into_byte_stream};
@@ -28,7 +30,8 @@ pub(crate) enum StreamTranslationError {
     Sse(#[from] SseError),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub(crate) enum StreamTranslatorErrorStage {
     Event,
     Finish,
@@ -40,6 +43,75 @@ impl StreamTranslatorErrorStage {
             Self::Event => "stream translation error",
             Self::Finish => "stream translation finish error",
         }
+    }
+
+    fn report(
+        self,
+        error: &StreamTranslationError,
+        sink: &StreamTranslationFailureSink,
+        upstream_event: Option<UpstreamSseEvent>,
+        end: Option<SseStreamEnd>,
+    ) -> String {
+        let message = format!("{}: {error}", self.default_error_prefix());
+        if !sink.record(StreamTranslationFailure {
+            stage: self,
+            error: message.clone(),
+            upstream_event,
+            end,
+        }) {
+            tracing::warn!(
+                event = "stream-error",
+                kind = "translation",
+                err = message,
+                "stream translation failed"
+            );
+        }
+        message
+    }
+}
+
+/// The upstream SSE frame that directly triggered, or immediately preceded, a
+/// stream translation failure. Its data is intentionally kept raw for local
+/// diagnostics; ordinary logs must never include it.
+#[derive(Debug, Clone)]
+pub(crate) struct UpstreamSseEvent {
+    pub(crate) event_type: String,
+    pub(crate) data: String,
+}
+
+/// Carrier-level failure data emitted by `translate_sse_stream`.
+///
+/// Pair translators remain pure: they receive and return `StreamEvent`s. This
+/// event is produced only by the SSE carrier, where raw upstream framing still
+/// exists and can be safely handed to the local diagnostics sink.
+#[derive(Debug, Clone)]
+pub(crate) struct StreamTranslationFailure {
+    pub(crate) stage: StreamTranslatorErrorStage,
+    pub(crate) error: String,
+    pub(crate) upstream_event: Option<UpstreamSseEvent>,
+    pub(crate) end: Option<SseStreamEnd>,
+}
+
+/// Carrier adapter into the single request observation system.
+///
+/// The translation layer owns no diagnostics or logging policy. Pipeline builds
+/// this sink from `ObserveContext`; unit translations use its default no-op.
+#[derive(Clone, Default)]
+pub(crate) struct StreamTranslationFailureSink(
+    Option<Arc<dyn Fn(StreamTranslationFailure) + Send + Sync + 'static>>,
+);
+
+impl StreamTranslationFailureSink {
+    pub(crate) fn new(observe: impl Fn(StreamTranslationFailure) + Send + Sync + 'static) -> Self {
+        Self(Some(Arc::new(observe)))
+    }
+
+    fn record(&self, failure: StreamTranslationFailure) -> bool {
+        let Some(observe) = &self.0 else {
+            return false;
+        };
+        observe(failure);
+        true
     }
 }
 
@@ -62,8 +134,9 @@ impl std::fmt::Display for SseStreamEnd {
 /// stream translators.
 ///
 /// Translators receive and produce `StreamEvent` values; they never touch
-/// raw `Bytes` or `SseEvent`. The carrier layer (`translate_sse_stream`)
-/// is responsible for parsing `SseEvent` → `StreamEvent` on input and
+/// raw `Bytes` or `SseEvent`. The carrier layer
+/// (`translate_sse_stream`) is responsible for parsing
+/// `SseEvent` → `StreamEvent` on input and
 /// encoding `StreamEvent` → `Bytes` on output.
 #[derive(Debug, Clone)]
 pub(crate) struct StreamEvent {
@@ -140,7 +213,14 @@ pub(crate) trait StreamingEventTranslator: Send + 'static {
     }
 }
 
-pub(crate) fn translate_sse_stream<T>(input: ByteStream, mut translator: T) -> ByteStream
+/// Translate an SSE carrier while forwarding failure context to the request's
+/// observation sink. This is the only translation carrier API that handles raw
+/// upstream SSE data; pair translators themselves remain pure.
+pub(crate) fn translate_sse_stream<T>(
+    input: ByteStream,
+    mut translator: T,
+    failure_sink: StreamTranslationFailureSink,
+) -> ByteStream
 where
     T: StreamingEventTranslator,
 {
@@ -148,6 +228,7 @@ where
         futures_util::pin_mut!(input);
 
         let mut scanner = SseEventScanner::default();
+        let mut last_upstream_event = None;
 
         while let Some(chunk) = input.next().await {
             let chunk = match chunk {
@@ -167,10 +248,14 @@ where
                     let events = match translator.finish_stream(SseStreamEnd::DoneSentinel) {
                         Ok(events) => events,
                         Err(error) => {
-                            let event = ErrorResponseFields::stream_translation(format!(
-                                "{}: {error}",
-                                StreamTranslatorErrorStage::Finish.default_error_prefix()
-                            ))
+                            let event = ErrorResponseFields::stream_translation(
+                                StreamTranslatorErrorStage::Finish.report(
+                                    &error,
+                                    &failure_sink,
+                                    last_upstream_event.clone(),
+                                    Some(SseStreamEnd::DoneSentinel),
+                                ),
+                            )
                             .encode_sse_event()?;
                             yield event;
                             return;
@@ -182,7 +267,28 @@ where
                     return;
                 }
 
-                let data = event.payload_with_type()?;
+                let upstream_event = UpstreamSseEvent {
+                    event_type: event.event_type.clone(),
+                    data: event.data.clone(),
+                };
+                last_upstream_event = Some(upstream_event.clone());
+                let data = match event.payload_with_type() {
+                    Ok(data) => data,
+                    Err(error) => {
+                        let error = StreamTranslationError::from(error);
+                        let event = ErrorResponseFields::stream_translation(
+                            StreamTranslatorErrorStage::Event.report(
+                                &error,
+                                &failure_sink,
+                                Some(upstream_event),
+                                None,
+                            ),
+                        )
+                        .encode_sse_event()?;
+                        yield event;
+                        return;
+                    }
+                };
                 let stream_event = StreamEvent {
                     event_type: event.event_type,
                     data,
@@ -190,10 +296,14 @@ where
                 let events = match translator.translate_event(stream_event) {
                     Ok(events) => events,
                     Err(error) => {
-                        let event = ErrorResponseFields::stream_translation(format!(
-                            "{}: {error}",
-                            StreamTranslatorErrorStage::Event.default_error_prefix()
-                        ))
+                        let event = ErrorResponseFields::stream_translation(
+                            StreamTranslatorErrorStage::Event.report(
+                                &error,
+                                &failure_sink,
+                                Some(upstream_event),
+                                None,
+                            ),
+                        )
                         .encode_sse_event()?;
                         yield event;
                         return;
@@ -208,10 +318,14 @@ where
         let events = match translator.finish_stream(SseStreamEnd::Eof) {
             Ok(events) => events,
             Err(error) => {
-                let event = ErrorResponseFields::stream_translation(format!(
-                    "{}: {error}",
-                    StreamTranslatorErrorStage::Finish.default_error_prefix()
-                ))
+                let event = ErrorResponseFields::stream_translation(
+                    StreamTranslatorErrorStage::Finish.report(
+                        &error,
+                        &failure_sink,
+                        last_upstream_event,
+                        Some(SseStreamEnd::Eof),
+                    ),
+                )
                 .encode_sse_event()?;
                 yield event;
                 return;
@@ -473,3 +587,7 @@ pub(crate) struct RequireStreamingPhaseContext {
     pub(crate) source: &'static str,
     pub(crate) event: &'static str,
 }
+
+#[cfg(test)]
+#[path = "streaming_tests.rs"]
+mod tests;

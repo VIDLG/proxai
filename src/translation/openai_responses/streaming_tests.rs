@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use crate::translation::streaming::{StreamIdentity, StreamTranslationError};
 
-use super::ResponsesInboundLifecycle;
+use super::{ForwardedContent, ResponsesInboundLifecycle};
 
 fn output_item_added() -> Value {
     json!({
@@ -43,6 +43,24 @@ fn streaming_lifecycle() -> ResponsesInboundLifecycle<()> {
         )
         .unwrap();
     lifecycle
+}
+
+#[test]
+fn reconciles_authoritative_snapshot_suffix() {
+    let mut forwarded = ForwardedContent::from("Hel".to_string());
+
+    assert_eq!(
+        forwarded.reconcile_snapshot("Hello").unwrap(),
+        Some("lo".to_string())
+    );
+    assert_eq!(forwarded.reconcile_snapshot("Hello").unwrap(), None);
+}
+
+#[test]
+fn rejects_snapshot_that_does_not_extend_forwarded_content() {
+    let mut forwarded = ForwardedContent::from("Hello".to_string());
+
+    assert!(forwarded.reconcile_snapshot("Hi").is_err());
 }
 
 #[test]
@@ -123,6 +141,60 @@ fn rejects_reasoning_output_item_without_id() {
 
     assert!(matches!(&error, StreamTranslationError::Json(_)));
     assert!(error.to_string().contains("missing field `id`"));
+}
+
+#[test]
+fn rejects_output_item_added_with_inline_message_content() {
+    let mut lifecycle = streaming_lifecycle();
+
+    let error = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.output_item.added",
+            "sequence_number": 1,
+            "output_index": 0,
+            "item": {
+                "type": "message",
+                "id": "msg_1",
+                "role": "assistant",
+                "status": "in_progress",
+                "content": [{
+                    "type": "output_text",
+                    "text": "inline",
+                    "annotations": [],
+                    "logprobs": []
+                }]
+            }
+        }))
+        .unwrap_err();
+
+    assert!(matches!(&error, StreamTranslationError::Semantic(_)));
+    assert!(error.to_string().contains(
+        "response.output_item.added with non-empty message content; content must be emitted through response.content_part.* events"
+    ));
+}
+
+#[test]
+fn rejects_output_item_added_with_inline_reasoning_summary() {
+    let mut lifecycle = streaming_lifecycle();
+
+    let error = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.output_item.added",
+            "sequence_number": 1,
+            "output_index": 0,
+            "item": {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": [{"type": "summary_text", "text": "inline"}],
+                "status": "in_progress"
+            }
+        }))
+        .unwrap_err();
+
+    assert!(matches!(&error, StreamTranslationError::Semantic(_)));
+    assert!(error.to_string().contains(
+        "response.output_item.added with reasoning content or summary; reasoning must be emitted through response.reasoning_* events"
+    ));
 }
 
 #[test]

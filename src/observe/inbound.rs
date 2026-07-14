@@ -5,8 +5,10 @@ use crate::observe::point::{
 
 impl ObserveContext {
     pub(crate) fn observe_request_failed(&self, point: RequestFailed<'_>) {
-        self.span
-            .in_scope(|| self.sinks.observe_request_failed(point.error));
+        if self.should_report_failure() {
+            self.span
+                .in_scope(|| self.sinks.observe_request_failed(point.error));
+        }
     }
 
     pub(crate) fn observe_inbound_request_received(&self, point: InboundRequestReceived<'_>) {

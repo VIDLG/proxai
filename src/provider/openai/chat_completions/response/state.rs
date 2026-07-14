@@ -48,9 +48,12 @@ impl ChatUpstreamResponseState {
                 self.stream_done = true;
                 continue;
             }
-            let Ok(response) =
-                serde_json::from_str::<CreateChatCompletionStreamResponse>(&event.data)
-            else {
+            let Ok(payload) = event.payload_with_type() else {
+                continue;
+            };
+            let Ok(response) = serde_json::from_value::<CreateChatCompletionStreamResponse>(
+                super::normalize::normalize_stream_event_payload(payload),
+            ) else {
                 continue;
             };
             let projection = ChatStreamResponseProjection::from(response);

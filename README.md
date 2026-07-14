@@ -25,25 +25,31 @@ The current stable forwarding and translation paths are:
 - inbound: `openai_responses` → outbound: `openai_chat_completions`
 - inbound: `openai_responses` → outbound: `anthropic_messages`
 - inbound: `openai_chat_completions` → outbound: `anthropic_messages`
+- inbound: `openai_chat_completions` → outbound: `openai_responses`
 - inbound: `anthropic_messages` → outbound: `openai_responses`
+- inbound: `anthropic_messages` → outbound: `openai_chat_completions`
 
-Other cross-protocol translation paths remain intentionally unsupported until
-they are implemented explicitly. See [Protocols Reference](https://vidlg.github.io/proxai/reference/protocols)
-for the full matrix.
+See [Protocols Reference](https://vidlg.github.io/proxai/reference/protocols) for the full matrix and pair-specific lossiness.
 
 For Chat-compatible clients such as Zed, plain reasoning text is preserved through
 the `reasoning_content` extension in assistant history, non-streaming messages,
 and streaming deltas. Zed also accepts `reasoning` in streaming deltas, while it
 replays assistant history as `reasoning_content`. These compatibility fields are
 injected and extracted at the translation boundary; the official OpenAI Chat wire
-types remain aligned with the OpenAPI schema. Redacted or encrypted reasoning is
-never exposed as ordinary visible content.
+types remain aligned with the OpenAPI schema. In provider compatibility mode,
+ProxAI also repairs measured upstream omissions such as MiniMax Chat streaming
+chunks without required-nullable `choices[].finish_reason`. Redacted or encrypted
+reasoning is never exposed as ordinary visible content.
 
 When translating Anthropic thinking across turns, ProxAI uses a versioned,
 client-carried continuation envelope: Responses uses `reasoning.encrypted_content`,
 and Chat-compatible history uses a suffix in `reasoning_content`. ProxAI removes
 that envelope and restores the provider-specific thinking blocks before forwarding
 the next request to Anthropic; it keeps no proxy-side continuation state.
+
+Request and stream translation failures automatically create bounded local diagnostic
+bundles under `diagnostics/`, independent of capture. Stream bundles retain the raw
+triggering SSE frame locally; normal logs expose only safe context and `diag=...`.
 
 ## Quick Start
 
@@ -88,7 +94,7 @@ The complete documentation lives in `site/src/content/docs/` and is published to
 - [Using ProxAI](https://vidlg.github.io/proxai/using) — user-facing task guide
 - [Configuration](https://vidlg.github.io/proxai/using/configuration) — runtime settings, routes, providers, capture, logging, errors
 - [Routing and Providers](https://vidlg.github.io/proxai/using/routing-and-providers) — how providers are selected
-- [Observability](https://vidlg.github.io/proxai/using/observability) — capture, logs, privacy boundaries
+- [Observability](https://vidlg.github.io/proxai/using/observability) — compact logs, automatic failure diagnostics, capture, and privacy boundaries
 - [Troubleshooting](https://vidlg.github.io/proxai/using/troubleshooting) — common symptoms and next checks
 - [Protocol Overview](https://vidlg.github.io/proxai/protocol) — phase axis, protocol axis, conversion matrix
 - [Streaming Behavior](https://vidlg.github.io/proxai/protocol/streaming-behavior) — terminal events, tool-call timeouts

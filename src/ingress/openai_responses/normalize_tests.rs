@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 
 #[test]
-fn moves_system_input_to_instructions_and_preserves_other_fields() {
+fn moves_system_input_to_instructions_and_normalizes_compact_tools() {
     let payload = json!({
         "model": "gpt-5.5",
         "instructions": "Existing instructions.",
@@ -37,7 +37,7 @@ fn moves_system_input_to_instructions_and_preserves_other_fields() {
     assert_eq!(normalized["prompt_cache_key"], "zed-session");
     assert_eq!(
         normalized["tools"],
-        json!([{"type": "function", "name": "shell"}])
+        json!([{"type": "function", "name": "shell", "strict": null}])
     );
 }
 
@@ -228,4 +228,19 @@ fn preserves_zed_assistant_replay_annotations_and_logprobs() {
     assert_eq!(normalized["input"][0]["content"][0]["logprobs"], logprobs);
     serde_json::from_value::<crate::protocol::openai_responses::CreateResponseRequest>(normalized)
         .expect("Zed replay with native output metadata must remain valid");
+}
+
+#[test]
+fn preserves_explicit_function_tool_strictness_and_non_function_tools() {
+    let normalized = normalize_payload(json!({
+        "tools": [
+            {"type": "function", "name": "loose", "strict": false},
+            {"type": "function", "name": "unspecified", "strict": null},
+            {"type": "web_search_preview"}
+        ]
+    }));
+
+    assert_eq!(normalized["tools"][0]["strict"], false);
+    assert_eq!(normalized["tools"][1]["strict"], serde_json::Value::Null);
+    assert!(normalized["tools"][2].get("strict").is_none());
 }

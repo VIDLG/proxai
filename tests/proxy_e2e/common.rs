@@ -210,6 +210,52 @@ pub(super) async fn spawn_chat_completion_sse_upstream() -> SocketAddr {
     address
 }
 
+pub(super) async fn spawn_minimax_chat_completion_sse_upstream(
+    capture: Arc<Capture>,
+) -> SocketAddr {
+    async fn stream(
+        State(capture): State<Arc<Capture>>,
+        uri: axum::http::Uri,
+        body: String,
+    ) -> Response<Body> {
+        capture
+            .payloads
+            .lock()
+            .await
+            .push(serde_json::from_str(&body).unwrap());
+        capture.paths.lock().await.push(uri.to_string());
+
+        let chunks = stream::iter([
+            Ok::<_, std::io::Error>(Bytes::from_static(
+                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\n",
+            )),
+            Ok(Bytes::from_static(
+                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}]}\n\n",
+            )),
+            Ok(Bytes::from_static(
+                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            )),
+            Ok(Bytes::from_static(b"data: [DONE]\n\n")),
+        ]);
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/event-stream")
+            .body(Body::from_stream(chunks))
+            .unwrap()
+    }
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new()
+        .route("/v1/chat/completions", post(stream))
+        .with_state(capture);
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    address
+}
+
 pub(super) async fn spawn_incomplete_chat_completion_sse_upstream() -> SocketAddr {
     async fn stream() -> Response<Body> {
         let chunks = stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(
@@ -869,6 +915,54 @@ pub(super) async fn spawn_chat_to_anthropic_shim(upstream_address: SocketAddr) -
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
+        }],
+    )
+    .await
+}
+
+pub(super) async fn spawn_responses_to_chat_shim(upstream_address: SocketAddr) -> SocketAddr {
+    spawn_shim_with_routes(
+        upstream_address,
+        proxai::protocol::ProviderProtocol::OpenaiChatCompletions,
+        vec![proxai::config::RouteConfig {
+            name: None,
+            request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiResponses),
+            match_kind: proxai::config::MatchKind::Glob,
+            model_pattern: "*".to_string(),
+            provider: "openai_default".to_string(),
+            upstream_model: Some("MiniMax-M3".to_string()),
+        }],
+    )
+    .await
+}
+
+pub(super) async fn spawn_chat_to_responses_shim(upstream_address: SocketAddr) -> SocketAddr {
+    spawn_shim_with_routes(
+        upstream_address,
+        proxai::protocol::ProviderProtocol::OpenaiResponses,
+        vec![proxai::config::RouteConfig {
+            name: None,
+            request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiChatCompletions),
+            match_kind: proxai::config::MatchKind::Glob,
+            model_pattern: "*".to_string(),
+            provider: "openai_default".to_string(),
+            upstream_model: Some("gpt-upstream".to_string()),
+        }],
+    )
+    .await
+}
+
+pub(super) async fn spawn_anthropic_to_chat_shim(upstream_address: SocketAddr) -> SocketAddr {
+    spawn_shim_with_routes(
+        upstream_address,
+        proxai::protocol::ProviderProtocol::OpenaiChatCompletions,
+        vec![proxai::config::RouteConfig {
+            name: None,
+            request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
+            match_kind: proxai::config::MatchKind::Glob,
+            model_pattern: "*".to_string(),
+            provider: "openai_default".to_string(),
+            upstream_model: Some("MiniMax-M3".to_string()),
         }],
     )
     .await

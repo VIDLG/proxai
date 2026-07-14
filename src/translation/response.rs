@@ -3,41 +3,69 @@ use serde_json::Value;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 use super::TranslationResult;
+use super::streaming::StreamTranslationFailureSink;
 use crate::http_support::ByteStream;
 
+#[cfg(test)]
 pub(crate) fn translate_streaming_response(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
     input: ByteStream,
 ) -> TranslationResult<ByteStream> {
+    translate_streaming_response_with_failure_sink(
+        request_protocol,
+        provider_protocol,
+        input,
+        StreamTranslationFailureSink::default(),
+    )
+}
+
+/// Translate a streaming response with the pipeline's request observation sink.
+/// The sink is carrier-only: pair translators still receive only protocol data.
+pub(crate) fn translate_streaming_response_with_failure_sink(
+    request_protocol: RequestProtocol,
+    provider_protocol: ProviderProtocol,
+    input: ByteStream,
+    failure_sink: StreamTranslationFailureSink,
+) -> TranslationResult<ByteStream> {
     match (request_protocol, provider_protocol) {
         (RequestProtocol::OpenaiResponses, ProviderProtocol::OpenaiChatCompletions) => Ok(
-            super::openai_chat_completions::to_openai_responses::translate_streaming_response(
+            super::openai_chat_completions::to_openai_responses::translate_streaming_response_with_failure_sink(
                 input,
+                failure_sink,
             ),
         ),
         (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::OpenaiResponses) => Ok(
-            super::openai_responses::to_openai_chat_completions::translate_streaming_response(
+            super::openai_responses::to_openai_chat_completions::translate_streaming_response_with_failure_sink(
                 input,
+                failure_sink,
             ),
         ),
-        (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => {
-            Ok(super::anthropic_messages::to_openai_responses::translate_streaming_response(input))
-        }
+        (RequestProtocol::OpenaiResponses, ProviderProtocol::AnthropicMessages) => Ok(
+            super::anthropic_messages::to_openai_responses::translate_streaming_response_with_failure_sink(
+                input,
+                failure_sink,
+            ),
+        ),
         (RequestProtocol::OpenaiChatCompletions, ProviderProtocol::AnthropicMessages) => Ok(
-            super::anthropic_messages::to_openai_chat_completions::translate_streaming_response(
+            super::anthropic_messages::to_openai_chat_completions::translate_streaming_response_with_failure_sink(
                 input,
+                failure_sink,
             ),
         ),
-        (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => {
-            Ok(super::openai_responses::to_anthropic_messages::translate_streaming_response(input))
-        }
+        (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiResponses) => Ok(
+            super::openai_responses::to_anthropic_messages::translate_streaming_response_with_failure_sink(
+                input,
+                failure_sink,
+            ),
+        ),
         (RequestProtocol::AnthropicMessages, ProviderProtocol::OpenaiChatCompletions) => Ok(
-            super::openai_chat_completions::to_anthropic_messages::translate_streaming_response(
+            super::openai_chat_completions::to_anthropic_messages::translate_streaming_response_with_failure_sink(
                 input,
+                failure_sink,
             ),
         ),
-        // Identity passthrough: no translation needed.
+        // Identity passthrough: no translation carrier exists to observe.
         _ => Ok(input),
     }
 }

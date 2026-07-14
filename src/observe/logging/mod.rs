@@ -7,6 +7,7 @@ mod output_alias;
 mod record;
 mod request_hints;
 mod tool_alias;
+mod translation;
 mod upstream;
 
 use super::point::{
@@ -38,7 +39,10 @@ use openai_responses::{
     emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
 };
 use output_alias::compact_output_item_kind;
-use record::{ProviderRequestFields, ValuableJson};
+use record::{
+    ProviderRequestFields, ValuableJson, compact_provider_protocol, compact_request_protocol,
+    render_translation, render_translation_alias,
+};
 pub use tool_alias::TOOL_NAME_ALIASES;
 use tool_alias::compact_tool_call_name;
 use upstream::{
@@ -87,6 +91,24 @@ pub(super) struct LoggingSink;
 impl LoggingSink {
     pub(super) fn emit_request_failed(self, error: &crate::error::Error) {
         emit_request_failed(error);
+    }
+
+    pub(super) fn emit_request_translation_failure(
+        self,
+        request_id: RequestId,
+        point: &super::point::RequestTranslationFailure<'_>,
+        diagnostic_path: Option<&std::path::Path>,
+    ) {
+        translation::emit_request_translation_failure(request_id, point, diagnostic_path);
+    }
+
+    pub(super) fn emit_streaming_translation_failure(
+        self,
+        request_id: RequestId,
+        point: &super::point::StreamingTranslationFailure<'_>,
+        diagnostic_path: Option<&std::path::Path>,
+    ) {
+        translation::emit_streaming_translation_failure(request_id, point, diagnostic_path);
     }
 
     pub(super) fn emit_provider_request_prepared(

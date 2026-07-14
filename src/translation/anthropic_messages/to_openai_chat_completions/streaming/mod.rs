@@ -78,7 +78,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     event.message.model,
                 );
                 self.lifecycle
-                    .begin_message_stream(identity.clone(), StreamingState::new())?;
+                    .begin_message_stream(identity.clone(), StreamingState::default())?;
                 chunks.push(chat_choice_chunk(&identity, message_start_delta(), None)?);
             }
             MessageStreamEvent::Ping(_) => {}
@@ -110,6 +110,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                                 block.id,
                                 block.name,
                                 Some(FunctionType::Function),
+                                String::new(),
                             ),
                             None,
                         )?);
@@ -133,7 +134,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                             .register_redacted_thinking_block(index, block.data.clone())?;
                     }
 
-                    ContentBlock::ToolResult(_)
+                    other @ (ContentBlock::ToolResult(_)
                     | ContentBlock::ServerToolUse(_)
                     | ContentBlock::WebSearchToolResult(_)
                     | ContentBlock::WebFetchToolResult(_)
@@ -141,11 +142,17 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     | ContentBlock::BashCodeExecutionToolResult(_)
                     | ContentBlock::TextEditorCodeExecutionToolResult(_)
                     | ContentBlock::ToolSearchToolResult(_)
-                    | ContentBlock::ContainerUpload(_) => {
-                        return Err(StreamTranslationError::Semantic(
-                            "Anthropic stream emitted content_block_start that Chat Completions cannot represent"
-                                .to_string(),
-                        ));
+                    | ContentBlock::ContainerUpload(_)) => {
+                        let content_block_type = other.as_ref();
+                        self.lifecycle
+                            .streaming_state_mut()?
+                            .register_ignored_block(index, content_block_type)?;
+                        tracing::trace!(
+                            content_block_type,
+                            block_index = index,
+                            reason = "Anthropic content block has no OpenAI Chat Completions stream representation",
+                            "skipping Anthropic content block during Chat Completions stream translation"
+                        );
                     }
                 }
             }
@@ -164,7 +171,7 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     let tool_call_index = self
                         .lifecycle
                         .streaming_state()?
-                        .get_tool_call_index(event.index)?;
+                        .require_tool_call_index(event.index)?;
 
                     let identity = self.lifecycle.stream_identity()?;
                     chunks.push(chat_choice_chunk(
@@ -191,18 +198,35 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 }
 
                 ContentBlockDelta::CitationsDelta(_) => {
-                    return Err(StreamTranslationError::Semantic(
-                        "Anthropic stream emitted content_block_delta that Chat Completions cannot represent"
-                            .to_string(),
-                    ));
+                    self.lifecycle
+                        .streaming_state()?
+                        .require_text_block(event.index, "citations_delta")?;
+                    tracing::trace!(
+                        block_index = event.index,
+                        reason = "Anthropic citation deltas have no OpenAI Chat Completions stream representation",
+                        "skipping Anthropic citation delta during Chat Completions stream translation"
+                    );
                 }
             },
+            MessageStreamEvent::ContentBlockStop(event) => {
+                let produced_continuation = self
+                    .lifecycle
+                    .streaming_state_mut()?
+                    .finish_content_block(event.index)?;
+                if produced_continuation {
+                    self.lifecycle.streaming_phase_mut()?.mark_reasoning();
+                }
+            }
             MessageStreamEvent::MessageDelta(event) => {
                 let Some(stop_reason) = event.delta.stop_reason.as_non_null().copied() else {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream emitted message_delta without stop_reason".to_string(),
                     ));
                 };
+
+                self.lifecycle
+                    .streaming_state()?
+                    .ensure_content_blocks_closed()?;
 
                 let mut phase = self.lifecycle.take_streaming_phase()?;
                 let emitted_text = phase.emitted_text();
@@ -252,15 +276,6 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                 let _phase = self.lifecycle.take_terminal_phase()?;
                 self.lifecycle.stop();
                 done = true;
-            }
-            MessageStreamEvent::ContentBlockStop(event) => {
-                let produced_continuation = self
-                    .lifecycle
-                    .streaming_state_mut()?
-                    .stop_block(event.index)?;
-                if produced_continuation {
-                    self.lifecycle.streaming_phase_mut()?.mark_reasoning();
-                }
             }
         }
 

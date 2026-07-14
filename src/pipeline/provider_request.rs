@@ -4,7 +4,9 @@ use axum::http::HeaderMap;
 
 use crate::error::{InternalError, Result};
 use crate::ingress::PreparedInboundRequest;
-use crate::observe::{ProviderProtocolRequestPrepared, ProviderRequestBodySizes};
+use crate::observe::{
+    ProviderProtocolRequestPrepared, ProviderRequestBodySizes, RequestTranslationFailure,
+};
 use crate::protocol::RequestProtocol;
 use crate::provider::{self, ProviderRequest, ProviderTransport, ProviderTransportError};
 use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
@@ -91,11 +93,28 @@ impl RoutedInboundFlow {
         } = self;
 
         let provider_protocol = transport.protocol();
-        let translated_payload = translate_request(
+        let translated_payload = match translate_request(
             request.protocol(),
             provider_protocol,
             request.normalized_payload(),
-        )?;
+        ) {
+            Ok(payload) => payload,
+            Err(error) => {
+                obs.observe_request_translation_failure(RequestTranslationFailure {
+                    method: &method,
+                    uri: &uri,
+                    normalized_payload: request.normalized_payload(),
+                    inbound_request_bytes: request.body_len(),
+                    request_protocol: request.protocol(),
+                    provider: &provider_name,
+                    route_name: route_name.as_deref(),
+                    provider_protocol,
+                    model: request.model(),
+                    error: &error,
+                });
+                return Err(error.into());
+            }
+        };
         let provider_request = provider::prepare_request(
             provider_protocol,
             translated_payload,

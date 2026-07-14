@@ -5,6 +5,8 @@
 // - move top-level system messages from `input` into `instructions`;
 // - complete Zed's compact assistant replay messages into standard Responses
 //   output-message items;
+// - complete compact top-level function tool definitions with the required
+//   nullable `strict` carrier field;
 // - leave nested tool schemas and unrelated payload fields untouched.
 use serde_json::{Map, Value};
 
@@ -12,6 +14,8 @@ pub(crate) fn normalize_payload(mut value: Value) -> Value {
     let Some(object) = value.as_object_mut() else {
         return value;
     };
+
+    normalize_function_tools(object);
 
     let can_extract_system_messages = matches!(
         object.get("instructions"),
@@ -26,6 +30,21 @@ pub(crate) fn normalize_payload(mut value: Value) -> Value {
     }
 
     value
+}
+
+fn normalize_function_tools(object: &mut Map<String, Value>) {
+    let Some(tools) = object.get_mut("tools").and_then(Value::as_array_mut) else {
+        return;
+    };
+
+    for tool in tools {
+        let Some(tool) = tool.as_object_mut() else {
+            continue;
+        };
+        if tool.get("type").and_then(Value::as_str) == Some("function") {
+            tool.entry("strict".to_string()).or_insert(Value::Null);
+        }
+    }
 }
 
 fn normalize_input_items(items: &mut Vec<Value>, can_extract_system_messages: bool) -> Vec<String> {
@@ -153,3 +172,7 @@ fn extract_text(content: Option<&Value>) -> Option<String> {
 #[cfg(test)]
 #[path = "normalize_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "normalize_regression_tests.rs"]
+mod regression_tests;

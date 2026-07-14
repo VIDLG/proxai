@@ -18,6 +18,7 @@ pub(crate) use point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
     ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderRequestBodySizes,
     ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestFailed,
-    RequestInfoParseFailure, UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
+    RequestInfoParseFailure, RequestTranslationFailure, StreamingTranslationFailure,
+    UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
     UpstreamStreamChunkReceived, UpstreamStreamProgress, UpstreamStreamingResponseStarted,
 };

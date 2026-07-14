@@ -1,11 +1,17 @@
 use std::future::Future;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use futures_util::StreamExt;
 use getset::CopyGetters;
 use tracing::{Instrument, info_span};
 
 use super::capture::{CaptureController, CaptureSession};
 use super::sinks::ObserveSinks;
+use crate::http_support::ByteStream;
 use crate::request::RequestId;
 
 #[derive(Clone, CopyGetters)]
@@ -16,6 +22,7 @@ pub(crate) struct ObserveContext {
     pub(super) started: Instant,
     pub(super) sinks: ObserveSinks,
     pub(super) span: tracing::Span,
+    failure_reported: Arc<AtomicBool>,
 }
 
 impl ObserveContext {
@@ -30,6 +37,7 @@ impl ObserveContext {
             started,
             sinks: ObserveSinks::new(request_id, capture),
             span,
+            failure_reported: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -46,6 +54,23 @@ impl ObserveContext {
         F: Future,
     {
         future.instrument(self.span.clone()).await
+    }
+
+    pub(crate) fn instrument_stream(&self, mut stream: ByteStream) -> ByteStream {
+        let span = self.span.clone();
+        Box::pin(async_stream::stream! {
+            while let Some(item) = stream.as_mut().next().instrument(span.clone()).await {
+                yield item;
+            }
+        })
+    }
+
+    pub(super) fn mark_failure_reported(&self) {
+        self.failure_reported.store(true, Ordering::Relaxed);
+    }
+
+    pub(super) fn should_report_failure(&self) -> bool {
+        !self.failure_reported.swap(true, Ordering::Relaxed)
     }
 
     pub(crate) fn elapsed(&self) -> std::time::Duration {

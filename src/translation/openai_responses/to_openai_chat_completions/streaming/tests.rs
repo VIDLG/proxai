@@ -3,9 +3,9 @@ use axum::http::{Response, header};
 use serde_json::Value;
 
 use crate::http_support::into_byte_stream;
-use crate::translation::streaming::translate_sse_stream;
+use crate::translation::streaming::StreamTranslationFailureSink;
 
-use super::ChatCompletionStreamTranslator;
+use super::super::translate_streaming_response_with_failure_sink;
 
 async fn translate_responses_stream_body(body: &'static str) -> String {
     let body = complete_response_snapshots(body);
@@ -15,9 +15,9 @@ async fn translate_responses_stream_body(body: &'static str) -> String {
         header::HeaderValue::from_static("text/event-stream"),
     );
 
-    let translated = translate_sse_stream(
+    let translated = translate_streaming_response_with_failure_sink(
         into_byte_stream(response.into_body().into_data_stream()),
-        ChatCompletionStreamTranslator::default(),
+        StreamTranslationFailureSink::default(),
     );
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await
@@ -288,4 +288,110 @@ async fn propagates_response_error_as_stream_error() {
     assert!(text.contains("upstream failed"));
     assert!(!text.contains("\"finish_reason\":\"stop\""));
     assert!(!text.contains("data: [DONE]"));
+}
+
+#[tokio::test]
+async fn forwards_text_suffix_from_output_text_done_snapshot() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_text_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+        "event: response.output_text.delta\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hel\",\"logprobs\":[]}\n\n",
+        "event: response.output_text.done\n",
+        "data: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"text\":\"Hello\",\"logprobs\":[]}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_text_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+    let content = chunks
+        .iter()
+        .filter_map(|chunk| chunk["choices"][0]["delta"]["content"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(content, ["Hel", "lo"]);
+}
+
+#[tokio::test]
+async fn forwards_reasoning_suffix_from_done_snapshot() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_reasoning_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.reasoning_text.delta\n",
+        "data: {\"type\":\"response.reasoning_text.delta\",\"sequence_number\":3,\"item_id\":\"rs_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"plan\"}\n\n",
+        "event: response.reasoning_text.done\n",
+        "data: {\"type\":\"response.reasoning_text.done\",\"sequence_number\":4,\"item_id\":\"rs_1\",\"output_index\":0,\"content_index\":0,\"text\":\"planning\"}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_reasoning_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+    let reasoning = chunks
+        .iter()
+        .filter_map(|chunk| chunk["choices"][0]["delta"]["reasoning_content"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(reasoning, ["plan", "ning"]);
+}
+
+#[tokio::test]
+async fn forwards_initial_function_call_arguments() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_initial_arguments\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"{\\\"city\\\":\\\"SF\\\"}\",\"status\":\"in_progress\"}}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":3,\"response\":{\"id\":\"resp_initial_arguments\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+
+    assert_eq!(
+        chunks[1]["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"],
+        "{\"city\":\"SF\"}"
+    );
+}
+
+#[tokio::test]
+async fn forwards_content_present_only_in_content_part_done() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_part_done\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+        "event: response.content_part.done\n",
+        "data: {\"type\":\"response.content_part.done\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"fallback\",\"annotations\":[],\"logprobs\":[]}}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_part_done\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+
+    assert_eq!(chunks[1]["choices"][0]["delta"]["content"], "fallback");
+}
+
+#[tokio::test]
+async fn forwards_function_argument_suffix_from_done_snapshot() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_argument_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"lookup\",\"arguments\":\"\",\"status\":\"in_progress\"}}\n\n",
+        "event: response.function_call_arguments.delta\n",
+        "data: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":3,\"item_id\":\"fc_1\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\"}\n\n",
+        "event: response.function_call_arguments.done\n",
+        "data: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":4,\"item_id\":\"fc_1\",\"output_index\":0,\"name\":\"lookup\",\"arguments\":\"{\\\"city\\\":\\\"SF\\\"}\"}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_argument_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+    let arguments = chunks
+        .iter()
+        .filter_map(|chunk| {
+            chunk["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"].as_str()
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(arguments, ["", "{\"city\":", "\"SF\"}"]);
 }

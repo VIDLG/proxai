@@ -47,6 +47,7 @@ pub(crate) fn handle_streaming_success_response(
             openai::chat_completions::handle_streaming_response(
                 obs,
                 context.streaming_policy,
+                context.compatibility,
                 response,
             )
         }

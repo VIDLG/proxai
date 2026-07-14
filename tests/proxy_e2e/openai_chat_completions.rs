@@ -110,6 +110,47 @@ async fn proxy_translates_openai_chat_completions_to_anthropic_messages() {
 }
 
 #[tokio::test]
+async fn proxy_translates_openai_responses_stream_to_openai_chat_completions_stream() {
+    let upstream_address = spawn_typed_responses_sse_upstream().await;
+    let shim_address = spawn_chat_to_responses_shim(upstream_address).await;
+
+    let response = local_client()
+        .post(format!("http://{shim_address}/v1/chat/completions"))
+        .json(&json!({
+            "model": "gpt-5.5",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok()),
+        Some("text/event-stream")
+    );
+    let body = response.text().await.unwrap();
+    assert!(
+        body.contains("chat.completion.chunk"),
+        "translated SSE body: {body}"
+    );
+    assert!(
+        body.contains("\"content\":\"hello\""),
+        "translated SSE body: {body}"
+    );
+    assert!(
+        body.contains("\"finish_reason\":\"stop\""),
+        "translated SSE body: {body}"
+    );
+    assert!(body.contains("data: [DONE]"), "translated SSE body: {body}");
+    assert!(!body.contains("response.output_text.delta"));
+}
+
+#[tokio::test]
 async fn proxy_preserves_useful_upstream_error_headers_for_openai_chat_completions() {
     let capture = Arc::new(Capture::default());
     let upstream_address = spawn_error_upstream(capture.clone()).await;

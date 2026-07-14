@@ -55,6 +55,81 @@ fn forward_line_renders_translation_tools_and_request_id() {
 }
 
 #[test]
+fn forward_error_line_keeps_route_json_path_and_diagnostic_bundle() {
+    let mut fields = LogFields::default();
+    fields.insert("event", "fwd-error");
+    fields.insert("method", "POST");
+    fields.insert("path", "/v1/responses");
+    fields.insert("request_protocol_alias", "resp");
+    fields.insert("provider", "anthropic_default");
+    fields.insert("provider_protocol_alias", "ant");
+    fields.insert("inbound_request_bytes", "1536");
+    fields.insert("model", "glm-5.2");
+    fields.insert("stream", "true");
+    fields.insert("request_hints", "tools[1]");
+    fields.insert("json_path", "tools[0]");
+    fields.insert(
+        "diagnostic_path",
+        "diagnostics/1784025355355-request_translation_failure",
+    );
+    fields.insert("err", "missing field `strict`");
+    fields.insert("request_id", "1784025355355");
+
+    let mut line = String::new();
+    format_event_line(
+        &mut line,
+        &Level::WARN,
+        &fields,
+        false,
+        &DurationThresholds::default(),
+    )
+    .unwrap();
+
+    assert!(line.contains("fwd-error  POST /v1/responses"));
+    assert!(line.contains("glm-5.2 resp->anthropic/ant stream tools[1]"));
+    assert!(line.contains("in=1.5KB"));
+    assert!(line.contains("at=tools[0]"));
+    assert!(line.contains("diag=diagnostics/1784025355355-request_translation_failure"));
+    assert!(line.contains("missing field `strict`"));
+}
+
+#[test]
+fn stream_translation_error_line_keeps_protocol_event_and_diagnostic_bundle() {
+    let mut fields = LogFields::default();
+    fields.insert("event", "stream-error");
+    fields.insert("kind", "translation");
+    fields.insert("translation_alias", "chat->resp");
+    fields.insert("stage", "event");
+    fields.insert("upstream_event_type", "message");
+    fields.insert(
+        "diagnostic_path",
+        "diagnostics/1784030000000-stream_translation_failure",
+    );
+    fields.insert(
+        "err",
+        "stream JSON conversion failed: missing field `finish_reason`",
+    );
+    fields.insert("request_id", "1784030000000");
+
+    let mut line = String::new();
+    format_event_line(
+        &mut line,
+        &Level::WARN,
+        &fields,
+        false,
+        &DurationThresholds::default(),
+    )
+    .unwrap();
+
+    assert!(line.contains("stream-error"));
+    assert!(line.contains("chat->resp"));
+    assert!(line.contains("stage=event"));
+    assert!(line.contains("sse=message"));
+    assert!(line.contains("diag=diagnostics/1784030000000-stream_translation_failure"));
+    assert!(line.contains("missing field `finish_reason`"));
+}
+
+#[test]
 fn forward_line_renders_request_effort_when_present() {
     let mut fields = LogFields::default();
     fields.insert("event", "fwd");

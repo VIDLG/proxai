@@ -3,9 +3,9 @@ use axum::http::{Response, header};
 use serde_json::Value;
 
 use crate::http_support::into_byte_stream;
-use crate::translation::streaming::translate_sse_stream;
+use crate::translation::streaming::StreamTranslationFailureSink;
 
-use super::ResponsesStreamTranslator;
+use super::super::translate_streaming_response_with_failure_sink;
 
 async fn translate_chat_stream_body(body: &'static str) -> String {
     let mut response = Response::new(Body::from(body));
@@ -14,9 +14,9 @@ async fn translate_chat_stream_body(body: &'static str) -> String {
         header::HeaderValue::from_static("text/event-stream"),
     );
 
-    let translated = translate_sse_stream(
+    let translated = translate_streaming_response_with_failure_sink(
         into_byte_stream(response.into_body().into_data_stream()),
-        ResponsesStreamTranslator::default(),
+        StreamTranslationFailureSink::default(),
     );
     let body = to_bytes(Body::from_stream(translated), usize::MAX)
         .await

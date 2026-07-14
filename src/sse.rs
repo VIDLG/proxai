@@ -124,6 +124,26 @@ impl SseEvent {
         serde_json::from_str(&self.data).ok()
     }
 
+    /// Re-encode a JSON payload using this event's SSE framing semantics.
+    ///
+    /// The default `message` event is represented by a bare `data:` frame;
+    /// emitting an explicit `event: message` would be wire-equivalent but adds
+    /// an unnecessary frame field to otherwise transparent normalization.
+    pub(crate) fn encode_json_payload(
+        &self,
+        payload: &impl Serialize,
+    ) -> serde_json::Result<Bytes> {
+        let data = serde_json::to_string(payload)?;
+        if self.is_default_event_type() {
+            Ok(Bytes::from(format!("data: {data}\n\n")))
+        } else {
+            Ok(Bytes::from(format!(
+                "event: {}\ndata: {data}\n\n",
+                self.event_type
+            )))
+        }
+    }
+
     pub(crate) fn payload_with_type(&self) -> SseResult<Value> {
         let mut payload = serde_json::from_str::<Value>(&self.data)?;
         if !self.is_default_event_type()

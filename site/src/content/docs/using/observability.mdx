@@ -27,6 +27,16 @@ Logs should not include:
 
 These rules implement [Behavior Contract C23–C25](/reference/behavior-contracts#privacy).
 
+## Automatic failure diagnostics
+
+Translation failures automatically create a local diagnostic bundle under `diagnostics/`; this is independent of all `[capture]` switches. A request failure before forwarding emits `fwd-error`; a failure while converting an already-started SSE response emits `stream-error`. Both include the protocol pair and `diag=...` pointing to the bundle.
+
+A request-translation bundle contains `record.json` plus the exact normalized JSON payload that failed to deserialize or translate. A stream-translation bundle contains `record.json` plus the raw triggering (or immediately preceding terminal) `upstream_sse_event.sse` frame. JSON paths and compact logs identify context, but cannot replace the surrounding payload/frame needed to reproduce the failure. ProxAI keeps only the newest 50 diagnostic bundles.
+
+<ProxaiCallout type="caution" title="Diagnostics can contain private data">
+  Automatic diagnostic payloads can contain prompts and tool arguments. They stay local, are never written into normal logs, and must be sanitized before sharing or committing.
+</ProxaiCallout>
+
 ## Capture one request
 
 <PipelineStrip

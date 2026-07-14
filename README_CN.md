@@ -24,22 +24,30 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 - 入站：`openai_responses` → 出站：`openai_chat_completions`
 - 入站：`openai_responses` → 出站：`anthropic_messages`
 - 入站：`openai_chat_completions` → 出站：`anthropic_messages`
+- 入站：`openai_chat_completions` → 出站：`openai_responses`
 - 入站：`anthropic_messages` → 出站：`openai_responses`
+- 入站：`anthropic_messages` → 出站：`openai_chat_completions`
 
-其他跨协议转换路径仍保持显式未支持，直到逐个实现。完整矩阵见
+完整矩阵和各 protocol pair 的信息损失说明见
 [协议参考](https://vidlg.github.io/proxai/zh/reference/protocols)。
 
 对于 Zed 等 Chat-compatible 客户端，普通 reasoning 文本会通过
 `reasoning_content` 扩展保留在 assistant 历史消息、非流式 message 和流式
 delta 中。Zed 的流式响应还接受 `reasoning`，但 assistant 历史回放使用
 `reasoning_content`。这些兼容字段只在 translation 边界提取和注入，官方
-OpenAI Chat wire types 仍严格对齐 OpenAPI schema。Redacted 或 encrypted
-reasoning 不会伪装成普通可见正文。
+OpenAI Chat wire types 仍严格对齐 OpenAPI schema。在 provider compatibility
+模式下，ProxAI 还会修复已测量到的上游缺失字段，例如 MiniMax Chat 流式 chunk
+缺少 required-nullable `choices[].finish_reason`。Redacted 或 encrypted reasoning
+不会伪装成普通可见正文。
 
 Anthropic thinking 的跨轮续接使用带版本的、由客户端携带的 continuation envelope：
 Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在
 `reasoning_content` 后。ProxAI 会在向 Anthropic 转发下一次请求前剥离 envelope
 并恢复 provider-specific thinking block；代理自身不保存这类续接状态。
+
+请求和流式 translation 失败都会自动在 `diagnostics/` 下生成有数量上限的本地
+诊断 bundle，独立于 capture。流式 bundle 会仅在本地保留触发失败的原始 SSE frame；
+普通日志只输出安全上下文和 `diag=...`。
 
 ## 快速开始
 
@@ -83,7 +91,7 @@ proxai --config <path> \
 - [使用 ProxAI](https://vidlg.github.io/proxai/zh/using) —— 面向用户的任务指南
 - [配置说明](https://vidlg.github.io/proxai/zh/using/configuration) —— server、routing、providers、capture、logging、errors
 - [路由与 Provider](https://vidlg.github.io/proxai/zh/using/routing-and-providers) —— provider 如何被选中
-- [观测与诊断](https://vidlg.github.io/proxai/zh/using/observability) —— capture、日志、隐私边界
+- [观测与诊断](https://vidlg.github.io/proxai/zh/using/observability) —— 紧凑日志、自动失败诊断、capture 与隐私边界
 - [常见排障](https://vidlg.github.io/proxai/zh/using/troubleshooting) —— 常见症状与下一步检查
 - [协议总览](https://vidlg.github.io/proxai/zh/protocol) —— phase 轴、protocol 轴、转换矩阵
 - [流式行为](https://vidlg.github.io/proxai/zh/protocol/streaming-behavior) —— terminal event、tool-call 超时

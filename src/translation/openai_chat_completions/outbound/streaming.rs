@@ -36,6 +36,7 @@ pub(crate) fn tool_call_start_delta(
     id: String,
     name: String,
     type_: Option<FunctionType>,
+    arguments: String,
 ) -> ChatCompletionStreamResponseDelta {
     ChatCompletionStreamResponseDelta {
         tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
@@ -44,7 +45,7 @@ pub(crate) fn tool_call_start_delta(
             r#type: type_,
             function: Some(FunctionCallStream {
                 name: Some(name),
-                arguments: Some(String::new()),
+                arguments: Some(arguments),
             }),
         }]),
         ..Default::default()

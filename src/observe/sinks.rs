@@ -9,9 +9,9 @@ use crate::observe::point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
     ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamOutcome,
     ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestInfoParseFailure,
-    UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
-    UpstreamResponseHeadReceived, UpstreamStreamChunkReceived, UpstreamStreamProgress,
-    UpstreamStreamingResponseStarted,
+    RequestTranslationFailure, StreamingTranslationFailure, UpstreamErrorResponseReceived,
+    UpstreamNonStreamingResponseReceived, UpstreamResponseHeadReceived,
+    UpstreamStreamChunkReceived, UpstreamStreamProgress, UpstreamStreamingResponseStarted,
 };
 
 use crate::request::RequestId;
@@ -66,6 +66,32 @@ impl ObserveSinks {
         );
         self.logging
             .emit_request_info_parse_failure(request_id, point.error);
+    }
+
+    pub(super) fn observe_request_translation_failure(
+        &self,
+        request_id: RequestId,
+        point: &RequestTranslationFailure<'_>,
+    ) {
+        let diagnostic_path = self.diagnostics.record_request_translation_failure(point);
+        self.logging.emit_request_translation_failure(
+            request_id,
+            point,
+            diagnostic_path.as_deref(),
+        );
+    }
+
+    pub(super) fn observe_streaming_translation_failure(
+        &self,
+        request_id: RequestId,
+        point: &StreamingTranslationFailure<'_>,
+    ) {
+        let diagnostic_path = self.diagnostics.record_streaming_translation_failure(point);
+        self.logging.emit_streaming_translation_failure(
+            request_id,
+            point,
+            diagnostic_path.as_deref(),
+        );
     }
 
     pub(super) fn observe_provider_request_prepared(

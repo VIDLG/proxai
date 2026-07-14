@@ -27,6 +27,16 @@ import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/Proxai
 
 这些规则实现了 [行为契约 C23–C25](/zh/reference/behavior-contracts#隐私)。
 
+## 自动失败诊断
+
+Translation 失败时，ProxAI 会自动在 `diagnostics/` 下创建本地诊断 bundle；该行为独立于所有 `[capture]` 开关。转发前的请求失败使用 `fwd-error`；已经开始的 SSE 响应在转换时失败使用 `stream-error`。两者都会包含协议对和指向 bundle 的 `diag=...`。
+
+请求 translation bundle 包含 `record.json` 和发生反序列化或转换失败时的完整 normalized JSON payload。流式 translation bundle 包含 `record.json` 和触发失败的原始（或终止前最近一个）`upstream_sse_event.sse` frame。JSON path 和紧凑日志只能定位上下文，不能替代复现所需的 payload/frame 现场。ProxAI 只保留最新 50 个诊断 bundle。
+
+<ProxaiCallout type="caution" title="Diagnostics 可能包含私有数据">
+  自动诊断 payload 可能包含 prompt 和 tool arguments。它们只保存在本地，不会写入普通日志；分享或提交前必须脱敏。
+</ProxaiCallout>
+
 ## Capture 一次请求
 
 <PipelineStrip

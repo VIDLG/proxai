@@ -4,6 +4,9 @@ mod common;
 #[path = "proxy_e2e/openai_responses.rs"]
 mod openai_responses;
 
+#[path = "proxy_e2e/openai_responses_regression_tests.rs"]
+mod openai_responses_regression_tests;
+
 #[path = "proxy_e2e/openai_chat_completions.rs"]
 mod openai_chat_completions;
 

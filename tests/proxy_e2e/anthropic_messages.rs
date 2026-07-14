@@ -238,6 +238,61 @@ async fn proxy_replays_incomplete_anthropic_messages_sse() {
 }
 
 #[tokio::test]
+async fn proxy_translates_openai_chat_stream_to_anthropic_messages_stream() {
+    let capture = Arc::new(Capture::default());
+    let upstream_address = spawn_minimax_chat_completion_sse_upstream(capture.clone()).await;
+    let shim_address = spawn_anthropic_to_chat_shim(upstream_address).await;
+
+    let response = local_client()
+        .post(format!("http://{shim_address}/v1/messages"))
+        .json(&json!({
+            "model": "claude-sonnet",
+            "max_tokens": 256,
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok()),
+        Some("text/event-stream")
+    );
+    let body = response.text().await.unwrap();
+    assert!(
+        body.contains("event: message_start"),
+        "translated SSE body: {body}"
+    );
+    assert!(
+        body.contains("event: content_block_start"),
+        "translated SSE body: {body}"
+    );
+    assert!(
+        body.contains("\"type\":\"text\"") && body.contains("\"text\":\"hello\""),
+        "translated SSE body: {body}"
+    );
+    assert!(
+        body.contains("event: message_stop"),
+        "translated SSE body: {body}"
+    );
+    assert!(!body.contains("chat.completion.chunk"));
+
+    let payloads = capture.payloads.lock().await;
+    assert_eq!(payloads.len(), 1);
+    assert_eq!(payloads[0]["model"], "MiniMax-M3");
+    assert_eq!(payloads[0]["messages"][0]["role"], "user");
+    assert_eq!(payloads[0]["stream"], true);
+
+    let paths = capture.paths.lock().await;
+    assert_eq!(paths.as_slice(), &["/v1/chat/completions".to_string()]);
+}
+
+#[tokio::test]
 async fn proxy_translates_openai_responses_stream_to_anthropic_messages_stream() {
     let upstream_address = spawn_typed_responses_sse_upstream().await;
     let shim_address = spawn_anthropic_to_responses_shim(upstream_address).await;

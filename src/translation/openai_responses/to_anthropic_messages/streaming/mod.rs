@@ -14,10 +14,14 @@ use crate::http_support::ByteStream;
 use crate::protocol::anthropic::messages::{MessageStreamEvent, StopReason};
 use crate::protocol::openai_responses::{Response, ResponseStreamEvent};
 
-use crate::translation::openai_responses::streaming::ResponsesInboundLifecycle;
+use crate::translation::openai_responses::streaming::{
+    ResponsesInboundLifecycle, response_failure_error,
+};
+
 use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, translate_sse_stream, typed_stream_events,
+    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError,
+    StreamTranslationFailureSink, StreamTranslationResult, StreamingEventTranslator,
+    translate_sse_stream, typed_stream_events,
 };
 
 use state::StreamingState;
@@ -26,8 +30,16 @@ use state::StreamingState;
 #[path = "tests.rs"]
 mod tests;
 
+#[cfg(test)]
 pub(super) fn translate_streaming_response(input: ByteStream) -> ByteStream {
-    translate_sse_stream(input, MessagesStreamTranslator::default())
+    translate_streaming_response_with_failure_sink(input, StreamTranslationFailureSink::default())
+}
+
+pub(super) fn translate_streaming_response_with_failure_sink(
+    input: ByteStream,
+    failure_sink: StreamTranslationFailureSink,
+) -> ByteStream {
+    translate_sse_stream(input, MessagesStreamTranslator::default(), failure_sink)
 }
 
 #[derive(Debug, Default)]
@@ -43,29 +55,24 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
 
         match parsed {
             ResponseStreamEvent::ResponseCreated(event) => {
-                events.extend(self.observe_response_snapshot(&event.response)?);
+                events.extend(self.project_response_snapshot(&event.response)?);
             }
             ResponseStreamEvent::ResponseInProgress(event) => {
-                events.extend(self.observe_response_snapshot(&event.response)?);
+                events.extend(self.project_response_snapshot(&event.response)?);
             }
             ResponseStreamEvent::ResponseOutputItemAdded(event) => {
                 let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.register_output_item(
+                events.extend(state.project_output_item_added(
                     event.output_index,
                     event.item,
                     &event_type,
                 )?);
             }
-            ResponseStreamEvent::ResponseOutputItemDone(event) => {
-                self.lifecycle
-                    .streaming_state_mut()?
-                    .finish_output_item(event.output_index, &event_type)?;
-            }
             ResponseStreamEvent::ResponseContentPartAdded(event) => {
                 events.extend(
                     self.lifecycle
                         .streaming_state_mut()?
-                        .register_content_part(
+                        .project_content_part_added(
                             event.output_index,
                             event.content_index,
                             event.part,
@@ -73,51 +80,85 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                         )?,
                 );
             }
-            ResponseStreamEvent::ResponseContentPartDone(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.finish_content_part(
-                    event.output_index,
-                    event.content_index,
-                    event.part,
-                    &event_type,
-                )?);
-            }
             ResponseStreamEvent::ResponseOutputTextDelta(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.text_delta(
-                    event.output_index,
-                    event.content_index,
-                    event.delta,
-                    &event_type,
-                )?);
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_output_text_delta(
+                            event.output_index,
+                            event.content_index,
+                            event.delta,
+                            &event_type,
+                        )?,
+                );
             }
             ResponseStreamEvent::ResponseOutputTextDone(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.finish_text(
-                    event.output_index,
-                    event.content_index,
-                    event.text,
-                    &event_type,
-                )?);
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_output_text_done(
+                            event.output_index,
+                            event.content_index,
+                            event.text,
+                            &event_type,
+                        )?,
+                );
             }
             ResponseStreamEvent::ResponseRefusalDelta(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.refusal_delta(
-                    event.output_index,
-                    event.content_index,
-                    event.delta,
-                    &event_type,
-                )?);
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_refusal_delta(
+                            event.output_index,
+                            event.content_index,
+                            event.delta,
+                            &event_type,
+                        )?,
+                );
             }
             ResponseStreamEvent::ResponseRefusalDone(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.finish_refusal(
+                events.extend(self.lifecycle.streaming_state_mut()?.project_refusal_done(
                     event.output_index,
                     event.content_index,
                     event.refusal,
                     &event_type,
                 )?);
             }
+            ResponseStreamEvent::ResponseReasoningTextDelta(event) => {
+                let state = self.lifecycle.streaming_state_mut()?;
+                events.extend(state.project_reasoning_text_delta(
+                    event.output_index,
+                    event.content_index,
+                    event.delta,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseReasoningTextDone(event) => {
+                let state = self.lifecycle.streaming_state_mut()?;
+                events.extend(state.project_reasoning_text_done(
+                    event.output_index,
+                    event.content_index,
+                    event.text,
+                    &event_type,
+                )?);
+            }
+            ResponseStreamEvent::ResponseContentPartDone(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_content_part_done(
+                            event.output_index,
+                            event.content_index,
+                            event.part,
+                            &event_type,
+                        )?,
+                );
+            }
             ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => {
                 events.extend(
                     self.lifecycle
                         .streaming_state_mut()?
-                        .register_summary_part(
+                        .project_reasoning_summary_part_added(
                             event.output_index,
                             event.summary_index,
                             event.part,
@@ -125,51 +166,45 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                         )?,
                 );
             }
-            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.stop_summary_part(
-                    event.output_index,
-                    event.summary_index,
-                    event.part,
-                    &event_type,
-                )?);
-            }
             ResponseStreamEvent::ResponseReasoningSummaryTextDelta(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.summary_delta(
-                    event.output_index,
-                    event.summary_index,
-                    event.delta,
-                    &event_type,
-                )?);
-            }
-            ResponseStreamEvent::ResponseReasoningTextDelta(event) => {
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.reasoning_text_delta(
-                    event.output_index,
-                    event.content_index,
-                    event.delta,
-                    &event_type,
-                )?);
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_reasoning_summary_text_delta(
+                            event.output_index,
+                            event.summary_index,
+                            event.delta,
+                            &event_type,
+                        )?,
+                );
             }
             ResponseStreamEvent::ResponseReasoningSummaryTextDone(event) => {
-                events.extend(self.lifecycle.streaming_state_mut()?.finish_summary_text(
-                    event.output_index,
-                    event.summary_index,
-                    event.text,
-                    &event_type,
-                )?);
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_reasoning_summary_text_done(
+                            event.output_index,
+                            event.summary_index,
+                            event.text,
+                            &event_type,
+                        )?,
+                );
             }
-            ResponseStreamEvent::ResponseReasoningTextDone(event) => {
-                let state = self.lifecycle.streaming_state_mut()?;
-                events.extend(state.stop_reasoning_text(
-                    event.output_index,
-                    event.content_index,
-                    event.text,
-                    &event_type,
-                )?);
+            ResponseStreamEvent::ResponseReasoningSummaryPartDone(event) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_reasoning_summary_part_done(
+                            event.output_index,
+                            event.summary_index,
+                            event.part,
+                            &event_type,
+                        )?,
+                );
             }
             ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(event) => {
                 let state = self.lifecycle.streaming_state_mut()?;
-                events.push(state.function_arguments_delta(
+                events.push(state.project_function_call_arguments_delta(
                     event.output_index,
                     event.delta,
                     &event_type,
@@ -179,7 +214,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                 events.extend(
                     self.lifecycle
                         .streaming_state_mut()?
-                        .finish_function_arguments(
+                        .project_function_call_arguments_done(
                             event.output_index,
                             event.arguments,
                             &event_type,
@@ -189,27 +224,40 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
             ResponseStreamEvent::ResponseCustomToolCallInputDelta(event) => {
                 self.lifecycle
                     .streaming_state_mut()?
-                    .custom_tool_input_delta(event.output_index, &event.delta, &event_type)?;
+                    .project_custom_tool_call_input_delta(
+                        event.output_index,
+                        &event.delta,
+                        &event_type,
+                    )?;
             }
             ResponseStreamEvent::ResponseCustomToolCallInputDone(event) => {
                 events.extend(
                     self.lifecycle
                         .streaming_state_mut()?
-                        .finish_custom_tool_input(event.output_index, event.input, &event_type)?,
+                        .project_custom_tool_call_input_done(
+                            event.output_index,
+                            event.input,
+                            &event_type,
+                        )?,
                 );
+            }
+            ResponseStreamEvent::ResponseOutputItemDone(event) => {
+                self.lifecycle
+                    .streaming_state_mut()?
+                    .ensure_output_item_projection_closed(event.output_index, &event_type)?;
             }
             ResponseStreamEvent::ResponseCompleted(event) => {
                 let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
-                let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.complete(StopReason::EndTurn, usage)?);
+                let state = self.lifecycle.take_terminal_state()?;
+                events.extend(state.finish_message(StopReason::EndTurn, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseIncomplete(event) => {
                 let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
-                let mut state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.complete(StopReason::MaxTokens, usage)?);
+                let state = self.lifecycle.take_terminal_state()?;
+                events.extend(state.finish_message(StopReason::MaxTokens, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseFailed(event) => {
@@ -239,46 +287,24 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
     }
 
     fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
-        if self.lifecycle.is_stopped() {
-            return Ok(Vec::new());
-        }
-        // Responses streams must end with a terminal semantic event
-        // (`response.completed` / `incomplete` / `failed` / `error`). A carrier
-        // EOF or `[DONE]` before that means the upstream closed early; surface it
-        // as a stream translation error instead of inventing Anthropic terminal
-        // events.
-        Err(self.lifecycle.unexpected_stream_end_error(end))
+        self.lifecycle.finish_stream(end)?;
+        Ok(Vec::new())
     }
 }
 
 impl MessagesStreamTranslator {
-    fn observe_response_snapshot(
+    fn project_response_snapshot(
         &mut self,
         response: &Response,
     ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
-        let identity = response_identity(response);
+        let identity = StreamIdentity::new(response.id.clone(), response.model.clone());
         self.lifecycle
             .ensure_response_stream(identity.clone(), StreamingState::default())?;
         Ok(self
             .lifecycle
             .streaming_state_mut()?
-            .start_message(&identity, response.usage.as_ref())
+            .emit_message_start(&identity, response.usage.as_ref())
             .into_iter()
             .collect())
     }
-}
-
-fn response_failure_error(response: &Response) -> StreamTranslationError {
-    let detail = response
-        .error
-        .as_non_null()
-        .map(|error| format!("{}: {}", error.code, error.message))
-        .unwrap_or_else(|| "upstream response failed without error details".to_string());
-    StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))
-}
-
-/// Build a `StreamIdentity` from a Responses `Response` snapshot, preserving
-/// the upstream `resp_...` id verbatim so round-trip debugging stays tractable.
-fn response_identity(response: &Response) -> StreamIdentity {
-    StreamIdentity::new(response.id.clone(), response.model.clone())
 }

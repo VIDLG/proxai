@@ -13,7 +13,7 @@ use crate::translation::streaming::{StreamTranslationError, StreamTranslationRes
 /// Tracks content block registrations so delta/stop events can be validated
 /// against the block variant they reference. Holds no protocol output
 /// directly; output building lives in `super::output`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct StreamingState {
     blocks: BTreeMap<u32, StreamBlock>,
     continuation: Option<ContinuationEnvelope>,
@@ -26,17 +26,22 @@ pub(super) enum StreamBlock {
     ToolUse { chat_tool_index: u32 },
     Thinking { text: String, signature: String },
     RedactedThinking { data: String },
+    Ignored { content_block_type: String },
+}
+
+impl StreamBlock {
+    fn content_block_type(&self) -> &str {
+        match self {
+            Self::Text => "text",
+            Self::ToolUse { .. } => "tool_use",
+            Self::Thinking { .. } => "thinking",
+            Self::RedactedThinking { .. } => "redacted_thinking",
+            Self::Ignored { content_block_type } => content_block_type,
+        }
+    }
 }
 
 impl StreamingState {
-    pub(super) fn new() -> Self {
-        Self {
-            blocks: BTreeMap::new(),
-            continuation: None,
-            next_tool_call_index: 0,
-        }
-    }
-
     pub(super) fn register_tool_use_block(
         &mut self,
         block_index: u32,
@@ -76,6 +81,19 @@ impl StreamingState {
         data: String,
     ) -> StreamTranslationResult<()> {
         self.register_block(block_index, StreamBlock::RedactedThinking { data })
+    }
+
+    pub(super) fn register_ignored_block(
+        &mut self,
+        block_index: u32,
+        content_block_type: impl Into<String>,
+    ) -> StreamTranslationResult<()> {
+        self.register_block(
+            block_index,
+            StreamBlock::Ignored {
+                content_block_type: content_block_type.into(),
+            },
+        )
     }
 
     fn register_block(
@@ -120,12 +138,15 @@ impl StreamingState {
         block_index: u32,
         delta_name: &'static str,
     ) -> StreamTranslationResult<()> {
-        match self.opened_block(block_index, delta_name)? {
-            StreamBlock::Text => Ok(()),
-            _ => Err(StreamTranslationError::Semantic(format!(
-                "Anthropic stream emitted {delta_name} for incompatible content block index {block_index}"
-            ))),
+        if matches!(
+            self.opened_block(block_index, delta_name)?,
+            StreamBlock::Text
+        ) {
+            return Ok(());
         }
+        Err(StreamTranslationError::Semantic(format!(
+            "Anthropic stream emitted {delta_name} for incompatible content block index {block_index}"
+        )))
     }
 
     pub(super) fn append_thinking_delta(
@@ -160,7 +181,7 @@ impl StreamingState {
         Ok(())
     }
 
-    pub(super) fn get_tool_call_index(&self, block_index: u32) -> StreamTranslationResult<u32> {
+    pub(super) fn require_tool_call_index(&self, block_index: u32) -> StreamTranslationResult<u32> {
         let StreamBlock::ToolUse { chat_tool_index } =
             self.opened_block(block_index, "input_json_delta")?
         else {
@@ -171,7 +192,10 @@ impl StreamingState {
         Ok(*chat_tool_index)
     }
 
-    pub(super) fn stop_block(&mut self, block_index: u32) -> StreamTranslationResult<bool> {
+    pub(super) fn finish_content_block(
+        &mut self,
+        block_index: u32,
+    ) -> StreamTranslationResult<bool> {
         let block = self.blocks.remove(&block_index).ok_or_else(|| {
             StreamTranslationError::Semantic(format!(
                 "Anthropic stream emitted content_block_stop for unopened content block index {block_index}"
@@ -193,12 +217,26 @@ impl StreamingState {
                     .push(Continuation::RedactedThinking { data });
                 true
             }
-            StreamBlock::Text | StreamBlock::ToolUse { .. } => false,
+            StreamBlock::Text | StreamBlock::ToolUse { .. } | StreamBlock::Ignored { .. } => false,
         };
         Ok(produced_continuation)
+    }
+
+    pub(super) fn ensure_content_blocks_closed(&self) -> StreamTranslationResult<()> {
+        let Some((block_index, block)) = self.blocks.iter().next() else {
+            return Ok(());
+        };
+        Err(StreamTranslationError::Semantic(format!(
+            "Anthropic stream emitted message_delta before content_block_stop for open {} content block index {block_index}",
+            block.content_block_type()
+        )))
     }
 
     pub(super) fn take_continuation(&mut self) -> Option<ContinuationEnvelope> {
         self.continuation.take()
     }
 }
+
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod tests;

@@ -82,7 +82,8 @@ The shared protocol compare rules enforce these named carriers and their distinc
 
 Provider compatibility normalization should repair only conservative or measured upstream deviations into the nearest official protocol shape. Current conservative repairs are SDK required-nullable response fields missing from JSON objects (`missing -> null`) and bare `message_start` events normalized into the official nested `message` shape. Current measured provider repairs:
 
-- MiniMax-compatible streams may omit `signature` on a thinking `content_block_start`, so ProxAI inserts an empty signature for that narrow case.
+- MiniMax-compatible Anthropic streams may omit `signature` on a thinking `content_block_start`, so ProxAI inserts an empty signature for that narrow case.
+- MiniMax-compatible Chat Completions streams may omit required-nullable `choices[].finish_reason` before their terminal chunk, so ProxAI inserts `null` for the missing field.
 - GLM 5.1 Anthropic-compatible streams may emit `server_tool_use` with only one counter, so ProxAI fills the absent `web_fetch_requests` or `web_search_requests` counter with `0`.
 
 Do not add other provider-specific business defaults, such as missing tool callers, unless a measured upstream case and a focused fixture document the behavior.

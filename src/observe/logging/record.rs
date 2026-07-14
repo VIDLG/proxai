@@ -76,7 +76,7 @@ impl From<&ProviderRequestLogPayload<'_>> for ProviderRequestFields {
     }
 }
 
-fn render_translation(
+pub(super) fn render_translation(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
 ) -> String {
@@ -87,7 +87,7 @@ fn render_translation(
     }
 }
 
-fn render_translation_alias(
+pub(super) fn render_translation_alias(
     request_protocol: RequestProtocol,
     provider_protocol: ProviderProtocol,
 ) -> String {
@@ -102,7 +102,7 @@ fn render_translation_alias(
     }
 }
 
-fn compact_request_protocol(protocol: RequestProtocol) -> &'static str {
+pub(super) fn compact_request_protocol(protocol: RequestProtocol) -> &'static str {
     match protocol {
         RequestProtocol::OpenaiResponses => "resp",
         RequestProtocol::OpenaiChatCompletions => "chat",
@@ -110,7 +110,7 @@ fn compact_request_protocol(protocol: RequestProtocol) -> &'static str {
     }
 }
 
-fn compact_provider_protocol(protocol: ProviderProtocol) -> &'static str {
+pub(super) fn compact_provider_protocol(protocol: ProviderProtocol) -> &'static str {
     match protocol {
         ProviderProtocol::OpenaiResponses => "resp",
         ProviderProtocol::OpenaiChatCompletions => "chat",

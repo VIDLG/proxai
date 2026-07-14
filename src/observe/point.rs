@@ -8,6 +8,8 @@ use crate::provider::ProviderRequestView;
 use crate::provider::anthropic_messages::AnthropicUpstreamResponseSnapshot;
 use crate::provider::openai::chat_completions::ChatUpstreamStreamSnapshot;
 use crate::provider::openai::responses::ResponsesUpstreamStreamSnapshot;
+use crate::translation::TranslationError;
+use crate::translation::streaming::StreamTranslationFailure;
 use crate::upstream::UpstreamStreamError;
 
 pub(crate) struct InboundRequestReceived<'a> {
@@ -37,6 +39,30 @@ impl ProviderRequestBodySizes {
 
 pub(crate) struct RequestFailed<'a> {
     pub(crate) error: &'a Error,
+}
+
+pub(crate) struct RequestTranslationFailure<'a> {
+    pub(crate) method: &'a Method,
+    pub(crate) uri: &'a Uri,
+    pub(crate) normalized_payload: &'a serde_json::Value,
+    pub(crate) inbound_request_bytes: usize,
+    pub(crate) request_protocol: RequestProtocol,
+    pub(crate) provider: &'a str,
+    pub(crate) route_name: Option<&'a str>,
+    pub(crate) provider_protocol: ProviderProtocol,
+    pub(crate) model: &'a str,
+    pub(crate) error: &'a TranslationError,
+}
+
+/// A stream carrier failure after the provider request has already been sent.
+/// The local diagnostics bundle retains the raw triggering SSE frame; normal
+/// logs retain only its event type and the bundle path.
+pub(crate) struct StreamingTranslationFailure<'a> {
+    pub(crate) method: &'a Method,
+    pub(crate) uri: &'a Uri,
+    pub(crate) request_protocol: RequestProtocol,
+    pub(crate) provider_protocol: ProviderProtocol,
+    pub(crate) failure: &'a StreamTranslationFailure,
 }
 
 pub(crate) struct ProviderProtocolRequestPrepared<'a> {

@@ -1,4 +1,6 @@
 mod openai_responses;
+mod stream_translation;
+mod translation;
 
 use chrono::Utc;
 use serde::Serialize;
@@ -8,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::observe::point::{RequestTranslationFailure, StreamingTranslationFailure};
 use crate::paths;
 use crate::provider::openai::responses::ResponsesUpstreamStreamSnapshot;
 use crate::request::RequestId;
@@ -34,6 +37,20 @@ impl DiagnosticsSink {
             request_info_parse_payload,
             error,
         )
+    }
+
+    pub(super) fn record_request_translation_failure(
+        &self,
+        point: &RequestTranslationFailure<'_>,
+    ) -> Option<PathBuf> {
+        translation::write_request_translation_failure(self.request_id, point)
+    }
+
+    pub(super) fn record_streaming_translation_failure(
+        &self,
+        point: &StreamingTranslationFailure<'_>,
+    ) -> Option<PathBuf> {
+        stream_translation::write_streaming_translation_failure(self.request_id, point)
     }
 
     pub(super) fn record_openai_responses_unfinished_tool_stream(
