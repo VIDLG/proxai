@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::json;
 
-use crate::observe::{Observation, Observer, ProviderResponseAdaptation, ProviderResponsePhase};
+use crate::observe::{
+    Observation, Observer, ProviderObservation, ProviderResponseAdaptation, ProviderResponsePhase,
+};
 use crate::protocol::ProviderProtocol;
 use crate::translation::stream::StreamEvent;
 
@@ -90,10 +92,13 @@ fn compatible_mode_emits_typed_provider_observation() {
 
     assert!(matches!(
         recorded.lock().unwrap().as_slice(),
-        [Observation::Provider(observation)]
-            if observation.phase == ProviderResponsePhase::Streaming
-                && observation.adaptation
-                    == ProviderResponseAdaptation::OpenaiChatCompletionsStreamEvent
+        [Observation::Provider(
+            ProviderObservation::ResponseAdapted {
+                phase: ProviderResponsePhase::Streaming,
+                adaptation: ProviderResponseAdaptation::OpenaiChatCompletionsStreamEvent,
+                ..
+            }
+        )]
     ));
 }
 

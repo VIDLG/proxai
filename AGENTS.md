@@ -63,8 +63,8 @@ Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 - `crates/proxai-core/src/protocol/` owns wire models.
 - `crates/proxai-core/src/routing/` owns carrier-independent route configuration, matcher compilation, provider-label selection, upstream model rewrite, and typed routing errors.
 - `crates/proxai-core/src/translation/` owns protocol-to-protocol conversion.
-- `crates/proxai-core/src/provider/` owns carrier-independent provider compatibility policy, structured response normalization, and typed provider adaptation observations.
-- `provider/request` owns application-side provider request preparation, including provider model rewrite, projection/summary extraction, and body serialization.
+- `crates/proxai-core/src/provider/` owns carrier-independent provider request payload preparation, response compatibility policy, structured response normalization, and typed provider adaptation observations.
+- `provider/request` owns application-side provider projection/summary extraction, body serialization, and request carrier assembly.
 - `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
 - `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
 

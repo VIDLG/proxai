@@ -24,12 +24,27 @@ pub enum IngressObservation {
     AnthropicLegacyThinkingBudget { model: String, budget_tokens: u32 },
 }
 
-/// A provider compatibility repair applied before response translation or forwarding.
+/// A provider compatibility adaptation applied around translation or forwarding.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProviderObservation {
-    pub protocol: ProviderProtocol,
-    pub phase: ProviderResponsePhase,
-    pub adaptation: ProviderResponseAdaptation,
+pub enum ProviderObservation {
+    RequestAdapted {
+        protocol: ProviderProtocol,
+        adaptation: ProviderRequestAdaptation,
+    },
+    ResponseAdapted {
+        protocol: ProviderProtocol,
+        phase: ProviderResponsePhase,
+        adaptation: ProviderResponseAdaptation,
+    },
+}
+
+/// Closed set of provider request compatibility adaptations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderRequestAdaptation {
+    OpenaiResponsesOutputFieldsRemoved {
+        status_removed: usize,
+        reasoning_content_removed: usize,
+    },
 }
 
 /// Structured provider response phase where compatibility repair occurred.

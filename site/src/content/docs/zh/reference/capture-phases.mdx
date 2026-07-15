@@ -13,7 +13,7 @@ Capture phase 表示数据处在代理 pipeline 的哪个位置。Capture artifa
   labels={{ modules: '模块', responsibility: '职责' }}
   stages={[
     { name: 'inbound_request', modules: ['ingress/', 'pipeline/inbound_request'], responsibility: '本地客户端原始请求，已经经过 HTTP admission 和协议检测。' },
-    { name: 'provider_request', modules: ['routing', 'translation/', 'provider/*/request'], responsibility: '路由、协议转换、模型改写、projection 和序列化之后的 provider 请求。' },
+    { name: 'provider_request', modules: ['routing', 'translation/', 'proxai-core/provider/request/', 'provider/*/request'], responsibility: '路由、协议转换、core value preparation、projection 和序列化之后的 provider 请求。' },
     { name: 'upstream_response', modules: ['provider/*/transport', 'pipeline/upstream_response'], responsibility: '出站响应重建之前的上游 status、headers 和 body bytes。' },
     { name: 'outbound_response', modules: ['translation/', 'http_support'], responsibility: '为客户端入站协议重建后的最终响应。' },
   ]}

@@ -5,6 +5,8 @@
 //! sinks belong to downstream composition.
 
 mod normalizer;
+mod request;
 mod response;
 
 pub use normalizer::{ProviderCompatibility, ProviderNormalizer};
+pub use request::ProviderRequestPreparer;

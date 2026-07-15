@@ -1,3 +1,4 @@
+use proxai_core::provider::ProviderRequestPreparer;
 use serde_json::Value;
 
 use crate::error::{InternalError, Result};
@@ -15,12 +16,12 @@ pub(crate) fn prepare_request(
     upstream_model: &str,
     obs: &ObserveContext,
 ) -> Result<ProviderRequest, InternalError> {
-    let provider_payload = payload_with_upstream_model(&payload, upstream_model);
+    let provider_payload = ProviderRequestPreparer::new(protocol)
+        .with_observer(obs.clone())
+        .prepare(payload, upstream_model);
 
     match protocol {
         ProviderProtocol::OpenaiResponses => {
-            let provider_payload =
-                responses_provider::request::sanitize_provider_payload(provider_payload);
             let body = serde_json::to_vec(&provider_payload)?;
             let prepared = responses_provider::request::prepare_provider_request(
                 &provider_payload,
@@ -51,17 +52,6 @@ pub(crate) fn prepare_request(
             ))
         }
     }
-}
-
-pub(in crate::provider) fn payload_with_upstream_model(
-    payload: &Value,
-    upstream_model: &str,
-) -> Value {
-    let mut payload = payload.clone();
-    if let Some(model) = payload.get_mut("model") {
-        *model = Value::String(upstream_model.to_string());
-    }
-    payload
 }
 
 #[derive(Debug, Clone)]

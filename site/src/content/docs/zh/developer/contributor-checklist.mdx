@@ -34,7 +34,7 @@ import { ContractCards, ProxaiCallout, ReferenceTable } from '@components/Proxai
   rows={[
     ['请求转换', '`(request_protocol, provider_protocol, normalized_payload) -> payload`'],
     ['非流式响应转换', '`(request_protocol, provider_protocol, payload) -> payload`'],
-    ['流式响应转换', '`(request_protocol, provider_protocol, ByteStream) -> ByteStream`'],
+    ['流式响应转换', '`(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`'],
     ['不要传入', '不要把 HTTP `Response`、`Body`、route/model rewrite details 或 provider request structs 传进 `translation/`'],
   ]}
   codeFirstColumn={false}

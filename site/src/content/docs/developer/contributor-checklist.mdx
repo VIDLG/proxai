@@ -34,7 +34,7 @@ Use this checklist before opening a pull request that changes ProxAI behavior. I
   rows={[
     ['Request translation', '`(request_protocol, provider_protocol, normalized_payload) -> payload`'],
     ['Non-streaming response translation', '`(request_protocol, provider_protocol, payload) -> payload`'],
-    ['Streaming response translation', '`(request_protocol, provider_protocol, ByteStream) -> ByteStream`'],
+    ['Streaming response translation', '`(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`'],
     ['Do not pass through', 'HTTP `Response`, `Body`, route/model rewrite details, or provider request structs into `translation/`'],
   ]}
   codeFirstColumn={false}

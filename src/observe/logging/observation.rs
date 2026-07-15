@@ -1,4 +1,6 @@
-use proxai_core::observe::{IngressObservation, Observation};
+use proxai_core::observe::{
+    IngressObservation, Observation, ProviderObservation, ProviderRequestAdaptation,
+};
 
 pub(super) fn emit(observation: &Observation) {
     match observation {
@@ -11,10 +13,29 @@ pub(super) fn emit(observation: &Observation) {
             budget_tokens,
             "accepted Anthropic legacy thinking.type=enabled budget_tokens; prefer output_config.effort or thinking.type=adaptive"
         ),
-        Observation::Provider(observation) => tracing::trace!(
-            provider_protocol = %observation.protocol,
-            phase = %observation.phase,
-            adaptation = %observation.adaptation,
+        Observation::Provider(ProviderObservation::RequestAdapted {
+            protocol,
+            adaptation:
+                ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
+                    status_removed,
+                    reasoning_content_removed,
+                },
+        }) => tracing::trace!(
+            provider_protocol = %protocol,
+            phase = "request",
+            adaptation = "openai_responses_output_fields_removed",
+            status_removed,
+            reasoning_content_removed,
+            "provider compatibility observation"
+        ),
+        Observation::Provider(ProviderObservation::ResponseAdapted {
+            protocol,
+            phase,
+            adaptation,
+        }) => tracing::trace!(
+            provider_protocol = %protocol,
+            phase = %phase,
+            adaptation = %adaptation,
             "provider compatibility observation"
         ),
         Observation::Translation(observation) => tracing::trace!(

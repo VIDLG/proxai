@@ -13,7 +13,7 @@ export const proxyFlowNodes = [
   { id: 'ingress', position: { x: 230, y: 40 }, data: { label: 'ingress\nparse + normalize' } },
   { id: 'routing', position: { x: 460, y: 40 }, data: { label: 'routing\nroute + provider' } },
   { id: 'requestTranslation', position: { x: 690, y: 40 }, data: { label: 'translation\nrequest payload' } },
-  { id: 'providerRequest', position: { x: 920, y: 40 }, data: { label: 'provider/request\nrewrite + serialize' } },
+  { id: 'providerRequest', position: { x: 920, y: 40 }, data: { label: 'provider request\nadapt + serialize' } },
   { id: 'transport', position: { x: 920, y: 200 }, data: { label: 'provider/transport\nsend upstream' } },
   { id: 'upstream', position: { x: 690, y: 200 }, data: { label: 'upstream\nread response' } },
   { id: 'responseTranslation', position: { x: 460, y: 200 }, data: { label: 'translation\nresponse or stream' } },
@@ -103,7 +103,7 @@ Provider names are user labels. They are not semantic protocol identifiers.
   - formatting.rs — formatting helpers
   - error/ — domain errors and rendering
   - http_support/ — HTTP carrier helpers
-  - provider/ — provider request preparation and HTTP transport
+  - provider/ — provider request projection/serialization, response observation, and HTTP transport
   - upstream/ — upstream response reading
   - pipeline/ — typed proxy pipeline, including HTTP ingress adaptation
   - observe/ — capture, logging, diagnostics
@@ -114,11 +114,12 @@ Provider names are user labels. They are not semantic protocol identifiers.
       - ingress/ — carrier-independent inbound normalization and validation
       - protocol/ — protocol wire types and protocol enums
       - routing/ — compiled protocol/model routing and provider-label selection
+      - provider/ — carrier-independent provider request preparation and response normalization
       - translation/ — carrier-independent cross-protocol conversion
 
 </FileTree>
 
-The application crate re-exports `proxai_core::{protocol, routing, translation}` from `src/lib.rs`. It keeps HTTP ingress, provider transport lookup, and SSE carrier adaptation in `src/`, while structured ingress, provider-label routing, and translation stay in `proxai-core`.
+The application crate re-exports `proxai_core::{protocol, routing, translation}` from `src/lib.rs`. It keeps HTTP ingress, provider projections/serialization, transport lookup, and SSE carrier adaptation in `src/`, while structured ingress, provider-label routing, provider request/response adaptation, and translation stay in `proxai-core`.
 
 ## Request lifecycle
 
@@ -170,8 +171,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'provider_request',
-      modules: ['pipeline/provider_request.rs', 'provider/request', 'proxai-core/translation/request'],
-      responsibility: 'Translate request payload, rewrite provider model, serialize body.',
+      modules: ['pipeline/provider_request.rs', 'proxai-core/translation/request', 'proxai-core/provider/request', 'provider/request'],
+      responsibility: 'Translate the request, rewrite and adapt the structured provider value in core, then project diagnostics and serialize the body in the application.',
     },
     {
       name: 'Send upstream',
@@ -203,9 +204,9 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'proxai-core/ingress/', icon: 'route', description: 'Carrier-independent structured request normalization, validation, model extraction, and typed ingress observations.' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default; no concrete sinks.' },
     { name: 'proxai-core/routing/', icon: 'flow', description: 'Carrier-independent provider-label selection from request protocol, model pattern, defaults, and route configuration.' },
-    { name: 'proxai-core/provider/', icon: 'key', description: 'Carrier-independent provider compatibility policy and structured response/event normalization.' },
+    { name: 'proxai-core/provider/', icon: 'key', description: 'Carrier-independent provider request value preparation, response compatibility policy, structured response/event normalization, and typed adaptation observations.' },
     { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and emits typed observations through the shared `Observer`.' },
-    { name: 'provider/', icon: 'key', description: 'Provider request rendering, model rewrite, auth headers, upstream URL construction, and transport.' },
+    { name: 'provider/', icon: 'key', description: 'Provider projection/summary extraction, request serialization, response observation, auth headers, upstream URL construction, and transport.' },
     { name: 'upstream/', icon: 'terminal', description: 'Reading upstream status, headers, complete bodies, or streaming byte carriers.' },
     { name: 'sse_translation.rs', icon: 'flow', description: 'Application carrier adapter: parses SSE bytes into `StreamEvent`, applies `ProviderNormalizer`, invokes the pure translator, retains failure context, and encodes output back to SSE.' },
     { name: 'http_support/', icon: 'file', description: 'Protocol-neutral HTTP helpers such as content-type checks, response reconstruction, and boxed byte streams.' },
@@ -220,10 +221,10 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 - `proxai-core/ingress/` accepts structured JSON values and owns protocol normalization and validation; it never receives HTTP body bytes.
 - `src/pipeline/inbound.rs` is the application adapter for path detection, JSON byte parsing, error mapping, and request-scoped observer wiring.
 - `pipeline/` coordinates the full request lifecycle and owns phase order.
-- `proxai-core/provider/` owns carrier-independent provider compatibility policy and structured response/event normalization.
+- `proxai-core/provider/` owns carrier-independent provider request value preparation, response compatibility policy, structured response/event normalization, and typed adaptation observations.
 - `proxai-core/translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
 - `sse_translation.rs` is the application adapter between upstream byte streams and core provider/translation APIs. It owns raw triggering frames and SSE output encoding.
-- `provider/` owns application-side provider request rendering and transport details such as auth headers, upstream URLs, and idle-read timeout.
+- `provider/` owns application-side provider projections/summaries, request serialization, response observation, and transport details such as auth headers, upstream URLs, and idle-read timeout.
 - `proxai-core/observe/` defines the shared `Observer` contract and closed `Observation` enum. Core ingress, provider normalization, and translation emit typed variants; `src/observe/` supplies the downstream implementation and owns logging, diagnostics, and capture.
 - `observe/` cuts across the pipeline for diagnostics, but does not make routing or protocol decisions.
 - Semantic stream and HTTP errors should use domain errors instead of being hidden inside `std::io::Error`.

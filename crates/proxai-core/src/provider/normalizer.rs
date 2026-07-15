@@ -117,7 +117,7 @@ impl ProviderNormalizer {
 
     fn observe(&self, phase: ProviderResponsePhase, adaptation: ProviderResponseAdaptation) {
         self.observer.observe(
-            &ProviderObservation {
+            &ProviderObservation::ResponseAdapted {
                 protocol: self.protocol,
                 phase,
                 adaptation,
