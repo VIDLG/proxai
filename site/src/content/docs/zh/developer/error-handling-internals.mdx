@@ -113,17 +113,17 @@ pub enum Error {
 }
 ```
 
-`UpstreamResponseError` 负责保存 upstream 非 2xx 响应体中解析出的紧凑错误信息：
+`proxai-core::provider::normalize_provider_error` 负责把结构化 upstream 非 2xx JSON payload 归一化为：
 
 ```rust
-Upstream {
+ProviderError {
     code: Option<String>,
     message: String,
     param: Option<serde_json::Value>,
 }
 ```
 
-这里的 `code` / `param` 是 upstream truth：只有上游实际提供时才保留，不再伪造默认 code。这实现了 [行为契约 C15 和 C18](/zh/reference/behavior-contracts#错误)。
+应用层 `UpstreamResponseError` 继续负责 HTTP body bytes、空 body、非 JSON body 和未知 shape，并持有归一化后的 `ProviderError`。OpenAI `error.code` 和 Anthropic `error.type` 都会成为 provider error `code`；`code` / `param` 只在上游实际提供时保留，不伪造默认值。这实现了 [行为契约 C15 和 C18](/zh/reference/behavior-contracts#错误)。
 
 ## 响应投影边界：`error/render.rs`
 

@@ -1,7 +1,24 @@
 use proxai_core::protocol::ProviderProtocol;
-use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer, ProviderRequestPreparer};
+use proxai_core::provider::{
+    ProviderCompatibility, ProviderNormalizer, ProviderRequestPreparer, normalize_provider_error,
+};
 use proxai_core::translation::stream::StreamEvent;
 use serde_json::json;
+
+#[test]
+fn normalizes_provider_errors_through_the_public_api() {
+    let error = normalize_provider_error(
+        ProviderProtocol::AnthropicMessages,
+        &json!({
+            "type": "error",
+            "error": {"type": "authentication_error", "message": "invalid API key"}
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(error.code.as_deref(), Some("authentication_error"));
+    assert_eq!(error.message, "invalid API key");
+}
 
 #[test]
 fn prepares_provider_request_values_through_the_public_api() {

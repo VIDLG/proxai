@@ -174,7 +174,9 @@ async fn proxy_preserves_useful_upstream_error_headers_for_anthropic_messages() 
         Some("0")
     );
     let body = response.text().await.unwrap();
-    assert!(body.contains("quota exhausted"));
+    let error = serde_json::from_str::<serde_json::Value>(&body).unwrap();
+    assert_eq!(error["error"]["message"], "quota exhausted");
+    assert_eq!(error["error"]["code"], "rate_limit_error");
 
     let paths = capture.paths.lock().await;
     assert_eq!(paths.as_slice(), &["/v1/messages".to_string()]);

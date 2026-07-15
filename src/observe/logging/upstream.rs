@@ -91,7 +91,7 @@ pub(crate) fn error_text(error: &UpstreamError) -> String {
 
 fn response_error_text(error: &UpstreamResponseError) -> String {
     match error {
-        UpstreamResponseError::Upstream { message, .. } => message.clone(),
+        UpstreamResponseError::Provider(error) => error.message.clone(),
         UpstreamResponseError::EmptyBody
         | UpstreamResponseError::NonJsonBody { .. }
         | UpstreamResponseError::UnknownBodyShape { .. } => error.to_string(),

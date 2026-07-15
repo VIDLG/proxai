@@ -75,8 +75,9 @@ For upstream non-2xx responses, ProxAI keeps useful details when the upstream ac
 - rate-limit headers
 - OpenAI-style `code`
 - OpenAI-style `param`
+- Anthropic `error.type`, normalized as the provider error `code`
 
-It should not fabricate upstream `code` or `param` values. These rules implement [Behavior Contract C15 and C18](/reference/behavior-contracts#errors).
+`proxai-core::provider::normalize_provider_error` owns structured JSON error normalization. The application keeps HTTP status/headers, body bytes, empty/non-JSON handling, and client-facing rendering. It should not fabricate upstream `code` or `param` values. These rules implement [Behavior Contract C15 and C18](/reference/behavior-contracts#errors).
 
 ## Related docs
 

@@ -35,7 +35,7 @@ This section is for maintainers changing ProxAI internals. It focuses on source-
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default.' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire data models for OpenAI Responses, OpenAI Chat Completions, Anthropic Messages, and SSE payloads.' },
     { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: 'Pure protocol-to-protocol payload and stream conversion across explicit pairs.' },
-    { name: 'crates/proxai-core/src/provider/', icon: 'file', description: 'Carrier-independent provider request value preparation, response compatibility normalization, and typed adaptation observations.' },
+    { name: 'crates/proxai-core/src/provider/', icon: 'file', description: 'Carrier-independent provider request value preparation, structured response/error normalization, and typed adaptation observations.' },
     { name: 'src/provider/*/request', icon: 'file', description: 'Provider logging projection/summary extraction, outbound payload serialization, and request carrier assembly.' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: 'Upstream URL construction, provider authentication headers, and HTTP send behavior.' },
     { name: 'src/provider/*/response', icon: 'timer', description: 'Provider response summaries, streaming observers, protocol state machines, and outcome diagnostics.' },

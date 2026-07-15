@@ -166,9 +166,11 @@ pub(super) async fn spawn_error_upstream(capture: Arc<Capture>) -> SocketAddr {
             .header("request-id", "anthropic_req_123")
             .header("x-ratelimit-remaining-requests", "0")
             .header("anthropic-ratelimit-requests-remaining", "0")
-            .body(Body::from(
-                r#"{"error":{"message":"quota exhausted","code":"rate_limit_exceeded"}}"#,
-            ))
+            .body(Body::from(if uri.path() == "/v1/messages" {
+                r#"{"type":"error","error":{"type":"rate_limit_error","message":"quota exhausted"}}"#
+            } else {
+                r#"{"error":{"message":"quota exhausted","code":"rate_limit_exceeded"}}"#
+            }))
             .unwrap()
     }
 

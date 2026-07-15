@@ -1,39 +1,29 @@
 use std::fmt;
 
 use axum::body::Bytes;
+use proxai_core::provider::{ProviderError, normalize_provider_error};
 use serde_json::Value;
 
 use crate::http_support::UpstreamResponseHead;
+use crate::protocol::ProviderProtocol;
 
 #[derive(Debug, Clone)]
 pub enum UpstreamResponseError {
-    Upstream {
-        code: Option<String>,
-        message: String,
-        param: Option<Value>,
-    },
+    Provider(ProviderError),
     EmptyBody,
-    NonJsonBody {
-        text: String,
-    },
-    UnknownBodyShape {
-        text: String,
-    },
+    NonJsonBody { text: String },
+    UnknownBodyShape { text: String },
 }
 
 impl fmt::Display for UpstreamResponseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Upstream {
-                code,
-                message,
-                param,
-            } => {
-                write!(f, "upstream response error: {message}")?;
-                if let Some(code) = code {
+            Self::Provider(error) => {
+                write!(f, "upstream response error: {}", error.message)?;
+                if let Some(code) = &error.code {
                     write!(f, " code={code}")?;
                 }
-                if let Some(param) = param {
+                if let Some(param) = &error.param {
                     match param {
                         Value::String(value) => write!(f, " param={value}"),
                         value => write!(f, " param={value}"),
@@ -64,7 +54,7 @@ impl fmt::Display for UpstreamResponseError {
 impl std::error::Error for UpstreamResponseError {}
 
 impl UpstreamResponseError {
-    pub(crate) fn parse_body(bytes: &[u8]) -> Self {
+    pub(crate) fn parse_body(protocol: ProviderProtocol, bytes: &[u8]) -> Self {
         let text = String::from_utf8_lossy(bytes).trim().to_string();
         if text.is_empty() {
             return Self::EmptyBody;
@@ -74,69 +64,28 @@ impl UpstreamResponseError {
             return Self::NonJsonBody { text };
         };
 
-        let code = value
-            .pointer("/error/code")
-            .or_else(|| value.pointer("/code"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-
-        let param = value
-            .pointer("/error/param")
-            .or_else(|| value.pointer("/param"))
-            .cloned();
-
-        if let Some(message) = value
-            .pointer("/error/message")
-            .or_else(|| value.pointer("/error"))
-            .or_else(|| value.pointer("/detail"))
-            .or_else(|| value.pointer("/message"))
-            .and_then(Value::as_str)
-        {
-            return Self::Upstream {
-                code,
-                message: message.to_string(),
-                param,
-            };
-        }
-        if let Some(array) = value.pointer("/detail").and_then(Value::as_array) {
-            let joined = array
-                .iter()
-                .filter_map(|item| {
-                    item.get("msg")
-                        .or_else(|| item.get("message"))
-                        .and_then(Value::as_str)
-                })
-                .collect::<Vec<_>>()
-                .join("; ");
-            if !joined.is_empty() {
-                return Self::Upstream {
-                    code,
-                    message: joined,
-                    param,
-                };
-            }
-        }
-
-        Self::UnknownBodyShape { text }
+        normalize_provider_error(protocol, &value)
+            .map(Self::Provider)
+            .unwrap_or(Self::UnknownBodyShape { text })
     }
 
     pub(crate) fn upstream_code(&self) -> Option<&str> {
         match self {
-            Self::Upstream { code, .. } => code.as_deref(),
+            Self::Provider(error) => error.code.as_deref(),
             Self::EmptyBody | Self::NonJsonBody { .. } | Self::UnknownBodyShape { .. } => None,
         }
     }
 
     pub(crate) fn upstream_message(&self) -> Option<&str> {
         match self {
-            Self::Upstream { message, .. } => Some(message),
+            Self::Provider(error) => Some(&error.message),
             Self::EmptyBody | Self::NonJsonBody { .. } | Self::UnknownBodyShape { .. } => None,
         }
     }
 
     pub(crate) fn upstream_param(&self) -> Option<&Value> {
         match self {
-            Self::Upstream { param, .. } => param.as_ref(),
+            Self::Provider(error) => error.param.as_ref(),
             Self::EmptyBody | Self::NonJsonBody { .. } | Self::UnknownBodyShape { .. } => None,
         }
     }

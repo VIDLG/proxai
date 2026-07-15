@@ -53,7 +53,7 @@ impl UpstreamHttpFlow {
                     return Err(error);
                 }
             };
-            let parsed = UpstreamResponseError::parse_body(&body);
+            let parsed = UpstreamResponseError::parse_body(provider_protocol, &body);
             let error = UpstreamError::ErrorStatus {
                 head: head.clone(),
                 body,

@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::UpstreamResponseError;
+use crate::protocol::ProviderProtocol;
 
 #[test]
 fn parses_openai_error_shape_and_displays_code_and_param() {
@@ -14,7 +15,7 @@ fn parses_openai_error_shape_and_displays_code_and_param() {
     }))
     .unwrap();
 
-    let error = UpstreamResponseError::parse_body(&body);
+    let error = UpstreamResponseError::parse_body(ProviderProtocol::OpenaiResponses, &body);
 
     assert_eq!(error.upstream_code(), Some("array_above_max_length"));
     assert_eq!(
@@ -26,4 +27,23 @@ fn parses_openai_error_shape_and_displays_code_and_param() {
         error.to_string(),
         "upstream response error: Invalid 'input[3].content': array too long. code=array_above_max_length param=input[3].content"
     );
+}
+
+#[test]
+fn keeps_carrier_failures_in_the_application_error() {
+    assert!(matches!(
+        UpstreamResponseError::parse_body(ProviderProtocol::OpenaiResponses, b"  "),
+        UpstreamResponseError::EmptyBody
+    ));
+    assert!(matches!(
+        UpstreamResponseError::parse_body(ProviderProtocol::OpenaiResponses, b"not json"),
+        UpstreamResponseError::NonJsonBody { .. }
+    ));
+    assert!(matches!(
+        UpstreamResponseError::parse_body(
+            ProviderProtocol::OpenaiResponses,
+            br#"{"unexpected":true}"#,
+        ),
+        UpstreamResponseError::UnknownBodyShape { .. }
+    ));
 }

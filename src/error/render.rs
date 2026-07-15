@@ -253,16 +253,12 @@ fn upstream_response_error_fields(
     error: &UpstreamResponseError,
 ) -> ErrorResponseFields {
     match error {
-        UpstreamResponseError::Upstream {
-            code,
-            message,
-            param,
-        } => ErrorResponseFields::new_with_details(
+        UpstreamResponseError::Provider(error) => ErrorResponseFields::new_with_details(
             status,
-            message.clone(),
+            error.message.clone(),
             ErrorResponseType::UpstreamError,
-            code.clone(),
-            param.clone(),
+            error.code.clone(),
+            error.param.clone(),
         ),
         UpstreamResponseError::EmptyBody => ErrorResponseFields::new(
             status,

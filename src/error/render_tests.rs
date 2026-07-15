@@ -1,4 +1,5 @@
 use axum::http::StatusCode;
+use proxai_core::provider::ProviderError;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -27,11 +28,11 @@ fn generic_sse_error_matches_zed_responses_nested_error_shape() {
 fn upstream_error_payload_preserves_code_and_param() {
     let fields = upstream_response_error_fields(
         StatusCode::TOO_MANY_REQUESTS,
-        &UpstreamResponseError::Upstream {
+        &UpstreamResponseError::Provider(ProviderError {
             code: Some("rate_limit_exceeded".to_string()),
             message: "quota exhausted".to_string(),
             param: Some(json!("input")),
-        },
+        }),
     );
     let frame = encode_sse_event(fields);
     let data = sse_data(&frame);
@@ -51,11 +52,11 @@ fn upstream_error_payload_preserves_code_and_param() {
 fn text_upstream_error_payload_preserves_code_and_param_as_json() {
     let fields = upstream_response_error_fields(
         StatusCode::BAD_GATEWAY,
-        &UpstreamResponseError::Upstream {
+        &UpstreamResponseError::Provider(ProviderError {
             code: Some("array_above_max_length".to_string()),
             message: "Invalid 'input[3].content': array too long.".to_string(),
             param: Some(json!("input[3].content")),
-        },
+        }),
     );
 
     let body = fields.payload.text_body();
