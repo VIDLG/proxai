@@ -13,7 +13,7 @@ This page documents the conversion pair used when a client speaks OpenAI Chat Co
 <ConversionPath
   from={{ title: 'Inbound', description: '`openai_chat_completions` request payload' }}
   via={[
-    { title: 'Normalize', description: '`src/ingress/` parses Chat messages and tools' },
+    { title: 'Normalize', description: '`proxai-core/ingress` validates the structured Chat request' },
     { title: 'Translate request', description: 'Chat messages/tools -> Anthropic Messages request' },
     { title: 'Translate response', description: 'Anthropic Message/content blocks -> Chat choices' },
   ]}

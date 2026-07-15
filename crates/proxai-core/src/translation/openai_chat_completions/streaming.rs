@@ -17,6 +17,7 @@
 use delegate::delegate;
 use serde_json::Value;
 
+use crate::json::deserialize_value;
 use crate::protocol::openai::chat_completions::{
     ChatCompletionStreamRole, CreateChatCompletionStreamResponse,
 };
@@ -61,7 +62,10 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         &self,
         payload: Value,
     ) -> StreamTranslationResult<CreateChatCompletionStreamResponse> {
-        let chunk = serde_json::from_value::<CreateChatCompletionStreamResponse>(payload)?;
+        let chunk = deserialize_value::<CreateChatCompletionStreamResponse>(
+            &payload,
+            "OpenAI Chat Completions stream event",
+        )?;
         if let Some(role) = chunk
             .choices
             .iter()

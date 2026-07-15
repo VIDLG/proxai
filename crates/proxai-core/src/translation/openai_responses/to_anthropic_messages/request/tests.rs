@@ -1,10 +1,10 @@
 use serde_json::{Value, json};
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::translation::TranslationResult;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::to_anthropic_messages::translate_request_payload as translate_request_payload_with_translator;
 use crate::translation::test_support::request_scope;
+use crate::translation::{TranslationError, TranslationResult};
 
 fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
     let scope = request_scope(
@@ -64,13 +64,15 @@ fn reports_json_location_for_invalid_responses_request_payload() {
         "input": {"unexpected": true}
     });
 
-    let error = translate_request_payload(&payload).unwrap_err().to_string();
+    let error = translate_request_payload(&payload).unwrap_err();
 
-    assert!(error.contains("failed to deserialize normalized translation payload"));
-    assert!(error.contains("OpenAI Responses request payload"));
-    assert!(error.contains("JSON path `input`"));
-    assert!(error.contains("pretty line "));
-    assert!(error.contains("column "));
+    let TranslationError::JsonPayload(error) = error else {
+        panic!("expected a typed JSON payload error");
+    };
+    assert_eq!(error.context(), "OpenAI Responses request payload");
+    assert_eq!(error.path(), "input");
+    assert!(error.line() > 0);
+    assert!(error.column() > 0);
 }
 
 #[test]

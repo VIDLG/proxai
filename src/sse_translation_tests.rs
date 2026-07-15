@@ -21,7 +21,7 @@ async fn returns_the_raw_triggering_sse_event_with_the_stream_error() {
         panic!("expected a structured translation failure");
     };
 
-    assert!(failure.error.contains("stream translation error"));
+    assert!(failure.to_string().contains("stream translation error"));
     assert_eq!(failure.stage.as_ref(), "event");
     let event = failure.upstream_event.as_ref().unwrap();
     assert_eq!(event.event_type, "message");

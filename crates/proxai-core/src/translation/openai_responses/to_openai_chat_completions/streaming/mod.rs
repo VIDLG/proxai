@@ -16,6 +16,7 @@ use crate::protocol::openai::responses::{
     OutputContent, OutputItem, Response, ResponseStreamEvent, ResponseUsage, SummaryPart,
 };
 use crate::translation::TranslationScope;
+use crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
     refusal_delta, text_delta, tool_arguments_delta, tool_call_start_delta,
@@ -34,11 +35,7 @@ fn reasoning_stream_event(
     reasoning: String,
 ) -> StreamTranslationResult<StreamEvent> {
     let mut payload = serde_json::to_value(chat_choice_chunk(identity, Default::default(), None))?;
-    crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning(
-        &mut payload,
-        reasoning,
-    )
-    .map_err(|error| StreamTranslationError::Semantic(error.to_string()))?;
+    inject_stream_reasoning(&mut payload, reasoning)?;
     StreamEvent::message(payload)
 }
 

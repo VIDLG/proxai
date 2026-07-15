@@ -139,7 +139,10 @@ fn rejects_reasoning_output_item_without_id() {
         }))
         .unwrap_err();
 
-    assert!(matches!(&error, StreamTranslationError::Json(_)));
+    let StreamTranslationError::JsonPayload(error) = error else {
+        panic!("expected a typed JSON payload error");
+    };
+    assert_eq!(error.context(), "OpenAI Responses stream event");
     assert!(error.to_string().contains("missing field `id`"));
 }
 

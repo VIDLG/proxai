@@ -9,7 +9,9 @@
 use std::collections::BTreeMap;
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
-use crate::protocol::openai::chat_completions::{ChatCompletionMessageToolCallChunk, FinishReason};
+use crate::protocol::openai::chat_completions::{
+    ChatCompletionMessageToolCallChunk, CompletionUsage, FinishReason,
+};
 
 use crate::translation::anthropic_messages::outbound::{
     content_block_stop, input_json_delta, text_block_start, text_delta, thinking_block_start,
@@ -172,5 +174,5 @@ impl ChatToAnthropicBlockState {
 pub(super) struct PendingAnthropicTerminal {
     pub(super) finish_reason: FinishReason,
     pub(super) refusal: String,
-    pub(super) usage: Option<crate::protocol::openai::chat_completions::CompletionUsage>,
+    pub(super) usage: Option<CompletionUsage>,
 }

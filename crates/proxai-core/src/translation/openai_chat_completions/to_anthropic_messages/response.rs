@@ -1,8 +1,8 @@
 //! Non-streaming response conversion for `openai_chat_completions -> anthropic_messages`.
 
 use crate::protocol::anthropic::messages::{
-    ContentBlock, Message, MessageRole as AnthropicMessageRole, MessageType, RefusalStopDetails,
-    RefusalStopDetailsType, StopReason,
+    ContentBlock, Message, MessageRole as AnthropicMessageRole, MessageType, RedactedThinkingBlock,
+    RefusalStopDetails, RefusalStopDetailsType, StopReason, ThinkingBlock, ToolUseBlock,
 };
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageToolCalls, CreateChatCompletionResponse, FinishReason,
@@ -45,12 +45,10 @@ pub(super) fn translate_response(
                         thinking,
                         signature,
                     } if !signature.is_empty() => {
-                        content.push(ContentBlock::Thinking(
-                            crate::protocol::anthropic::messages::ThinkingBlock {
-                                thinking,
-                                signature,
-                            },
-                        ));
+                        content.push(ContentBlock::Thinking(ThinkingBlock {
+                            thinking,
+                            signature,
+                        }));
                     }
                     Continuation::Thinking { .. } => {
                         return Err(TranslationError::InvalidPayload(
@@ -58,9 +56,9 @@ pub(super) fn translate_response(
                         ));
                     }
                     Continuation::RedactedThinking { data } => {
-                        content.push(ContentBlock::RedactedThinking(
-                            crate::protocol::anthropic::messages::RedactedThinkingBlock { data },
-                        ));
+                        content.push(ContentBlock::RedactedThinking(RedactedThinkingBlock {
+                            data,
+                        }));
                     }
                 }
             }
@@ -128,9 +126,7 @@ pub(super) fn translate_response(
     })
 }
 
-impl TryFrom<&ChatCompletionMessageToolCalls>
-    for crate::protocol::anthropic::messages::ToolUseBlock
-{
+impl TryFrom<&ChatCompletionMessageToolCalls> for ToolUseBlock {
     type Error = TranslationError;
 
     fn try_from(tool_call: &ChatCompletionMessageToolCalls) -> TranslationResult<Self> {

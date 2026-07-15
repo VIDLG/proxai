@@ -3,13 +3,12 @@ use std::sync::Arc;
 use futures_util::{StreamExt, stream};
 use serde_json::{Value, json};
 
+use crate::observe::{NoopObserver, TranslationPhase};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 use super::context::TranslationContext;
 use super::stream::{StreamEnd, StreamEvent, StreamTranslationInput};
-use super::{
-    NoopTranslationObserver, TranslationPhase, TranslationRoute, TranslationScope, Translator,
-};
+use super::{TranslationRoute, TranslationScope, Translator};
 
 pub(crate) fn request_scope(
     request_protocol: RequestProtocol,
@@ -43,7 +42,7 @@ fn translation_scope(
             request_protocol,
             provider_protocol,
         },
-        Arc::new(NoopTranslationObserver),
+        Arc::new(NoopObserver),
     )
     .scope(phase)
 }

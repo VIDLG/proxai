@@ -2,6 +2,7 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::http::{Method, Uri};
+use proxai_core::error::JsonPayloadError;
 use serde_json::Value;
 
 use crate::observe::point::StreamingTranslationFailure;
@@ -10,6 +11,7 @@ use crate::request::RequestId;
 use crate::sse_translation::{
     StreamTranslationFailure, StreamTranslatorErrorStage, UpstreamSseEvent,
 };
+use crate::translation::stream::StreamTranslationError;
 
 use super::write_streaming_translation_failure_to_dir;
 
@@ -24,11 +26,14 @@ fn stores_raw_triggering_sse_event_without_capture() {
     ));
     let method = Method::POST;
     let uri: Uri = "/v1/responses".parse().unwrap();
+    let source = serde_json::from_str::<Value>("{\n  ?\n}").unwrap_err();
     let failure = StreamTranslationFailure {
         stage: StreamTranslatorErrorStage::Event,
-        error:
-            "stream translation error: stream JSON conversion failed: missing field `finish_reason`"
-                .to_string(),
+        error: StreamTranslationError::JsonPayload(JsonPayloadError::new(
+            "OpenAI Chat Completions stream event",
+            "choices[0]",
+            source,
+        )),
         upstream_event: Some(UpstreamSseEvent {
             event_type: "message".to_string(),
             data: "{\"choices\":[{\"delta\":{}}]}".to_string(),
@@ -54,6 +59,9 @@ fn stores_raw_triggering_sse_event_without_capture() {
         .expect("record should be JSON");
     assert_eq!(record["kind"], "stream_translation_failure");
     assert_eq!(record["failure"]["stage"], "event");
+    assert_eq!(record["failure"]["json_path"], "choices[0]");
+    assert_eq!(record["failure"]["line"], 2);
+    assert_eq!(record["failure"]["column"], 3);
     assert_eq!(record["failure"]["upstream_event_type"], "message");
     assert_eq!(
         record["artifacts"]["upstream_sse_event"],

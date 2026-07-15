@@ -14,7 +14,7 @@ use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::anthropic_messages::outbound::json_number_from_f32;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use crate::translation::{TranslationResult, TranslationScope};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 pub(super) fn translate_request(
     request: &chat::CreateChatCompletionRequest,
@@ -22,7 +22,7 @@ pub(super) fn translate_request(
     scope: &TranslationScope,
 ) -> TranslationResult<anthropic::MessageCreateParamsBase> {
     if request.function_call.is_some() || request.functions.is_some() {
-        return Err(crate::translation::TranslationError::InvalidPayload(
+        return Err(TranslationError::InvalidPayload(
                 "deprecated Chat Completions function_call/functions must be migrated to tool_choice/tools before translating to Anthropic Messages"
                     .to_string(),
             ));

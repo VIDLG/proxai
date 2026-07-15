@@ -49,6 +49,15 @@ fn write_streaming_translation_failure_to_dir(
         None => None,
     };
 
+    let json_error = point.failure.error.as_json_payload_error();
+    let (json_path, line, column) = match json_error {
+        Some(error) => (
+            Some(error.path().as_str()),
+            Some(error.line()),
+            Some(error.column()),
+        ),
+        None => (None, None, None),
+    };
     let record = DiagnosticRecord {
         id,
         created_at: Utc::now().to_rfc3339(),
@@ -64,7 +73,10 @@ fn write_streaming_translation_failure_to_dir(
         },
         failure: DiagnosticFailure {
             stage: point.failure.stage.as_ref().to_string(),
-            error: &point.failure.error,
+            error: point.failure.to_string(),
+            json_path,
+            line,
+            column,
             stream_end: point.failure.end.map(|end| end.to_string()),
             upstream_event_type: point
                 .failure
@@ -108,7 +120,10 @@ struct DiagnosticRequest {
 #[derive(Serialize)]
 struct DiagnosticFailure<'a> {
     stage: String,
-    error: &'a str,
+    error: String,
+    json_path: Option<&'a str>,
+    line: Option<usize>,
+    column: Option<usize>,
     stream_end: Option<String>,
     upstream_event_type: Option<&'a str>,
 }

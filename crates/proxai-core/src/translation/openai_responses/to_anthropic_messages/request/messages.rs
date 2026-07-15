@@ -237,7 +237,7 @@ impl From<&responses::OutputMessageContent> for anthropic::ContentBlockParam {
 }
 
 impl TryFrom<&responses::EasyInputContent> for anthropic::MessageParamContent {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(content: &responses::EasyInputContent) -> TranslationResult<Self> {
         match content {
@@ -259,7 +259,7 @@ fn translate_input_content_list(
 }
 
 impl TryFrom<&responses::InputContent> for anthropic::ContentBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(part: &responses::InputContent) -> TranslationResult<Self> {
         match part {
@@ -273,7 +273,7 @@ impl TryFrom<&responses::InputContent> for anthropic::ContentBlockParam {
 }
 
 impl TryFrom<&responses::InputImageContent> for anthropic::ImageBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(image: &responses::InputImageContent) -> TranslationResult<Self> {
         let Some(url) = image.image_url.as_non_null() else {
@@ -292,7 +292,7 @@ impl TryFrom<&responses::InputImageContent> for anthropic::ImageBlockParam {
 }
 
 impl TryFrom<&responses::InputFileContent> for anthropic::DocumentBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(file: &responses::InputFileContent) -> TranslationResult<Self> {
         let source = if let Some(data) = file.file_data.as_deref() {
@@ -340,7 +340,7 @@ impl From<&responses::CustomToolCall> for anthropic::ContentBlockParam {
 }
 
 impl TryFrom<&responses::FunctionCallOutputItemParam> for anthropic::ToolResultBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(output: &responses::FunctionCallOutputItemParam) -> TranslationResult<Self> {
         Ok(Self {
@@ -353,7 +353,7 @@ impl TryFrom<&responses::FunctionCallOutputItemParam> for anthropic::ToolResultB
 }
 
 impl TryFrom<&responses::FunctionCallOutput> for anthropic::ToolResultContentParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(output: &responses::FunctionCallOutput) -> TranslationResult<Self> {
         match output {
@@ -368,7 +368,7 @@ impl TryFrom<&responses::FunctionCallOutput> for anthropic::ToolResultContentPar
 }
 
 impl TryFrom<&responses::InputContent> for anthropic::ToolResultContentBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(part: &responses::InputContent) -> TranslationResult<Self> {
         match part {
@@ -382,7 +382,7 @@ impl TryFrom<&responses::InputContent> for anthropic::ToolResultContentBlockPara
 }
 
 impl TryFrom<&responses::CustomToolCallOutput> for anthropic::ToolResultBlockParam {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(output: &responses::CustomToolCallOutput) -> TranslationResult<Self> {
         Ok(Self {

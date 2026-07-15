@@ -8,7 +8,7 @@ use crate::config::ErrorResponseFormat;
 use crate::http_support::{is_forwardable_error_response_header, response_with_headers};
 use crate::sse::encode_sse_json;
 
-use super::{Error, RequestError, UpstreamError, UpstreamResponseError};
+use super::{Error, UpstreamError, UpstreamResponseError};
 
 /// Client-facing error payload embedded in JSON HTTP responses and SSE error events.
 #[derive(Debug, Clone, Serialize)]
@@ -185,11 +185,7 @@ impl Error {
     pub(crate) fn response_spec(&self) -> ErrorResponseSpec {
         match self {
             Error::Request(error) => {
-                let message = match error {
-                    RequestError::Body(error) => error.to_string(),
-                    RequestError::Invalid(message) => message.clone(),
-                };
-                ErrorResponseSpec::new(ErrorResponseFields::invalid_request(message))
+                ErrorResponseSpec::new(ErrorResponseFields::invalid_request(error.to_string()))
             }
             Error::Upstream(error) => upstream_error_response_spec(error),
             Error::Config(error) => {

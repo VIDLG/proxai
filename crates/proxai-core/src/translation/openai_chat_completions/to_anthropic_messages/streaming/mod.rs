@@ -11,6 +11,7 @@ use crate::protocol::openai::chat_completions::{
 
 use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::outbound::{message_start, message_stop};
+use crate::translation::openai_chat_completions::compatibility::stream_reasoning;
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
@@ -39,11 +40,7 @@ impl ChatToAnthropicStreaming {
         event: StreamEvent,
         _scope: &TranslationScope,
     ) -> StreamTranslationResult<Vec<StreamEvent>> {
-        let reasoning =
-            crate::translation::openai_chat_completions::compatibility::stream_reasoning(
-                &event.data,
-            )
-            .map_err(StreamTranslationError::Semantic)?;
+        let reasoning = stream_reasoning(&event.data).map_err(StreamTranslationError::Semantic)?;
         let chunk = self.lifecycle.parse_stream_event(event.data)?;
 
         if chunk.choices.is_empty() {

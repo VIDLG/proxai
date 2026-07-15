@@ -1,5 +1,6 @@
 pub(crate) mod capture;
 mod context;
+mod core_observer;
 pub(crate) mod diagnostics;
 mod inbound;
 pub(crate) mod logging;
@@ -8,7 +9,6 @@ mod outbound;
 mod point;
 mod provider;
 mod sinks;
-mod translation_observer;
 mod upstream;
 
 pub(crate) use capture::CaptureController;

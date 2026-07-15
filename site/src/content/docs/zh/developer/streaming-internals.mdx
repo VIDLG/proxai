@@ -173,7 +173,7 @@ provider/upstream byte observation
   → pipeline 观测失败并渲染客户端错误
 ```
 
-原始 chunk、触发失败的 SSE frame、HTTP metadata、diagnostics 和客户端错误渲染都留在应用层。核心通过 `Stream<Item = Result<StreamEvent, StreamTranslationError>>` 返回语义错误；`TranslationObserver` 只用于合法但有损的适配观测，不承担错误返回。
+原始 chunk、触发失败的 SSE frame、HTTP metadata、diagnostics 和客户端错误渲染都留在应用层。核心通过 `Stream<Item = Result<StreamEvent, StreamTranslationError>>` 返回语义错误；共享的 core `Observer` 只报告类型化、合法但有损的适配观测，不承担错误返回。
 
 ## Translation stream 生命周期
 

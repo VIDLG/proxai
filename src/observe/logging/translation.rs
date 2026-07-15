@@ -6,7 +6,6 @@ use tracing::warn;
 use crate::config::LogOutputFormat;
 use crate::observe::point::{RequestTranslationFailure, StreamingTranslationFailure};
 use crate::request::RequestId;
-use crate::translation::TranslationError;
 
 use super::{
     active_log_format, compact_provider_protocol, compact_request_protocol, emit_json_log,
@@ -39,10 +38,11 @@ pub(super) fn emit_request_translation_failure(
     let request_hints = tools
         .map(|count| format!("tools[{count}]"))
         .unwrap_or_default();
-    let json_path = match point.error {
-        TranslationError::JsonPayload { path, .. } => path.as_str(),
-        _ => "",
-    };
+    let json_path = point
+        .error
+        .as_json_payload_error()
+        .map(|error| error.path().as_str())
+        .unwrap_or_default();
     let diagnostic_path = diagnostic_path
         .map(|path| path.display().to_string())
         .unwrap_or_default();
@@ -123,6 +123,13 @@ pub(super) fn emit_streaming_translation_failure(
     let diagnostic_path = diagnostic_path
         .map(|path| path.display().to_string())
         .unwrap_or_default();
+    let json_path = point
+        .failure
+        .error
+        .as_json_payload_error()
+        .map(|error| error.path().as_str())
+        .unwrap_or_default();
+    let error = point.failure.to_string();
     let upstream_event_type = point
         .failure
         .upstream_event
@@ -152,7 +159,8 @@ pub(super) fn emit_streaming_translation_failure(
             upstream_event_type,
             stream_end,
             diagnostic_path,
-            err = %point.failure.error,
+            json_path,
+            err = %error,
             "stream translation failed after forwarding"
         ),
         LogOutputFormat::Json => emit_json_log(
@@ -172,7 +180,8 @@ pub(super) fn emit_streaming_translation_failure(
                 "upstream_event_type": upstream_event_type,
                 "stream_end": stream_end,
                 "diagnostic_path": diagnostic_path,
-                "error": point.failure.error,
+                "json_path": json_path,
+                "error": error,
             }),
         ),
     }

@@ -7,7 +7,7 @@ mod types;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai_responses as responses;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use crate::translation::{TranslationResult, TranslationScope};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use self::messages::{ResponsesInput, responses_input_from_messages};
 
@@ -17,7 +17,7 @@ pub(super) fn translate_request(
     scope: &TranslationScope,
 ) -> TranslationResult<responses::CreateResponseRequest> {
     if request.function_call.is_some() || request.functions.is_some() {
-        return Err(crate::translation::TranslationError::InvalidPayload(
+        return Err(TranslationError::InvalidPayload(
                 "deprecated Chat Completions function_call/functions must be migrated to tool_choice/tools before translating to OpenAI Responses"
                     .to_string(),
             ));

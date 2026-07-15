@@ -1,6 +1,7 @@
 mod anthropic_messages;
 mod counts;
 mod human;
+mod observation;
 mod openai_chat_completions;
 mod openai_responses;
 mod output_alias;
@@ -39,6 +40,7 @@ use openai_responses::{
     emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
 };
 use output_alias::compact_output_item_kind;
+use proxai_core::observe::Observation;
 use record::{
     ProviderRequestFields, ValuableJson, compact_provider_protocol, compact_request_protocol,
     render_translation, render_translation_alias,
@@ -89,6 +91,10 @@ pub fn init(
 pub(super) struct LoggingSink;
 
 impl LoggingSink {
+    pub(super) fn emit_core(self, observation: &Observation) {
+        observation::emit(observation);
+    }
+
     pub(super) fn emit_request_failed(self, error: &crate::error::Error) {
         emit_request_failed(error);
     }

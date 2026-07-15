@@ -8,6 +8,7 @@
 use crate::protocol::openai::chat_completions::{CreateChatCompletionStreamResponse, FinishReason};
 
 use crate::translation::TranslationScope;
+use crate::translation::openai_chat_completions::compatibility::stream_reasoning;
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
@@ -45,11 +46,7 @@ impl ChatToResponsesStreaming {
         event: StreamEvent,
         _scope: &TranslationScope,
     ) -> StreamTranslationResult<Vec<StreamEvent>> {
-        let reasoning =
-            crate::translation::openai_chat_completions::compatibility::stream_reasoning(
-                &event.data,
-            )
-            .map_err(StreamTranslationError::Semantic)?;
+        let reasoning = stream_reasoning(&event.data).map_err(StreamTranslationError::Semantic)?;
         let chunk = self.lifecycle.parse_stream_event(event.data)?;
         let mut events = Vec::new();
 

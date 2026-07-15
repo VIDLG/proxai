@@ -18,7 +18,9 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
 
 <ModuleGrid
   modules={[
-    { name: 'src/ingress/', icon: 'route', description: 'Detect inbound protocol from HTTP path, parse inbound body, normalize request carriers before routing.' },
+    { name: 'src/ingress/', icon: 'route', description: 'Detect inbound protocol from HTTP path, parse JSON bytes, map application errors, and wire the request-scoped observer.' },
+    { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: 'Normalize and validate structured inbound payloads before routing and translation.' },
+    { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: 'Shared observer contract, closed core observation variants, and no-op default. No concrete sinks.' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs, enums, and protocol-specific event payloads. No provider routing decisions.' },
     { name: 'src/routing/', icon: 'route', description: 'Match request_protocol and model_pattern, select provider, enforce protocol guard errors.' },
     { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: 'Pure request/response/stream conversion between protocol pairs.' },
@@ -36,7 +38,9 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
 <ReferenceTable
   columns={['Question', 'Put it in']}
   rows={[
-    ['Does it parse a client request path or body?', '`src/ingress/`'],
+    ['Does it parse a client request path or body bytes?', '`src/ingress/`'],
+    ['Does it normalize or validate a structured inbound payload?', '`crates/proxai-core/src/ingress/`'],
+    ['Does it define a reusable core observation contract or event?', '`crates/proxai-core/src/observe.rs`'],
     ['Does it define protocol JSON wire shape?', '`crates/proxai-core/src/protocol/`'],
     ['Does it select a provider by protocol/model?', '`src/routing/` or pipeline routing step'],
     ['Does it convert one protocol payload into another protocol payload?', '`crates/proxai-core/src/translation/`'],
@@ -45,6 +49,25 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
     ['Does it filter headers or rebuild an HTTP response?', '`src/http_support/`'],
     ['Does it render client-facing errors?', '`src/error/`'],
     ['Does it write logs or capture artifacts?', '`src/observe/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Observation and logging boundary
+
+`proxai-core` defines the shared `Observer` contract, closed `Observation` variants, and a no-op default. Core ingress and translation emit typed variants through that contract. They do not select `tracing`, diagnostics files, capture storage, metrics backends, or any other concrete sink; the downstream application composes those implementations.
+
+For request-scoped code, emit stable lifecycle and domain events through `ObserveContext`. `ObserveSinks` then decides whether each point goes to logging, diagnostics, capture, or several sinks. The logging sink is the layer that translates an observation into a `tracing` event and chooses its level and output format.
+
+<ReferenceTable
+  columns={['Situation', 'Use']}
+  rows={[
+    ['Core legal-but-lossy adaptation or ingress compatibility event', 'A typed `Observation` variant through the shared `Observer`; the downstream decides the sink.'],
+    ['Request lifecycle, protocol/provider outcome, or failure context', '`ObserveContext` with a typed point.'],
+    ['Logging sink implementation', 'Direct `tracing`; this is where level and formatting are selected.'],
+    ['Observation/capture subsystem failure', 'Direct `tracing` to avoid recursively observing the observer.'],
+    ['Process startup, configuration, or background task without request context', 'Direct `tracing`.'],
+    ['Temporary local implementation debugging', '`tracing::trace!`; promote it to an observe point if it becomes a recurring diagnostic signal.'],
   ]}
   codeFirstColumn={false}
 />

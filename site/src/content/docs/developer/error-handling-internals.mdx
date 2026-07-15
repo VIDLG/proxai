@@ -28,7 +28,7 @@ ProxAI keeps internal errors strongly typed, then projects them into compact cli
 ## Error projection pipeline
 
 <ConversionPath
-  from={{ title: 'Typed internal error', description: 'RequestError, ConfigError, InternalError, UpstreamError, TranslationError, SSE errors' }}
+  from={{ title: 'Typed error', description: 'Core IngressError/TranslationError plus application RequestError/InternalError/UpstreamError' }}
   via={[
     { title: 'error/render.rs', description: 'Maps domain errors into ErrorResponseSpec' },
     { title: 'ErrorResponseFields', description: 'Shared HTTP/SSE status + payload fields' },
@@ -41,15 +41,20 @@ ProxAI keeps internal errors strongly typed, then projects them into compact cli
 <ReferenceTable
   columns={['Error type', 'Meaning']}
   rows={[
-    ['RequestError', 'Inbound body or validation failure'],
+    ['JsonPayloadError', 'Shared core JSON path/location/source details'],
+    ['IngressError', 'Core structured request normalization or validation failure'],
+    ['RequestError', 'Application body/path failure or wrapped IngressError'],
     ['ConfigError', 'Config loading and config-file reads'],
     ['InternalError', 'Runtime invariants, local IO, JSON serialization, internal body reads'],
     ['UpstreamError', 'Upstream send/status/body-read failures'],
-    ['TranslationError', 'Protocol payload conversion failures'],
-    ['SseError / SseTranslationError', 'SSE event semantics'],
+    ['TranslationError', 'Core non-streaming protocol payload conversion failures'],
+    ['StreamTranslationError', 'Core structured stream conversion and lifecycle semantics'],
+    ['SseError', 'Application SSE carrier parsing'],
     ['ByteStreamError', 'Stream carrier failures'],
   ]}
 />
+
+Core domain errors are returned through `Result` and transparently wrapped by application errors so their source chains remain intact. Non-fatal adaptations use `Observation` instead; do not emit and return the same failure twice.
 
 Do not hide semantic stream or HTTP failures inside `std::io::Error`; reserve IO errors for real OS/filesystem IO.
 

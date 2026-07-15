@@ -5,6 +5,7 @@ use delegate::delegate;
 use futures_util::{Stream, StreamExt};
 use serde_json::Value;
 
+use crate::observe::{NoopObserver, Observer, TranslationPhase};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::anthropic_messages::to_openai_chat_completions::AnthropicToChatStreaming;
 use crate::translation::anthropic_messages::to_openai_responses::AnthropicToResponsesStreaming;
@@ -13,10 +14,7 @@ use crate::translation::openai_chat_completions::to_openai_responses::ChatToResp
 use crate::translation::openai_responses::to_anthropic_messages::ResponsesToAnthropicStreaming;
 use crate::translation::openai_responses::to_openai_chat_completions::ResponsesToChatStreaming;
 
-use super::context::{
-    NoopTranslationObserver, TranslationContext, TranslationObserver, TranslationPhase,
-    TranslationRoute, TranslationScope,
-};
+use super::context::{TranslationContext, TranslationRoute, TranslationScope};
 use super::stream::{
     StreamEnd, StreamEvent, StreamEventStream, StreamTranslationInput, StreamTranslationResult,
 };
@@ -162,11 +160,11 @@ impl Translator {
             provider_protocol,
         };
         Self {
-            context: TranslationContext::new(route, Arc::new(NoopTranslationObserver)),
+            context: TranslationContext::new(route, Arc::new(NoopObserver)),
         }
     }
 
-    pub fn with_observer(mut self, observer: impl TranslationObserver) -> Self {
+    pub fn with_observer(mut self, observer: impl Observer + 'static) -> Self {
         self.context = self.context.with_observer(Arc::new(observer));
         self
     }

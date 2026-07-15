@@ -54,11 +54,11 @@ pub(crate) struct UpstreamSseEvent {
 }
 
 /// Application-carrier context for a semantic stream translation failure.
-#[derive(Debug, Clone, thiserror::Error)]
-#[error("{error}")]
+#[derive(Debug, thiserror::Error)]
+#[error("{}: {error}", stage.error_prefix())]
 pub(crate) struct StreamTranslationFailure {
     pub(crate) stage: StreamTranslatorErrorStage,
-    pub(crate) error: String,
+    pub(crate) error: StreamTranslationError,
     pub(crate) upstream_event: Option<UpstreamSseEvent>,
     pub(crate) end: Option<StreamEnd>,
 }
@@ -72,7 +72,7 @@ impl StreamTranslationFailure {
     ) -> Self {
         Self {
             stage,
-            error: format!("{}: {error}", stage.error_prefix()),
+            error,
             upstream_event,
             end,
         }

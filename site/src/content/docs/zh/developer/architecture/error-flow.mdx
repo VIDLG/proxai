@@ -11,7 +11,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 本页说明内部失败如何变成紧凑的客户端 HTTP 或 SSE 错误。
 
 <ConversionPath
-  from={{ title: '内部错误', description: 'RequestError / ConfigError / UpstreamError / TranslationError / SseError / ByteStreamError' }}
+  from={{ title: 'Typed error', description: 'IngressError / RequestError / TranslationError / StreamTranslationError / 应用错误' }}
   via={[
     { title: '分类', description: '选择稳定的客户端错误 type 和 status' },
     { title: '保留安全细节', description: '保留有用上游 headers，同时不泄漏私有数据' },
@@ -25,16 +25,23 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 <ReferenceTable
   columns={['错误族', '用于']}
   rows={[
-    ['`RequestError`', '入站 body 解析和客户端请求校验失败。'],
+    ['`JsonPayloadError`', 'Core 共享的 JSON path、pretty source 位置和反序列化 source 详情。'],
+    ['`IngressError`', '与 carrier 无关的结构化请求归一化和校验失败。'],
+    ['`RequestError`', '应用层 HTTP body/path 失败，以及对 `IngressError` 的透明包装。'],
     ['`ConfigError`', '配置加载、配置文件读取、route/provider 校验和启动配置失败。'],
     ['`InternalError`', '代理运行时不变量、本地文件系统 IO、body 读取、序列化和边界失败。'],
     ['`UpstreamError`', 'Provider 发送失败、非成功状态和上游 body 读取失败。'],
-    ['`TranslationError`', '协议 payload 转换失败。'],
-    ['`SseError` / `SseTranslationError`', 'SSE event 语义和流式转换失败。'],
+    ['`TranslationError`', '非流式协议 payload 转换失败。'],
+    ['`StreamTranslationError`', '结构化 stream 转换和 lifecycle 语义失败。'],
+    ['`SseError`', '应用层 SSE carrier 解析失败。'],
     ['`ByteStreamError`', 'Byte stream carrier 失败。'],
   ]}
   codeFirstColumn={false}
 />
+
+## Error 与 observation
+
+Core 操作无法继续时返回 typed error；合法适配或目标协议无法表达的损失通过 `Observer` 发出 typed `Observation`。Core 不应对同一个失败既发 observation 又返回 error；应用边界结合 HTTP/SSE context，只观测、诊断和渲染一次返回的错误。
 
 ## 投影规则
 
@@ -72,8 +79,11 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 <ReferenceTable
   columns={['关注点', '归属']}
   rows={[
-    ['Domain error taxonomy', '`src/error/`'],
-    ['SSE 语义失败', '`src/sse.rs` 和 streaming translation modules'],
+    ['Core 共享 JSON 错误详情', '`crates/proxai-core/src/error.rs`'],
+    ['Core ingress 错误', '`crates/proxai-core/src/ingress/error.rs`'],
+    ['Core translation 错误', '`crates/proxai-core/src/translation/error.rs` 与 `translation/stream.rs`'],
+    ['应用错误组合与渲染', '`src/error/`'],
+    ['SSE carrier 失败', '`src/sse.rs` 与 `src/sse_translation.rs`'],
     ['Byte stream carriers', '`src/http_support/`'],
     ['Proxy 请求生命周期', '`src/lib.rs` 和 pipeline modules'],
   ]}

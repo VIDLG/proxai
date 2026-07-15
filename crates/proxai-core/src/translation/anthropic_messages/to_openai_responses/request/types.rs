@@ -94,7 +94,7 @@ impl TryFrom<anthropic::ToolUseBlockParam> for responses::Item {
 }
 
 impl TryFrom<anthropic::ToolResultBlockParam> for responses::Item {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(block: anthropic::ToolResultBlockParam) -> TranslationResult<Self> {
         let output = match block.content {
@@ -126,7 +126,7 @@ impl TryFrom<anthropic::ToolResultBlockParam> for responses::Item {
 }
 
 impl TryFrom<anthropic::DocumentBlockParam> for responses::InputContent {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(doc_block: anthropic::DocumentBlockParam) -> TranslationResult<Self> {
         match doc_block.source {
@@ -152,7 +152,7 @@ impl TryFrom<anthropic::DocumentBlockParam> for responses::InputContent {
                             blocks.into_iter().next().unwrap().into();
                         Ok(content)
                     } else {
-                        Err(crate::translation::TranslationError::InvalidPayload(
+                        Err(TranslationError::InvalidPayload(
                             "Anthropic document content with multiple blocks is not \
                              supported in OpenAI Responses input"
                                 .to_string(),
@@ -165,7 +165,7 @@ impl TryFrom<anthropic::DocumentBlockParam> for responses::InputContent {
 }
 
 impl TryFrom<anthropic::ToolResultContentBlockParam> for responses::InputContent {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(block: anthropic::ToolResultContentBlockParam) -> TranslationResult<Self> {
         match block {
@@ -178,13 +178,11 @@ impl TryFrom<anthropic::ToolResultContentBlockParam> for responses::InputContent
                     anthropic::ToolResultContentBlockParam::ToolReference(_) => "tool_reference",
                     _ => "unknown",
                 };
-                Err(crate::translation::TranslationError::InvalidPayload(
-                    format!(
-                        "Anthropic tool result content block type `{}` is not supported \
+                Err(TranslationError::InvalidPayload(format!(
+                    "Anthropic tool result content block type `{}` is not supported \
                          in OpenAI Responses input",
-                        name,
-                    ),
-                ))
+                    name,
+                )))
             }
         }
     }

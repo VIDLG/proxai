@@ -29,7 +29,7 @@ export const upstreamErrorPayload = {
 ## 错误投影链路
 
 <ConversionPath
-  from={{ title: '内部 typed error', description: 'RequestError、ConfigError、InternalError、UpstreamError、TranslationError、SSE errors' }}
+  from={{ title: 'Typed error', description: 'Core IngressError/TranslationError，以及应用 RequestError/InternalError/UpstreamError' }}
   via={[
     { title: 'error/render.rs', description: '把领域错误映射成 ErrorResponseSpec' },
     { title: 'ErrorResponseFields', description: 'HTTP/SSE 共用 status + payload 字段' },
@@ -65,7 +65,10 @@ ProxAI 的错误处理有几个目标：
 整体链路是：
 
 ```text
-内部 typed error
+Core typed error
+  JsonPayloadError / IngressError / TranslationError / StreamTranslationError
+        ↓ 应用错误透明包装，保留 source chain
+应用 typed error
   Error / RequestError / ConfigError / InternalError / UpstreamError / UpstreamResponseError
         ↓ error/render.rs
 客户端响应 spec
@@ -82,19 +85,22 @@ HTTP text/json response 或 SSE error event bytes
 
 ## 内部错误类型
 
-内部错误类型定义在 `src/error/` 下，另有 translation / SSE / stream 领域错误在各自模块中定义：
+Core 领域错误定义在 `crates/proxai-core` 的所属领域中；应用错误组合与响应投影定义在 `src/error/`：
 
+- `JsonPayloadError`
+- `IngressError`
+- `TranslationError`
+- `StreamTranslationError`
 - `Error`
 - `RequestError`
 - `ConfigError`
 - `InternalError`
 - `UpstreamError`
 - `UpstreamResponseError`
-- `TranslationError`
-- `SseError` / `SseTranslationError`
+- `SseError`
 - `ByteStreamError`
 
-这些类型描述的是 proxai 内部失败原因，而不是客户端响应格式。错误应按领域分层，不要用宽泛转换把语义错误包装成 `std::io::Error`；`io::Error` 只用于真实 OS / filesystem IO。
+这些类型描述的是 proxai 内部失败原因，而不是客户端响应格式。Core error 通过 `Result` 返回，应用错误使用透明 variant 保留其 source chain；合法但有损的适配才通过 `Observation` 发出，不应对同一个失败既 emit observation 又返回 error。错误应按领域分层，不要用宽泛转换把语义错误包装成 `std::io::Error`；`io::Error` 只用于真实 OS / filesystem IO。
 
 例如：
 
@@ -254,7 +260,7 @@ enum ErrorResponseType {
     UpstreamErrorBodyEmpty,
     UpstreamErrorBodyNonJson,
     UpstreamErrorBodyUnknownShape,
-    SseTranslationError,
+    StreamTranslationError,
 }
 ```
 

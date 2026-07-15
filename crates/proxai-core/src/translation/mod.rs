@@ -4,7 +4,7 @@
 //! inbound request protocol and the selected provider protocol.
 //!
 //! Keep translation concerns here rather than inside `provider/` so that:
-//! - `ingress/` owns inbound protocol parsing and normalization
+//! - `ingress/` owns structured inbound normalization and validation
 //! - `translation/` owns protocol-to-protocol conversion
 //! - `provider/` owns transport and provider-local request/response rendering
 //!
@@ -15,7 +15,6 @@
 pub(crate) mod anthropic_messages;
 mod context;
 pub(crate) mod error;
-pub(crate) mod json;
 pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
 mod request;
@@ -24,11 +23,8 @@ pub mod stream;
 pub(crate) mod text;
 mod translator;
 
+pub use context::TranslationRoute;
 pub(crate) use context::TranslationScope;
-pub use context::{
-    NoopTranslationObserver, TranslationObservation, TranslationObservationKind,
-    TranslationObserver, TranslationPhase, TranslationRoute,
-};
 pub use error::{Result as TranslationResult, TranslationError};
 pub(crate) use request::translate_request;
 pub(crate) use response::translate_non_streaming_response;

@@ -2,8 +2,9 @@
 //! `openai_responses -> openai_chat_completions`.
 
 use crate::protocol::openai::chat_completions::{
-    ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls, CompletionTokensDetails,
-    CompletionUsage, ImageDetail as ChatImageDetail, PromptTokensDetails,
+    ChatCompletionMessageCustomToolCall, ChatCompletionMessageToolCall,
+    ChatCompletionMessageToolCalls, CompletionTokensDetails, CompletionUsage, CustomTool,
+    FunctionCall, ImageDetail as ChatImageDetail, PromptTokensDetails,
 };
 use crate::protocol::openai::responses::{
     CustomToolCall, FunctionToolCall, ImageDetail as ResponsesImageDetail, ResponseUsage,
@@ -76,7 +77,7 @@ impl From<&FunctionToolCall> for ChatCompletionMessageToolCalls {
     fn from(call: &FunctionToolCall) -> Self {
         Self::Function(ChatCompletionMessageToolCall {
             id: tool_call_id(&call.id, &call.call_id),
-            function: crate::protocol::openai::chat_completions::FunctionCall {
+            function: FunctionCall {
                 name: call.name.clone(),
                 arguments: call.arguments.clone(),
             },
@@ -86,14 +87,12 @@ impl From<&FunctionToolCall> for ChatCompletionMessageToolCalls {
 
 impl From<&CustomToolCall> for ChatCompletionMessageToolCalls {
     fn from(call: &CustomToolCall) -> Self {
-        Self::Custom(
-            crate::protocol::openai::chat_completions::ChatCompletionMessageCustomToolCall {
-                id: call.id.clone().unwrap_or_else(|| call.call_id.clone()),
-                custom: crate::protocol::openai::chat_completions::CustomTool {
-                    name: call.name.clone(),
-                    input: call.input.clone(),
-                },
+        Self::Custom(ChatCompletionMessageCustomToolCall {
+            id: call.id.clone().unwrap_or_else(|| call.call_id.clone()),
+            custom: CustomTool {
+                name: call.name.clone(),
+                input: call.input.clone(),
             },
-        )
+        })
     }
 }

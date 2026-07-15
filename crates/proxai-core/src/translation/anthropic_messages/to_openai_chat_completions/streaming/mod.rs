@@ -5,10 +5,13 @@
 //! of its own beyond the inbound lifecycle wrapper.
 
 use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, MessageStreamEvent};
-use crate::protocol::openai::chat_completions::{CompletionUsage, FinishReason, FunctionType};
+use crate::protocol::openai::chat_completions::{
+    ChatCompletionStreamResponseDelta, CompletionUsage, FinishReason, FunctionType,
+};
 
 use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
+use crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk as build_chat_choice_chunk,
     chat_usage_chunk as build_chat_usage_chunk, refusal_delta, tool_arguments_delta,
@@ -27,7 +30,7 @@ use state::StreamingState;
 
 fn chat_choice_chunk(
     identity: &StreamIdentity,
-    delta: crate::protocol::openai::chat_completions::ChatCompletionStreamResponseDelta,
+    delta: ChatCompletionStreamResponseDelta,
     finish_reason: Option<FinishReason>,
 ) -> StreamTranslationResult<serde_json::Value> {
     Ok(serde_json::to_value(build_chat_choice_chunk(
@@ -52,11 +55,7 @@ fn chat_reasoning_chunk(
 ) -> StreamTranslationResult<serde_json::Value> {
     let mut payload =
         serde_json::to_value(build_chat_choice_chunk(identity, Default::default(), None))?;
-    crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning(
-        &mut payload,
-        reasoning,
-    )
-    .map_err(|error| StreamTranslationError::Semantic(error.to_string()))?;
+    inject_stream_reasoning(&mut payload, reasoning)?;
     Ok(payload)
 }
 

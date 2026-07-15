@@ -7,7 +7,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::observe::point::RequestTranslationFailure;
 use crate::paths;
 use crate::request::RequestId;
-use crate::translation::TranslationError;
 
 const KIND: &str = "request_translation_failure";
 const PHASE: &str = "provider_request";
@@ -39,11 +38,14 @@ fn write_request_translation_failure_to_dir(
     )
     .ok()?;
 
-    let (json_path, line, column) = match point.error {
-        TranslationError::JsonPayload {
-            path, line, column, ..
-        } => (Some(path.as_str()), Some(*line), Some(*column)),
-        _ => (None, None, None),
+    let json_error = point.error.as_json_payload_error();
+    let (json_path, line, column) = match json_error {
+        Some(error) => (
+            Some(error.path().as_str()),
+            Some(error.line()),
+            Some(error.column()),
+        ),
+        None => (None, None, None),
     };
     let error_message = point.error.to_string();
     let record = DiagnosticRecord {

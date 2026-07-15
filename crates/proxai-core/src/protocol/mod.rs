@@ -7,17 +7,30 @@ pub use field_presence::{Nullable, OptionalNullable, RequiredNullable, deseriali
 pub use openai::responses as openai_responses;
 
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumString};
+use strum::{Display, EnumMessage, EnumString};
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, Display, EnumString,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Default,
+    Deserialize,
+    Serialize,
+    Display,
+    EnumMessage,
+    EnumString,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum RequestProtocol {
     #[default]
+    #[strum(message = "OpenAI Responses")]
     OpenaiResponses,
+    #[strum(message = "OpenAI Chat Completions")]
     OpenaiChatCompletions,
+    #[strum(message = "Anthropic Messages")]
     AnthropicMessages,
 }
 
@@ -34,6 +47,11 @@ pub enum ProviderProtocol {
 }
 
 impl RequestProtocol {
+    pub fn human_name(self) -> &'static str {
+        self.get_message()
+            .expect("all request protocol variants must define a human-readable name")
+    }
+
     pub fn matches_provider_protocol(self, provider_protocol: ProviderProtocol) -> bool {
         self == provider_protocol.default_request_protocol()
     }

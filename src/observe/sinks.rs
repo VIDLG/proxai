@@ -15,6 +15,7 @@ use crate::observe::point::{
 };
 
 use crate::request::RequestId;
+use proxai_core::observe::Observation;
 
 #[derive(Clone)]
 pub(super) struct ObserveSinks {
@@ -30,6 +31,10 @@ impl ObserveSinks {
             logging: LoggingSink,
             diagnostics: DiagnosticsSink::new(request_id),
         }
+    }
+
+    pub(super) fn observe_core(&self, observation: &Observation) {
+        self.logging.emit_core(observation);
     }
 
     pub(super) fn observe_request_failed(&self, error: &crate::error::Error) {

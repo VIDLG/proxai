@@ -18,7 +18,9 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
 
 <ModuleGrid
   modules={[
-    { name: 'src/ingress/', icon: 'route', description: '从 HTTP path 检测入站协议，解析入站 body，并在 routing 前规范化 request carrier。' },
+    { name: 'src/ingress/', icon: 'route', description: '从 HTTP path 检测入站协议，解析 JSON bytes，映射应用错误并接入 request-scoped observer。' },
+    { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: '在 routing 和 translation 前归一化并校验结构化入站 payload。' },
+    { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: '共享 observer contract、封闭的 core observation variants 和 no-op 默认实现；不包含具体 sink。' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs、enums 和协议专属 event payload。不做 provider routing 决策。' },
     { name: 'src/routing/', icon: 'route', description: '匹配 request_protocol 和 model_pattern，选择 provider，并执行协议 guard 错误。' },
     { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: '协议 pair 之间的纯 request/response/stream 转换。' },
@@ -36,7 +38,9 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
 <ReferenceTable
   columns={['问题', '放在']}
   rows={[
-    ['是否解析客户端请求 path 或 body？', '`src/ingress/`'],
+    ['是否解析客户端请求 path 或 body bytes？', '`src/ingress/`'],
+    ['是否归一化或校验结构化入站 payload？', '`crates/proxai-core/src/ingress/`'],
+    ['是否定义可复用的 core observation contract 或 event？', '`crates/proxai-core/src/observe.rs`'],
     ['是否定义协议 JSON wire shape？', '`crates/proxai-core/src/protocol/`'],
     ['是否按协议/模型选择 provider？', '`src/routing/` 或 pipeline routing step'],
     ['是否把一种协议 payload 转成另一种协议 payload？', '`crates/proxai-core/src/translation/`'],
@@ -45,6 +49,25 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
     ['是否过滤 headers 或重建 HTTP response？', '`src/http_support/`'],
     ['是否渲染客户端错误？', '`src/error/`'],
     ['是否写日志或 capture artifacts？', '`src/observe/`'],
+  ]}
+  codeFirstColumn={false}
+/>
+
+## Observation 与日志边界
+
+`proxai-core` 定义共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现。Core ingress 与 translation 通过该 contract 发出类型化 variants。它们不选择 `tracing`、诊断文件、capture 存储、metrics backend 或其他具体 sink；具体实现由下游应用组合层提供。
+
+对于 request-scoped 代码，稳定的生命周期和领域事件应通过 `ObserveContext` 发出。`ObserveSinks` 再决定一个 point 应进入日志、diagnostics、capture，还是同时进入多个 sink。只有 logging sink 负责把 observation 转成 `tracing` event，并选择日志级别和输出格式。
+
+<ReferenceTable
+  columns={['场景', '使用方式']}
+  rows={[
+    ['Core 中合法但有损的适配，或 ingress compatibility event', '通过共享 `Observer` 发出类型化 `Observation` variant；具体 sink 由下游决定。'],
+    ['请求生命周期、协议/provider 结果或失败现场', '使用带类型 point 的 `ObserveContext`。'],
+    ['Logging sink 实现', '直接使用 `tracing`；日志级别和格式在这里决定。'],
+    ['Observation/capture 子系统自身失败', '直接使用 `tracing`，避免 observer 递归观测自身。'],
+    ['没有 request context 的进程启动、配置或后台任务', '直接使用 `tracing`。'],
+    ['临时局部实现调试', '使用 `tracing::trace!`；若反复用于真实诊断，则提升为 observe point。'],
   ]}
   codeFirstColumn={false}
 />

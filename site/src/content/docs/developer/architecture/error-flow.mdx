@@ -11,7 +11,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 This page explains how internal failures become compact client-facing HTTP or SSE errors.
 
 <ConversionPath
-  from={{ title: 'Internal error', description: 'RequestError / ConfigError / UpstreamError / TranslationError / SseError / ByteStreamError' }}
+  from={{ title: 'Typed error', description: 'IngressError / RequestError / TranslationError / StreamTranslationError / application errors' }}
   via={[
     { title: 'Classify', description: 'Select stable client-facing error type and status' },
     { title: 'Preserve safe details', description: 'Keep useful upstream headers without leaking private data' },
@@ -25,16 +25,23 @@ This page explains how internal failures become compact client-facing HTTP or SS
 <ReferenceTable
   columns={['Error family', 'Use for']}
   rows={[
-    ['`RequestError`', 'Inbound body parsing and client request validation failures.'],
+    ['`JsonPayloadError`', 'Shared core JSON path, pretty source location, and deserialization source details.'],
+    ['`IngressError`', 'Carrier-independent structured request normalization and validation failures.'],
+    ['`RequestError`', 'Application HTTP body/path failures and transparent wrapping of `IngressError`.'],
     ['`ConfigError`', 'Config loading, config-file reads, route/provider validation, and startup config failures.'],
     ['`InternalError`', 'Proxy runtime invariants, local filesystem IO, body reads, serialization, and boundary failures.'],
     ['`UpstreamError`', 'Provider send failures, non-success statuses, and upstream body-read failures.'],
-    ['`TranslationError`', 'Protocol payload conversion failures.'],
-    ['`SseError` / `SseTranslationError`', 'SSE event semantics and streaming conversion failures.'],
+    ['`TranslationError`', 'Non-streaming protocol payload conversion failures.'],
+    ['`StreamTranslationError`', 'Structured stream conversion and lifecycle semantic failures.'],
+    ['`SseError`', 'Application SSE carrier parsing failures.'],
     ['`ByteStreamError`', 'Byte stream carrier failures.'],
   ]}
   codeFirstColumn={false}
 />
+
+## Error versus observation
+
+Core operations return typed errors when processing cannot continue. Legal adaptations and representational loss emit typed `Observation` values through `Observer`. Core must not both emit an observation and return the same failure; the application boundary observes, diagnoses, and renders a returned error once with HTTP/SSE context.
 
 ## Projection rules
 
@@ -72,8 +79,11 @@ This page explains how internal failures become compact client-facing HTTP or SS
 <ReferenceTable
   columns={['Concern', 'Owner']}
   rows={[
-    ['Domain error taxonomy', '`src/error/`'],
-    ['SSE semantic failures', '`src/sse.rs` and streaming translation modules'],
+    ['Shared core JSON error details', '`crates/proxai-core/src/error.rs`'],
+    ['Core ingress errors', '`crates/proxai-core/src/ingress/error.rs`'],
+    ['Core translation errors', '`crates/proxai-core/src/translation/error.rs` and `translation/stream.rs`'],
+    ['Application error composition and rendering', '`src/error/`'],
+    ['SSE carrier failures', '`src/sse.rs` and `src/sse_translation.rs`'],
     ['Byte stream carriers', '`src/http_support/`'],
     ['Proxy request lifecycle', '`src/lib.rs` and pipeline modules'],
   ]}

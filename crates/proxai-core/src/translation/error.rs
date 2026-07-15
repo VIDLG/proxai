@@ -1,3 +1,4 @@
+use crate::error::JsonPayloadError;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 pub type Result<T> = std::result::Result<T, TranslationError>;
@@ -22,14 +23,15 @@ pub enum TranslationError {
     #[error("JSON conversion failed during translation: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error(
-        "failed to deserialize normalized translation payload for {context} at JSON path `{path}` (pretty line {line}, column {column}): {message}"
-    )]
-    JsonPayload {
-        context: &'static str,
-        path: String,
-        message: String,
-        line: usize,
-        column: usize,
-    },
+    #[error(transparent)]
+    JsonPayload(#[from] JsonPayloadError),
+}
+
+impl TranslationError {
+    pub fn as_json_payload_error(&self) -> Option<&JsonPayloadError> {
+        match self {
+            Self::JsonPayload(error) => Some(error),
+            _ => None,
+        }
+    }
 }

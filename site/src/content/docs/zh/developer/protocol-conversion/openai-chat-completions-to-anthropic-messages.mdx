@@ -13,7 +13,7 @@ import { ConversionPath, ProxaiCallout, ReferenceTable } from '@components/Proxa
 <ConversionPath
   from={{ title: '入站', description: '`openai_chat_completions` request payload' }}
   via={[
-    { title: '规范化', description: '`src/ingress/` 解析 Chat messages 和 tools' },
+    { title: '规范化', description: '`proxai-core/ingress` 校验结构化 Chat request' },
     { title: '请求转换', description: 'Chat messages/tools -> Anthropic Messages request' },
     { title: '响应转换', description: 'Anthropic Message/content blocks -> Chat choices' },
   ]}

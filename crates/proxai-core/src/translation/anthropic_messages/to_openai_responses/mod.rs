@@ -11,17 +11,20 @@ pub(crate) use streaming::AnthropicToResponsesStreaming;
 
 use serde_json::Value;
 
+use crate::json::deserialize_value;
 use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
 use crate::protocol::openai_responses::{CreateResponseRequest, Response};
 
-use crate::translation::{TranslationResult, TranslationScope, json};
+use crate::translation::{TranslationResult, TranslationScope};
 
 pub(crate) fn translate_request_payload(
     payload: &Value,
     scope: &TranslationScope,
 ) -> TranslationResult<Value> {
-    let request =
-        json::from_value::<MessageCreateParamsBase>(payload, "Anthropic Messages request payload")?;
+    let request = deserialize_value::<MessageCreateParamsBase>(
+        payload,
+        "Anthropic Messages request payload",
+    )?;
     let translated: CreateResponseRequest = request::translate_request(request, scope)?;
     Ok(serde_json::to_value(translated)?)
 }
@@ -30,7 +33,7 @@ pub(crate) fn translate_non_streaming_response(
     payload: Value,
     scope: &TranslationScope,
 ) -> TranslationResult<Value> {
-    let message = json::from_value::<Message>(&payload, "Anthropic Messages response payload")?;
+    let message = deserialize_value::<Message>(&payload, "Anthropic Messages response payload")?;
     let translated: Response = response::translate_response(&message, scope)?;
     Ok(serde_json::to_value(translated)?)
 }

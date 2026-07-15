@@ -102,7 +102,7 @@ impl RoutedInboundFlow {
                     method: &method,
                     uri: &uri,
                     normalized_payload: request.normalized_payload(),
-                    inbound_request_bytes: request.body_len(),
+                    inbound_request_bytes: request.normalized_payload_len(),
                     request_protocol: request.protocol(),
                     provider: &provider_name,
                     route_name: route_name.as_deref(),
@@ -124,7 +124,7 @@ impl RoutedInboundFlow {
             method: method.clone(),
             uri: uri.clone(),
             request_sizes: ProviderRequestBodySizes {
-                inbound: request.body_len(),
+                inbound: request.normalized_payload_len(),
                 provider: provider_request.body().len(),
             },
             request_protocol: request.protocol(),

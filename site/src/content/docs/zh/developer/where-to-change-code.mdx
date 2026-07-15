@@ -19,7 +19,7 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@component
 <ModuleGrid
   modules={[
     { name: '运行时配置项', icon: 'config', description: '从 `src/config.rs` 开始；更新 `config.example.toml`、`src/main.rs` 或 `src/lib.rs` 的 wiring、用户文档、参考文档和配置加载测试。' },
-    { name: '入站协议解析', icon: 'route', description: '从 `src/ingress/` 和 `crates/proxai-core/src/protocol/` 开始；保持基于 path 的 request protocol detection，并在 routing 前 normalize。' },
+    { name: '入站协议解析', icon: 'route', description: 'HTTP path/body 适配放在 `src/ingress/`，结构化归一化/校验放在 `crates/proxai-core/src/ingress/`，wire shape 放在 `crates/proxai-core/src/protocol/`。' },
     { name: 'Route matching', icon: 'route', description: '从 `src/routing/` 开始；保持严格 `request_protocol` guard，不要让显式 guard mismatch 静默 fallthrough。' },
     { name: 'Provider request 行为', icon: 'file', description: '从 `src/provider/*/request` 开始；model rewrite、projection 和 serialization 属于 provider 侧。' },
     { name: 'Provider transport', icon: 'terminal', description: '从 `src/provider/*/transport` 开始；auth headers、上游 URL 构造和 HTTP send 不应进入纯 translation。' },

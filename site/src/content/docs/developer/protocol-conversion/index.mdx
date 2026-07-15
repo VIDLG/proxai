@@ -19,7 +19,7 @@ ProxAI keeps protocol conversion explicit and pair-oriented. The conversion rule
 ## Boundaries
 
 - `crates/proxai-core/src/protocol/` owns protocol-specific Rust wire models.
-- `src/ingress/` owns inbound parsing and normalization before translation.
+- `src/ingress/` parses HTTP body bytes and maps application errors/notices; `crates/proxai-core/src/ingress/` owns structured normalization and validation before translation.
 - `crates/proxai-core/src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
 - `src/provider/request.rs` owns provider request preparation, including model rewrite, projection/summary extraction, and JSON body serialization.
 - `src/provider/transport.rs` owns outbound HTTP transport, auth headers, upstream URL construction, and send.

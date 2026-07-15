@@ -4,6 +4,7 @@ use crate::protocol::openai::responses::{
     ReasoningItemContent, ReasoningTextContent, RefusalContent, Response, ResponseObject,
     ResponseUsage, ToolChoiceOptions, ToolChoiceParam,
 };
+use crate::translation::anthropic_messages::continuation::ContinuationEnvelope;
 use crate::translation::openai_responses::outbound::{output_text, response_id};
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
@@ -22,7 +23,7 @@ pub(super) fn translate_response(
     let mut output = Vec::new();
     if let Some(reasoning_content) = reasoning_content {
         let (visible_reasoning, continuation) =
-                crate::translation::anthropic_messages::continuation::ContinuationEnvelope::split_chat_reasoning_content(reasoning_content)?;
+            ContinuationEnvelope::split_chat_reasoning_content(reasoning_content)?;
         if continuation.is_some() {
             scope.dropped("Anthropic continuation envelope in Chat reasoning_content",
                 "OpenAI Responses reasoning cannot carry provider-specific Anthropic continuation data",

@@ -83,7 +83,7 @@ impl ProviderStreamingHttpFlow {
                                 failure: &failure,
                             },
                         );
-                        yield Ok(ErrorResponseFields::stream_translation(failure.error)
+                        yield Ok(ErrorResponseFields::stream_translation(failure.to_string())
                             .encode_sse_event_or_fallback());
                         return;
                     }

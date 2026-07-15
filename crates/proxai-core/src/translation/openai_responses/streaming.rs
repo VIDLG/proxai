@@ -20,6 +20,7 @@ use derive_more::From;
 use serde_json::Value;
 use strum::Display;
 
+use crate::json::deserialize_value;
 use crate::protocol::openai::responses::{
     OutputContent, OutputItem, Response, ResponseStreamEvent,
 };
@@ -216,7 +217,8 @@ impl<S> ResponsesInboundLifecycle<S> {
         &mut self,
         payload: Value,
     ) -> StreamTranslationResult<ResponseStreamEvent> {
-        let parsed = serde_json::from_value::<ResponseStreamEvent>(payload)?;
+        let parsed =
+            deserialize_value::<ResponseStreamEvent>(&payload, "OpenAI Responses stream event")?;
         self.apply_output_item_lifecycle(&parsed)?;
         Ok(parsed)
     }

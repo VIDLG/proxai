@@ -8,6 +8,7 @@
 use delegate::delegate;
 use serde_json::Value;
 
+use crate::json::deserialize_value;
 use crate::protocol::anthropic::messages::MessageStreamEvent;
 use crate::translation::stream::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
@@ -40,7 +41,8 @@ impl<S> AnthropicInboundLifecycle<S> {
         &self,
         payload: Value,
     ) -> StreamTranslationResult<MessageStreamEvent> {
-        let parsed = serde_json::from_value::<MessageStreamEvent>(payload)?;
+        let parsed =
+            deserialize_value::<MessageStreamEvent>(&payload, "Anthropic Messages stream event")?;
         if matches!(parsed, MessageStreamEvent::Ping(_)) {
             return Ok(parsed);
         }

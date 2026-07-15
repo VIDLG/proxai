@@ -1,6 +1,6 @@
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai_responses as responses;
-use crate::translation::TranslationResult;
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 impl From<chat::ServiceTier> for responses::ServiceTier {
     fn from(value: chat::ServiceTier) -> Self {
@@ -42,7 +42,7 @@ impl From<chat::ReasoningEffort> for responses::Reasoning {
 }
 
 impl TryFrom<&chat::ResponseFormat> for responses::TextResponseFormatConfiguration {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(value: &chat::ResponseFormat) -> TranslationResult<Self> {
         match value {
@@ -72,7 +72,7 @@ impl From<chat::Verbosity> for responses::Verbosity {
 
 pub(super) fn response_stream_options(
     value: &chat::ChatCompletionStreamOptions,
-    scope: &crate::translation::TranslationScope,
+    scope: &TranslationScope,
 ) -> responses::ResponseStreamOptions {
     if value.include_usage.is_some() {
         scope.dropped(

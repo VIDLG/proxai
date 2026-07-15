@@ -12,7 +12,7 @@ use crate::protocol::openai_responses::{
     OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseUsage,
     ServiceTier, Status,
 };
-use crate::translation::TranslationResult;
+use crate::translation::{TranslationError, TranslationResult};
 
 /// Pair-local Responses `incomplete_details.reason` convention.
 ///
@@ -74,7 +74,7 @@ pub(super) fn responses_status_from_anthropic_stop_reason(stop_reason: StopReaso
 }
 
 impl TryFrom<&ToolUseBlock> for FunctionToolCall {
-    type Error = crate::translation::TranslationError;
+    type Error = TranslationError;
 
     fn try_from(block: &ToolUseBlock) -> TranslationResult<Self> {
         Ok(Self {

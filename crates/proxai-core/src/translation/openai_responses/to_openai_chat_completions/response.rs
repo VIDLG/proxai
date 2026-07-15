@@ -3,7 +3,7 @@ use crate::protocol::openai::chat_completions::{
     CreateChatCompletionResponseObject, FinishReason,
 };
 use crate::protocol::openai::responses::{
-    OutputItem, OutputMessage, OutputMessageContent, Response,
+    OutputItem, OutputMessage, OutputMessageContent, ReasoningItemContent, Response, SummaryPart,
 };
 use crate::translation::openai_chat_completions::outbound::assistant_response_message;
 use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
@@ -33,15 +33,11 @@ pub(super) fn translate_response(
             }
             OutputItem::Reasoning(reasoning) => {
                 reasoning_parts.extend(reasoning.summary.iter().map(|part| match part {
-                    crate::protocol::openai::responses::SummaryPart::SummaryText(text) => {
-                        text.text.clone()
-                    }
+                    SummaryPart::SummaryText(text) => text.text.clone(),
                 }));
                 if let Some(content) = reasoning.content.as_ref() {
                     reasoning_parts.extend(content.iter().map(|part| match part {
-                        crate::protocol::openai::responses::ReasoningItemContent::ReasoningText(
-                            text,
-                        ) => text.text.clone(),
+                        ReasoningItemContent::ReasoningText(text) => text.text.clone(),
                     }));
                 }
                 if reasoning.encrypted_content.is_non_null()

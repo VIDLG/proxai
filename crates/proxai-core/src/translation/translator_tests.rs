@@ -4,21 +4,22 @@ use futures_util::{StreamExt, stream};
 use serde_json::{Value, json};
 
 use super::Translator;
+use crate::observe::{
+    Observation, Observer, TranslationObservation, TranslationObservationKind, TranslationPhase,
+};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::stream::{StreamEnd, StreamEvent, StreamTranslationInput};
-use crate::translation::{
-    TranslationObservation, TranslationObservationKind, TranslationObserver, TranslationPhase,
-    TranslationRoute,
-};
 
 #[derive(Clone, Default)]
 struct RecordingObserver {
     observations: Arc<Mutex<Vec<TranslationObservation>>>,
 }
 
-impl TranslationObserver for RecordingObserver {
-    fn observe(&self, observation: &TranslationObservation) {
-        self.observations.lock().unwrap().push(observation.clone());
+impl Observer for RecordingObserver {
+    fn observe(&self, observation: &Observation) {
+        if let Observation::Translation(observation) = observation {
+            self.observations.lock().unwrap().push(observation.clone());
+        }
     }
 }
 
@@ -183,10 +184,8 @@ async fn reports_unrepresentable_stream_output_through_observer() {
     assert_eq!(
         observations.lock().unwrap().as_slice(),
         &[TranslationObservation {
-            route: TranslationRoute {
-                request_protocol: RequestProtocol::OpenaiChatCompletions,
-                provider_protocol: ProviderProtocol::OpenaiResponses,
-            },
+            request_protocol: RequestProtocol::OpenaiChatCompletions,
+            provider_protocol: ProviderProtocol::OpenaiResponses,
             phase: TranslationPhase::StreamingResponse,
             kind: TranslationObservationKind::Dropped,
             subject: "Responses output item `file_search_call` at index 0".to_string(),

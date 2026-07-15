@@ -1,4 +1,6 @@
 use super::prepare_openai_responses_request;
+use crate::ingress::IngressError;
+use crate::protocol::RequestProtocol;
 use serde_json::json;
 
 #[test]
@@ -18,12 +20,12 @@ fn prepare_request_normalizes_payload_and_extracts_model() {
         ]
     });
 
-    let prepared = prepare_openai_responses_request(request.to_string().as_bytes()).unwrap();
+    let prepared = prepare_openai_responses_request(request).unwrap();
 
-    assert_eq!(prepared.model, "gpt-5.5");
+    assert_eq!(prepared.model(), "gpt-5.5");
     assert_eq!(
-        prepared.normalized_payload,
-        json!({
+        prepared.normalized_payload(),
+        &json!({
             "model": "gpt-5.5",
             "instructions": "be concise\n\nexisting",
             "input": [
@@ -37,20 +39,16 @@ fn prepare_request_normalizes_payload_and_extracts_model() {
 }
 
 #[test]
-fn prepare_request_rejects_non_json_payloads() {
-    let error = prepare_openai_responses_request(b"not json").unwrap_err();
-
-    assert_eq!(
-        error.to_string(),
-        "invalid request: OpenAI Responses requests must be JSON and include a non-empty `model`."
-    );
-}
-
-#[test]
 fn prepare_request_rejects_missing_or_empty_model_values() {
     let missing = json!({});
     let empty = json!({ "model": "   " });
 
-    assert!(prepare_openai_responses_request(missing.to_string().as_bytes()).is_err());
-    assert!(prepare_openai_responses_request(empty.to_string().as_bytes()).is_err());
+    for payload in [missing, empty] {
+        assert!(matches!(
+            prepare_openai_responses_request(payload),
+            Err(IngressError::MissingModel {
+                protocol: RequestProtocol::OpenaiResponses,
+            })
+        ));
+    }
 }

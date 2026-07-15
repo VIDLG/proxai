@@ -47,7 +47,7 @@ export const lifecycleEdges = [
 <PipelineStageCards
   labels={{ modules: '模块', responsibility: '职责' }}
   stages={[
-    { name: 'inbound_request', modules: ['src/ingress/', 'src/pipeline/inbound.rs'], responsibility: '检测请求路径，读取 body，解析协议 payload，并规范化入站请求元数据。' },
+    { name: 'inbound_request', modules: ['src/ingress/', 'crates/proxai-core/src/ingress/', 'src/pipeline/inbound.rs'], responsibility: '检测请求路径，读取并解析 body bytes，再归一化和校验结构化协议 payload。' },
     { name: 'routing', codeName: false, modules: ['src/routing/', 'src/config.rs'], responsibility: '解析显式路由或协议感知默认 provider；执行 request_protocol guard。' },
     { name: 'provider_request', modules: ['src/provider/*/request', 'crates/proxai-core/src/translation/'], responsibility: '协议不同时转换 payload，重写 provider model，并序列化上游请求。' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: '构造上游 URL，附加 provider-owned 认证头，并通过 HTTP 发送。' },

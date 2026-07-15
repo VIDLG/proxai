@@ -57,15 +57,18 @@ Use phase names for capture artifacts/config, flow locals, and logging fields th
 
 Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 
-- `src/ingress/` owns inbound protocol parsing and normalization.
+- `src/ingress/` owns inbound byte parsing, application error mapping, and request-scoped observer wiring.
+- `crates/proxai-core/src/ingress/` owns structured inbound normalization and validation.
+- `crates/proxai-core/src/observe.rs` owns the shared core observation contract and typed variants.
 - `crates/proxai-core/src/protocol/` owns wire models.
 - `crates/proxai-core/src/translation/` owns protocol-to-protocol conversion.
 - `provider/request` owns provider request preparation, including provider model rewrite, projection/summary extraction, and body serialization.
 - `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
 - `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
 
-Translation should stay pure at the carrier boundary:
+Core ingress and translation should stay pure at the carrier boundary:
 
+- inbound preparation: `(request_protocol, payload) -> prepared_request`
 - request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
 - non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
 - streaming response translation: `(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`
@@ -74,23 +77,32 @@ Do not pass HTTP `Response`, `Body`, `ByteStream`, SSE frames, route/model rewri
 
 Prefer pair-oriented conversion names such as `openai_responses -> anthropic_messages`. For protocol-specific request/response data, prefer top-level enums keyed by protocol over parallel fields that can drift into impossible states.
 
-When a target protocol cannot represent a source field or block, report it through the core `TranslationObserver` with the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`; the application observer decides how to log or diagnose the loss.
+When a target protocol cannot represent a source field or block, report a typed translation observation through the core `Observer` with the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`; the downstream observer decides how to log or diagnose the loss.
 
 ## Logging / Errors / Streaming
 
 Logs should be compact, structured, stable, and useful for real debugging. Do not log request bodies, Authorization headers, API keys, private prompts, or unnecessary private upstream URL details.
 
+Core crates may define observation traits, closed structured observation variants, and no-op defaults, but must not choose concrete logging, diagnostics, capture, metrics, or storage implementations. Downstream composition supplies those implementations.
+
+Core request-domain producers emit typed `Observation` values through `Observer`; downstream `ObserveContext` implements that contract, and its sinks decide logging level/format, diagnostics, and capture. Use `tracing` directly only inside logging/observation sinks, for observation-system failures that must not recurse, for process-level startup/config/background events without a request context, or for genuinely temporary local debugging. If a trace becomes a recurring diagnostic signal, promote it to an observe point.
+
 Keep `error_responses.format = "text"` as the readable default. Preserve useful headers such as `Retry-After`; avoid overfitting to every upstream JSON shape.
 
 Use domain-specific errors rather than broad catch-all conversions:
 
-- `RequestError` for inbound body/validation failures.
+- `JsonPayloadError` for shared core JSON path/source details; ingress and translation wrap it transparently.
+- `IngressError` for carrier-independent structured normalization and validation failures.
+- `RequestError` for application HTTP body/path failures and transparent wrapping of `IngressError`.
 - `ConfigError` for config loading and config-file reads.
 - `InternalError` for proxy runtime invariants, local filesystem IO, internal HTTP body reads, JSON serialization, and translation boundary errors.
 - `UpstreamError` for upstream send/status/body-read failures.
-- `TranslationError` for protocol payload conversion.
-- `SseError` / `SseTranslationError` for SSE event semantics.
-- `ByteStreamError` for stream carrier errors.
+- `TranslationError` for non-streaming protocol payload conversion.
+- `StreamTranslationError` for structured stream conversion and lifecycle semantics.
+- `SseError` for application SSE carrier parsing.
+- `ByteStreamError` for byte stream carrier errors.
+
+Core errors return through `Result`; non-fatal adaptations emit typed `Observation` values. Do not emit an observation for the same failure that is returned as an error—the downstream boundary observes and renders that error once with carrier context.
 
 Avoid wrapping semantic stream or HTTP errors in `std::io::Error`; reserve `io::Error` for real OS/filesystem IO.
 

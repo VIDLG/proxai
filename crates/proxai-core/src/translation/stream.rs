@@ -13,6 +13,8 @@ use serde::Serialize;
 use serde_json::Value;
 use strum::{Display, EnumDiscriminants};
 
+use crate::error::JsonPayloadError;
+
 const DEFAULT_EVENT_TYPE: &str = "message";
 const DONE_SENTINEL_DATA: &str = "[DONE]";
 
@@ -20,11 +22,27 @@ pub type StreamTranslationResult<T> = Result<T, StreamTranslationError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamTranslationError {
+    #[error("stream payload conversion failed: {0}")]
+    Translation(#[from] super::error::TranslationError),
+
+    #[error(transparent)]
+    JsonPayload(#[from] JsonPayloadError),
+
     #[error("stream JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
 
     #[error("stream semantic conversion failed: {0}")]
     Semantic(String),
+}
+
+impl StreamTranslationError {
+    pub fn as_json_payload_error(&self) -> Option<&JsonPayloadError> {
+        match self {
+            Self::Translation(error) => error.as_json_payload_error(),
+            Self::JsonPayload(error) => Some(error),
+            Self::Json(_) | Self::Semantic(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]

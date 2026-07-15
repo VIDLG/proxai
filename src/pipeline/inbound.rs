@@ -52,12 +52,12 @@ impl InboundHttpFlow {
             "/v1/chat/completions" | "/chat/completions" => RequestProtocol::OpenaiChatCompletions,
             "/v1/messages" | "/messages" => RequestProtocol::AnthropicMessages,
             path => {
-                return Err(RequestError::Invalid(format!(
-                    "unsupported request path `{path}`"
-                )));
+                return Err(RequestError::UnsupportedPath {
+                    path: path.to_string(),
+                });
             }
         };
-        let request = prepare_inbound_request(request_protocol, &body)?;
+        let request = prepare_inbound_request(request_protocol, &body, &obs)?;
         obs.observe_inbound_request_prepared(InboundRequestPrepared {
             method: &method,
             uri: &uri,

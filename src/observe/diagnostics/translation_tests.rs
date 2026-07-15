@@ -2,6 +2,7 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::http::{Method, Uri};
+use proxai_core::error::JsonPayloadError;
 use serde_json::json;
 
 use crate::observe::point::RequestTranslationFailure;
@@ -27,13 +28,12 @@ fn stores_normalized_payload_and_json_location_without_capture() {
         "model": "glm-5.2",
         "tools": [{"type": "function", "name": "lookup"}]
     });
-    let error = TranslationError::JsonPayload {
-        context: "OpenAI Responses request payload",
-        path: "tools[0]".to_string(),
-        message: "missing field `strict`".to_string(),
-        line: 4,
-        column: 5,
-    };
+    let source = serde_json::from_str::<serde_json::Value>("{\n\n\n    ?\n}").unwrap_err();
+    let error = TranslationError::from(JsonPayloadError::new(
+        "OpenAI Responses request payload",
+        "tools[0]",
+        source,
+    ));
     let point = RequestTranslationFailure {
         method: &method,
         uri: &uri,
