@@ -39,7 +39,7 @@ Route matching selects a provider for one inbound request. Provider `protocol` t
   rows={[
     ['name', 'Optional stable identifier used by `--route-override`'],
     ['request_protocol', 'Optional inbound protocol guard: `openai_responses`, `openai_chat_completions`, or `anthropic_messages`'],
-    ['match_kind', '`exact`, `glob`, `regex`, or `auto`'],
+    ['match_kind', '`exact`, `glob`, `regex`, or `auto`; use an explicit kind when pattern syntax is ambiguous'],
     ['model_pattern', 'Logical model selector matched against the inbound model'],
     ['provider', 'Provider name selected when the route matches'],
     ['upstream_model', 'Optional model rewrite applied before the provider request is serialized'],
@@ -54,7 +54,7 @@ Route matching selects a provider for one inbound request. Provider `protocol` t
     ['Model does not match any explicit route', 'Use `routing.default_provider_names.<inbound_protocol>`'],
     ['Model matches and `request_protocol` is omitted', 'Route can match the detected inbound protocol'],
     ['Model matches and explicit `request_protocol` equals detected protocol', 'Use the route provider'],
-    ['Model matches but explicit `request_protocol` differs', 'Return a configuration error instead of falling through'],
+    ['Model matches an explicit `request_protocol` that differs', 'Continue scanning for a later model match with a compatible protocol; if none exists, return a configuration error instead of using the default provider'],
     ['Selected provider protocol differs from inbound protocol', 'Use the explicit translation pair if supported; otherwise fail explicitly'],
   ]}
   codeFirstColumn={false}

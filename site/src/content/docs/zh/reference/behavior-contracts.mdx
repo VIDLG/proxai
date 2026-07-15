@@ -32,10 +32,10 @@ import { ContractCards, ProxaiCallout } from '@components/ProxaiDocs.jsx';
 ## 路由与转换
 
 <ContractCards layout="single" labels={{ sourceOwner: '源码归属', failureMode: '失败模式', suggestedTests: '建议测试', relatedDocs: '相关文档' }} contracts={[
-  { id: 'C7', title: '显式路由优先', promise: '只有在没有显式 route 命中时才使用默认 provider。命中的 route 永远优先于默认。', sourceOwner: '`src/routing/`', failureMode: '默认 provider 抢走已命中 route 的流量。', suggestedTests: ['Route matching tests', 'Proxy e2e route tests'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
+  { id: 'C7', title: '显式路由优先', promise: '只有在没有显式 route 命中时才使用默认 provider。命中的 route 永远优先于默认。', sourceOwner: '`crates/proxai-core/src/routing/`', failureMode: '默认 provider 抢走已命中 route 的流量。', suggestedTests: ['Route matching tests', 'Proxy e2e route tests'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
   { id: 'C8', title: '不支持的转换对显式失败', promise: '未实现的转换对一定显式失败。当 route 命中但协议对不支持时，ProxAI 永远不会静默 fallthrough 到默认 provider。', sourceOwner: '`crates/proxai-core/src/translation/` 和 routing dispatch', failureMode: '不支持的转换静默路由到其他 provider。', suggestedTests: ['兼容性矩阵覆盖', 'Unsupported pair e2e tests'], relatedDocs: [{ label: '兼容性矩阵', href: '/zh/reference/compatibility-matrix' }] },
   { id: 'C9', title: 'Provider protocol 是语义标识', promise: 'Provider `protocol` 是语义标识。Provider 名字只是用户标签，永远不会改变 wire 行为。', sourceOwner: '`src/config.rs`、`src/provider/`、`crates/proxai-core/src/translation/`', failureMode: 'Provider name 意外改变 serialization 或 response parsing。', suggestedTests: ['Provider protocol dispatch tests'], relatedDocs: [{ label: '术语表', href: '/zh/reference/glossary' }] },
-  { id: 'C10', title: 'Request protocol guard 严格生效', promise: '如果 route 设置了 `request_protocol`，并且模型命中但入站协议不同，ProxAI 会返回配置错误，而不是继续路由。', sourceOwner: '`src/routing/`', failureMode: 'Endpoint-specific routes 静默 fall through。', suggestedTests: ['Protocol-aware route matching tests'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
+  { id: 'C10', title: 'Request protocol guard 严格生效', promise: '当模型命中的 routes 设置了 `request_protocol` 时，ProxAI 可以选择后续协议兼容的命中项；若不存在兼容项，则返回配置错误而不是回退到默认 provider。', sourceOwner: '`crates/proxai-core/src/routing/`', failureMode: 'Endpoint-specific routes 静默 fall through 到协议不兼容的 route 或默认 provider。', suggestedTests: ['Protocol-aware route matching tests'], relatedDocs: [{ label: '路由匹配', href: '/zh/reference/route-matching' }] },
 ]} />
 
 ## Provider 认证

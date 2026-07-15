@@ -39,7 +39,7 @@ Route matching 为一个入站请求选择 provider。随后 provider 的 `proto
   rows={[
     ['name', '`--route-override` 使用的可选稳定标识'],
     ['request_protocol', '可选入站协议 guard：`openai_responses`、`openai_chat_completions` 或 `anthropic_messages`'],
-    ['match_kind', '`exact`、`glob`、`regex` 或 `auto`'],
+    ['match_kind', '`exact`、`glob`、`regex` 或 `auto`；pattern 语法有歧义时应显式指定'],
     ['model_pattern', '匹配入站 model 的逻辑模型选择器'],
     ['provider', 'route 命中时选择的 provider 名称'],
     ['upstream_model', 'provider request 序列化前应用的可选模型改写'],
@@ -54,7 +54,7 @@ Route matching 为一个入站请求选择 provider。随后 provider 的 `proto
     ['模型没有命中任何显式 route', '使用 `routing.default_provider_names.<inbound_protocol>`'],
     ['模型命中且 `request_protocol` 省略', 'Route 可以匹配检测出的入站协议'],
     ['模型命中且显式 `request_protocol` 等于检测出的协议', '使用 route provider'],
-    ['模型命中但显式 `request_protocol` 不同', '返回配置错误，而不是 fallback'],
+    ['模型命中但显式 `request_protocol` 不同', '继续寻找后续协议兼容的模型命中；若不存在，则返回配置错误而不是使用默认 provider'],
     ['选中 provider protocol 与入站协议不同', '如果支持对应转换 pair，则执行显式转换；否则显式失败'],
   ]}
   codeFirstColumn={false}

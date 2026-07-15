@@ -168,6 +168,34 @@ read_idle_timeout_secs = 55
 }
 
 #[test]
+fn rejects_provider_names_that_collide_after_normalization() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[providers.OpenAI]
+protocol = "openai_responses"
+base_url = "http://upstream.example:8080"
+api_key = "first"
+read_idle_timeout_secs = 42
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "http://upstream.example:8081"
+api_key = "second"
+read_idle_timeout_secs = 42
+"#,
+    )
+    .unwrap();
+
+    let error = AppConfig::load(path.clone()).unwrap_err().to_string();
+
+    assert!(error.contains("duplicates normalized provider name `openai`"));
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn rejects_empty_provider_api_key() {
     let path = unique_config_path();
     fs::write(
@@ -222,12 +250,8 @@ fn bundled_example_config_builds_runtime_for_all_default_protocols() {
         Some(ProviderProtocol::AnthropicMessages)
     );
 
-    AppState::new(
-        config.routing.default_provider_names,
-        config.providers,
-        config.routing.routes,
-    )
-    .expect("bundled example config should build runtime state");
+    AppState::new(config.routing, config.providers)
+        .expect("bundled example config should build runtime state");
 
     fs::remove_file(path).unwrap();
 }

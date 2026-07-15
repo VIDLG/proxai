@@ -808,7 +808,7 @@ struct ShimOptions {
     request_capture_enabled: bool,
     upstream_capture_enabled: bool,
     sse_tool_call_timeout: Option<Duration>,
-    routes: Vec<proxai::config::RouteConfig>,
+    routes: Vec<proxai::config::RouteRule>,
     upstream_base_path: String,
 }
 
@@ -876,10 +876,10 @@ pub(super) async fn spawn_anthropic_shim_with_model_route(
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::AnthropicMessages,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
-            match_kind: proxai::config::MatchKind::Exact,
+            match_kind: proxai::config::ModelMatchKind::Exact,
             model_pattern: "claude-request".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
@@ -892,10 +892,10 @@ pub(super) async fn spawn_responses_to_anthropic_shim(upstream_address: SocketAd
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::AnthropicMessages,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiResponses),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
@@ -908,10 +908,10 @@ pub(super) async fn spawn_chat_to_anthropic_shim(upstream_address: SocketAddr) -
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::AnthropicMessages,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiChatCompletions),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("claude-upstream".to_string()),
@@ -924,10 +924,10 @@ pub(super) async fn spawn_responses_to_chat_shim(upstream_address: SocketAddr) -
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::OpenaiChatCompletions,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiResponses),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("MiniMax-M3".to_string()),
@@ -940,10 +940,10 @@ pub(super) async fn spawn_chat_to_responses_shim(upstream_address: SocketAddr) -
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::OpenaiResponses,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::OpenaiChatCompletions),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("gpt-upstream".to_string()),
@@ -956,10 +956,10 @@ pub(super) async fn spawn_anthropic_to_chat_shim(upstream_address: SocketAddr) -
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::OpenaiChatCompletions,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("MiniMax-M3".to_string()),
@@ -972,10 +972,10 @@ pub(super) async fn spawn_anthropic_to_responses_shim(upstream_address: SocketAd
     spawn_shim_with_routes(
         upstream_address,
         proxai::protocol::ProviderProtocol::OpenaiResponses,
-        vec![proxai::config::RouteConfig {
+        vec![proxai::config::RouteRule {
             name: None,
             request_protocol: Some(proxai::protocol::RequestProtocol::AnthropicMessages),
-            match_kind: proxai::config::MatchKind::Glob,
+            match_kind: proxai::config::ModelMatchKind::Glob,
             model_pattern: "*".to_string(),
             provider: "openai_default".to_string(),
             upstream_model: Some("gpt-upstream".to_string()),
@@ -1035,7 +1035,7 @@ pub(super) async fn spawn_shim_with_capture_options(
 async fn spawn_shim_with_routes(
     upstream_address: SocketAddr,
     provider_protocol: proxai::protocol::ProviderProtocol,
-    routes: Vec<proxai::config::RouteConfig>,
+    routes: Vec<proxai::config::RouteRule>,
 ) -> SocketAddr {
     let mut options = ShimOptions::new(provider_protocol);
     options.routes = routes;
@@ -1067,13 +1067,15 @@ async fn spawn_shim_with_options(upstream_address: SocketAddr, options: ShimOpti
         },
     );
     let state = AppState::new(
-        proxai::config::DefaultProviderNamesConfig {
-            openai_responses: "openai_default".to_string(),
-            openai_chat_completions: "openai_default".to_string(),
-            anthropic_messages: "openai_default".to_string(),
+        proxai::config::RoutingConfig {
+            default_provider_names: proxai::config::DefaultProviderNames {
+                openai_responses: "openai_default".to_string(),
+                openai_chat_completions: "openai_default".to_string(),
+                anthropic_messages: "openai_default".to_string(),
+            },
+            routes: options.routes,
         },
         providers,
-        options.routes,
     )
     .unwrap()
     .with_capture_dir(options.capture_dir)

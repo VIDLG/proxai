@@ -42,7 +42,7 @@ Use protocol-based names where wire behavior differs:
 - provider names: user labels, not semantic protocol identifiers
 
 Current protocol values: `openai_responses`, `openai_chat_completions`, `anthropic_messages`.
-If a route omits `request_protocol`, match the actual inbound protocol detected from the request path; provider `protocol` still controls outbound wire behavior. Set `request_protocol` only when the same model pattern needs endpoint-specific routing; model matches with mismatched explicit `request_protocol` should raise a configuration error instead of falling through.
+If a route omits `request_protocol`, match the actual inbound protocol detected from the request path; provider `protocol` still controls outbound wire behavior. Set `request_protocol` only when the same model pattern needs endpoint-specific routing. A model match with a mismatched explicit `request_protocol` may continue to a later model match whose protocol is compatible; if no compatible route exists, raise a configuration error instead of falling through to the default provider.
 
 Keep protocol names separate from chain phases:
 
@@ -61,14 +61,16 @@ Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 - `crates/proxai-core/src/ingress/` owns structured inbound normalization and validation.
 - `crates/proxai-core/src/observe.rs` owns the shared core observation contract and typed variants.
 - `crates/proxai-core/src/protocol/` owns wire models.
+- `crates/proxai-core/src/routing/` owns carrier-independent route configuration, matcher compilation, provider-label selection, upstream model rewrite, and typed routing errors.
 - `crates/proxai-core/src/translation/` owns protocol-to-protocol conversion.
 - `provider/request` owns provider request preparation, including provider model rewrite, projection/summary extraction, and body serialization.
 - `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
 - `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
 
-Core ingress and translation should stay pure at the carrier boundary:
+Core ingress, routing, and translation should stay pure at the carrier boundary:
 
 - inbound preparation: `(request_protocol, payload) -> prepared_request`
+- route resolution: `(routing_config, provider_names, request_protocol, model) -> resolved_route`
 - request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
 - non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
 - streaming response translation: `(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`

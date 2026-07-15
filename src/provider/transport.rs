@@ -5,12 +5,13 @@ use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
-use crate::config::{ProviderCompatibility, ProviderConfig, normalize_provider_name};
+use crate::config::{ProviderCompatibility, ProviderConfig};
 use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_support::filter_forwardable_request_headers;
 use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
 use crate::protocol::ProviderProtocol;
 use crate::provider::{ProviderRequest, ProviderResponseContext, anthropic_messages, openai};
+use crate::routing::normalize_provider_name;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ProviderTransportError {

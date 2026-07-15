@@ -6,7 +6,7 @@ use axum::{Router, routing::any};
 use observe::{CaptureController, InboundRequestReceived, RequestFailed};
 
 use getset::{CopyGetters, Getters};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
@@ -24,28 +24,25 @@ pub(crate) mod pipeline;
 pub use proxai_core::protocol;
 pub mod provider;
 pub mod request;
-pub mod routing;
+pub use proxai_core::routing;
 pub mod sse;
 mod sse_translation;
 pub use proxai_core::translation;
 pub(crate) mod upstream;
 
-use config::{
-    CaptureConfig, DefaultProviderNamesConfig, ErrorResponseFormat, ProviderConfig, RouteConfig,
-};
+use config::{CaptureConfig, ErrorResponseFormat, ProviderConfig, RoutingConfig};
 pub use error::Error;
 use error::{InternalError, RequestError, Result};
 use observe::ObserveContext;
 pub use observe::TOOL_NAME_ALIASES;
 use pipeline::{InboundHttpFlow, run_provider_flow};
 use provider::ProviderTransport;
-use routing::{EffectiveDefaultProviderNames, EffectiveRoute};
+use routing::RoutingTable;
 
 #[derive(Clone, Getters, CopyGetters)]
 pub struct AppState {
-    default_provider_names: EffectiveDefaultProviderNames,
+    routing: RoutingTable,
     providers: BTreeMap<String, ProviderTransport>,
-    routes: Vec<EffectiveRoute>,
     #[getset(get_copy = "pub(crate)")]
     error_response_format: ErrorResponseFormat,
     #[getset(get = "pub(crate)")]
@@ -56,10 +53,11 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        default_provider_names: DefaultProviderNamesConfig,
+        routing: RoutingConfig,
         providers: BTreeMap<String, ProviderConfig>,
-        routes: Vec<RouteConfig>,
     ) -> Result<Self> {
+        let routing =
+            RoutingTable::build(routing, providers.keys()).map_err(InternalError::from)?;
         let provider_transports = providers
             .into_iter()
             .map(|(name, config)| {
@@ -67,19 +65,10 @@ impl AppState {
                 Ok((transport.name().to_string(), transport))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
-        let provider_protocols = provider_transports
-            .values()
-            .map(|transport| (transport.name().to_string(), transport.protocol()))
-            .collect();
-        let provider_names = provider_transports.keys().cloned().collect::<BTreeSet<_>>();
-        let effective_default_provider_names =
-            EffectiveDefaultProviderNames::build(default_provider_names, &provider_names)?;
-        let effective_routes = EffectiveRoute::build(&provider_protocols, routes)?;
 
         Ok(Self {
-            default_provider_names: effective_default_provider_names,
+            routing,
             providers: provider_transports,
-            routes: effective_routes,
             error_response_format: ErrorResponseFormat::Text,
             capture: CaptureController::new(None, CaptureConfig::default()),
             max_request_body_bytes: 50 * 1024 * 1024,
@@ -191,11 +180,7 @@ async fn proxy_inner(
     );
     let prepared_provider = inbound_http
         .prepare_inbound()?
-        .route_to_provider(
-            &state.default_provider_names,
-            &state.routes,
-            &state.providers,
-        )?
+        .route_to_provider(&state.routing, &state.providers)?
         .prepare_provider_request()?;
 
     run_provider_flow(prepared_provider).await

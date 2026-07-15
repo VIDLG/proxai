@@ -1,3 +1,4 @@
+use crate::routing::RoutingError;
 use crate::translation::TranslationError;
 
 #[derive(Debug, thiserror::Error)]
@@ -22,15 +23,15 @@ pub enum InternalError {
     #[error("build upstream HTTP client: {0}")]
     HttpClientBuild(#[source] reqwest::Error),
 
-    /// Default provider names or resolved provider selections were invalid.
-    #[error("invalid provider resolution: {0}")]
-    InvalidProviderResolution(String),
+    /// Routing configuration or request resolution failed in the core router.
+    #[error(transparent)]
+    Routing(#[from] RoutingError),
+
+    /// The immutable provider registry diverged from the validated core router.
+    #[error("routed provider `{provider}` has no configured transport")]
+    MissingProviderTransport { provider: String },
 
     /// Protocol translation failed for a configured route.
     #[error(transparent)]
     Translation(#[from] TranslationError),
-
-    /// A route pattern or route-level transformation rule is invalid.
-    #[error("invalid route configuration: {0}")]
-    InvalidRoute(String),
 }

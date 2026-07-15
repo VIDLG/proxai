@@ -1,8 +1,4 @@
-use crate::{
-    error::ConfigError,
-    observe::DurationThresholds,
-    protocol::{ProviderProtocol, RequestProtocol},
-};
+use crate::{error::ConfigError, observe::DurationThresholds, protocol::ProviderProtocol};
 use serde::{Deserialize, Serialize};
 use serde_with::{DurationSeconds, serde_as};
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,6 +7,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use strum::{Display, EnumString};
 use url::Url;
+
+use proxai_core::routing::normalize_provider_name;
+pub use proxai_core::routing::{DefaultProviderNames, ModelMatchKind, RouteRule, RoutingConfig};
 
 const DEFAULT_SERVER_HOST: &str = "127.0.0.1";
 const DEFAULT_SERVER_PORT: u16 = 18080;
@@ -56,7 +55,23 @@ impl AppConfig {
                 message: "server.max_concurrent_requests must be greater than 0".to_string(),
             });
         }
+        let mut provider_names = BTreeSet::new();
         for (name, provider) in &config.providers {
+            let normalized_name = normalize_provider_name(name);
+            if normalized_name.is_empty() {
+                return Err(ConfigError::Invalid {
+                    path: path.clone(),
+                    message: "provider name must be a non-empty string".to_string(),
+                });
+            }
+            if !provider_names.insert(normalized_name.clone()) {
+                return Err(ConfigError::Invalid {
+                    path: path.clone(),
+                    message: format!(
+                        "providers.{name} duplicates normalized provider name `{normalized_name}`"
+                    ),
+                });
+            }
             if provider.api_key.trim().is_empty() {
                 return Err(ConfigError::Invalid {
                     path: path.clone(),
@@ -64,26 +79,13 @@ impl AppConfig {
                 });
             }
         }
-        let mut route_names = BTreeSet::new();
-        for (index, route) in config.routing.routes.iter().enumerate() {
-            if let Some(name) = &route.name {
-                let name = name.trim();
-                if name.is_empty() {
-                    return Err(ConfigError::Invalid {
-                        path: path.clone(),
-                        message: format!("routing.routes[{index}].name must be a non-empty string"),
-                    });
-                }
-                if !route_names.insert(name.to_string()) {
-                    return Err(ConfigError::Invalid {
-                        path: path.clone(),
-                        message: format!(
-                            "routing.routes[{index}].name duplicates route name `{name}`"
-                        ),
-                    });
-                }
-            }
-        }
+        config
+            .routing
+            .validate()
+            .map_err(|error| ConfigError::Invalid {
+                path: path.clone(),
+                message: error.to_string(),
+            })?;
         Ok(config)
     }
 }
@@ -122,49 +124,6 @@ impl Default for McpConfig {
             port: DEFAULT_MCP_PORT,
         }
     }
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct RoutingConfig {
-    pub default_provider_names: DefaultProviderNamesConfig,
-    pub routes: Vec<RouteConfig>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct DefaultProviderNamesConfig {
-    pub openai_responses: String,
-    pub openai_chat_completions: String,
-    pub anthropic_messages: String,
-}
-
-pub(crate) fn normalize_provider_name(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, Display, EnumString,
-)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
-pub enum MatchKind {
-    #[default]
-    Auto,
-    Exact,
-    Glob,
-    Regex,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct RouteConfig {
-    pub name: Option<String>,
-    pub request_protocol: Option<RequestProtocol>,
-    pub match_kind: MatchKind,
-    pub model_pattern: String,
-    pub provider: String,
-    pub upstream_model: Option<String>,
 }
 
 #[serde_as]

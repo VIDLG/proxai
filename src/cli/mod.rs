@@ -3,9 +3,13 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use owo_colors::OwoColorize;
 use proxai::{
     AppState,
-    config::{AppConfig, LogLevel, LogOutputFormat, MatchKind, RouteConfig},
+    config::{
+        AppConfig, DefaultProviderNames, LogLevel, LogOutputFormat, ModelMatchKind, RouteRule,
+        RoutingConfig,
+    },
     mcp, observe, paths,
     protocol::RequestProtocol,
+    routing::normalize_provider_name,
 };
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -314,12 +318,8 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
         config.capture.outbound_response_enabled = true;
     }
 
-    let default_provider_name = config
-        .routing
-        .default_provider_names
-        .openai_responses
-        .trim()
-        .to_ascii_lowercase();
+    let default_provider_name =
+        normalize_provider_name(&config.routing.default_provider_names.openai_responses);
     let default_provider = config
         .providers
         .remove(&default_provider_name)
@@ -327,7 +327,7 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
             config
                 .providers
                 .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case(&default_provider_name))
+                .find(|(name, _)| normalize_provider_name(name) == default_provider_name)
                 .map(|(name, _)| name.clone())
                 .and_then(|name| config.providers.remove(&name))
         })
@@ -369,10 +369,10 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
         },
     );
     for (name, provider) in config.providers {
-        providers.insert(name.to_ascii_lowercase(), provider);
+        providers.insert(normalize_provider_name(&name), provider);
     }
 
-    let default_provider_names = proxai::config::DefaultProviderNamesConfig {
+    let default_provider_names = DefaultProviderNames {
         openai_responses: default_provider_name.clone(),
         openai_chat_completions: config
             .routing
@@ -387,11 +387,13 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
     };
 
     let state = AppState::new(
-        default_provider_names,
+        RoutingConfig {
+            default_provider_names,
+            routes: config.routing.routes.clone(),
+        },
         providers,
-        config.routing.routes.clone(),
     )
-    .context("parse upstream URL")?
+    .context("build routing and provider transports")?
     .with_server_limits(
         config.server.max_request_body_bytes,
         config.server.max_concurrent_requests,
@@ -642,7 +644,7 @@ fn normalize_config_value(value: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn apply_route_overrides(routes: &mut [RouteConfig], overrides: &[String]) -> anyhow::Result<()> {
+fn apply_route_overrides(routes: &mut [RouteRule], overrides: &[String]) -> anyhow::Result<()> {
     for override_spec in overrides {
         let (selector, value) = override_spec.split_once('=').with_context(|| {
             format!("invalid --route-override {override_spec:?}; expected ROUTE.FIELD=VALUE")
@@ -667,12 +669,12 @@ fn apply_route_overrides(routes: &mut [RouteConfig], overrides: &[String]) -> an
 }
 
 fn find_route_by_name<'a>(
-    routes: &'a mut [RouteConfig],
+    routes: &'a mut [RouteRule],
     route_name: &str,
-) -> anyhow::Result<&'a mut RouteConfig> {
+) -> anyhow::Result<&'a mut RouteRule> {
     let mut matches = routes
         .iter_mut()
-        .filter(|route| route.name.as_deref() == Some(route_name));
+        .filter(|route| route.name.as_deref().map(str::trim) == Some(route_name));
     let Some(route) = matches.next() else {
         anyhow::bail!("unknown route name `{route_name}`");
     };
@@ -683,7 +685,7 @@ fn find_route_by_name<'a>(
 }
 
 fn apply_route_override_field(
-    route: &mut RouteConfig,
+    route: &mut RouteRule,
     field_name: &str,
     value: &str,
 ) -> anyhow::Result<()> {
@@ -699,7 +701,7 @@ fn apply_route_override_field(
             };
         }
         "match_kind" => {
-            route.match_kind = MatchKind::from_str(value)
+            route.match_kind = ModelMatchKind::from_str(value)
                 .with_context(|| format!("invalid match_kind {value:?}"))?;
         }
         "model_pattern" => route.model_pattern = value.to_string(),

@@ -104,7 +104,6 @@ Provider names are user labels. They are not semantic protocol identifiers.
   - error/ — domain errors and rendering
   - http_support/ — HTTP carrier helpers
   - ingress/ — HTTP ingress adapter: path detection, JSON byte parsing, error/notice mapping
-  - routing/ — route matching
   - provider/ — provider request preparation and HTTP transport
   - upstream/ — upstream response reading
   - pipeline/ — typed proxy pipeline
@@ -115,11 +114,12 @@ Provider names are user labels. They are not semantic protocol identifiers.
     - src/
       - ingress/ — carrier-independent inbound normalization and validation
       - protocol/ — protocol wire types and protocol enums
+      - routing/ — compiled protocol/model routing and provider-label selection
       - translation/ — carrier-independent cross-protocol conversion
 
 </FileTree>
 
-The application crate re-exports `proxai_core::{protocol, translation}` from `src/lib.rs` and keeps a thin `src/ingress/` adapter over `proxai_core::ingress`, preserving application-side paths while keeping structured ingress and translation logic in `proxai-core`.
+The application crate re-exports `proxai_core::{protocol, routing, translation}` from `src/lib.rs`. It keeps HTTP ingress, provider transport lookup, and SSE carrier adaptation in `src/`, while structured ingress, provider-label routing, and translation stay in `proxai-core`.
 
 ## Request lifecycle
 
@@ -166,8 +166,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     {
       name: 'Routing',
       codeName: false,
-      modules: ['pipeline/inbound.rs', 'routing/'],
-      responsibility: 'Match by protocol and model, resolve default provider.',
+      modules: ['pipeline/provider_request.rs', 'proxai-core/routing/'],
+      responsibility: 'Match by protocol and model, resolve a provider label and upstream model, then select the application transport.',
     },
     {
       name: 'provider_request',
@@ -203,7 +203,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'src/ingress/', icon: 'route', description: 'HTTP path detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.' },
     { name: 'proxai-core/ingress/', icon: 'route', description: 'Carrier-independent structured request normalization, validation, model extraction, and typed ingress observations.' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default; no concrete sinks.' },
-    { name: 'routing/', icon: 'flow', description: 'Provider selection from request protocol, model pattern, defaults, and route configuration.' },
+    { name: 'proxai-core/routing/', icon: 'flow', description: 'Carrier-independent provider-label selection from request protocol, model pattern, defaults, and route configuration.' },
     { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and emits typed observations through the shared `Observer`.' },
     { name: 'provider/', icon: 'key', description: 'Provider request rendering, model rewrite, auth headers, upstream URL construction, and transport.' },
     { name: 'upstream/', icon: 'terminal', description: 'Reading upstream status, headers, complete bodies, or streaming byte carriers.' },
@@ -237,7 +237,7 @@ flowchart TD
   lib --> pipeline[pipeline/]
 
   pipeline --> app_ingress[src/ingress/]
-  pipeline --> routing[routing/]
+  pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
   pipeline --> sse_translation[sse_translation.rs]

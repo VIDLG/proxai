@@ -104,7 +104,6 @@ Provider 名字只是用户标签，不是语义协议标识。
   - error/ — 领域错误类型与渲染
   - http_support/ — HTTP 载体工具
   - ingress/ — HTTP ingress adapter：path 检测、JSON bytes 解析、错误与 notice 映射
-  - routing/ — 路由匹配
   - provider/ — provider 请求构造与 HTTP transport
   - upstream/ — 上游响应读回
   - pipeline/ — 类型化代理 pipeline
@@ -115,11 +114,12 @@ Provider 名字只是用户标签，不是语义协议标识。
     - src/
       - ingress/ — 与 carrier 无关的入站归一化与校验
       - protocol/ — 各协议 wire 类型与协议枚举
+      - routing/ — 编译后的协议/模型路由与 provider 标签选择
       - translation/ — 与 carrier 无关的跨协议转换
 
 </FileTree>
 
-应用 crate 在 `src/lib.rs` 中重新导出 `proxai_core::{protocol, translation}`，并保留一个委托给 `proxai_core::ingress` 的薄 `src/ingress/` adapter；这样应用侧路径保持稳定，而结构化 ingress 与 translation 逻辑真实落在 `proxai-core` 中。
+应用 crate 在 `src/lib.rs` 中重新导出 `proxai_core::{protocol, routing, translation}`。HTTP ingress、provider transport lookup 和 SSE carrier adaptation 留在 `src/`，结构化 ingress、provider 标签路由与 translation 则位于 `proxai-core`。
 
 ## 请求生命周期
 
@@ -167,8 +167,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     {
       name: '路由',
       codeName: false,
-      modules: ['pipeline/inbound.rs', 'routing/'],
-      responsibility: '按协议和模型匹配 route，解析默认 provider。',
+      modules: ['pipeline/provider_request.rs', 'proxai-core/routing/'],
+      responsibility: '按协议和模型匹配 route，解析 provider 标签和 upstream model，再选择应用层 transport。',
     },
     {
       name: 'provider_request',
@@ -204,7 +204,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'src/ingress/', icon: 'route', description: 'HTTP path 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
     { name: 'proxai-core/ingress/', icon: 'route', description: '与 carrier 无关的结构化请求归一化、校验、模型提取和类型化 ingress observations。' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: '共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现；不包含具体 sink。' },
-    { name: 'routing/', icon: 'flow', description: '根据请求协议、模型模式、默认值和 route 配置选择 provider。' },
+    { name: 'proxai-core/routing/', icon: 'flow', description: '根据请求协议、模型模式、默认值和 route 配置选择 provider 标签，不依赖 carrier。' },
     { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate 在显式协议 pair 之间做请求、响应与结构化事件转换，暴露 `Translator` façade，并通过共享 `Observer` 发出类型化 observations。' },
     { name: 'provider/', icon: 'key', description: 'Provider 请求渲染、模型改写、认证 header、上游 URL 构造和 transport。' },
     { name: 'upstream/', icon: 'terminal', description: '读取上游状态码、headers、完整 body 或流式 byte carrier。' },
@@ -238,7 +238,7 @@ flowchart TD
   lib --> pipeline[pipeline/]
 
   pipeline --> app_ingress[src/ingress/]
-  pipeline --> routing[routing/]
+  pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
   pipeline --> sse_translation[sse_translation.rs]

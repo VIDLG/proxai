@@ -9,7 +9,7 @@ use crate::observe::{
 };
 use crate::protocol::RequestProtocol;
 use crate::provider::{self, ProviderRequest, ProviderTransport, ProviderTransportError};
-use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
+use crate::routing::{ResolvedRoute, RoutingTable};
 use crate::translation::Translator;
 
 use super::ProxyFlow;
@@ -18,7 +18,7 @@ use super::upstream_response::{UpstreamHttp, UpstreamHttpFlow};
 
 pub(crate) struct RoutedInbound {
     request: PreparedInboundRequest,
-    route: RouteTarget,
+    route: ResolvedRoute,
     transport: ProviderTransport,
 }
 
@@ -34,8 +34,7 @@ pub(crate) type PreparedProviderFlow = ProxyFlow<PreparedProvider>;
 impl PreparedInboundFlow {
     pub(crate) fn route_to_provider(
         self,
-        default_provider_names: &EffectiveDefaultProviderNames,
-        routes: &[EffectiveRoute],
+        routing: &RoutingTable,
         providers: &BTreeMap<String, ProviderTransport>,
     ) -> Result<RoutedInboundFlow, InternalError> {
         let Self {
@@ -46,16 +45,12 @@ impl PreparedInboundFlow {
             error_response_format,
             stage: PreparedInbound { request },
         } = self;
-        let route = resolve_route(
-            default_provider_names,
-            routes,
-            request.protocol(),
-            request.model(),
-        )?;
-        let transport = providers
-            .get(&route.provider)
-            .cloned()
-            .ok_or_else(|| InternalError::InvalidProviderResolution(route.provider.clone()))?;
+        let route = routing.resolve(request.protocol(), request.model())?;
+        let transport = providers.get(&route.provider).cloned().ok_or_else(|| {
+            InternalError::MissingProviderTransport {
+                provider: route.provider.clone(),
+            }
+        })?;
         Ok(RoutedInboundFlow {
             method,
             uri,
@@ -83,7 +78,7 @@ impl RoutedInboundFlow {
                 RoutedInbound {
                     request,
                     route:
-                        RouteTarget {
+                        ResolvedRoute {
                             provider: provider_name,
                             route_name,
                             upstream_model,
