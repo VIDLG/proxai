@@ -23,9 +23,9 @@ use strum::Display;
 use crate::protocol::openai::responses::{
     OutputContent, OutputItem, Response, ResponseStreamEvent,
 };
-use crate::translation::streaming::{
-    InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+use crate::translation::stream::{
+    InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
+    StreamTranslationError, StreamTranslationResult,
 };
 
 /// Inbound lifecycle wrapper for translators rooted at `openai_responses`.
@@ -206,7 +206,6 @@ impl ForwardedContent {
 impl<S> ResponsesInboundLifecycle<S> {
     delegate! {
         to self.inner {
-            pub(crate) fn is_stopped(&self) -> bool;
             pub(crate) fn stop(&mut self);
         }
     }
@@ -546,10 +545,7 @@ impl<S> ResponsesInboundLifecycle<S> {
     pub(crate) fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut S> {
         let phase = self
             .inner
-            .require_streaming_phase_mut(RequireStreamingPhaseContext {
-                source: "Responses",
-                event: "active content event",
-            })?;
+            .require_streaming_phase_mut("Responses", "active content event")?;
         Ok(phase.state_mut())
     }
 
@@ -562,17 +558,9 @@ impl<S> ResponsesInboundLifecycle<S> {
         })
     }
 
-    /// Validate a carrier stream ending after a Responses stream has already
-    /// emitted its semantic terminal event.
-    pub(crate) fn finish_stream(&self, end: SseStreamEnd) -> StreamTranslationResult<()> {
-        if self.is_stopped() {
-            return Ok(());
-        }
-        Err(self.unexpected_stream_end_error(end))
-    }
-
-    /// Build an error describing why the carrier stream ended unexpectedly.
-    pub(crate) fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
+    /// Validate that the semantic Responses stream reached a terminal event
+    /// and completed target projection before its carrier ended.
+    pub(crate) fn finish_stream(&self, end: StreamEnd) -> StreamTranslationResult<()> {
         let message = match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
                 format!("Responses stream reached {end} before response.created")
@@ -582,12 +570,12 @@ impl<S> ResponsesInboundLifecycle<S> {
             }
             InboundStreamLifecyclePhase::Terminal => {
                 format!(
-                    "Responses stream reached {end} after terminal event but before carrier close"
+                    "Responses stream reached {end} after terminal event but before target projection completed"
                 )
             }
-            InboundStreamLifecyclePhase::Stopped => String::new(),
+            InboundStreamLifecyclePhase::Stopped => return Ok(()),
         };
-        StreamTranslationError::Semantic(message)
+        Err(StreamTranslationError::Semantic(message))
     }
 }
 

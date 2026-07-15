@@ -10,7 +10,7 @@ use crate::translation::anthropic_messages::outbound::{
     thinking_content_block, tool_use_block_param, user_message,
 };
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 pub(super) struct AnthropicMessages {
     pub system: Option<anthropic::SystemPrompt>,
@@ -21,6 +21,7 @@ impl AnthropicMessages {
     pub(super) fn from_chat(
         chat_messages: &[chat::ChatCompletionRequestMessage],
         extensions: &ChatRequestExtensions,
+        scope: &TranslationScope,
     ) -> TranslationResult<Self> {
         let mut system_parts = Vec::new();
         let mut messages = Vec::new();
@@ -44,6 +45,7 @@ impl AnthropicMessages {
                     messages.push(assistant_message(assistant_content(
                         message,
                         extensions.reasoning(message_index),
+                        scope,
                     )?));
                 }
                 chat::ChatCompletionRequestMessage::Tool(message) => {
@@ -180,6 +182,7 @@ impl TryFrom<&chat::ImageUrl> for anthropic::ImageBlockParam {
 fn assistant_content(
     message: &chat::ChatCompletionRequestAssistantMessage,
     reasoning_content: Option<&str>,
+    scope: &TranslationScope,
 ) -> TranslationResult<anthropic::MessageParamContent> {
     if message.function_call.is_non_null() {
         return Err(TranslationError::InvalidPayload(
@@ -213,9 +216,9 @@ fn assistant_content(
             }
         }
         if !visible_reasoning.is_empty() {
-            tracing::trace!(
-                reason = "Chat reasoning_content has no Anthropic thinking signature",
-                "skipping unsigned Chat assistant reasoning during Anthropic Messages request translation"
+            scope.dropped(
+                "unsigned Chat assistant reasoning_content",
+                "Anthropic thinking blocks require a provider signature",
             );
         }
     }

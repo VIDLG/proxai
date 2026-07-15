@@ -10,12 +10,13 @@
 
 use crate::protocol::anthropic::messages::TextBlock;
 use crate::protocol::openai_responses::{OutputItem, ResponseStreamEvent};
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{
     completed_function_call_item_with_id, output_text_done, reasoning_item, reasoning_text_done,
     redacted_reasoning_item, text_message_item, tool_arguments_done,
 };
-use crate::translation::streaming::StreamTranslationResult;
+use crate::translation::stream::StreamTranslationResult;
 
 use super::super::citations::text_block_annotations;
 use super::state::StreamBlock;
@@ -47,6 +48,7 @@ pub(super) fn finalize_block(
     output_index: u32,
     sequence_number: u64,
     text_char_offset: &mut usize,
+    scope: &TranslationScope,
 ) -> StreamTranslationResult<(OutputItem, Vec<ResponseStreamEvent>)> {
     Ok(match block {
         StreamBlock::Text {
@@ -63,7 +65,7 @@ pub(super) fn finalize_block(
                 text: text.clone(),
                 citations: citations.into(),
             };
-            let annotations = text_block_annotations(&synthetic_block, *text_char_offset);
+            let annotations = text_block_annotations(&synthetic_block, *text_char_offset, scope);
             *text_char_offset = text_char_offset.saturating_add(text.chars().count());
             let item = text_message_item(item_id, text, annotations);
             (item, vec![done])

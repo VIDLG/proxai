@@ -5,17 +5,20 @@ mod response;
 mod streaming;
 mod types;
 
-use serde_json::Value;
+pub(crate) use streaming::ChatToAnthropicStreaming;
 
-use crate::http_support::ByteStream;
+use serde_json::Value;
 
 use crate::protocol::openai::chat_completions::{
     CreateChatCompletionRequest, CreateChatCompletionResponse,
 };
-use crate::translation::streaming::{StreamTranslationFailureSink, translate_sse_stream};
-use crate::translation::{TranslationError, TranslationResult, json};
 
-pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
+use crate::translation::{TranslationError, TranslationResult, TranslationScope, json};
+
+pub(crate) fn translate_request_payload(
+    payload: &Value,
+    scope: &TranslationScope,
+) -> TranslationResult<Value> {
     let extensions =
         crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions::extract(
             payload,
@@ -24,11 +27,14 @@ pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Va
         payload,
         "OpenAI Chat Completions request payload",
     )?;
-    let translated = request::translate_request(&request, &extensions)?;
+    let translated = request::translate_request(&request, &extensions, scope)?;
     Ok(serde_json::to_value(translated)?)
 }
 
-pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
+pub(crate) fn translate_non_streaming_response(
+    payload: Value,
+    scope: &TranslationScope,
+) -> TranslationResult<Value> {
     let reasoning =
         crate::translation::openai_chat_completions::compatibility::response_reasoning(&payload)
             .map_err(TranslationError::InvalidPayload)?;
@@ -36,22 +42,6 @@ pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationRes
         &payload,
         "OpenAI Chat Completions response payload",
     )?;
-    let translated = response::translate_response(&response, reasoning.as_deref())?;
+    let translated = response::translate_response(&response, reasoning.as_deref(), scope)?;
     Ok(serde_json::to_value(translated)?)
-}
-
-#[cfg(test)]
-pub(crate) fn translate_streaming_response(input: ByteStream) -> ByteStream {
-    translate_streaming_response_with_failure_sink(input, StreamTranslationFailureSink::default())
-}
-
-pub(crate) fn translate_streaming_response_with_failure_sink(
-    input: ByteStream,
-    failure_sink: StreamTranslationFailureSink,
-) -> ByteStream {
-    translate_sse_stream(
-        input,
-        streaming::MessagesStreamTranslator::default(),
-        failure_sink,
-    )
 }

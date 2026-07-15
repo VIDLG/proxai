@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use crate::translation::streaming::{StreamIdentity, StreamTranslationError};
+use crate::translation::stream::{StreamIdentity, StreamTranslationError};
 
 use super::{ForwardedContent, ResponsesInboundLifecycle};
 

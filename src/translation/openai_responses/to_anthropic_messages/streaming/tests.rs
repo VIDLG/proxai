@@ -1,23 +1,19 @@
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, header};
 use serde_json::Value;
 
-use crate::http_support::into_byte_stream;
-
-use super::translate_streaming_response;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::Translator;
+use crate::translation::test_support::translate_sse_fixture;
 
 async fn translate_body(body: &'static str) -> String {
     let body = complete_response_snapshots(body);
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(body))
-        .unwrap();
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    String::from_utf8(body.to_vec()).unwrap()
+    translate_sse_fixture(
+        &body,
+        Translator::new(
+            RequestProtocol::AnthropicMessages,
+            ProviderProtocol::OpenaiResponses,
+        ),
+    )
+    .await
 }
 
 fn complete_response_snapshots(body: &str) -> String {
@@ -145,7 +141,7 @@ data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":
     .await;
 
     assert!(body.contains("event: message_start"));
-    assert!(body.contains("stream translation finish error"));
+    assert!(body.contains("stream translation error"));
     assert!(body.contains("Responses stream reached EOF before a terminal response event"));
     assert!(!body.contains("event: message_stop"));
 }

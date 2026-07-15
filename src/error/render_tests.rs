@@ -7,9 +7,9 @@ use crate::error::UpstreamResponseError;
 
 #[test]
 fn generic_sse_error_matches_zed_responses_nested_error_shape() {
-    let frame = ErrorResponseFields::stream_translation("translation failed")
-        .encode_sse_event()
-        .unwrap();
+    let frame = encode_sse_event(ErrorResponseFields::stream_translation(
+        "translation failed",
+    ));
     let data = sse_data(&frame);
 
     let event = serde_json::from_str::<ZedResponsesStreamEvent>(&data).unwrap();
@@ -25,16 +25,15 @@ fn generic_sse_error_matches_zed_responses_nested_error_shape() {
 
 #[test]
 fn upstream_error_payload_preserves_code_and_param() {
-    let frame = upstream_response_error_fields(
+    let fields = upstream_response_error_fields(
         StatusCode::TOO_MANY_REQUESTS,
         &UpstreamResponseError::Upstream {
             code: Some("rate_limit_exceeded".to_string()),
             message: "quota exhausted".to_string(),
             param: Some(json!("input")),
         },
-    )
-    .encode_sse_event()
-    .unwrap();
+    );
+    let frame = encode_sse_event(fields);
     let data = sse_data(&frame);
 
     let event = serde_json::from_str::<ZedResponsesStreamEvent>(&data).unwrap();
@@ -74,9 +73,9 @@ fn text_upstream_error_payload_preserves_code_and_param_as_json() {
 
 #[test]
 fn generic_sse_error_matches_zed_chat_completions_error_shape() {
-    let frame = ErrorResponseFields::stream_translation("translation failed")
-        .encode_sse_event()
-        .unwrap();
+    let frame = encode_sse_event(ErrorResponseFields::stream_translation(
+        "translation failed",
+    ));
     let data = sse_data(&frame);
 
     let result = serde_json::from_str::<ZedChatCompletionStreamResult>(&data).unwrap();
@@ -85,6 +84,10 @@ fn generic_sse_error_matches_zed_chat_completions_error_shape() {
     };
 
     assert_eq!(error.message, "translation failed");
+}
+
+fn encode_sse_event(fields: ErrorResponseFields) -> bytes::Bytes {
+    fields.payload.encode_sse_event().unwrap()
 }
 
 fn sse_data(frame: &[u8]) -> String {

@@ -7,15 +7,15 @@
 use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, MessageStreamEvent};
 use crate::protocol::openai::chat_completions::{CompletionUsage, FinishReason, FunctionType};
 
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk as build_chat_choice_chunk,
     chat_usage_chunk as build_chat_usage_chunk, refusal_delta, tool_arguments_delta,
     tool_call_start_delta,
 };
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator,
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
 };
 
 mod output;
@@ -61,12 +61,16 @@ fn chat_reasoning_chunk(
 }
 
 #[derive(Debug, Default)]
-pub(super) struct ChatCompletionStreamTranslator {
+pub(crate) struct AnthropicToChatStreaming {
     lifecycle: AnthropicInboundLifecycle<StreamingState>,
 }
 
-impl StreamingEventTranslator for ChatCompletionStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl AnthropicToChatStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
         let mut chunks = Vec::new();
         let mut done = false;
@@ -147,11 +151,8 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                         self.lifecycle
                             .streaming_state_mut()?
                             .register_ignored_block(index, content_block_type)?;
-                        tracing::trace!(
-                            content_block_type,
-                            block_index = index,
-                            reason = "Anthropic content block has no OpenAI Chat Completions stream representation",
-                            "skipping Anthropic content block during Chat Completions stream translation"
+                        scope.dropped(format!("Anthropic content block `{content_block_type}` at index {index}"),
+                            "Anthropic content block has no OpenAI Chat Completions stream representation",
                         );
                     }
                 }
@@ -201,10 +202,8 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     self.lifecycle
                         .streaming_state()?
                         .require_text_block(event.index, "citations_delta")?;
-                    tracing::trace!(
-                        block_index = event.index,
-                        reason = "Anthropic citation deltas have no OpenAI Chat Completions stream representation",
-                        "skipping Anthropic citation delta during Chat Completions stream translation"
+                    scope.dropped(format!("Anthropic citation delta at block index {}", event.index),
+                        "Anthropic citation deltas have no OpenAI Chat Completions stream representation",
                     );
                 }
             },
@@ -289,12 +288,12 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
         Ok(events)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
-        if self.lifecycle.is_stopped() {
-            return Ok(Vec::new());
-        }
-
-        Err(self.lifecycle.unexpected_stream_end_error(end))
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
+        self.lifecycle.finish_stream(end)?;
+        Ok(Vec::new())
     }
 }
 

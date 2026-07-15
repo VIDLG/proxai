@@ -18,7 +18,7 @@ use crate::protocol::openai_responses::{
     IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails, Response, ResponseObject,
     ResponseStreamEvent, ResponseUsage, Status, ToolChoiceOptions, ToolChoiceParam,
 };
-use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
+use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
 use super::super::types::{
     incomplete_details_from_finish_reason, responses_status_from_chat_finish_reason,

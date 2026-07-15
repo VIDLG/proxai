@@ -1,6 +1,6 @@
 use super::super::summary::ResponseSummary;
 use super::{ObservedState, ObservedUpdate};
-use crate::provider::openai::responses::ResponseOutputItemKind;
+use crate::protocol::openai_responses::OutputItemKind;
 
 #[test]
 fn observed_updates_merge_later_function_call_name() {
@@ -18,9 +18,7 @@ fn observed_updates_merge_later_function_call_name() {
     let summary = ResponseSummary::from(&state);
 
     assert_eq!(
-        summary
-            .output_items
-            .get(&ResponseOutputItemKind::FunctionCall),
+        summary.output_items.get(&OutputItemKind::FunctionCall),
         Some(&1)
     );
     assert_eq!(summary.function_calls.get("lookup"), Some(&1));
@@ -40,10 +38,7 @@ fn observed_updates_merge_later_mcp_call_details() {
 
     let summary = ResponseSummary::from(&state);
 
-    assert_eq!(
-        summary.output_items.get(&ResponseOutputItemKind::McpCall),
-        Some(&1)
-    );
+    assert_eq!(summary.output_items.get(&OutputItemKind::McpCall), Some(&1));
     assert_eq!(summary.mcp_calls.get("github/search"), Some(&1));
 }
 
@@ -51,7 +46,7 @@ fn observed_updates_merge_later_mcp_call_details() {
 fn summary_only_updates_are_deduped_by_output_index() {
     let mut state = ObservedState::default();
     let update = ObservedUpdate::SummaryOnlyItemKind {
-        kind: ResponseOutputItemKind::ToolSearchCall,
+        kind: OutputItemKind::ToolSearchCall,
         event_key: "tool_search_call:7".to_string(),
     };
 
@@ -61,9 +56,7 @@ fn summary_only_updates_are_deduped_by_output_index() {
     let summary = ResponseSummary::from(&state);
 
     assert_eq!(
-        summary
-            .output_items
-            .get(&ResponseOutputItemKind::ToolSearchCall),
+        summary.output_items.get(&OutputItemKind::ToolSearchCall),
         Some(&1)
     );
 }

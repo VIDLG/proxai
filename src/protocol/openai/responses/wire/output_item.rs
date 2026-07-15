@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use strum::AsRefStr;
+use strum::{AsRefStr, Display, EnumDiscriminants};
 
 use super::{
     ApplyPatchToolCall, ApplyPatchToolCallOutput, CompactionBody, CustomToolCall,
@@ -11,9 +11,16 @@ use super::{
 use super::{CodeInterpreterToolCall, ComputerToolCall, ComputerToolCallOutputResource};
 use super::{FunctionShellCall, FunctionShellCallOutput, ImageGenToolCall, LocalShellToolCall};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, AsRefStr, EnumDiscriminants)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
+#[strum_discriminants(
+    name(OutputItemKind),
+    vis(pub),
+    derive(PartialOrd, Ord, Display, Serialize),
+    strum(serialize_all = "snake_case"),
+    serde(rename_all = "snake_case")
+)]
 pub enum OutputItem {
     Message(OutputMessage),
     FileSearchCall(FileSearchToolCall),

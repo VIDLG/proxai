@@ -2,6 +2,17 @@ use serde_json::json;
 
 use crate::protocol::openai::chat_completions::CreateChatCompletionResponse;
 use crate::protocol::openai::responses::Response;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationResult;
+use crate::translation::test_support::response_scope;
+
+fn translate_response(response: &Response) -> TranslationResult<CreateChatCompletionResponse> {
+    let scope = response_scope(
+        RequestProtocol::OpenaiChatCompletions,
+        ProviderProtocol::OpenaiResponses,
+    );
+    super::translate_response(response, &scope).map(|(response, _)| response)
+}
 
 #[test]
 fn translates_responses_message_response_to_chat_completion() {
@@ -41,7 +52,7 @@ fn translates_responses_message_response_to_chat_completion() {
         }
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
+    let translated = translate_response(&response).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["id"], "chatcmpl_resp_42");
@@ -83,7 +94,7 @@ fn translates_responses_function_call_to_chat_tool_calls() {
         ]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
+    let translated = translate_response(&response).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(
@@ -125,7 +136,7 @@ fn translates_responses_incomplete_status_to_length_finish_reason() {
         ]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
+    let translated = translate_response(&response).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["choices"][0]["finish_reason"], "length");
@@ -187,7 +198,7 @@ fn translates_responses_refusal_to_chat_refusal_message() {
         }]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let translated: CreateChatCompletionResponse = (&response).try_into().unwrap();
+    let translated = translate_response(&response).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert!(value["choices"][0]["message"]["content"].is_null());
@@ -227,7 +238,7 @@ fn rejects_mixed_responses_text_and_refusal_for_chat_response() {
         }]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let error: Result<CreateChatCompletionResponse, _> = (&response).try_into();
+    let error = translate_response(&response);
     let error = error.unwrap_err().to_string();
 
     assert!(error.contains("both text and refusal content"));
@@ -258,7 +269,11 @@ fn translates_responses_reasoning_output_to_chat_reasoning_content() {
             "status": "completed"
         }]
     });
-    let value = super::super::translate_non_streaming_response(upstream).unwrap();
+    let scope = response_scope(
+        RequestProtocol::OpenaiChatCompletions,
+        ProviderProtocol::OpenaiResponses,
+    );
+    let value = super::super::translate_non_streaming_response(upstream, &scope).unwrap();
 
     assert_eq!(
         value["choices"][0]["message"]["reasoning_content"],
@@ -289,7 +304,7 @@ fn rejects_responses_output_without_chat_content() {
         ]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let error: Result<CreateChatCompletionResponse, _> = (&response).try_into();
+    let error = translate_response(&response);
     let error = error.unwrap_err().to_string();
     assert!(error.contains("no Chat-representable text, reasoning, or tool calls"));
 }

@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use crate::translation::openai_responses::streaming::{
     ForwardedContent, ResponsesOutputSegmentKey,
 };
-use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
+use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
 /// In-flight Chat projection state for one Responses assistant turn.
 #[derive(Debug, Default)]

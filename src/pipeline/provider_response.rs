@@ -1,15 +1,17 @@
+use async_stream::stream;
 use axum::body::{Body, to_bytes};
 use axum::http::Response;
+use futures_util::StreamExt;
 
-use crate::error::{InternalError, Result};
-use crate::http_support::{into_byte_stream, json_response_from_parts, sse_response_from_parts};
-
+use crate::error::{ErrorResponseFields, InternalError, Result};
+use crate::http_support::{
+    ByteStream, ByteStreamError, into_byte_stream, json_response_from_parts,
+    sse_response_from_parts,
+};
 use crate::observe::StreamingTranslationFailure;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
-use crate::translation::streaming::StreamTranslationFailureSink;
-use crate::translation::{
-    translate_non_streaming_response, translate_streaming_response_with_failure_sink,
-};
+use crate::sse_translation::{SseTranslationStreamError, translate_sse_stream};
+use crate::translation::Translator;
 
 use super::ProxyFlow;
 
@@ -57,26 +59,48 @@ impl ProviderStreamingHttpFlow {
             ..
         } = self;
 
-        let failure_obs = obs.clone();
-        let failure_method = method.clone();
-        let failure_uri = uri.clone();
-        let failure_sink = StreamTranslationFailureSink::new(move |failure| {
-            failure_obs.observe_streaming_translation_failure(StreamingTranslationFailure {
-                method: &failure_method,
-                uri: &failure_uri,
-                request_protocol: inbound_protocol,
-                provider_protocol,
-                failure: &failure,
-            });
-        });
-
         let (parts, body) = response.into_parts();
-        let stream = translate_streaming_response_with_failure_sink(
-            inbound_protocol,
-            provider_protocol,
-            into_byte_stream(body.into_data_stream()),
-            failure_sink,
-        )?;
+        let input = into_byte_stream(body.into_data_stream());
+        if inbound_protocol.matches_provider_protocol(provider_protocol) {
+            return Ok(sse_response_from_parts(parts, obs.instrument_stream(input)));
+        }
+
+        let translator =
+            Translator::new(inbound_protocol, provider_protocol).with_observer(obs.clone());
+        let mut input = translate_sse_stream(input, translator);
+        let failure_obs = obs.clone();
+        let stream: ByteStream = Box::pin(stream! {
+            while let Some(item) = input.next().await {
+                match item {
+                    Ok(chunk) => yield Ok(chunk),
+                    Err(SseTranslationStreamError::Translation(failure)) => {
+                        failure_obs.observe_streaming_translation_failure(
+                            StreamingTranslationFailure {
+                                method: &method,
+                                uri: &uri,
+                                request_protocol: inbound_protocol,
+                                provider_protocol,
+                                failure: &failure,
+                            },
+                        );
+                        yield Ok(ErrorResponseFields::stream_translation(failure.error)
+                            .encode_sse_event_or_fallback());
+                        return;
+                    }
+                    Err(SseTranslationStreamError::Upstream(error)) => {
+                        yield Ok(ErrorResponseFields::upstream_response_body_read(format!(
+                            "upstream SSE stream error: {error}"
+                        ))
+                        .encode_sse_event_or_fallback());
+                        return;
+                    }
+                    Err(error @ SseTranslationStreamError::Encoding(_)) => {
+                        yield Err(Box::new(error) as ByteStreamError);
+                        return;
+                    }
+                }
+            }
+        });
         Ok(sse_response_from_parts(
             parts,
             obs.instrument_stream(stream),
@@ -87,6 +111,7 @@ impl ProviderStreamingHttpFlow {
 impl ProviderNonStreamingHttpFlow {
     pub(crate) async fn translate_to_outbound(self) -> Result<Response<Body>, InternalError> {
         let Self {
+            obs,
             stage:
                 ProviderNonStreamingHttp {
                     inbound_protocol,
@@ -104,8 +129,9 @@ impl ProviderNonStreamingHttpFlow {
             return Ok(Response::from_parts(parts, Body::from(body)));
         }
         let payload = serde_json::from_slice(&body)?;
-        let translated =
-            translate_non_streaming_response(inbound_protocol, provider_protocol, payload)?;
+        let translated = Translator::new(inbound_protocol, provider_protocol)
+            .with_observer(obs)
+            .translate_response(payload)?;
         Ok(json_response_from_parts(
             parts,
             serde_json::to_vec(&translated)?,

@@ -7,9 +7,8 @@ use valuable::Valuable;
 use crate::config::LogOutputFormat;
 use crate::formatting::{compact_tail, truncate_chars};
 
-use crate::provider::openai::responses::{
-    ResponseOutputItemKind, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
-};
+use crate::protocol::openai_responses::OutputItemKind;
+use crate::provider::openai::responses::{ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot};
 use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
@@ -127,7 +126,7 @@ impl ResponseFields {
             output_items: string_count_map(&summary.output_items),
             output_items_human: compact_output_items_for_human(
                 &summary.output_items,
-                ResponseOutputItemKind::Message,
+                OutputItemKind::Message,
             ),
             calls: merge_count_maps([function_calls.clone(), mcp_calls.clone()]),
             calls_by_source: source_count_maps([("function", function_calls), ("mcp", mcp_calls)]),

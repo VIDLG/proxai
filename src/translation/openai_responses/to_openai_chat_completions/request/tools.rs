@@ -1,7 +1,7 @@
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire as chat_request;
 use crate::protocol::openai::responses;
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 impl TryFrom<&responses::Tool> for chat::ChatCompletionTools {
     type Error = TranslationError;
@@ -63,6 +63,7 @@ impl From<responses::GrammarSyntax> for chat_request::GrammarSyntax {
 
 pub(super) fn chat_tools(
     tools: &Option<Vec<responses::Tool>>,
+    scope: &TranslationScope,
 ) -> TranslationResult<Option<Vec<chat::ChatCompletionTools>>> {
     let tools = match tools {
         None => return Ok(None),
@@ -73,12 +74,10 @@ pub(super) fn chat_tools(
     for tool in tools {
         match chat::ChatCompletionTools::try_from(tool) {
             Ok(tool) => translated.push(tool),
-            Err(error) => {
-                tracing::trace!(
-                    error = %error,
-                    "skipping Responses tool without Chat Completions equivalent"
-                );
-            }
+            Err(error) => scope.dropped(
+                format!("Responses tool `{}`", tool_discriminant(tool)),
+                error.to_string(),
+            ),
         }
     }
     if translated.is_empty() {

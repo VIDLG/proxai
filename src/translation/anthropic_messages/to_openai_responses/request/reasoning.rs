@@ -1,10 +1,11 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
-use tracing::warn;
+use crate::translation::TranslationScope;
 
 pub(super) fn request_reasoning(
     output_config: Option<&anthropic::OutputConfig>,
     thinking: Option<&anthropic::ThinkingConfigParam>,
+    scope: &TranslationScope,
 ) -> Option<responses::Reasoning> {
     let summary = thinking.and_then(reasoning_summary);
     let output_effort = output_config
@@ -12,9 +13,10 @@ pub(super) fn request_reasoning(
         .copied()
         .map(Into::into);
     let has_output_effort = output_effort.is_some();
-    let effort = output_effort.or_else(|| thinking.and_then(thinking_effort));
+    let effort =
+        output_effort.or_else(|| thinking.and_then(|thinking| thinking_effort(thinking, scope)));
     if has_output_effort {
-        warn_if_legacy_thinking_ignored(thinking, "openai_responses");
+        observe_legacy_thinking_ignored(thinking, scope);
     }
 
     if effort.is_some() || summary.is_some() {
@@ -30,16 +32,14 @@ pub(super) fn request_reasoning(
 
 fn thinking_effort(
     thinking: &anthropic::ThinkingConfigParam,
+    scope: &TranslationScope,
 ) -> Option<responses::ReasoningEffort> {
     match thinking {
         anthropic::ThinkingConfigParam::Enabled(value) => {
             let effort = responses::ReasoningEffort::from(value);
-            warn!(
-                event = "anthropic_legacy_thinking_budget_mapped",
-                budget_tokens = value.budget_tokens,
-                reasoning_effort = ?effort,
-                target_protocol = "openai_responses",
-                "mapped Anthropic legacy thinking.type=enabled budget_tokens lossily to reasoning effort"
+            scope.adapted(
+                format!("Anthropic legacy thinking budget `{}`", value.budget_tokens),
+                format!("mapped lossily to Responses reasoning effort `{effort:?}`"),
             );
             Some(effort)
         }
@@ -48,16 +48,14 @@ fn thinking_effort(
     }
 }
 
-fn warn_if_legacy_thinking_ignored(
+fn observe_legacy_thinking_ignored(
     thinking: Option<&anthropic::ThinkingConfigParam>,
-    target_protocol: &'static str,
+    scope: &TranslationScope,
 ) {
     if let Some(anthropic::ThinkingConfigParam::Enabled(value)) = thinking {
-        warn!(
-            event = "anthropic_legacy_thinking_budget_ignored",
-            budget_tokens = value.budget_tokens,
-            target_protocol,
-            "ignored Anthropic legacy thinking.type=enabled budget_tokens because output_config.effort is present"
+        scope.dropped(
+            format!("Anthropic legacy thinking budget `{}`", value.budget_tokens),
+            "output_config.effort takes precedence",
         );
     }
 }

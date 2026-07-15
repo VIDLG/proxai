@@ -13,9 +13,7 @@ use crate::protocol::openai_responses::{
     OutputItem, Response, ResponseObject, ResponseUsage, ServiceTier, Status, ToolChoiceOptions,
     ToolChoiceParam,
 };
-use crate::translation::streaming::{
-    StreamIdentity, StreamTranslationError, StreamTranslationResult,
-};
+use crate::translation::stream::{StreamIdentity, StreamTranslationError, StreamTranslationResult};
 
 use super::super::ids::OutputItemIdAllocator;
 use super::super::types::{

@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use crate::protocol::anthropic::messages::{MessageDelta, MessageStreamEvent, StopReason, Usage};
 use crate::protocol::openai_responses::{OutputContent, OutputItem, ResponseUsage, SummaryPart};
 
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::outbound::{
     content_block_stop, input_json_delta as input_json_delta_event,
     message_delta as message_delta_event, message_start as message_start_event, message_stop,
@@ -22,9 +23,7 @@ use crate::translation::anthropic_messages::outbound::{
 use crate::translation::openai_responses::streaming::{
     ForwardedContent, ResponsesOutputSegmentKey,
 };
-use crate::translation::streaming::{
-    StreamIdentity, StreamTranslationError, StreamTranslationResult,
-};
+use crate::translation::stream::{StreamIdentity, StreamTranslationError, StreamTranslationResult};
 
 /// Per-stream Anthropic projection state.
 ///
@@ -91,6 +90,7 @@ impl StreamingState {
         output_index: u32,
         item: OutputItem,
         event: &str,
+        scope: &TranslationScope,
     ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
         match item {
             OutputItem::Message(_) | OutputItem::Reasoning(_) => Ok(Vec::new()),
@@ -129,9 +129,8 @@ impl StreamingState {
             | OutputItem::McpListTools(_)
             | OutputItem::McpApprovalRequest(_)
             | OutputItem::ToolSearchCall(_)) => {
-                tracing::trace!(
-                    item_type = item.as_ref(),
-                    reason = "Responses provider-hosted tool has no stable Anthropic server-tool wire mapping"
+                scope.dropped(format!("Responses output item `{}`", item.as_ref()),
+                    "Responses provider-hosted tool has no stable Anthropic server-tool wire mapping",
                 );
                 Ok(Vec::new())
             }
@@ -139,9 +138,8 @@ impl StreamingState {
             | OutputItem::LocalShellCall(_)
             | OutputItem::ShellCall(_)
             | OutputItem::ApplyPatchCall(_)) => {
-                tracing::trace!(
-                    item_type = item.as_ref(),
-                    reason = "Responses tool call has no paired Anthropic tool definition and result-contract mapping"
+                scope.dropped(format!("Responses output item `{}`", item.as_ref()),
+                    "Responses tool call has no paired Anthropic tool definition and result-contract mapping",
                 );
                 Ok(Vec::new())
             }
@@ -153,16 +151,14 @@ impl StreamingState {
             | OutputItem::ApplyPatchCallOutput(_)
             | OutputItem::McpApprovalResponse(_)
             | OutputItem::ToolSearchOutput(_)) => {
-                tracing::trace!(
-                    item_type = item.as_ref(),
-                    reason = "Responses tool result is request-side Anthropic content, not an outbound message stream block"
+                scope.dropped(format!("Responses output item `{}`", item.as_ref()),
+                    "Responses tool result is request-side Anthropic content, not an outbound message stream block",
                 );
                 Ok(Vec::new())
             }
             item @ OutputItem::Compaction(_) => {
-                tracing::trace!(
-                    item_type = item.as_ref(),
-                    reason = "Responses compaction item is internal transcript state with no Anthropic Messages stream representation"
+                scope.dropped(format!("Responses output item `{}`", item.as_ref()),
+                    "Responses compaction item is internal transcript state with no Anthropic Messages stream representation",
                 );
                 Ok(Vec::new())
             }

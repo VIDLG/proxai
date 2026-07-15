@@ -1,27 +1,18 @@
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, header};
 use serde_json::Value;
 
-use crate::http_support::into_byte_stream;
-use crate::translation::streaming::StreamTranslationFailureSink;
-
-use super::super::translate_streaming_response_with_failure_sink;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::Translator;
+use crate::translation::test_support::translate_sse_fixture;
 
 async fn translate_chat_stream_body(body: &'static str) -> String {
-    let mut response = Response::new(Body::from(body));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let translated = translate_streaming_response_with_failure_sink(
-        into_byte_stream(response.into_body().into_data_stream()),
-        StreamTranslationFailureSink::default(),
-    );
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    String::from_utf8(body.to_vec()).unwrap()
+    translate_sse_fixture(
+        body,
+        Translator::new(
+            RequestProtocol::OpenaiResponses,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
+    )
+    .await
 }
 
 fn response_stream_payloads(body: &str) -> Vec<Value> {
@@ -170,7 +161,7 @@ async fn rejects_done_before_first_chunk() {
     let body = "data: [DONE]\n\n";
     let text = translate_chat_stream_body(body).await;
 
-    assert!(text.contains("stream translation finish error"));
+    assert!(text.contains("stream translation error"));
 }
 
 #[tokio::test]
@@ -202,7 +193,7 @@ async fn rejects_done_before_terminal_finish_reason() {
 
     let text = translate_chat_stream_body(body).await;
 
-    assert!(text.contains("stream translation finish error"));
+    assert!(text.contains("stream translation error"));
     assert!(text.contains("emitted [DONE] before a terminal finish_reason"));
 }
 

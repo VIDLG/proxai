@@ -176,7 +176,6 @@ impl ErrorResponseFields {
 
     delegate! {
         to self.payload {
-            pub(crate) fn encode_sse_event(self) -> serde_json::Result<Bytes>;
             pub(crate) fn encode_sse_event_or_fallback(self) -> Bytes;
         }
     }

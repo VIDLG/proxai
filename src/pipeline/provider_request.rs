@@ -10,7 +10,7 @@ use crate::observe::{
 use crate::protocol::RequestProtocol;
 use crate::provider::{self, ProviderRequest, ProviderTransport, ProviderTransportError};
 use crate::routing::{EffectiveDefaultProviderNames, EffectiveRoute, RouteTarget, resolve_route};
-use crate::translation::translate_request;
+use crate::translation::Translator;
 
 use super::ProxyFlow;
 use super::inbound::{PreparedInbound, PreparedInboundFlow};
@@ -93,11 +93,9 @@ impl RoutedInboundFlow {
         } = self;
 
         let provider_protocol = transport.protocol();
-        let translated_payload = match translate_request(
-            request.protocol(),
-            provider_protocol,
-            request.normalized_payload(),
-        ) {
+        let translator =
+            Translator::new(request.protocol(), provider_protocol).with_observer(obs.clone());
+        let translated_payload = match translator.translate_request(request.normalized_payload()) {
             Ok(payload) => payload,
             Err(error) => {
                 obs.observe_request_translation_failure(RequestTranslationFailure {

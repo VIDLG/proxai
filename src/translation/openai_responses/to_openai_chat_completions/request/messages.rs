@@ -5,11 +5,12 @@ use crate::translation::openai_chat_completions::outbound::{
     assistant_message, developer_text_message, system_text_message, text_part, tool_message,
     user_message, user_text_message,
 };
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 pub(super) fn chat_messages(
     instructions: Option<&str>,
     input: Option<&responses::InputParam>,
+    scope: &TranslationScope,
 ) -> TranslationResult<(
     Vec<chat::ChatCompletionRequestMessage>,
     ChatRequestExtensions,
@@ -29,7 +30,7 @@ pub(super) fn chat_messages(
         }
         Some(responses::InputParam::Items(items)) => {
             for item in items {
-                chat_messages_for_input_item(item, &mut messages, &mut extensions)?;
+                chat_messages_for_input_item(item, &mut messages, &mut extensions, scope)?;
             }
         }
     }
@@ -48,18 +49,22 @@ fn chat_messages_for_input_item(
     item: &responses::InputItem,
     messages: &mut Vec<chat::ChatCompletionRequestMessage>,
     extensions: &mut ChatRequestExtensions,
+    scope: &TranslationScope,
 ) -> TranslationResult<()> {
     match item {
         responses::InputItem::EasyMessage(message) => {
-            messages_from_easy_message(message, messages)?;
+            messages_from_easy_message(message, messages, scope)?;
         }
         responses::InputItem::Item(item) => {
-            messages_from_item(item, messages, extensions)?;
+            messages_from_item(item, messages, extensions, scope)?;
         }
         responses::InputItem::ItemReference(reference) => {
             // Responses item references are stateful pointers that the proxy
             // cannot resolve; surface them as user text so the upstream is the
             // one deciding how to handle the dangling reference.
+            scope.adapted(format!("Responses item_reference `{}`", reference.id),
+                "Chat Completions cannot resolve stateful Responses item references; emitting an omission marker",
+            );
             messages.push(user_text_message(format!(
                 "[OpenAI Responses item_reference `{}` omitted during Chat Completions translation]",
                 reference.id
@@ -72,18 +77,19 @@ fn chat_messages_for_input_item(
 fn messages_from_easy_message(
     message: &responses::EasyInputMessage,
     messages: &mut Vec<chat::ChatCompletionRequestMessage>,
+    scope: &TranslationScope,
 ) -> TranslationResult<()> {
     let role = message.role;
     match role {
         responses::Role::System => {
-            for text in text_parts_from_easy_content(&message.content) {
+            for text in text_parts_from_easy_content(&message.content, scope) {
                 if !text.trim().is_empty() {
                     messages.push(system_text_message(text));
                 }
             }
         }
         responses::Role::Developer => {
-            for text in text_parts_from_easy_content(&message.content) {
+            for text in text_parts_from_easy_content(&message.content, scope) {
                 if !text.trim().is_empty() {
                     messages.push(developer_text_message(text));
                 }
@@ -96,7 +102,7 @@ fn messages_from_easy_message(
         responses::Role::Assistant => {
             // Easy assistant content is treated as output text; Chat assistant
             // messages require non-empty content, so drop empty turns.
-            if let Some(content) = assistant_content_from_easy(&message.content) {
+            if let Some(content) = assistant_content_from_easy(&message.content, scope) {
                 messages.push(assistant_message(Some(content), None));
             }
         }
@@ -108,6 +114,7 @@ fn messages_from_item(
     item: &responses::Item,
     messages: &mut Vec<chat::ChatCompletionRequestMessage>,
     extensions: &mut ChatRequestExtensions,
+    scope: &TranslationScope,
 ) -> TranslationResult<()> {
     match item {
         responses::Item::Message(message) => match message {
@@ -115,7 +122,7 @@ fn messages_from_item(
                 push_assistant_output_message(output, messages, extensions);
             }
             responses::MessageItem::Input(input) => {
-                push_input_message(input, messages);
+                push_input_message(input, messages, scope);
             }
         },
         responses::Item::FunctionCall(call) => {
@@ -123,7 +130,7 @@ fn messages_from_item(
         }
         responses::Item::FunctionCallOutput(output) => {
             messages.push(tool_message(
-                (&output.output).into(),
+                function_output_content(&output.output, scope),
                 output.call_id.clone(),
             ));
         }
@@ -139,13 +146,16 @@ fn messages_from_item(
             ));
         }
         responses::Item::Reasoning(reasoning) => {
-            push_assistant_reasoning(reasoning, messages, extensions);
+            push_assistant_reasoning(reasoning, messages, extensions, scope);
         }
         other => {
             // Responses items without a Chat Completions representation
-            // (reasoning, hosted tool calls, MCP, search, etc.) are surfaced as
-            // a user text marker so the omission is observable rather than
-            // silently dropped.
+            // (hosted tool calls, MCP, search, etc.) are surfaced as a user text
+            // marker so the omission remains visible to the target model.
+            scope.adapted(
+                format!("Responses input item `{}`", other.as_ref()),
+                "Chat Completions has no matching input item; emitting an omission marker",
+            );
             messages.push(user_text_message(format!(
                 "[OpenAI Responses item `{}` omitted during Chat Completions translation]",
                 other.as_ref()
@@ -215,6 +225,7 @@ fn push_assistant_reasoning(
     reasoning: &responses::ReasoningItem,
     messages: &mut Vec<chat::ChatCompletionRequestMessage>,
     extensions: &mut ChatRequestExtensions,
+    scope: &TranslationScope,
 ) {
     let mut parts: Vec<String> = reasoning
         .summary
@@ -230,10 +241,13 @@ fn push_assistant_reasoning(
     }
     let reasoning_content = parts.concat();
     if reasoning_content.is_empty() {
-        tracing::trace!(
-            encrypted = reasoning.encrypted_content.is_non_null(),
-            reason = "Chat reasoning_content requires visible reasoning text",
-            "skipping Responses reasoning item during Chat Completions request translation"
+        scope.dropped(
+            "Responses reasoning item",
+            if reasoning.encrypted_content.is_non_null() {
+                "Chat reasoning_content cannot represent encrypted reasoning without visible text"
+            } else {
+                "Chat reasoning_content requires visible reasoning text"
+            },
         );
         return;
     }
@@ -253,17 +267,18 @@ fn push_assistant_reasoning(
 fn push_input_message(
     input: &responses::InputMessage,
     messages: &mut Vec<chat::ChatCompletionRequestMessage>,
+    scope: &TranslationScope,
 ) {
     match input.role {
         responses::InputRole::System => {
-            if let Some(text) = join_input_text(&input.content)
+            if let Some(text) = join_input_text(&input.content, scope)
                 && !text.is_empty()
             {
                 messages.push(system_text_message(text));
             }
         }
         responses::InputRole::Developer => {
-            if let Some(text) = join_input_text(&input.content)
+            if let Some(text) = join_input_text(&input.content, scope)
                 && !text.is_empty()
             {
                 messages.push(developer_text_message(text));
@@ -281,20 +296,16 @@ fn push_input_message(
                     }
                     responses::InputContent::InputImage(image) => {
                         let Some(url) = image.image_url.as_non_null().cloned() else {
-                            tracing::trace!(
-                                source_field = "input[].content[].image_url",
-                                reason = "Chat Completions user image parts require an image URL",
-                                "skipping Responses input content during Chat Completions translation"
+                            scope.dropped("Responses input image",
+                                "Chat Completions user image parts require an image URL",
                             );
                             return None;
                         };
-                        let detail = match image.detail.try_into() {
+                        let detail: chat::ImageDetail = match image.detail.try_into() {
                             Ok(detail) => detail,
                             Err(error) => {
-                                tracing::trace!(
-                                    source_field = "input[].content[].detail",
-                                    reason = %error,
-                                    "skipping Responses input image during Chat Completions translation"
+                                scope.dropped("Responses input image detail",
+                                    error.to_string(),
                                 );
                                 return None;
                             }
@@ -309,10 +320,8 @@ fn push_input_message(
                         ))
                     }
                     responses::InputContent::InputFile(_) => {
-                        tracing::trace!(
-                            source_field = "input[].content[].input_file",
-                            reason = "Chat Completions user message content has no compatible hosted file representation",
-                            "skipping Responses input content during Chat Completions translation"
+                        scope.dropped("Responses input_file content",
+                            "Chat Completions user messages have no compatible hosted-file representation",
                         );
                         None
                     }
@@ -343,7 +352,10 @@ fn push_assistant_tool_call(
     messages.push(assistant_message(None, Some(vec![tool_call])));
 }
 
-fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<String> {
+fn text_parts_from_easy_content(
+    content: &responses::EasyInputContent,
+    scope: &TranslationScope,
+) -> Vec<String> {
     match content {
         responses::EasyInputContent::Text(text) => vec![text.clone()],
         responses::EasyInputContent::ContentList(parts) => parts
@@ -351,10 +363,12 @@ fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<St
             .filter_map(|part| match part {
                 responses::InputContent::InputText(text) => Some(text.text.clone()),
                 other => {
-                    tracing::trace!(
-                        discriminant = ?std::mem::discriminant(other),
-                        reason = "instruction messages can only be represented as Chat text",
-                        "skipping Responses instruction content during Chat Completions translation"
+                    scope.dropped(
+                        format!(
+                            "Responses instruction content {:?}",
+                            std::mem::discriminant(other)
+                        ),
+                        "Chat instruction messages can only represent text",
                     );
                     None
                 }
@@ -363,16 +377,21 @@ fn text_parts_from_easy_content(content: &responses::EasyInputContent) -> Vec<St
     }
 }
 
-fn join_input_text(content: &[responses::InputContent]) -> Option<String> {
+fn join_input_text(
+    content: &[responses::InputContent],
+    scope: &TranslationScope,
+) -> Option<String> {
     let parts: Vec<String> = content
         .iter()
         .filter_map(|part| match part {
             responses::InputContent::InputText(text) => Some(text.text.clone()),
             other => {
-                tracing::trace!(
-                    discriminant = ?std::mem::discriminant(other),
-                    reason = "instruction messages can only be represented as Chat text",
-                    "skipping Responses instruction content during Chat Completions translation"
+                scope.dropped(
+                    format!(
+                        "Responses instruction content {:?}",
+                        std::mem::discriminant(other)
+                    ),
+                    "Chat instruction messages can only represent text",
                 );
                 None
             }
@@ -387,6 +406,7 @@ fn join_input_text(content: &[responses::InputContent]) -> Option<String> {
 
 fn assistant_content_from_easy(
     content: &responses::EasyInputContent,
+    scope: &TranslationScope,
 ) -> Option<chat::ChatCompletionRequestAssistantMessageContent> {
     match content {
         responses::EasyInputContent::Text(text) if !text.is_empty() => Some(
@@ -403,10 +423,12 @@ fn assistant_content_from_easy(
                         )),
                     );
                 } else {
-                    tracing::trace!(
-                        discriminant = ?std::mem::discriminant(part),
-                        reason = "Chat assistant history content can only represent text here",
-                        "skipping Responses assistant content during Chat Completions translation"
+                    scope.dropped(
+                        format!(
+                            "Responses assistant content {:?}",
+                            std::mem::discriminant(part)
+                        ),
+                        "Chat assistant history content can only represent text here",
                     );
                 }
             }
@@ -495,37 +517,40 @@ impl TryFrom<&responses::InputContent> for chat::ChatCompletionRequestUserMessag
     }
 }
 
-impl From<&responses::FunctionCallOutput> for chat::ChatCompletionRequestToolMessageContent {
-    fn from(output: &responses::FunctionCallOutput) -> Self {
-        match output {
-            responses::FunctionCallOutput::Text(text) => Self::Text(text.clone()),
-            responses::FunctionCallOutput::Content(parts) => {
-                let translated = parts
-                    .iter()
-                    .filter_map(|part| match part {
-                        responses::InputContent::InputText(text) => {
-                            Some(text_part(text.text.clone()))
-                        }
-                        other => {
-                            tracing::trace!(
-                                discriminant = ?std::mem::discriminant(other),
-                                reason = "Chat tool messages can only represent text output parts",
-                                "skipping Responses function output content during Chat Completions translation"
-                            );
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                if translated.is_empty() {
-                    Self::Text(String::new())
-                } else {
-                    Self::Array(
-                        translated
-                            .into_iter()
-                            .map(chat::ChatCompletionRequestToolMessageContentPart::Text)
-                            .collect(),
-                    )
-                }
+fn function_output_content(
+    output: &responses::FunctionCallOutput,
+    scope: &TranslationScope,
+) -> chat::ChatCompletionRequestToolMessageContent {
+    match output {
+        responses::FunctionCallOutput::Text(text) => {
+            chat::ChatCompletionRequestToolMessageContent::Text(text.clone())
+        }
+        responses::FunctionCallOutput::Content(parts) => {
+            let translated = parts
+                .iter()
+                .filter_map(|part| match part {
+                    responses::InputContent::InputText(text) => Some(text_part(text.text.clone())),
+                    other => {
+                        scope.dropped(
+                            format!(
+                                "Responses function output content {:?}",
+                                std::mem::discriminant(other)
+                            ),
+                            "Chat tool messages can only represent text output parts",
+                        );
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            if translated.is_empty() {
+                chat::ChatCompletionRequestToolMessageContent::Text(String::new())
+            } else {
+                chat::ChatCompletionRequestToolMessageContent::Array(
+                    translated
+                        .into_iter()
+                        .map(chat::ChatCompletionRequestToolMessageContentPart::Text)
+                        .collect(),
+                )
             }
         }
     }

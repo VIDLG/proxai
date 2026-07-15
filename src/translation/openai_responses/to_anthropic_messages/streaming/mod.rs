@@ -10,7 +10,6 @@
 
 mod state;
 
-use crate::http_support::ByteStream;
 use crate::protocol::anthropic::messages::{MessageStreamEvent, StopReason};
 use crate::protocol::openai_responses::{Response, ResponseStreamEvent};
 
@@ -18,10 +17,10 @@ use crate::translation::openai_responses::streaming::{
     ResponsesInboundLifecycle, response_failure_error,
 };
 
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError,
-    StreamTranslationFailureSink, StreamTranslationResult, StreamingEventTranslator,
-    translate_sse_stream, typed_stream_events,
+use crate::translation::TranslationScope;
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    typed_stream_events,
 };
 
 use state::StreamingState;
@@ -30,25 +29,17 @@ use state::StreamingState;
 #[path = "tests.rs"]
 mod tests;
 
-#[cfg(test)]
-pub(super) fn translate_streaming_response(input: ByteStream) -> ByteStream {
-    translate_streaming_response_with_failure_sink(input, StreamTranslationFailureSink::default())
-}
-
-pub(super) fn translate_streaming_response_with_failure_sink(
-    input: ByteStream,
-    failure_sink: StreamTranslationFailureSink,
-) -> ByteStream {
-    translate_sse_stream(input, MessagesStreamTranslator::default(), failure_sink)
-}
-
 #[derive(Debug, Default)]
-pub(super) struct MessagesStreamTranslator {
+pub(crate) struct ResponsesToAnthropicStreaming {
     lifecycle: ResponsesInboundLifecycle<StreamingState>,
 }
 
-impl StreamingEventTranslator for MessagesStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl ResponsesToAnthropicStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
         let event_type = parsed.as_ref().to_string();
         let mut events = Vec::new();
@@ -66,6 +57,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                     event.output_index,
                     event.item,
                     &event_type,
+                    scope,
                 )?);
             }
             ResponseStreamEvent::ResponseContentPartAdded(event) => {
@@ -275,24 +267,25 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
                     event.message
                 )));
             }
-            other => {
-                tracing::trace!(
-                    response_stream_event = other.as_ref(),
-                    reason = "Responses stream event has no Anthropic Messages representation"
-                );
-            }
+            other => scope.dropped(
+                format!("Responses stream event `{}`", other.as_ref()),
+                "Responses stream event has no Anthropic Messages representation",
+            ),
         }
 
         typed_stream_events(events)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         self.lifecycle.finish_stream(end)?;
         Ok(Vec::new())
     }
 }
 
-impl MessagesStreamTranslator {
+impl ResponsesToAnthropicStreaming {
     fn project_response_snapshot(
         &mut self,
         response: &Response,

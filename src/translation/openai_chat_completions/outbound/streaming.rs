@@ -8,7 +8,7 @@ use crate::protocol::openai::chat_completions::{
     ChatCompletionStreamRole, CompletionUsage, CreateChatCompletionStreamResponse,
     CreateChatCompletionStreamResponseObject, FinishReason, FunctionCallStream, FunctionType,
 };
-use crate::translation::streaming::StreamIdentity;
+use crate::translation::stream::StreamIdentity;
 
 pub(crate) fn assistant_role_delta() -> ChatCompletionStreamResponseDelta {
     ChatCompletionStreamResponseDelta {

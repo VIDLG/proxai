@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::ingress;
 use crate::protocol::ProviderProtocol;
 
-use super::translate_request;
+use crate::translation::Translator;
 
 #[test]
 fn translates_openai_responses_inbound_to_chat_provider_request() {
@@ -23,12 +23,10 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let translated = translate_request(
-        inbound.protocol(),
-        ProviderProtocol::OpenaiChatCompletions,
-        inbound.normalized_payload(),
-    )
-    .expect("translation should produce a Chat Completions payload");
+    let translator = Translator::new(inbound.protocol(), ProviderProtocol::OpenaiChatCompletions);
+    let translated = translator
+        .translate_request(inbound.normalized_payload())
+        .expect("translation should produce a Chat Completions payload");
 
     let provider_body = translated;
     assert_eq!(provider_body["model"], "glm-5.1");
@@ -60,12 +58,10 @@ fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
         .map(ingress::PreparedInboundRequest::OpenaiResponses)
         .unwrap();
 
-    let translated = translate_request(
-        inbound.protocol(),
-        ProviderProtocol::AnthropicMessages,
-        inbound.normalized_payload(),
-    )
-    .expect("translation should produce an Anthropic payload");
+    let translator = Translator::new(inbound.protocol(), ProviderProtocol::AnthropicMessages);
+    let translated = translator
+        .translate_request(inbound.normalized_payload())
+        .expect("translation should produce an Anthropic payload");
 
     let provider_body = translated;
     assert_eq!(provider_body["model"], "glm-5.1");

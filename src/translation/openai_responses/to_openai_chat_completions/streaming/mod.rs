@@ -15,6 +15,7 @@ use crate::protocol::openai::chat_completions::{CompletionUsage, FinishReason};
 use crate::protocol::openai::responses::{
     OutputContent, OutputItem, Response, ResponseStreamEvent, ResponseUsage, SummaryPart,
 };
+use crate::translation::TranslationScope;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk, chat_usage_chunk,
     refusal_delta, text_delta, tool_arguments_delta, tool_call_start_delta,
@@ -22,9 +23,8 @@ use crate::translation::openai_chat_completions::outbound::{
 use crate::translation::openai_responses::streaming::{
     ResponsesInboundLifecycle, ResponsesOutputSegmentKey, response_failure_error,
 };
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator,
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
 };
 
 use state::StreamingState;
@@ -43,12 +43,16 @@ fn reasoning_stream_event(
 }
 
 #[derive(Debug, Default)]
-pub(super) struct ChatCompletionStreamTranslator {
+pub(crate) struct ResponsesToChatStreaming {
     lifecycle: ResponsesInboundLifecycle<StreamingState>,
 }
 
-impl StreamingEventTranslator for ChatCompletionStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl ResponsesToChatStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
         let event_type = parsed.as_ref().to_string();
         let mut chunks = Vec::new();
@@ -83,14 +87,14 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     ))?);
                 }
                 OutputItem::Message(_) | OutputItem::Reasoning(_) => {}
-                other => {
-                    tracing::trace!(
-                        output_index = event.output_index,
-                        item_type = other.as_ref(),
-                        reason = "Responses output item has no Chat Completions streaming representation",
-                        "skipping Responses output item"
-                    );
-                }
+                other => scope.dropped(
+                    format!(
+                        "Responses output item `{}` at index {}",
+                        other.as_ref(),
+                        event.output_index
+                    ),
+                    "Responses output item has no Chat Completions streaming representation",
+                ),
             },
             ResponseStreamEvent::ResponseContentPartAdded(event) => match event.part {
                 OutputContent::OutputText(part) => {
@@ -408,24 +412,25 @@ impl StreamingEventTranslator for ChatCompletionStreamTranslator {
                     event.message
                 )));
             }
-            other => {
-                tracing::trace!(
-                    response_stream_event = other.as_ref(),
-                    reason = "Responses stream event has no Chat Completions representation"
-                );
-            }
+            other => scope.dropped(
+                format!("Responses stream event `{}`", other.as_ref()),
+                "Responses stream event has no Chat Completions representation",
+            ),
         }
 
         Ok(chunks)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         self.lifecycle.finish_stream(end)?;
         Ok(Vec::new())
     }
 }
 
-impl ChatCompletionStreamTranslator {
+impl ResponsesToChatStreaming {
     fn project_response_snapshot(
         &mut self,
         response: &Response,

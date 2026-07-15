@@ -8,10 +8,11 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_chat_completions::outbound::assistant_response_message;
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 pub(super) fn translate_response(
     message: &Message,
+    scope: &TranslationScope,
 ) -> TranslationResult<(CreateChatCompletionResponse, Option<String>)> {
     let mut text_parts: Vec<String> = Vec::new();
     let mut reasoning_parts: Vec<String> = Vec::new();
@@ -40,12 +41,13 @@ pub(super) fn translate_response(
                 });
             }
             // Server-tool artifacts have no safe Chat message field.
-            skipped => {
-                tracing::trace!(
-                    discriminant = ?std::mem::discriminant(skipped),
-                    "skipping Anthropic response block with no Chat-representable field"
-                );
-            }
+            skipped => scope.dropped(
+                format!(
+                    "Anthropic response block {:?}",
+                    std::mem::discriminant(skipped)
+                ),
+                "Anthropic response block has no Chat Completions representation",
+            ),
         }
     }
 

@@ -13,17 +13,31 @@
 //! Self-to-self protocol paths are intentionally omitted.
 
 pub(crate) mod anthropic_messages;
+mod context;
 pub(crate) mod error;
 pub(crate) mod json;
 pub(crate) mod openai_chat_completions;
 pub(crate) mod openai_responses;
 mod request;
 mod response;
-pub(crate) mod streaming;
+pub mod stream;
 pub(crate) mod text;
+mod translator;
 
-pub(crate) use error::{Result as TranslationResult, TranslationError};
-pub(crate) use request::translate_request;
-pub(crate) use response::{
-    translate_non_streaming_response, translate_streaming_response_with_failure_sink,
+pub(crate) use context::TranslationScope;
+pub use context::{
+    NoopTranslationObserver, TranslationObservation, TranslationObservationKind,
+    TranslationObserver, TranslationPhase, TranslationRoute,
 };
+pub use error::{Result as TranslationResult, TranslationError};
+pub(crate) use request::translate_request;
+pub(crate) use response::translate_non_streaming_response;
+pub use translator::Translator;
+
+#[cfg(test)]
+#[path = "test_support_tests.rs"]
+pub(crate) mod test_support;
+
+#[cfg(test)]
+#[path = "dependency_tests.rs"]
+mod dependency_tests;

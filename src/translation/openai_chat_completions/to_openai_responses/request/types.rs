@@ -70,18 +70,18 @@ impl From<chat::Verbosity> for responses::Verbosity {
     }
 }
 
-impl From<chat::ChatCompletionStreamOptions> for responses::ResponseStreamOptions {
-    fn from(value: chat::ChatCompletionStreamOptions) -> Self {
-        if value.include_usage.is_some() {
-            tracing::trace!(
-                source_field = "stream_options.include_usage",
-                reason = "OpenAI Responses stream_options schema has no include_usage field",
-                "skipping Chat Completions request field during OpenAI Responses translation"
-            );
-        }
+pub(super) fn response_stream_options(
+    value: &chat::ChatCompletionStreamOptions,
+    scope: &crate::translation::TranslationScope,
+) -> responses::ResponseStreamOptions {
+    if value.include_usage.is_some() {
+        scope.dropped(
+            "Chat stream_options.include_usage",
+            "OpenAI Responses stream_options has no include_usage field",
+        );
+    }
 
-        Self {
-            include_obfuscation: value.include_obfuscation,
-        }
+    responses::ResponseStreamOptions {
+        include_obfuscation: value.include_obfuscation,
     }
 }

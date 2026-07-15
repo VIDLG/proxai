@@ -8,15 +8,16 @@
 use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, MessageStreamEvent};
 use crate::protocol::openai_responses::Status;
 
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
 use crate::translation::openai_responses::outbound::{
     in_progress_function_call_item, in_progress_message_item, in_progress_reasoning_item,
     in_progress_redacted_reasoning_item, output_item_added, output_item_done, output_text_delta,
     reasoning_text_delta, response_created, response_id, response_terminal, tool_arguments_delta,
 };
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, typed_stream_events,
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
+    typed_stream_events,
 };
 
 mod output;
@@ -29,13 +30,17 @@ use state::StreamingState;
 mod tests;
 
 #[derive(Debug, Default)]
-pub(super) struct ResponsesStreamTranslator {
+pub(crate) struct AnthropicToResponsesStreaming {
     sequence_number: u64,
     lifecycle: AnthropicInboundLifecycle<StreamingState>,
 }
 
-impl StreamingEventTranslator for ResponsesStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl AnthropicToResponsesStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let parsed = self.lifecycle.parse_stream_event(event.data)?;
         let mut chunks = Vec::new();
 
@@ -236,6 +241,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
                     index,
                     sequence_number,
                     &mut state.text_char_offset,
+                    scope,
                 )?;
 
                 // Accumulate the completed item so the terminal snapshot's
@@ -300,16 +306,16 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
         typed_stream_events(chunks)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
-        if self.lifecycle.is_stopped() {
-            return Ok(Vec::new());
-        }
-
-        Err(self.lifecycle.unexpected_stream_end_error(end))
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
+        self.lifecycle.finish_stream(end)?;
+        Ok(Vec::new())
     }
 }
 
-impl ResponsesStreamTranslator {
+impl AnthropicToResponsesStreaming {
     fn next_sequence_number(&mut self) -> u64 {
         self.sequence_number += 1;
         self.sequence_number

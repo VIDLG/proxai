@@ -1,35 +1,36 @@
-use crate::http_support::into_byte_stream;
 use crate::protocol::openai::responses::ResponseStreamEvent;
-use crate::sse::SseEventScanner;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::Translator;
+use crate::translation::test_support::{parse_rendered_events, translate_sse_fixture};
 
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, header};
-
-use super::super::translate_streaming_response;
+async fn translate_streaming_response(stream: &str) -> String {
+    translate_sse_fixture(
+        stream,
+        Translator::new(
+            RequestProtocol::OpenaiResponses,
+            ProviderProtocol::AnthropicMessages,
+        ),
+    )
+    .await
+}
 
 fn assert_openai_response_stream_events_deserialize(body: &str) {
-    let mut scanner = SseEventScanner::default();
-    let events = scanner.scan(body.as_bytes());
+    let events = parse_rendered_events(body);
     assert!(
         !events.is_empty(),
         "translated stream should contain SSE events"
     );
     for event in events {
-        let payload = event
-            .payload_with_type()
-            .expect("translated event payload should be JSON");
+        let payload = event.data;
         let _: ResponseStreamEvent = serde_json::from_value(payload.clone()).unwrap_or_else(|error| {
-                panic!("translated event should deserialize as OpenAI Responses stream event: {error}; payload={payload}")
-            });
+            panic!("translated event should deserialize as OpenAI Responses stream event: {error}; payload={payload}")
+        });
     }
 }
 
 #[tokio::test]
 async fn translates_anthropic_message_stream_to_openai_responses_sse() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_stream\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"\"}}\n\n\
@@ -40,16 +41,9 @@ data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
 data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"message_stop\"}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: response.created"));
     assert!(body.contains("event: response.output_text.delta"));
@@ -62,10 +56,7 @@ data: {\"type\":\"message_stop\"}\n\n",
 
 #[tokio::test]
 async fn translates_thinking_stream_to_openai_responses_sse() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_minimax\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"MiniMax-M2.7-highspeed\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n\
@@ -76,16 +67,9 @@ data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
 data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"message_stop\"}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: response.created"));
     assert!(body.contains("event: response.reasoning_text.delta"));
@@ -102,10 +86,7 @@ data: {\"type\":\"message_stop\"}\n\n",
 
 #[tokio::test]
 async fn translates_provider_tool_stream_with_required_nullable_normalization() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_tool\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.1\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"lookup\",\"input\":{}}}\n\n\
@@ -118,16 +99,9 @@ data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
 data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"server_tool_use\":{\"web_search_requests\":1,\"web_fetch_requests\":0}}}\n\n\
 event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"message_stop\"}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: response.created"));
     assert!(body.contains("event: response.output_item.added"));
@@ -139,10 +113,7 @@ data: {\"type\":\"message_stop\"}\n\n",
 
 #[tokio::test]
 async fn translates_interrupted_thinking_then_tool_start_stream_to_parseable_events() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_mimo\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"mimo-v2.5-pro\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\n\n\
@@ -153,16 +124,9 @@ data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signat
 event: content_block_stop\n\
 data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: content_block_start\n\
-data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"write_file\",\"input\":{}}}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"caller\":{\"type\":\"direct\"},\"name\":\"write_file\",\"input\":{}}}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: response.created"));
     assert!(body.contains("event: response.reasoning_text.delta"));
@@ -184,10 +148,7 @@ data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":
 
 #[tokio::test]
 async fn translates_max_tokens_stream_to_response_incomplete() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_incomplete\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"partial\"}}\n\n\
@@ -196,16 +157,9 @@ data: {\"type\":\"content_block_stop\",\"index\":0}\n\n\
 event: message_delta\n\
 data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":2}}\n\n\
 event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"message_stop\"}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: response.incomplete"));
     assert!(body.contains("\"status\":\"incomplete\""));
@@ -216,10 +170,7 @@ data: {\"type\":\"message_stop\"}\n\n",
 
 #[tokio::test]
 async fn allocates_unique_item_ids_for_multiple_text_and_thinking_blocks() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_multi\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_start\n\
 data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"citations\":null,\"text\":\"a\"}}\n\n\
@@ -240,16 +191,9 @@ data: {\"type\":\"content_block_stop\",\"index\":3}\n\n\
 event: message_delta\n\
 data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":4}}\n\n\
 event: message_stop\n\
-data: {\"type\":\"message_stop\"}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"message_stop\"}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("\"id\":\"msg_resp_msg_multi\""));
     assert!(body.contains("\"id\":\"msg_resp_msg_multi_1\""));
@@ -260,22 +204,12 @@ data: {\"type\":\"message_stop\"}\n\n",
 
 #[tokio::test]
 async fn rejects_unopened_content_block_delta() {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/event-stream")
-        .body(Body::from(
-            "event: message_start\n\
+    let stream = "event: message_start\n\
 data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_bad\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"container\":null,\"stop_details\":null,\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":8,\"output_tokens\":0}}}\n\n\
 event: content_block_delta\n\
-data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"oops\"}}\n\n",
-        ))
-        .unwrap();
+data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"oops\"}}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("event: error"));
     assert!(body.contains("unopened content block index 0"));

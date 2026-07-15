@@ -1,21 +1,22 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
-impl From<responses::ReasoningSummary> for anthropic::ThinkingDisplay {
-    fn from(summary: responses::ReasoningSummary) -> Self {
-        match summary {
-            responses::ReasoningSummary::Auto => Self::Summarized,
-            responses::ReasoningSummary::Concise | responses::ReasoningSummary::Detailed => {
-                tracing::trace!(
-                    summary = %summary,
-                    reason = "Anthropic Messages thinking display cannot distinguish concise/detailed Responses summaries; using summarized"
-                );
-                Self::Summarized
-            }
-        }
+pub(super) fn thinking_display(
+    summary: responses::ReasoningSummary,
+    scope: &TranslationScope,
+) -> anthropic::ThinkingDisplay {
+    if matches!(
+        summary,
+        responses::ReasoningSummary::Concise | responses::ReasoningSummary::Detailed
+    ) {
+        scope.adapted(
+            format!("Responses reasoning summary `{summary}`"),
+            "Anthropic thinking display cannot distinguish concise/detailed; using summarized",
+        );
     }
+    anthropic::ThinkingDisplay::Summarized
 }
 
 impl TryFrom<responses::ReasoningEffort> for anthropic::OutputEffort {

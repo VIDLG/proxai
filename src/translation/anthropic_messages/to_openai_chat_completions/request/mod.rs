@@ -8,7 +8,7 @@ mod types;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use self::messages::{assistant_reasoning_content, chat_messages};
 use self::reasoning::request_reasoning_effort;
@@ -17,6 +17,7 @@ use self::types::chat_stop_configuration;
 
 pub(super) fn translate_request(
     request: anthropic::MessageCreateParamsBase,
+    scope: &TranslationScope,
 ) -> TranslationResult<(chat::CreateChatCompletionRequest, ChatRequestExtensions)> {
     if request.messages.is_empty() {
         return Err(TranslationError::InvalidPayload(
@@ -59,8 +60,11 @@ pub(super) fn translate_request(
         .as_ref()
         .and_then(|metadata| metadata.get("user_id").cloned());
 
-    let reasoning_effort =
-        request_reasoning_effort(request.output_config.as_ref(), request.thinking.as_ref());
+    let reasoning_effort = request_reasoning_effort(
+        request.output_config.as_ref(),
+        request.thinking.as_ref(),
+        scope,
+    );
     let response_format = request
         .output_config
         .as_ref()

@@ -98,7 +98,8 @@ Provider 名字只是用户标签，不是语义协议标识。
   - config.rs — `config.toml` schema 与加载
   - paths.rs — 应用目录解析
   - request.rs — 共享请求载体类型
-  - sse.rs — SSE 基础工具
+  - sse.rs — SSE 解析与编码基础工具
+  - sse_translation.rs — SSE bytes 与结构化 translation events 之间的应用层适配器
   - formatting.rs — 通用格式化工具
   - error/ — 领域错误类型与渲染
   - http_support/ — HTTP 载体工具
@@ -181,8 +182,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'outbound_response',
-      modules: ['pipeline/provider_response.rs', 'translation/response', 'translation/streaming'],
-      responsibility: '将响应翻译回入站协议并重建 HTTP 响应。',
+      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'translation/response', 'translation/streaming'],
+      responsibility: '将响应翻译回入站协议，在结构化事件与 SSE bytes 之间适配、观测失败并重建 HTTP 响应。',
     },
   ]}
 />
@@ -196,10 +197,11 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'protocol/', icon: 'protocol', description: '协议 wire shape 与共享协议枚举。只建模 JSON，不做转换，不依赖 HTTP 载体。' },
     { name: 'ingress/', icon: 'route', description: '入站协议检测、解析与归一化，发生在 routing 和 translation 之前。' },
     { name: 'routing/', icon: 'flow', description: '根据请求协议、模型模式、默认值和 route 配置选择 provider。' },
-    { name: 'translation/', icon: 'protocol', description: '在显式协议 pair 之间做纯请求、响应与流式转换。' },
+    { name: 'translation/', icon: 'protocol', description: '在显式协议 pair 之间做纯请求、响应与结构化事件转换，并暴露 `Translator` façade 和 `TranslationObserver` 扩展点。' },
     { name: 'provider/', icon: 'key', description: 'Provider 请求渲染、模型改写、认证 header、上游 URL 构造和 transport。' },
     { name: 'upstream/', icon: 'terminal', description: '读取上游状态码、headers、完整 body 或流式 byte carrier。' },
-    { name: 'http_support/', icon: 'file', description: '协议无关的 HTTP 工具，例如 content-type 检测、响应重建和 boxed stream。' },
+    { name: 'sse_translation.rs', icon: 'flow', description: '应用层 carrier 适配器：把 SSE bytes 解析成 `StreamEvent`，调用纯 translator，保留失败现场，再编码回 SSE。' },
+    { name: 'http_support/', icon: 'file', description: '协议无关的 HTTP 工具，例如 content-type 检测、响应重建和 boxed byte stream。' },
     { name: 'observe/', icon: 'gauge', description: 'Capture artifact、结构化日志、request hints 和隐私友好的诊断。' },
     { name: 'error/', icon: 'alert', description: '领域错误类型与面向客户端的响应渲染。' },
   ]}
@@ -209,8 +211,10 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 - `protocol/` 是底层 wire 建模：只描述 JSON shape，不做转换。
 - `pipeline/` 协调完整请求生命周期，并保持 phase 顺序显式。
-- `translation/` 在 HTTP 载体边界保持纯粹：接收 protocol 值和 payload/stream carrier，不接收 HTTP `Response`/`Body` 或 provider 私有结构。
+- `translation/` 与 carrier 无关：`Translator` 只接收 JSON `Value` 或结构化 `StreamEvent`，不接收 HTTP response/body、SSE bytes 或 provider 私有结构。
+- `sse_translation.rs` 是 upstream byte stream 与纯结构化事件 translator 之间的应用层适配器，负责保留触发失败的原始 frame 和 SSE 输出编码。
 - `provider/` 负责 provider 请求渲染和 transport 细节，例如认证 header、上游 URL 和 idle-read timeout。
+- `translation/` 定义窄接口 `TranslationObserver`，只观测合法但有损的适配；`observe/` 提供应用实现，并负责日志、诊断和 capture。
 - `observe/` 横切 pipeline 做诊断，但不参与 routing 或 protocol 决策。
 - 语义层 stream/HTTP 错误应使用领域错误，不要隐藏进 `std::io::Error`。
 
@@ -227,6 +231,7 @@ flowchart TD
   pipeline --> routing[routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
+  pipeline --> sse_translation[sse_translation.rs]
   pipeline --> translation[translation/]
   pipeline --> observe[observe/]
   pipeline --> http_support[http_support/]
@@ -237,10 +242,11 @@ flowchart TD
   provider --> protocol
   upstream --> http_support
   provider --> http_support
-  translation --> http_support
-  ingress --> sse[sse.rs]
+  sse_translation --> http_support
+  sse_translation --> sse[sse.rs]
+  sse_translation --> translation
+  ingress --> sse
   upstream --> sse
-  translation --> sse
   observe --> error
   lib --> observe
   lib --> error
@@ -250,12 +256,13 @@ flowchart TD
 
 - `protocol/` 是底层 wire 建模。
 - `pipeline/` 是知道完整请求生命周期的协调者。
-- `translation/` 不依赖 HTTP `Response`/`Body` 或 provider 私有类型。
-- `observe/` 横切 pipeline，但不参与协议或路由决策。
+- `translation/` 只依赖协议模型和结构化 value/event，不依赖 HTTP、SSE bytes、provider transport 或应用观测实现。
+- `sse_translation.rs` 与 `pipeline/` 组合 byte carrier、纯 translator、诊断和客户端错误渲染。
+- `observe/` 实现核心 observation trait，但不参与协议或路由决策。
 
 ## 翻译路径选择
 
-翻译路径由两个 protocol 值决定：
+`Translator` 根据两个 protocol 值选择翻译路径：
 
 - `ingress/` 检测出的 inbound `request_protocol`
 - 选中 provider 配置的 `protocol`
@@ -266,9 +273,11 @@ flowchart TD
 - 协议不同：进入 `translation/<inbound_protocol>/to_<provider_protocol>/`。
 - 未实现的协议对显式失败。
 
+`Translator` 是唯一公开的 façade，只持有一个 crate-private `TranslationContext`；该 context 原子地携带所选 route 与 observation hook。每个入口会派生一个绑定 phase 的 `TranslationScope`：request、non-streaming response 或 streaming response。Pair code 因此无需在 observation 调用中单独传 phase，也就不可能把一次操作的遥测误记到其他 pipeline phase。Value translation 借用派生出的 scope；structured stream translation 消费 `Translator`，把 streaming-response scope 移入返回的 stream，并在其中惰性创建私有、封闭的 `PairStreamingState`，其恰好包含六种跨协议状态机之一，或 identity 路径。这样 value-only translation 不会分配无用流状态，同时 pair state 也不可能被跨 stream 复用。Context 与 scope 定义位于 façade 下层的 `translation/context.rs`；顶层分发和 pair code 只接收 `&TranslationScope`，因此 dispatch、phase 与 observation 不可能对当前操作产生分歧。协议无关的 event、error、terminal、identity 与 lifecycle 类型集中在无外部依赖的 `translation/stream.rs`。Pair 只依赖 `context.rs` 与 `stream.rs`，`Translator` 再依赖这些底层和 pair state，所有依赖边保持单向。Carrier adapter 只调用 `Translator::translate_stream`，不再直接驱动 pair event 或 terminal handling。
+
 ## 数据类型约定
 
 - 协议特定请求/响应数据优先用按 protocol 区分的顶层 enum 包装。
 - 避免平行 `protocol` / `payload` / `projection` / `summary` 字段漂移成不可能状态。
-- 流跨过 HTTP 载体边界后保持为 `ByteStream`。
+- 核心 streaming API 保持 `StreamEvent` in/out；`ByteStream` 只存在于应用 carrier 层。
 - provider 名字与 protocol 名字保持分离。

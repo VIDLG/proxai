@@ -8,8 +8,8 @@ use crate::provider::ProviderRequestView;
 use crate::provider::anthropic_messages::AnthropicUpstreamResponseSnapshot;
 use crate::provider::openai::chat_completions::ChatUpstreamStreamSnapshot;
 use crate::provider::openai::responses::ResponsesUpstreamStreamSnapshot;
+use crate::sse_translation::StreamTranslationFailure;
 use crate::translation::TranslationError;
-use crate::translation::streaming::StreamTranslationFailure;
 use crate::upstream::UpstreamStreamError;
 
 pub(crate) struct InboundRequestReceived<'a> {

@@ -6,15 +6,15 @@ mod types;
 
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai_responses as responses;
-use crate::translation::TranslationResult;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use tracing::trace;
+use crate::translation::{TranslationResult, TranslationScope};
 
 use self::messages::{ResponsesInput, responses_input_from_messages};
 
 pub(super) fn translate_request(
     request: &chat::CreateChatCompletionRequest,
     extensions: &ChatRequestExtensions,
+    scope: &TranslationScope,
 ) -> TranslationResult<responses::CreateResponseRequest> {
     if request.function_call.is_some() || request.functions.is_some() {
         return Err(crate::translation::TranslationError::InvalidPayload(
@@ -57,9 +57,9 @@ pub(super) fn translate_request(
         .filter(|tools| !tools.is_empty());
 
     if request.seed.is_non_null() {
-        trace!(
-            reason = "OpenAI Responses has no seed equivalent",
-            "skipping deprecated Chat Completions seed during request translation"
+        scope.dropped(
+            "Chat Completions seed",
+            "OpenAI Responses has no seed equivalent",
         );
     }
 
@@ -124,8 +124,7 @@ pub(super) fn translate_request(
         stream_options: request
             .stream_options
             .as_non_null()
-            .cloned()
-            .map(responses::ResponseStreamOptions::from)
+            .map(|options| types::response_stream_options(options, scope))
             .into(),
         temperature: request.temperature.as_non_null().copied().into(),
         text,

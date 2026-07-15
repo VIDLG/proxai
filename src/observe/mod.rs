@@ -8,6 +8,7 @@ mod outbound;
 mod point;
 mod provider;
 mod sinks;
+mod translation_observer;
 mod upstream;
 
 pub(crate) use capture::CaptureController;

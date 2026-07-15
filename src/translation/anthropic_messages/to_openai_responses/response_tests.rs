@@ -4,7 +4,29 @@ use crate::protocol::anthropic::messages::Message;
 use crate::protocol::openai::responses::Response as OpenaiResponse;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
-use super::super::translate_non_streaming_response;
+use super::super::translate_non_streaming_response as translate_non_streaming_response_with_translator;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::test_support::response_scope;
+use crate::translation::{TranslationResult, TranslationScope};
+
+fn scope() -> TranslationScope {
+    response_scope(
+        RequestProtocol::OpenaiResponses,
+        ProviderProtocol::AnthropicMessages,
+    )
+}
+
+fn translate_message_response(message: &Message) -> TranslationResult<OpenaiResponse> {
+    let scope = scope();
+    super::translate_response(message, &scope)
+}
+
+fn translate_non_streaming_response(
+    payload: serde_json::Value,
+) -> TranslationResult<serde_json::Value> {
+    let scope = scope();
+    translate_non_streaming_response_with_translator(payload, &scope)
+}
 
 #[test]
 fn translates_anthropic_message_to_openai_responses_shape() {
@@ -41,7 +63,7 @@ fn translates_anthropic_message_to_openai_responses_shape() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
     let _: OpenaiResponse = serde_json::from_value(value.clone())
         .expect("translated response should deserialize as OpenAI Responses");
@@ -98,7 +120,7 @@ fn preserves_interleaved_text_reasoning_and_tool_order() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["output"][0]["type"], "reasoning");
@@ -158,7 +180,7 @@ fn translates_anthropic_tool_result_to_function_call_output() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["output"][0]["type"], "function_call");
@@ -195,7 +217,7 @@ fn translates_max_tokens_stop_to_incomplete_details() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["status"], "incomplete");
@@ -229,7 +251,7 @@ fn translates_anthropic_refusal_stop_to_completed_responses_status() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["status"], "completed");
@@ -262,7 +284,7 @@ fn omits_unrepresentable_anthropic_batch_service_tier() {
     }))
     .unwrap();
 
-    let translated: OpenaiResponse = (&message).try_into().unwrap();
+    let translated = translate_message_response(&message).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert!(value["service_tier"].is_null());

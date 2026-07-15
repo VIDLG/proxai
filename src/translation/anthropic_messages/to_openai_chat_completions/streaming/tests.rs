@@ -1,11 +1,20 @@
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, header};
 use serde_json::json;
 
-use crate::http_support::into_byte_stream;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::Translator;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
+use crate::translation::test_support::translate_sse_fixture;
 
-use super::super::translate_streaming_response;
+async fn translate_streaming_response(stream: &str) -> String {
+    translate_sse_fixture(
+        stream,
+        Translator::new(
+            RequestProtocol::OpenaiChatCompletions,
+            ProviderProtocol::AnthropicMessages,
+        ),
+    )
+    .await
+}
 
 #[tokio::test]
 async fn translates_anthropic_stream_to_chat_completion_sse() {
@@ -23,20 +32,9 @@ async fn translates_anthropic_stream_to_chat_completion_sse() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
+    let body = translate_streaming_response(stream).await;
 
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-
-    let chunks = chat_stream_payloads(body);
+    let chunks = chat_stream_payloads(&body);
 
     assert!(body.contains("event: message"));
     assert_eq!(chunks[0]["object"], "chat.completion.chunk");
@@ -65,19 +63,8 @@ async fn translates_anthropic_stream_refusal_details_to_chat_refusal_delta() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    let chunks = chat_stream_payloads(body);
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(
         chunks[1]["choices"][0]["finish_reason"],
@@ -121,19 +108,8 @@ async fn translates_anthropic_stream_with_only_thinking_blocks() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    let chunks = chat_stream_payloads(body);
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(
         chunks[1]["choices"][0]["delta"]["reasoning_content"],
@@ -163,19 +139,8 @@ async fn streams_signature_only_thinking_as_continuation() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    let chunks = chat_stream_payloads(body);
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     let (visible_reasoning, continuation) = ContinuationEnvelope::split_chat_reasoning_content(
         chunks[1]["choices"][0]["delta"]["reasoning_content"]
@@ -215,19 +180,8 @@ async fn translates_anthropic_thinking_blocks_before_text() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    let chunks = chat_stream_payloads(body);
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(
         chunks[1]["choices"][0]["delta"]["reasoning_content"],
@@ -269,19 +223,8 @@ async fn maps_anthropic_tool_block_indexes_to_chat_tool_call_indexes() {
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"proxai\\\"}\"}}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    let chunks = chat_stream_payloads(body);
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(
         chunks[2]["choices"][0]["delta"]["tool_calls"][0]["index"],
@@ -307,18 +250,7 @@ async fn rejects_anthropic_stream_eof_after_terminal_delta_before_message_stop()
         "event: message_delta\n",
         "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":2,\"output_tokens\":1}}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("after terminal message_delta but before message_stop"));
 }
@@ -333,18 +265,7 @@ async fn rejects_anthropic_stream_eof_before_terminal_delta() {
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("before terminal message_delta"));
 }
@@ -357,18 +278,7 @@ async fn rejects_anthropic_message_stop_before_terminal_delta() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("message_stop before terminal message_delta"));
 }
@@ -389,18 +299,7 @@ async fn rejects_anthropic_event_after_terminal_delta_before_message_stop() {
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"late\"}}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("after terminal message_delta before message_stop"));
 }
@@ -423,18 +322,7 @@ async fn rejects_anthropic_event_after_message_stop() {
         "event: content_block_delta\n",
         "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"late\"}}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
+    let body = translate_streaming_response(stream).await;
 
     assert!(body.contains("semantic event after message_stop"));
 }
@@ -457,18 +345,8 @@ async fn skips_unrepresentable_anthropic_content_blocks() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let chunks = chat_stream_payloads(std::str::from_utf8(&body).unwrap());
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(chunks[1]["choices"][0]["delta"]["content"], "hello");
     assert_eq!(chunks[2]["choices"][0]["finish_reason"], "stop");
@@ -492,18 +370,8 @@ async fn skips_anthropic_citation_deltas() {
         "event: message_stop\n",
         "data: {\"type\":\"message_stop\"}\n\n"
     );
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    let chunks = chat_stream_payloads(std::str::from_utf8(&body).unwrap());
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
 
     assert_eq!(chunks[1]["choices"][0]["delta"]["content"], "hello");
     assert_eq!(chunks[2]["choices"][0]["finish_reason"], "stop");

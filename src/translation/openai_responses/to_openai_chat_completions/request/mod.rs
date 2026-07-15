@@ -7,20 +7,22 @@ mod types;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::responses;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use self::messages::chat_messages;
 use self::tools::chat_tools;
 
 pub(super) fn translate_request(
     request: &responses::CreateResponseRequest,
+    scope: &TranslationScope,
 ) -> TranslationResult<(chat::CreateChatCompletionRequest, ChatRequestExtensions)> {
     let (messages, extensions) = chat_messages(
         request.instructions.as_non_null().map(String::as_str),
         request.input.as_ref(),
+        scope,
     )?;
 
-    let tools = chat_tools(&request.tools)?;
+    let tools = chat_tools(&request.tools, scope)?;
     let tool_choice = request
         .tool_choice
         .as_ref()

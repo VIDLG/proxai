@@ -9,7 +9,7 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::anthropic_messages::outbound::{text_block, tool_use_block};
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use super::super::response::single_assistant_choice;
 use super::types::anthropic_stop_reason_from_chat_finish_reason;
@@ -17,6 +17,7 @@ use super::types::anthropic_stop_reason_from_chat_finish_reason;
 pub(super) fn translate_response(
     chat: &CreateChatCompletionResponse,
     reasoning_content: Option<&str>,
+    scope: &TranslationScope,
 ) -> TranslationResult<Message> {
     let choice = single_assistant_choice(&chat.choices)?;
     if choice.logprobs.is_non_null() {
@@ -65,9 +66,9 @@ pub(super) fn translate_response(
             }
         }
         if !visible_reasoning.is_empty() {
-            tracing::trace!(
-                reason = "Chat reasoning_content has no Anthropic thinking signature",
-                "skipping unsigned Chat reasoning during Anthropic Messages response translation"
+            scope.dropped(
+                "unsigned Chat reasoning_content",
+                "Anthropic thinking blocks require a provider signature",
             );
         }
     }
@@ -125,14 +126,6 @@ pub(super) fn translate_response(
         stop_sequence: stop.sequence.into(),
         usage: chat.usage.as_ref().map(Into::into).unwrap_or_default(),
     })
-}
-
-impl TryFrom<&CreateChatCompletionResponse> for Message {
-    type Error = TranslationError;
-
-    fn try_from(chat: &CreateChatCompletionResponse) -> TranslationResult<Self> {
-        translate_response(chat, None)
-    }
 }
 
 impl TryFrom<&ChatCompletionMessageToolCalls>

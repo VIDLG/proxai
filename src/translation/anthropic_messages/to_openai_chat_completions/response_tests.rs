@@ -2,7 +2,20 @@ use serde_json::json;
 
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 
-use super::super::translate_non_streaming_response;
+use super::super::translate_non_streaming_response as translate_non_streaming_response_with_translator;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationResult;
+use crate::translation::test_support::response_scope;
+
+fn translate_non_streaming_response(
+    payload: serde_json::Value,
+) -> TranslationResult<serde_json::Value> {
+    let scope = response_scope(
+        RequestProtocol::OpenaiChatCompletions,
+        ProviderProtocol::AnthropicMessages,
+    );
+    translate_non_streaming_response_with_translator(payload, &scope)
+}
 
 #[tokio::test]
 async fn translates_anthropic_message_to_chat_completion_shape() {

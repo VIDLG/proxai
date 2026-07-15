@@ -15,7 +15,7 @@ use crate::translation::anthropic_messages::outbound::{
     content_block_stop, input_json_delta, text_block_start, text_delta, thinking_block_start,
     thinking_delta, tool_use_block_start,
 };
-use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
+use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
 #[derive(Debug, Default)]
 pub(super) struct ChatToAnthropicBlockState {

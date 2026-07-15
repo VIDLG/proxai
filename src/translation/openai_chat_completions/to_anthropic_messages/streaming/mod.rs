@@ -9,13 +9,14 @@ use crate::protocol::openai::chat_completions::{
     ChatChoiceStream, CreateChatCompletionStreamResponse,
 };
 
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::outbound::{message_start, message_stop};
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, typed_stream_events as encode_outputs,
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
+    typed_stream_events as encode_outputs,
 };
 
 mod output;
@@ -28,12 +29,16 @@ use state::{ChatStreamingState, PendingAnthropicTerminal};
 mod tests;
 
 #[derive(Debug, Default)]
-pub(super) struct MessagesStreamTranslator {
+pub(crate) struct ChatToAnthropicStreaming {
     lifecycle: ChatInboundLifecycle<ChatStreamingState, PendingAnthropicTerminal>,
 }
 
-impl StreamingEventTranslator for MessagesStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl ChatToAnthropicStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        _scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let reasoning =
             crate::translation::openai_chat_completions::compatibility::stream_reasoning(
                 &event.data,
@@ -126,7 +131,10 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
         encode_outputs(outputs)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_waiting_for_first_chunk() {
             Err(self.lifecycle.unexpected_stream_end_error(end))
         } else if let Some(terminal) = self.lifecycle.terminal() {
@@ -141,7 +149,7 @@ impl StreamingEventTranslator for MessagesStreamTranslator {
     }
 }
 
-impl MessagesStreamTranslator {
+impl ChatToAnthropicStreaming {
     fn translate_usage_only_chunk(
         &mut self,
         chunk: &CreateChatCompletionStreamResponse,

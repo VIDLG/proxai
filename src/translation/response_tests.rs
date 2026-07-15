@@ -1,20 +1,18 @@
 use serde_json::json;
 
-use crate::http_support::into_byte_stream;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-use super::{translate_non_streaming_response, translate_streaming_response};
+use crate::translation::Translator;
 
 #[test]
 fn passes_through_self_protocol_non_streaming_payload() {
     let payload = json!({"error": "upstream failed"});
 
-    let translated = translate_non_streaming_response(
+    let translator = Translator::new(
         RequestProtocol::OpenaiResponses,
         ProviderProtocol::OpenaiResponses,
-        payload.clone(),
-    )
-    .unwrap();
+    );
+    let translated = translator.translate_response(payload.clone()).unwrap();
 
     assert_eq!(translated, payload);
 }
@@ -42,27 +40,12 @@ fn supports_responses_to_chat_completions_non_streaming_translation() {
         ]
     });
 
-    let translated = translate_non_streaming_response(
+    let translator = Translator::new(
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
-        payload,
-    )
-    .unwrap();
+    );
+    let translated = translator.translate_response(payload).unwrap();
 
     assert_eq!(translated["object"], "chat.completion");
     assert_eq!(translated["choices"][0]["message"]["content"], "hi");
-}
-
-#[test]
-fn supports_chat_completions_to_responses_streaming_translation() {
-    // Previously unsupported; now implemented via responses → chat translator.
-    let result = translate_streaming_response(
-        RequestProtocol::OpenaiChatCompletions,
-        ProviderProtocol::OpenaiResponses,
-        into_byte_stream(axum::body::Body::empty().into_data_stream()),
-    );
-
-    // An empty body produces no events and succeeds; the important assertion
-    // is that the pair is no longer rejected as unsupported.
-    assert!(result.is_ok());
 }

@@ -26,6 +26,7 @@ pub mod provider;
 pub mod request;
 pub mod routing;
 pub mod sse;
+mod sse_translation;
 pub mod translation;
 pub(crate) mod upstream;
 

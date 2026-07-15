@@ -7,7 +7,7 @@ use crate::protocol::openai::responses::{
 };
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{response_id, text_message_item};
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use super::citations::text_block_annotations;
 use super::ids::OutputItemIdAllocator;
@@ -16,60 +16,62 @@ use super::types::{
     reasoning_item_from_thinking, responses_status_from_anthropic_stop_reason,
 };
 
-impl TryFrom<&Message> for Response {
-    type Error = TranslationError;
-
-    fn try_from(message: &Message) -> TranslationResult<Self> {
-        let stop_reason = message.stop_reason.as_non_null().copied();
-        Ok(Response {
-            background: None.into(),
-            conversation: None.into(),
-            created_at: 0.0,
-            completed_at: None.into(),
-            error: None.into(),
-            id: response_id(&message.id),
-            incomplete_details: incomplete_details_from_stop_reason(stop_reason).into(),
-            instructions: None.into(),
-            max_output_tokens: None.into(),
-            max_tool_calls: None.into(),
-            metadata: None.into(),
-            model: message.model.clone(),
-            object: ResponseObject::Response,
-            output: translate_output(message)?,
-            output_text: None.into(),
-            parallel_tool_calls: false,
-            previous_response_id: None.into(),
-            prompt: None.into(),
-            prompt_cache_key: None,
-            prompt_cache_retention: None.into(),
-            reasoning: None.into(),
-            safety_identifier: None,
-            service_tier: message
-                .usage
-                .service_tier
-                .as_non_null()
-                .copied()
-                .and_then(Option::<ServiceTier>::from)
-                .into(),
-            status: Some(
-                stop_reason
-                    .map(responses_status_from_anthropic_stop_reason)
-                    .unwrap_or(Status::InProgress),
-            ),
-            temperature: None.into(),
-            text: None,
-            tool_choice: ToolChoiceParam::Mode(ToolChoiceOptions::Auto),
-            tools: Vec::new(),
-            top_logprobs: None.into(),
-            top_p: None.into(),
-            truncation: None.into(),
-            user: None,
-            usage: Some((&message.usage).into()),
-        })
-    }
+pub(super) fn translate_response(
+    message: &Message,
+    scope: &TranslationScope,
+) -> TranslationResult<Response> {
+    let stop_reason = message.stop_reason.as_non_null().copied();
+    Ok(Response {
+        background: None.into(),
+        conversation: None.into(),
+        created_at: 0.0,
+        completed_at: None.into(),
+        error: None.into(),
+        id: response_id(&message.id),
+        incomplete_details: incomplete_details_from_stop_reason(stop_reason).into(),
+        instructions: None.into(),
+        max_output_tokens: None.into(),
+        max_tool_calls: None.into(),
+        metadata: None.into(),
+        model: message.model.clone(),
+        object: ResponseObject::Response,
+        output: translate_output(message, scope)?,
+        output_text: None.into(),
+        parallel_tool_calls: false,
+        previous_response_id: None.into(),
+        prompt: None.into(),
+        prompt_cache_key: None,
+        prompt_cache_retention: None.into(),
+        reasoning: None.into(),
+        safety_identifier: None,
+        service_tier: message
+            .usage
+            .service_tier
+            .as_non_null()
+            .copied()
+            .and_then(Option::<ServiceTier>::from)
+            .into(),
+        status: Some(
+            stop_reason
+                .map(responses_status_from_anthropic_stop_reason)
+                .unwrap_or(Status::InProgress),
+        ),
+        temperature: None.into(),
+        text: None,
+        tool_choice: ToolChoiceParam::Mode(ToolChoiceOptions::Auto),
+        tools: Vec::new(),
+        top_logprobs: None.into(),
+        top_p: None.into(),
+        truncation: None.into(),
+        user: None,
+        usage: Some((&message.usage).into()),
+    })
 }
 
-fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
+fn translate_output(
+    message: &Message,
+    scope: &TranslationScope,
+) -> TranslationResult<Vec<OutputItem>> {
     let mut output = Vec::new();
     let mut ids = OutputItemIdAllocator::new(&message.id);
     // Accumulate the character count of all completed text items so that
@@ -87,7 +89,7 @@ fn translate_output(message: &Message) -> TranslationResult<Vec<OutputItem>> {
                 output.push(text_message_item(
                     ids.message(),
                     &block.text,
-                    text_block_annotations(block, text_char_offset),
+                    text_block_annotations(block, text_char_offset, scope),
                 ));
                 text_char_offset = text_char_offset.saturating_add(block.text.chars().count());
             }

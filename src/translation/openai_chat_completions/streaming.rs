@@ -20,9 +20,9 @@ use serde_json::Value;
 use crate::protocol::openai::chat_completions::{
     ChatCompletionStreamRole, CreateChatCompletionStreamResponse,
 };
-use crate::translation::streaming::{
-    InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
+use crate::translation::stream::{
+    InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
+    StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
 
 #[derive(Debug)]
@@ -102,10 +102,7 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         &mut self,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
         self.inner
-            .require_streaming_phase_mut(RequireStreamingPhaseContext {
-                source: "Chat",
-                event: "choice deltas",
-            })
+            .require_streaming_phase_mut("Chat", "choice deltas")
     }
 
     pub(super) fn take_streaming_phase(
@@ -115,7 +112,7 @@ impl<S, T> ChatInboundLifecycle<S, T> {
         self.inner.take_streaming_phase(error)
     }
 
-    pub(super) fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
+    pub(super) fn unexpected_stream_end_error(&self, end: StreamEnd) -> StreamTranslationError {
         let message = match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
                 format!("Chat stream reached {end} before any assistant message chunk")
@@ -127,10 +124,10 @@ impl<S, T> ChatInboundLifecycle<S, T> {
                     .expect("streaming phase exists");
                 if phase.emitted_any() {
                     match end {
-                        SseStreamEnd::DoneSentinel => {
+                        StreamEnd::Done => {
                             "Chat stream emitted [DONE] before a terminal finish_reason".to_string()
                         }
-                        SseStreamEnd::Eof => {
+                        StreamEnd::Eof => {
                             "Chat stream reached EOF before a terminal finish_reason".to_string()
                         }
                     }

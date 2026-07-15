@@ -8,10 +8,12 @@
 
 use crate::protocol::anthropic::messages::{TextBlock, TextCitation};
 use crate::protocol::openai_responses::{Annotation, UrlCitationBody};
+use crate::translation::TranslationScope;
 
 pub(super) fn text_block_annotations(
     block: &TextBlock,
     base_char_offset: usize,
+    scope: &TranslationScope,
 ) -> Vec<Annotation> {
     let mut search_start_byte = 0;
     block
@@ -20,7 +22,13 @@ pub(super) fn text_block_annotations(
         .into_iter()
         .flatten()
         .filter_map(|citation| {
-            citation_annotation(citation, block, base_char_offset, &mut search_start_byte)
+            citation_annotation(
+                citation,
+                block,
+                base_char_offset,
+                &mut search_start_byte,
+                scope,
+            )
         })
         .collect()
 }
@@ -30,10 +38,13 @@ fn citation_annotation(
     block: &TextBlock,
     base_char_offset: usize,
     search_start_byte: &mut usize,
+    scope: &TranslationScope,
 ) -> Option<Annotation> {
     let TextCitation::WebSearchResultLocation(citation) = citation else {
-        let discriminant = std::mem::discriminant(citation);
-        tracing::trace!(?discriminant, "unsupported citation type, skipping");
+        scope.dropped(
+            format!("Anthropic citation {:?}", std::mem::discriminant(citation)),
+            "OpenAI Responses URL annotations only represent web-search citations",
+        );
         return None;
     };
 

@@ -7,12 +7,13 @@ use crate::protocol::openai::responses::{
 };
 use crate::translation::openai_chat_completions::outbound::assistant_response_message;
 use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use super::types::chat_id;
 
 pub(super) fn translate_response(
     response: &Response,
+    scope: &TranslationScope,
 ) -> TranslationResult<(CreateChatCompletionResponse, Option<String>)> {
     let mut content_parts: Vec<String> = Vec::new();
     let mut reasoning_parts: Vec<String> = Vec::new();
@@ -47,22 +48,15 @@ pub(super) fn translate_response(
                     && reasoning.summary.is_empty()
                     && reasoning.content.as_ref().is_none_or(Vec::is_empty)
                 {
-                    tracing::trace!(
-                        reason = "Chat reasoning_content cannot represent encrypted reasoning",
-                        "skipping encrypted Responses reasoning item during Chat Completions translation"
+                    scope.dropped("Responses encrypted reasoning item",
+                        "Chat reasoning_content cannot represent encrypted reasoning without visible text",
                     );
                 }
             }
-            skipped => {
-                // Responses output items without a Chat Completions
-                // representation (reasoning, hosted tool calls, MCP, search,
-                // compaction, etc.) are skipped with a trace log to keep
-                // silent drops observable.
-                tracing::trace!(
-                    discriminant = ?std::mem::discriminant(skipped),
-                    "skipping Responses output item with no Chat-representable field"
-                );
-            }
+            skipped => scope.dropped(
+                format!("Responses output item `{}`", skipped.as_ref()),
+                "Responses output item has no Chat Completions response representation",
+            ),
         }
     }
 
@@ -97,7 +91,7 @@ pub(super) fn translate_response(
                     (!tool_calls.is_empty()).then_some(tool_calls),
                     None,
                 ),
-                finish_reason: chat_finish_reason(response).ok_or_else(|| {
+                finish_reason: chat_finish_reason(response, scope).ok_or_else(|| {
                     TranslationError::InvalidPayload(
                         "OpenAI Responses response has no terminal state required for Chat Completions finish_reason"
                             .to_string(),
@@ -116,16 +110,8 @@ pub(super) fn translate_response(
         }, (!reasoning_content.is_empty()).then_some(reasoning_content)))
 }
 
-impl TryFrom<&Response> for CreateChatCompletionResponse {
-    type Error = TranslationError;
-
-    fn try_from(response: &Response) -> TranslationResult<Self> {
-        translate_response(response).map(|(response, _)| response)
-    }
-}
-
-fn chat_finish_reason(response: &Response) -> Option<FinishReason> {
-    infer_response_stop_kind(response).map(|kind| match kind {
+fn chat_finish_reason(response: &Response, scope: &TranslationScope) -> Option<FinishReason> {
+    infer_response_stop_kind(response, scope).map(|kind| match kind {
         ResponsesStopKind::EndTurn | ResponsesStopKind::Refusal => FinishReason::Stop,
         ResponsesStopKind::MaxTokens => FinishReason::Length,
         ResponsesStopKind::ToolUse => FinishReason::ToolCalls,

@@ -98,7 +98,8 @@ Provider names are user labels. They are not semantic protocol identifiers.
   - config.rs — `config.toml` schema and loading
   - paths.rs — app directory resolution
   - request.rs — shared request carrier types
-  - sse.rs — SSE helpers
+  - sse.rs — SSE parsing and encoding helpers
+  - sse_translation.rs — application adapter between SSE bytes and structured translation events
   - formatting.rs — formatting helpers
   - error/ — domain errors and rendering
   - http_support/ — HTTP carrier helpers
@@ -180,8 +181,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'outbound_response',
-      modules: ['pipeline/provider_response.rs', 'translation/response', 'translation/streaming'],
-      responsibility: 'Translate response back to inbound protocol and rebuild HTTP response.',
+      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'translation/response', 'translation/streaming'],
+      responsibility: 'Translate response back to the inbound protocol, adapt structured events to/from SSE bytes, observe failures, and rebuild the HTTP response.',
     },
   ]}
 />
@@ -195,10 +196,11 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'protocol/', icon: 'protocol', description: 'Protocol wire shapes and shared protocol enums. Models JSON only; no conversion and no HTTP carrier types.' },
     { name: 'ingress/', icon: 'route', description: 'Inbound protocol detection, parsing, and normalization before routing and translation.' },
     { name: 'routing/', icon: 'flow', description: 'Provider selection from request protocol, model pattern, defaults, and route configuration.' },
-    { name: 'translation/', icon: 'protocol', description: 'Pure request, response, and streaming conversion across explicit protocol pairs.' },
+    { name: 'translation/', icon: 'protocol', description: 'Pure request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and `TranslationObserver` extension point.' },
     { name: 'provider/', icon: 'key', description: 'Provider request rendering, model rewrite, auth headers, upstream URL construction, and transport.' },
     { name: 'upstream/', icon: 'terminal', description: 'Reading upstream status, headers, complete bodies, or streaming byte carriers.' },
-    { name: 'http_support/', icon: 'file', description: 'Protocol-neutral HTTP helpers such as content-type checks, response reconstruction, and boxed streams.' },
+    { name: 'sse_translation.rs', icon: 'flow', description: 'Application carrier adapter: parses SSE bytes into `StreamEvent`, invokes the pure translator, retains failure context, and encodes translated events back to SSE.' },
+    { name: 'http_support/', icon: 'file', description: 'Protocol-neutral HTTP helpers such as content-type checks, response reconstruction, and boxed byte streams.' },
     { name: 'observe/', icon: 'gauge', description: 'Capture artifacts, structured logging, request hints, and privacy-preserving diagnostics.' },
     { name: 'error/', icon: 'alert', description: 'Domain-specific error types and client-facing response rendering.' },
   ]}
@@ -208,8 +210,10 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 - `protocol/` is low-level wire modeling: JSON shapes only, no conversion.
 - `pipeline/` coordinates the full request lifecycle and owns phase order.
-- `translation/` is pure at the HTTP carrier boundary: it accepts protocol values and payload/stream carriers, not HTTP `Response`/`Body` or provider-private structs.
+- `translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
+- `sse_translation.rs` is the application adapter between upstream byte streams and the pure structured-event translator. It owns raw triggering frames and SSE output encoding.
 - `provider/` owns provider request rendering and transport details such as auth headers, upstream URLs, and idle-read timeout.
+- `translation/` defines the narrow `TranslationObserver` trait for legal-but-lossy adaptation telemetry; `observe/` supplies the application implementation and owns logging, diagnostics, and capture.
 - `observe/` cuts across the pipeline for diagnostics, but does not make routing or protocol decisions.
 - Semantic stream and HTTP errors should use domain errors instead of being hidden inside `std::io::Error`.
 
@@ -226,6 +230,7 @@ flowchart TD
   pipeline --> routing[routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
+  pipeline --> sse_translation[sse_translation.rs]
   pipeline --> translation[translation/]
   pipeline --> observe[observe/]
   pipeline --> http_support[http_support/]
@@ -236,10 +241,11 @@ flowchart TD
   provider --> protocol
   upstream --> http_support
   provider --> http_support
-  translation --> http_support
-  ingress --> sse[sse.rs]
+  sse_translation --> http_support
+  sse_translation --> sse[sse.rs]
+  sse_translation --> translation
+  ingress --> sse
   upstream --> sse
-  translation --> sse
   observe --> error
   lib --> observe
   lib --> error
@@ -249,12 +255,13 @@ Key rules:
 
 - `protocol/` is low-level wire modeling.
 - `pipeline/` is the coordinator that knows about the full request lifecycle.
-- `translation/` does not depend on HTTP `Response`/`Body` or provider-private types.
-- `observe/` cuts across the pipeline but does not make protocol or routing decisions.
+- `translation/` depends only on protocol models and structured values/events; it does not depend on HTTP, SSE bytes, provider transport, or application observation.
+- `sse_translation.rs` and `pipeline/` compose byte carriers, the pure translator, diagnostics, and client-facing error rendering.
+- `observe/` implements the core observation trait but does not make protocol or routing decisions.
 
 ## Translation selection
 
-Translation is selected from two protocol values:
+`Translator` selects translation from two protocol values:
 
 - inbound `request_protocol`, detected by `ingress/`
 - provider `protocol`, configured on the selected provider
@@ -265,9 +272,11 @@ Rules:
 - Different protocols: dispatch to `translation/<inbound_protocol>/to_<provider_protocol>/`.
 - Unsupported pairs fail explicitly.
 
+`Translator` is the single public façade. It owns a crate-private `TranslationContext`, which atomically carries the selected route and observation hook. Each entrypoint derives a phase-bound `TranslationScope`: request, non-streaming response, or streaming response. Pair code therefore calls observation methods without separately supplying a phase, so an operation cannot accidentally report telemetry under the wrong pipeline phase. Value translation borrows its derived scope; structured stream translation consumes `Translator`, moves a streaming-response scope into the returned stream, and lazily creates a private closed `PairStreamingState` containing exactly one of the six cross-protocol state machines or the identity path. This avoids allocating stream state for value-only translation and prevents pair state from being reused across streams. Context and scope definitions live below the façade in `translation/context.rs`; top-level dispatch and pair code receive only `&TranslationScope`, so dispatch, phase, and observation cannot disagree about the active operation. Protocol-neutral event, error, terminal, identity, and lifecycle types live in dependency-free `translation/stream.rs`. Pair implementations depend only on `context.rs` and `stream.rs`, while `Translator` depends on those foundations plus pair states, so every dependency edge remains one-directional. Carrier adapters call `Translator::translate_stream` rather than driving pair events or terminal handling directly.
+
 ## Data type conventions
 
 - Prefer top-level enums keyed by protocol for protocol-specific request/response data.
 - Avoid parallel `protocol` / `payload` / `projection` / `summary` fields that can drift into impossible states.
-- Keep streams as `ByteStream` across HTTP carrier boundaries.
+- Keep core streaming APIs as `StreamEvent` in/out; use `ByteStream` only in the application carrier layer.
 - Keep provider names separate from protocol names.

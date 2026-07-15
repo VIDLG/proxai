@@ -7,15 +7,16 @@
 
 use crate::protocol::openai::chat_completions::{CreateChatCompletionStreamResponse, FinishReason};
 
+use crate::translation::TranslationScope;
 use crate::translation::openai_chat_completions::streaming::{
     ChatInboundLifecycle, stream_identity,
 };
 use crate::translation::openai_responses::outbound::{
     output_text_delta, reasoning_text_delta, refusal_delta, tool_arguments_delta,
 };
-use crate::translation::streaming::{
-    SseStreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
-    StreamingEventTranslator, typed_stream_event as response_event,
+use crate::translation::stream::{
+    StreamEnd, StreamEvent, StreamTranslationError, StreamTranslationResult,
+    typed_stream_event as response_event,
 };
 
 mod state;
@@ -34,12 +35,16 @@ struct PendingResponsesTerminal {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct ResponsesStreamTranslator {
+pub(crate) struct ChatToResponsesStreaming {
     lifecycle: ChatInboundLifecycle<StreamingState, PendingResponsesTerminal>,
 }
 
-impl StreamingEventTranslator for ResponsesStreamTranslator {
-    fn translate_event(&mut self, event: StreamEvent) -> StreamTranslationResult<Vec<StreamEvent>> {
+impl ChatToResponsesStreaming {
+    pub(crate) fn translate_event(
+        &mut self,
+        event: StreamEvent,
+        _scope: &TranslationScope,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         let reasoning =
             crate::translation::openai_chat_completions::compatibility::stream_reasoning(
                 &event.data,
@@ -169,7 +174,10 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
         Ok(events)
     }
 
-    fn finish_stream(&mut self, end: SseStreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
+    pub(crate) fn finish_stream(
+        &mut self,
+        end: StreamEnd,
+    ) -> StreamTranslationResult<Vec<StreamEvent>> {
         if self.lifecycle.is_waiting_for_first_chunk() {
             Err(self.lifecycle.unexpected_stream_end_error(end))
         } else if self.lifecycle.terminal().is_some() {
@@ -182,7 +190,7 @@ impl StreamingEventTranslator for ResponsesStreamTranslator {
     }
 }
 
-impl ResponsesStreamTranslator {
+impl ChatToResponsesStreaming {
     fn register_chunk_lifecycle(
         &mut self,
         chunk: &CreateChatCompletionStreamResponse,

@@ -9,11 +9,12 @@ use crate::translation::anthropic_messages::outbound::{
     text_block_param, thinking_content_block, tool_use_block_param, typed_text_block,
 };
 
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 pub(super) fn translate_messages(
     instructions: Option<&str>,
     input: Option<&responses::InputParam>,
+    scope: &TranslationScope,
 ) -> TranslationResult<(
     Option<anthropic::SystemPrompt>,
     Vec<anthropic::MessageParam>,
@@ -25,8 +26,10 @@ pub(super) fn translate_messages(
         system_blocks.push(typed_text_block(instructions.to_string()));
     }
 
-    let (input_system_blocks, messages) =
-        input.map(translate_input).transpose()?.unwrap_or_default();
+    let (input_system_blocks, messages) = input
+        .map(|input| translate_input(input, scope))
+        .transpose()?
+        .unwrap_or_default();
     system_blocks.extend(input_system_blocks);
     if messages.is_empty() {
         return Err(TranslationError::InvalidPayload(
@@ -40,6 +43,7 @@ pub(super) fn translate_messages(
 
 fn translate_input(
     input: &responses::InputParam,
+    scope: &TranslationScope,
 ) -> TranslationResult<(
     Vec<anthropic::TypedTextBlockParam>,
     Vec<anthropic::MessageParam>,
@@ -182,16 +186,13 @@ fn translate_input(
                                 .is_some_and(|content| !content.is_empty());
                             if !restored_continuation {
                                 if has_unrecognized_encrypted_content {
-                                    tracing::trace!(
-                                        reason = "OpenAI Responses encrypted_content is provider-scoped and has no ProxAI continuation prefix",
-                                        "skipping unrecognized OpenAI Responses encrypted reasoning during Anthropic Messages request translation"
+                                    scope.dropped("Responses encrypted reasoning history",
+                                        "encrypted_content is provider-scoped and has no ProxAI Anthropic continuation prefix",
                                     );
                                 } else if !reasoning.summary.is_empty() || has_content {
-                                    tracing::trace!(
-                                        has_summary = !reasoning.summary.is_empty(),
-                                        has_content,
-                                        reason = "OpenAI Responses reasoning history has no Anthropic thinking signature",
-                                        "skipping unsigned OpenAI Responses reasoning history during Anthropic Messages request translation"
+                                    scope.dropped(
+                                        "unsigned Responses reasoning history",
+                                        "Anthropic thinking history requires a provider signature",
                                     );
                                 }
                             }

@@ -11,4 +11,4 @@ pub(crate) use state::{
     ResponsesUpstreamMetadata, ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot,
 };
 pub(crate) use streaming::handle_streaming_response;
-pub(crate) use summary::{ResponseOutputItemKind, ResponseSummary};
+pub(crate) use summary::ResponseSummary;

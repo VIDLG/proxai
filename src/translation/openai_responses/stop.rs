@@ -1,4 +1,5 @@
 use crate::protocol::openai_responses as responses;
+use crate::translation::TranslationScope;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResponsesStopKind {
@@ -10,6 +11,7 @@ pub(crate) enum ResponsesStopKind {
 
 pub(crate) fn infer_response_stop_kind(
     response: &responses::Response,
+    scope: &TranslationScope,
 ) -> Option<ResponsesStopKind> {
     if response_has_refusal(response) {
         return Some(ResponsesStopKind::Refusal);
@@ -26,8 +28,9 @@ pub(crate) fn infer_response_stop_kind(
     match response.status {
         Some(responses::Status::Completed) => Some(ResponsesStopKind::EndTurn),
         Some(responses::Status::Incomplete) => {
-            tracing::trace!(
-                reason = "Responses response is incomplete without incomplete_details.reason; treating as max_tokens"
+            scope.adapted(
+                "Responses incomplete status without incomplete_details.reason",
+                "treating the stop reason as max_tokens",
             );
             Some(ResponsesStopKind::MaxTokens)
         }

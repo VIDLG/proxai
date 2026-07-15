@@ -5,7 +5,7 @@ use crate::protocol::openai::responses::{
     ResponseUsage, ToolChoiceOptions, ToolChoiceParam,
 };
 use crate::translation::openai_responses::outbound::{output_text, response_id};
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use super::super::response::single_assistant_choice;
 use super::types::{
@@ -15,6 +15,7 @@ use super::types::{
 pub(super) fn translate_response(
     chat: &CreateChatCompletionResponse,
     reasoning_content: Option<&str>,
+    scope: &TranslationScope,
 ) -> TranslationResult<Response> {
     let choice = single_assistant_choice(&chat.choices)?;
 
@@ -23,9 +24,8 @@ pub(super) fn translate_response(
         let (visible_reasoning, continuation) =
                 crate::translation::anthropic_messages::continuation::ContinuationEnvelope::split_chat_reasoning_content(reasoning_content)?;
         if continuation.is_some() {
-            tracing::trace!(
-                reason = "Responses reasoning cannot carry an Anthropic continuation envelope",
-                "skipping provider-specific Chat reasoning continuation during Responses response translation"
+            scope.dropped("Anthropic continuation envelope in Chat reasoning_content",
+                "OpenAI Responses reasoning cannot carry provider-specific Anthropic continuation data",
             );
         }
         if !visible_reasoning.is_empty() {
@@ -137,14 +137,6 @@ pub(super) fn translate_response(
         user: None,
         usage: chat.usage.as_ref().map(ResponseUsage::from),
     })
-}
-
-impl TryFrom<&CreateChatCompletionResponse> for Response {
-    type Error = TranslationError;
-
-    fn try_from(chat: &CreateChatCompletionResponse) -> TranslationResult<Self> {
-        translate_response(chat, None)
-    }
 }
 
 #[cfg(test)]

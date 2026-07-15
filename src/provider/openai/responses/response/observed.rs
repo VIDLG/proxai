@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::protocol::ErrorObject;
-use crate::protocol::openai_responses::OutputItem;
+use crate::protocol::openai_responses::{OutputItem, OutputItemKind};
 
-use super::{ResponseOutputItemKind, ResponseSummary};
+use super::ResponseSummary;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ObservedEntityId(String);
@@ -43,7 +43,7 @@ pub(super) enum ObservedUpdate {
         id: String,
     },
     SummaryOnlyItemKind {
-        kind: ResponseOutputItemKind,
+        kind: OutputItemKind,
         event_key: String,
     },
 }
@@ -55,12 +55,7 @@ impl ObservedUpdate {
                 id: item.id.clone(),
             },
             OutputItem::FunctionCall(item) => item.id.as_ref().map_or_else(
-                || {
-                    Self::from_summary_only_item_kind(
-                        ResponseOutputItemKind::FunctionCall,
-                        output_index,
-                    )
-                },
+                || Self::from_summary_only_item_kind(OutputItemKind::FunctionCall, output_index),
                 |id| Self::FunctionCall {
                     id: id.clone(),
                     name: item.name.clone(),
@@ -69,57 +64,6 @@ impl ObservedUpdate {
             OutputItem::Reasoning(item) => Self::Reasoning {
                 id: item.id.clone(),
             },
-            OutputItem::FunctionCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::FunctionCallOutput,
-                output_index,
-            ),
-            OutputItem::FileSearchCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::FileSearchCall,
-                output_index,
-            ),
-            OutputItem::WebSearchCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::WebSearchCall,
-                output_index,
-            ),
-            OutputItem::ComputerCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ComputerCall,
-                output_index,
-            ),
-            OutputItem::ComputerCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ComputerCallOutput,
-                output_index,
-            ),
-            OutputItem::ImageGenerationCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ImageGenerationCall,
-                output_index,
-            ),
-            OutputItem::CodeInterpreterCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::CodeInterpreterCall,
-                output_index,
-            ),
-            OutputItem::LocalShellCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::LocalShellCall,
-                output_index,
-            ),
-            OutputItem::LocalShellCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::LocalShellCallOutput,
-                output_index,
-            ),
-            OutputItem::ShellCall(_) => {
-                Self::from_summary_only_item_kind(ResponseOutputItemKind::ShellCall, output_index)
-            }
-            OutputItem::ShellCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ShellCallOutput,
-                output_index,
-            ),
-            OutputItem::ApplyPatchCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ApplyPatchCall,
-                output_index,
-            ),
-            OutputItem::ApplyPatchCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ApplyPatchCallOutput,
-                output_index,
-            ),
             OutputItem::McpCall(item) => Self::McpCall {
                 id: item.id.clone(),
                 server_label: Some(item.server_label.clone()),
@@ -128,37 +72,11 @@ impl ObservedUpdate {
             OutputItem::McpListTools(item) => Self::McpListTools {
                 id: item.id.clone(),
             },
-            OutputItem::McpApprovalRequest(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::McpApprovalRequest,
-                output_index,
-            ),
-            OutputItem::McpApprovalResponse(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::McpApprovalResponse,
-                output_index,
-            ),
-            OutputItem::CustomToolCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::CustomToolCall,
-                output_index,
-            ),
-            OutputItem::CustomToolCallOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::CustomToolCallOutput,
-                output_index,
-            ),
-            OutputItem::ToolSearchCall(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ToolSearchCall,
-                output_index,
-            ),
-            OutputItem::ToolSearchOutput(_) => Self::from_summary_only_item_kind(
-                ResponseOutputItemKind::ToolSearchOutput,
-                output_index,
-            ),
-            OutputItem::Compaction(_) => {
-                Self::from_summary_only_item_kind(ResponseOutputItemKind::Compaction, output_index)
-            }
+            item => Self::from_summary_only_item_kind(item.into(), output_index),
         }
     }
 
-    fn from_summary_only_item_kind(kind: ResponseOutputItemKind, output_index: u32) -> Self {
+    fn from_summary_only_item_kind(kind: OutputItemKind, output_index: u32) -> Self {
         Self::SummaryOnlyItemKind {
             kind,
             event_key: format!("{kind}:{output_index}"),
@@ -191,7 +109,7 @@ impl ObservedUpdate {
 pub(super) struct ObservedState {
     entities: BTreeMap<ObservedEntityId, ObservedEntity>,
     anonymous_item_keys: BTreeSet<ObservedEntityId>,
-    anonymous_item_kinds: BTreeMap<ResponseOutputItemKind, u64>,
+    anonymous_item_kinds: BTreeMap<OutputItemKind, u64>,
     error: Option<ErrorObject>,
 }
 
@@ -278,28 +196,28 @@ impl From<&ObservedState> for ResponseSummary {
         for entity in state.entities.values() {
             match entity {
                 ObservedEntity::Message => {
-                    summary.add_item_kind(ResponseOutputItemKind::Message);
+                    summary.add_item_kind(OutputItemKind::Message);
                 }
                 ObservedEntity::FunctionCall { name } => {
                     if let Some(name) = name {
                         summary.add_function_call_item(name);
                     } else {
-                        summary.add_item_kind(ResponseOutputItemKind::FunctionCall);
+                        summary.add_item_kind(OutputItemKind::FunctionCall);
                     }
                 }
                 ObservedEntity::Reasoning => {
-                    summary.add_item_kind(ResponseOutputItemKind::Reasoning);
+                    summary.add_item_kind(OutputItemKind::Reasoning);
                 }
                 ObservedEntity::McpCall { server_label, name } => {
                     if let (Some(server_label), Some(name)) = (server_label.as_ref(), name.as_ref())
                     {
                         summary.add_mcp_call_item(server_label, name);
                     } else {
-                        summary.add_item_kind(ResponseOutputItemKind::McpCall);
+                        summary.add_item_kind(OutputItemKind::McpCall);
                     }
                 }
                 ObservedEntity::McpListTools => {
-                    summary.add_item_kind(ResponseOutputItemKind::McpListTools);
+                    summary.add_item_kind(OutputItemKind::McpListTools);
                 }
             }
         }

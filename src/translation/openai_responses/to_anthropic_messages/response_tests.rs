@@ -3,7 +3,19 @@ use serde_json::json;
 use crate::protocol::anthropic::messages::ContentBlock;
 use crate::protocol::openai_responses::Response;
 
-use super::translate_response_payload;
+use super::translate_response_payload as translate_response_payload_with_translator;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::test_support::response_scope;
+
+fn translate_response_payload(
+    response: &Response,
+) -> crate::protocol::anthropic::messages::Message {
+    let scope = response_scope(
+        RequestProtocol::AnthropicMessages,
+        ProviderProtocol::OpenaiResponses,
+    );
+    translate_response_payload_with_translator(response, &scope)
+}
 
 #[test]
 fn translates_openai_response_to_anthropic_message_shape() {

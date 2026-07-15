@@ -1,10 +1,11 @@
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
-use tracing::warn;
+use crate::translation::TranslationScope;
 
 pub(super) fn request_reasoning_effort(
     output_config: Option<&anthropic::OutputConfig>,
     thinking: Option<&anthropic::ThinkingConfigParam>,
+    scope: &TranslationScope,
 ) -> Option<chat::ReasoningEffort> {
     let output_reasoning_effort = output_config
         .and_then(|config| config.effort.as_non_null())
@@ -14,19 +15,16 @@ pub(super) fn request_reasoning_effort(
     let reasoning_effort = output_reasoning_effort.or_else(|| {
         thinking_effort(thinking).map(|(budget_tokens, effort)| {
             if let Some(budget_tokens) = budget_tokens {
-                warn!(
-                    event = "anthropic_legacy_thinking_budget_mapped",
-                    budget_tokens,
-                    reasoning_effort = ?effort,
-                    target_protocol = "openai_chat_completions",
-                    "mapped Anthropic legacy thinking.type=enabled budget_tokens lossily to reasoning effort"
+                scope.adapted(
+                    format!("Anthropic legacy thinking budget `{budget_tokens}`"),
+                    format!("mapped lossily to Chat reasoning effort `{effort:?}`"),
                 );
             }
             effort
         })
     });
     if has_output_reasoning_effort {
-        warn_if_legacy_thinking_ignored(thinking);
+        observe_legacy_thinking_ignored(thinking, scope);
     }
 
     reasoning_effort
@@ -45,13 +43,14 @@ fn thinking_effort(
     }
 }
 
-fn warn_if_legacy_thinking_ignored(thinking: Option<&anthropic::ThinkingConfigParam>) {
+fn observe_legacy_thinking_ignored(
+    thinking: Option<&anthropic::ThinkingConfigParam>,
+    scope: &TranslationScope,
+) {
     if let Some(anthropic::ThinkingConfigParam::Enabled(value)) = thinking {
-        warn!(
-            event = "anthropic_legacy_thinking_budget_ignored",
-            budget_tokens = value.budget_tokens,
-            target_protocol = "openai_chat_completions",
-            "ignored Anthropic legacy thinking.type=enabled budget_tokens because output_config.effort is present"
+        scope.dropped(
+            format!("Anthropic legacy thinking budget `{}`", value.budget_tokens),
+            "output_config.effort takes precedence",
         );
     }
 }

@@ -81,13 +81,6 @@ impl From<responses::Verbosity> for chat::Verbosity {
 
 impl From<&responses::ResponseStreamOptions> for chat::ChatCompletionStreamOptions {
     fn from(value: &responses::ResponseStreamOptions) -> Self {
-        if value.include_obfuscation.is_some() {
-            tracing::trace!(
-                source_field = "stream_options.include_obfuscation",
-                reason = "Chat Completions stream_options has no include_obfuscation equivalent",
-                "skipping Responses stream field during Chat Completions translation"
-            );
-        }
         Self {
             include_usage: None,
             include_obfuscation: value.include_obfuscation,

@@ -1,7 +1,18 @@
 use serde_json::json;
 
-use super::super::translate_request_payload;
+use super::super::translate_request_payload as translate_request_payload_with_translator;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationResult;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
+use crate::translation::test_support::request_scope;
+
+fn translate_request_payload(payload: &serde_json::Value) -> TranslationResult<serde_json::Value> {
+    let scope = request_scope(
+        RequestProtocol::AnthropicMessages,
+        ProviderProtocol::OpenaiChatCompletions,
+    );
+    translate_request_payload_with_translator(payload, &scope)
+}
 
 #[test]
 fn translates_anthropic_request_to_chat_completion_shape() {

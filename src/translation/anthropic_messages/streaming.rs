@@ -9,9 +9,9 @@ use delegate::delegate;
 use serde_json::Value;
 
 use crate::protocol::anthropic::messages::MessageStreamEvent;
-use crate::translation::streaming::{
-    InboundStreamLifecycle, InboundStreamLifecyclePhase, RequireStreamingPhaseContext,
-    SseStreamEnd, StreamIdentity, StreamTranslationError, StreamTranslationResult, StreamingPhase,
+use crate::translation::stream::{
+    InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
+    StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
 
 #[derive(Debug)]
@@ -33,7 +33,6 @@ impl<S> AnthropicInboundLifecycle<S> {
             #[call(receive_terminal)]
             pub(crate) fn receive_terminal_delta(&mut self, phase: StreamingPhase<S>);
             pub(crate) fn stop(&mut self);
-            pub(crate) fn is_stopped(&self) -> bool;
         }
     }
 
@@ -117,10 +116,7 @@ impl<S> AnthropicInboundLifecycle<S> {
         &mut self,
     ) -> StreamTranslationResult<&mut StreamingPhase<S>> {
         self.inner
-            .require_streaming_phase_mut(RequireStreamingPhaseContext {
-                source: "Anthropic",
-                event: "active content event",
-            })
+            .require_streaming_phase_mut("Anthropic", "active content event")
     }
 
     pub(crate) fn streaming_state_mut(&mut self) -> StreamTranslationResult<&mut S> {
@@ -143,15 +139,12 @@ impl<S> AnthropicInboundLifecycle<S> {
         })
     }
 
-    pub(crate) fn unexpected_stream_end_error(&self, end: SseStreamEnd) -> StreamTranslationError {
+    /// Validate that the semantic Anthropic stream reached `message_stop`
+    /// before its carrier ended.
+    pub(crate) fn finish_stream(&self, end: StreamEnd) -> StreamTranslationResult<()> {
         let message = match self.inner.phase_kind() {
             InboundStreamLifecyclePhase::Waiting => {
                 format!("Anthropic stream reached {end} before message_start")
-            }
-            InboundStreamLifecyclePhase::Terminal => {
-                format!(
-                    "Anthropic stream reached {end} after terminal message_delta but before message_stop"
-                )
             }
             InboundStreamLifecyclePhase::Streaming => {
                 let phase = self
@@ -165,8 +158,13 @@ impl<S> AnthropicInboundLifecycle<S> {
                         .to_string()
                 }
             }
-            InboundStreamLifecyclePhase::Stopped => String::new(),
+            InboundStreamLifecyclePhase::Terminal => {
+                format!(
+                    "Anthropic stream reached {end} after terminal message_delta but before message_stop"
+                )
+            }
+            InboundStreamLifecyclePhase::Stopped => return Ok(()),
         };
-        StreamTranslationError::Semantic(message)
+        Err(StreamTranslationError::Semantic(message))
     }
 }

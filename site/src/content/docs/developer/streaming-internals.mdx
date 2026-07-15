@@ -24,7 +24,7 @@ ProxAI treats streaming as a byte-carrier problem plus protocol-specific event o
   ]}
 />
 
-`translation/` does not perform provider-local stream observation. Provider streaming observation stays inside `provider/`; cross-protocol stream translation stays in `translation/streaming`.
+`translation/` does not perform provider-local byte-stream observation. Provider streaming observation stays inside `provider/`; `sse_translation.rs` adapts SSE bytes to the structured `StreamEvent` API exposed by `translation/`.
 
 ## BodyObserver lifecycle
 
@@ -100,16 +100,30 @@ OpenAI Responses has extra tool-call semantics. If tool-call arguments start but
   ]}
 />
 
+## Cross-protocol translation boundary
+
+The application and reusable translation core meet at a structured-event boundary:
+
+```text
+provider/upstream byte observation
+  → sse_translation.rs parses SSE frames
+  → Translator consumes and produces StreamEvent values
+  → sse_translation.rs encodes target SSE frames
+  → pipeline observes failures and renders client-facing errors
+```
+
+Raw chunks, triggering SSE frames, HTTP metadata, diagnostics, and client error rendering remain in the application layer. The core returns semantic failures through `Stream<Item = Result<StreamEvent, StreamTranslationError>>`; `TranslationObserver` is reserved for legal-but-lossy adaptations and is not an error channel.
+
 ## Translation stream lifecycle
 
-Cross-protocol streaming translation uses a protocol-neutral four-phase carrier in `translation/streaming.rs`:
+Cross-protocol streaming translation uses a protocol-neutral four-phase event state machine in `translation/stream.rs`. `Translator` owns the route and observer; `Translator::translate_stream` consumes it, privately creates the selected pair state inside the returned stream, and is the only public structured-stream driver:
 
 <ReferenceTable
   columns={['Phase', 'Meaning']}
   rows={[
     ['`Waiting`', 'No semantic source message/chunk has initialized the translated stream yet.'],
     ['`Streaming(StreamingPhase<S>)`', 'Source deltas are active; pair-private state and target-representable output tracking live in `StreamingPhase<S>`.'],
-    ['`Terminal(T)`', 'The source protocol has emitted its semantic terminal signal, but the carrier/source stop has not been fully consumed.'],
+    ['`Terminal(T)`', 'The source protocol has emitted its semantic terminal signal, but the final source stop/end marker has not been fully consumed.'],
     ['`Stopped`', 'The translator has emitted its final target stream output.'],
   ]}
 />
@@ -142,7 +156,7 @@ All three wrappers use typed protocol event parsing as the source-event allowlis
 
 ### Stream identity ownership
 
-Streaming identity (`StreamIdentity`) belongs to the protocol-neutral inbound lifecycle carrier, while source-protocol wrappers decide when to initialize or validate it.
+Streaming identity (`StreamIdentity`) belongs to the protocol-neutral inbound lifecycle state machine, while source-protocol wrappers decide when to initialize or validate it.
 
 <ReferenceTable
   columns={['Inbound source', 'Where identity comes from', 'Why it is handled this way']}
@@ -175,7 +189,7 @@ translation/<source>/streaming.rs
   source protocol parsing, identity, and lifecycle ordering
 
 translation/<source>/to_<target>/streaming/
-├── mod.rs       # routes source events through pair state and owns carrier timing
+├── mod.rs       # routes source events through pair state and owns event/terminal timing
 ├── state.rs     # validates/accumulates pair state and returns typed target events
 └── output.rs    # optional pair-local pure helpers when terminal assembly is substantial
 
@@ -188,7 +202,7 @@ translation/<target>/outbound/
 - **source lifecycle wrappers** own source event parsing, envelope identity, and phase ordering.
 - **pair state** owns atomic source-to-target transitions: validation, accumulation, target index allocation, and the typed target events produced by that transition.
 - **target outbound modules** contain reusable stateless constructors. They do not inspect source events or hold streaming state.
-- **pair mod.rs** dispatches source events, invokes pair state, handles terminal outcomes, and maps typed target events to carrier-level `StreamEvent`s.
+- **pair mod.rs** dispatches source events, invokes pair state, handles terminal outcomes, and maps typed target events to protocol-neutral `StreamEvent`s.
 - **pair output.rs** is optional. Keep it only when pair-local terminal construction is substantial enough to improve readability; do not duplicate constructors already owned by the target `outbound/` module.
 
 This makes state methods small transducers rather than passive bags of fields. If a method mutates pair state and returns target events, both operations must describe one atomic protocol transition. Carrier encoding and client-facing error rendering remain outside pair state.

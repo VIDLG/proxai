@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::observe::point::StreamingTranslationFailure;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::request::RequestId;
-use crate::translation::streaming::{
+use crate::sse_translation::{
     StreamTranslationFailure, StreamTranslatorErrorStage, UpstreamSseEvent,
 };
 

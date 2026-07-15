@@ -2,6 +2,17 @@ use serde_json::json;
 
 use crate::protocol::openai::chat_completions::CreateChatCompletionResponse;
 use crate::protocol::openai_responses::Response;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationResult;
+use crate::translation::test_support::response_scope;
+
+fn translate_response(chat: &CreateChatCompletionResponse) -> TranslationResult<Response> {
+    let scope = response_scope(
+        RequestProtocol::OpenaiResponses,
+        ProviderProtocol::OpenaiChatCompletions,
+    );
+    super::translate_response(chat, None, &scope)
+}
 
 #[test]
 fn translates_chat_completion_response_to_responses_shape() {
@@ -34,7 +45,7 @@ fn translates_chat_completion_response_to_responses_shape() {
         }
     });
     let chat = serde_json::from_value::<CreateChatCompletionResponse>(upstream).unwrap();
-    let translated: Response = (&chat).try_into().unwrap();
+    let translated = translate_response(&chat).unwrap();
     let value = serde_json::to_value(translated).unwrap();
 
     assert_eq!(value["id"], "resp_chatcmpl_123");
@@ -74,7 +85,11 @@ fn translates_zed_non_streaming_reasoning_extension_to_responses_item() {
         }]
     });
 
-    let translated = super::super::translate_non_streaming_response(upstream).unwrap();
+    let scope = response_scope(
+        RequestProtocol::OpenaiResponses,
+        ProviderProtocol::OpenaiChatCompletions,
+    );
+    let translated = super::super::translate_non_streaming_response(upstream, &scope).unwrap();
     assert_eq!(translated["output"][0]["type"], "reasoning");
     assert_eq!(translated["output"][0]["content"][0]["text"], "thinking");
     assert_eq!(translated["output"][1]["type"], "message");
@@ -90,9 +105,7 @@ fn rejects_chat_response_without_choices() {
         "choices": []
     });
     let chat = serde_json::from_value::<CreateChatCompletionResponse>(no_choices).unwrap();
-    let error = <Response as TryFrom<&CreateChatCompletionResponse>>::try_from(&chat)
-        .unwrap_err()
-        .to_string();
+    let error = translate_response(&chat).unwrap_err().to_string();
     assert!(error.contains("has no choices"));
 }
 
@@ -125,9 +138,7 @@ fn rejects_chat_response_with_multiple_choices() {
         ]
     });
     let chat = serde_json::from_value::<CreateChatCompletionResponse>(multiple_choices).unwrap();
-    let error = <Response as TryFrom<&CreateChatCompletionResponse>>::try_from(&chat)
-        .unwrap_err()
-        .to_string();
+    let error = translate_response(&chat).unwrap_err().to_string();
     assert!(error.contains("target response can represent exactly one assistant message"));
 }
 
@@ -149,9 +160,7 @@ fn rejects_chat_response_without_responses_output() {
         }]
     });
     let chat = serde_json::from_value::<CreateChatCompletionResponse>(upstream).unwrap();
-    let error = <Response as TryFrom<&CreateChatCompletionResponse>>::try_from(&chat)
-        .unwrap_err()
-        .to_string();
+    let error = translate_response(&chat).unwrap_err().to_string();
 
     assert!(error.contains("without content, refusal, or tool calls"));
 }

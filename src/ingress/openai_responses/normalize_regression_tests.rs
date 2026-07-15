@@ -24,10 +24,12 @@ fn regression_zed_responses_function_tool_missing_strict() {
     )
     .expect("normalized Zed function tool must parse as a Responses request");
 
-    let translated =
-        crate::translation::openai_responses::to_anthropic_messages::translate_request_payload(
-            &normalized,
-        )
+    let translator = crate::translation::Translator::new(
+        crate::protocol::RequestProtocol::OpenaiResponses,
+        crate::protocol::ProviderProtocol::AnthropicMessages,
+    );
+    let translated = translator
+        .translate_request(&normalized)
         .expect("normalized Zed function tool must translate to Anthropic Messages");
     assert_eq!(translated["tools"][0]["name"], "lookup");
 }

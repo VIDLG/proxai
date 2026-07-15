@@ -12,13 +12,14 @@ use self::tools::translate_tool_choice;
 use self::types::{chat_max_tokens, stop_sequences};
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai::chat_completions as chat;
-use crate::translation::TranslationResult;
 use crate::translation::anthropic_messages::outbound::json_number_from_f32;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
+use crate::translation::{TranslationResult, TranslationScope};
 
 pub(super) fn translate_request(
     request: &chat::CreateChatCompletionRequest,
     extensions: &ChatRequestExtensions,
+    scope: &TranslationScope,
 ) -> TranslationResult<anthropic::MessageCreateParamsBase> {
     if request.function_call.is_some() || request.functions.is_some() {
         return Err(crate::translation::TranslationError::InvalidPayload(
@@ -26,7 +27,8 @@ pub(super) fn translate_request(
                     .to_string(),
             ));
     }
-    let anthropic_messages = AnthropicMessages::from_chat(request.messages.as_slice(), extensions)?;
+    let anthropic_messages =
+        AnthropicMessages::from_chat(request.messages.as_slice(), extensions, scope)?;
 
     let tools = request
         .tools

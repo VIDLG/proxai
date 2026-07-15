@@ -6,42 +6,32 @@ mod response;
 mod streaming;
 mod types;
 
+pub(crate) use streaming::AnthropicToChatStreaming;
+
 use serde_json::Value;
 
-use crate::http_support::ByteStream;
 use crate::protocol::anthropic::messages::{Message, MessageCreateParamsBase};
 
-use crate::translation::streaming::{StreamTranslationFailureSink, translate_sse_stream};
-use crate::translation::{TranslationResult, json};
+use crate::translation::{TranslationResult, TranslationScope, json};
 
-pub(crate) fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
+pub(crate) fn translate_request_payload(
+    payload: &Value,
+    scope: &TranslationScope,
+) -> TranslationResult<Value> {
     let request =
         json::from_value::<MessageCreateParamsBase>(payload, "Anthropic Messages request payload")?;
-    let (translated, extensions) = request::translate_request(request)?;
+    let (translated, extensions) = request::translate_request(request, scope)?;
     let mut payload = serde_json::to_value(translated)?;
     extensions.apply(&mut payload)?;
     Ok(payload)
 }
 
-#[cfg(test)]
-pub(crate) fn translate_streaming_response(input: ByteStream) -> ByteStream {
-    translate_streaming_response_with_failure_sink(input, StreamTranslationFailureSink::default())
-}
-
-pub(crate) fn translate_streaming_response_with_failure_sink(
-    input: ByteStream,
-    failure_sink: StreamTranslationFailureSink,
-) -> ByteStream {
-    translate_sse_stream(
-        input,
-        streaming::ChatCompletionStreamTranslator::default(),
-        failure_sink,
-    )
-}
-
-pub(crate) fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
+pub(crate) fn translate_non_streaming_response(
+    payload: Value,
+    scope: &TranslationScope,
+) -> TranslationResult<Value> {
     let message = json::from_value::<Message>(&payload, "Anthropic Messages response payload")?;
-    let (translated, reasoning) = response::translate_response(&message)?;
+    let (translated, reasoning) = response::translate_response(&message, scope)?;
     let mut payload = serde_json::to_value(translated)?;
     crate::translation::openai_chat_completions::compatibility::inject_response_reasoning(
         &mut payload,

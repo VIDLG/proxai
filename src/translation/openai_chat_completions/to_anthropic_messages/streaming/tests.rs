@@ -1,10 +1,8 @@
-use axum::body::{Body, to_bytes};
-use axum::http::{Response, header};
 use serde_json::json;
 
-use crate::http_support::into_byte_stream;
-
-use super::super::translate_streaming_response;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::Translator;
+use crate::translation::test_support::translate_sse_fixture;
 
 /// Translate a Chat Completions SSE stream into the Anthropic Messages SSE
 /// stream produced by `translate_streaming_response`, returning the parsed
@@ -18,18 +16,14 @@ fn anthropic_message_payloads(body: &str) -> Vec<serde_json::Value> {
 }
 
 async fn run_translation(stream: String) -> String {
-    let mut response = Response::new(Body::from(stream));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        header::HeaderValue::from_static("text/event-stream"),
-    );
-
-    let response =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(response), usize::MAX)
-        .await
-        .unwrap();
-    std::str::from_utf8(&body).unwrap().to_string()
+    translate_sse_fixture(
+        &stream,
+        Translator::new(
+            RequestProtocol::AnthropicMessages,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
+    )
+    .await
 }
 
 /// Build a single Chat Completions stream chunk with one assistant choice.

@@ -1,15 +1,30 @@
-use axum::{
-    body::{Body, to_bytes},
-    http::Response,
-};
 use serde_json::{Value, json};
 
-use crate::http_support::into_byte_stream;
 use crate::protocol::anthropic::messages::{Message, MessageStreamEvent};
+use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
-use crate::translation::openai_chat_completions::to_anthropic_messages::{
-    translate_non_streaming_response, translate_streaming_response,
-};
+use crate::translation::openai_chat_completions::to_anthropic_messages::translate_non_streaming_response as translate_non_streaming_response_with_translator;
+use crate::translation::test_support::{response_scope, translate_sse_fixture};
+use crate::translation::{TranslationResult, Translator};
+
+fn translate_non_streaming_response(payload: Value) -> TranslationResult<Value> {
+    let scope = response_scope(
+        RequestProtocol::AnthropicMessages,
+        ProviderProtocol::OpenaiChatCompletions,
+    );
+    translate_non_streaming_response_with_translator(payload, &scope)
+}
+
+async fn translate_streaming_response(stream: &str) -> String {
+    translate_sse_fixture(
+        stream,
+        Translator::new(
+            RequestProtocol::AnthropicMessages,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
+    )
+    .await
+}
 
 #[test]
 fn translates_chat_response_to_anthropic_message() {
@@ -357,22 +372,12 @@ fn rejects_chat_response_choice_logprobs() {
 
 #[tokio::test]
 async fn translates_chat_stream_to_anthropic_messages_sse() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("stream should translate");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("event: message_start"));
     let payloads = parse_sse_payloads(&text);
@@ -400,22 +405,12 @@ data: [DONE]\n\n",
 
 #[tokio::test]
 async fn translates_chat_refusal_stream_to_anthropic_refusal_stop_reason() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_refusal_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("stream should translate");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     let payloads = parse_sse_payloads(&text);
     let start = payloads
@@ -433,22 +428,12 @@ data: [DONE]\n\n",
 
 #[tokio::test]
 async fn delays_chat_stream_stop_until_usage_only_chunk() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":{\"prompt_tokens\":99,\"completion_tokens\":88,\"total_tokens\":187},\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_usage_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("stream should translate");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("\"input_tokens\":4"));
     assert!(text.contains("\"output_tokens\":1"));
@@ -459,60 +444,30 @@ data: [DONE]\n\n",
 
 #[tokio::test]
 async fn rejects_chat_stream_done_before_finish_reason() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_done_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_done_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
-    assert!(text.contains("stream translation finish error"));
+    assert!(text.contains("stream translation error"));
     assert!(text.contains("emitted [DONE] before a terminal finish_reason"));
 }
 
 #[tokio::test]
 async fn rejects_chat_stream_eof_before_finish_reason() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_eof_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_eof_without_finish\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
-    assert!(text.contains("stream translation finish error"));
+    assert!(text.contains("stream translation error"));
     assert!(text.contains("reached EOF before a terminal finish_reason"));
 }
 
 #[tokio::test]
 async fn rejects_chat_stream_chunk_with_multiple_choices() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_multi_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null},{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_multi_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null},{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("has 2 choices"));
@@ -521,20 +476,10 @@ async fn rejects_chat_stream_chunk_with_multiple_choices() {
 
 #[tokio::test]
 async fn rejects_chat_stream_that_changes_id() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_a\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_a\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("changed id from msg_chatcmpl_a to msg_chatcmpl_b"));
@@ -542,20 +487,10 @@ data: {\"id\":\"chatcmpl_b\",\"object\":\"chat.completion.chunk\",\"created\":1,
 
 #[tokio::test]
 async fn rejects_chat_stream_that_changes_model() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("changed model from gpt-a to gpt-b"));
@@ -563,20 +498,10 @@ data: {\"id\":\"chatcmpl_model\",\"object\":\"chat.completion.chunk\",\"created\
 
 #[tokio::test]
 async fn rejects_chat_stream_that_switches_choice_index() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"first\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":1,\"delta\":{\"content\":\"second\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("switched from choice index 0 to 1"));
@@ -584,21 +509,11 @@ data: {\"id\":\"chatcmpl_switch_stream\",\"object\":\"chat.completion.chunk\",\"
 
 #[tokio::test]
 async fn rejects_chat_stream_choice_after_message_stop() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains(
@@ -608,20 +523,10 @@ data: {\"id\":\"chatcmpl_after_stop\",\"object\":\"chat.completion.chunk\",\"cre
 
 #[tokio::test]
 async fn rejects_chat_stream_with_both_content_and_refusal() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ordinary\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ordinary\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":\"I can't help with that.\"},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("contains both content and refusal"));
@@ -629,19 +534,9 @@ data: {\"id\":\"chatcmpl_mixed_stream\",\"object\":\"chat.completion.chunk\",\"c
 
 #[tokio::test]
 async fn rejects_chat_stream_without_anthropic_representable_content() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_empty\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_empty\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("without Anthropic-representable content"));
@@ -649,22 +544,12 @@ async fn rejects_chat_stream_without_anthropic_representable_content() {
 
 #[tokio::test]
 async fn puts_first_chat_text_delta_in_content_block_start() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_first_text\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"stop\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("stream should translate");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
     let payloads = parse_sse_payloads(&text);
 
     let start = payloads
@@ -684,20 +569,10 @@ data: [DONE]\n\n",
 
 #[tokio::test]
 async fn rejects_chat_stream_usage_only_chunk_before_finish_reason() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":1,\"total_tokens\":5},\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("usage-only chunk before a terminal finish_reason"));
@@ -705,19 +580,9 @@ data: {\"id\":\"chatcmpl_usage_too_early\",\"object\":\"chat.completion.chunk\",
 
 #[tokio::test]
 async fn rejects_chat_stream_choice_logprobs() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_logprobs\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":{\"content\":[],\"refusal\":null}}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_logprobs\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":{\"content\":[],\"refusal\":null}}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("choice logprobs cannot be represented"));
@@ -725,19 +590,9 @@ async fn rejects_chat_stream_choice_logprobs() {
 
 #[tokio::test]
 async fn rejects_chat_stream_non_assistant_delta_role() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_role\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"role\":\"user\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n",
-        ))
-        .unwrap();
+    let stream = "data: {\"id\":\"chatcmpl_role\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\",\"role\":\"user\",\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("translation errors are encoded as SSE error events");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
 
     assert!(text.contains("stream translation error"));
     assert!(text.contains("Chat stream emitted user role"));
@@ -745,22 +600,12 @@ async fn rejects_chat_stream_non_assistant_delta_role() {
 
 #[tokio::test]
 async fn translates_chat_stream_tool_arguments_as_input_json_delta() {
-    let response = Response::builder()
-        .header("content-type", "text/event-stream")
-        .body(Body::from(
-            "data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\"\"}}],\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
+    let stream = "data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"lookup\",\"arguments\":\"{\\\"q\\\"\"}}],\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\":\\\"zed\\\"}\"}}],\"refusal\":null},\"finish_reason\":null,\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
 data: {\"id\":\"chatcmpl_tool_stream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"refusal\":null},\"finish_reason\":\"tool_calls\",\"logprobs\":null}],\"usage\":null,\"service_tier\":null}\n\n\
-data: [DONE]\n\n",
-        ))
-        .unwrap();
+data: [DONE]\n\n";
 
-    let translated =
-        translate_streaming_response(into_byte_stream(response.into_body().into_data_stream()));
-    let body = to_bytes(Body::from_stream(translated), usize::MAX)
-        .await
-        .expect("stream should translate");
-    let text = String::from_utf8(body.to_vec()).expect("translated SSE should be UTF-8");
+    let text = translate_streaming_response(stream).await;
     let payloads = parse_sse_payloads(&text);
 
     let start = payloads

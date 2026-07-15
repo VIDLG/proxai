@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
-use crate::translation::streaming::{StreamTranslationError, StreamTranslationResult};
+use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
 /// In-flight streaming state for a single Anthropic assistant message.
 ///

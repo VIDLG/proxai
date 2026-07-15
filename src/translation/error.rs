@@ -1,6 +1,6 @@
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-pub(crate) type Result<T> = std::result::Result<T, TranslationError>;
+pub type Result<T> = std::result::Result<T, TranslationError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TranslationError {

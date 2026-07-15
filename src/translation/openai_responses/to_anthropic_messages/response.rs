@@ -8,20 +8,24 @@ use crate::protocol::anthropic::messages::{
     OutputTokensDetails, StopReason, Usage,
 };
 use crate::protocol::openai_responses as responses;
+use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::outbound::{
     redacted_thinking_block, text_block, thinking_block, tool_use_block,
 };
 use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
 use crate::translation::text::parse_json_or_string;
 
-pub(super) fn translate_response_payload(response: &responses::Response) -> AnthropicMessage {
+pub(super) fn translate_response_payload(
+    response: &responses::Response,
+    scope: &TranslationScope,
+) -> AnthropicMessage {
     let content = response
         .output
         .iter()
-        .flat_map(translate_response_output_item)
+        .flat_map(|item| translate_response_output_item(item, scope))
         .collect::<Vec<_>>();
 
-    let stop_reason = infer_response_stop_kind(response).map(|kind| match kind {
+    let stop_reason = infer_response_stop_kind(response, scope).map(|kind| match kind {
         ResponsesStopKind::EndTurn => StopReason::EndTurn,
         ResponsesStopKind::MaxTokens => StopReason::MaxTokens,
         ResponsesStopKind::ToolUse => StopReason::ToolUse,
@@ -42,7 +46,10 @@ pub(super) fn translate_response_payload(response: &responses::Response) -> Anth
     }
 }
 
-fn translate_response_output_item(item: &responses::OutputItem) -> Vec<ContentBlock> {
+fn translate_response_output_item(
+    item: &responses::OutputItem,
+    scope: &TranslationScope,
+) -> Vec<ContentBlock> {
     match item {
         responses::OutputItem::Message(message) => message
             .content
@@ -61,11 +68,11 @@ fn translate_response_output_item(item: &responses::OutputItem) -> Vec<ContentBl
             &call.name,
             parse_json_or_string(&call.input),
         ))],
-        responses::OutputItem::Reasoning(reasoning) => translate_reasoning_item(reasoning),
+        responses::OutputItem::Reasoning(reasoning) => translate_reasoning_item(reasoning, scope),
         other => {
-            tracing::trace!(
-                output_item_type = other.as_ref(),
-                reason = "Responses output item has no Anthropic Messages response representation"
+            scope.dropped(
+                format!("Responses output item `{}`", other.as_ref()),
+                "Responses output item has no Anthropic Messages response representation",
             );
             Vec::new()
         }
@@ -83,14 +90,18 @@ fn translate_response_message_content(content: &responses::OutputMessageContent)
     }
 }
 
-fn translate_reasoning_item(reasoning: &responses::ReasoningItem) -> Vec<ContentBlock> {
+fn translate_reasoning_item(
+    reasoning: &responses::ReasoningItem,
+    scope: &TranslationScope,
+) -> Vec<ContentBlock> {
     let mut blocks = reasoning
         .summary
         .iter()
         .map(|part| match part {
             responses::SummaryPart::SummaryText(text) => {
-                tracing::trace!(
-                    reason = "Anthropic Messages has no response-side reasoning summary block; mapping Responses reasoning summary_text to thinking"
+                scope.adapted(
+                    "Responses reasoning summary_text",
+                    "Anthropic Messages has no response-side summary block; mapping to thinking",
                 );
                 ContentBlock::Thinking(thinking_block(&text.text))
             }

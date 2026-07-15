@@ -2,7 +2,7 @@
 //!
 //! Used by `* -> anthropic_messages` streaming translators to build
 //! protocol-native `MessageStreamEvent` values. Carrier-level encoding stays in
-//! `translation::streaming::typed_stream_events`.
+//! `translation::stream::typed_stream_events`.
 
 use serde_json::{Map, Value};
 

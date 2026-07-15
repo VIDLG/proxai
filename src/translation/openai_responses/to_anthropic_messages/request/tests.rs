@@ -1,7 +1,18 @@
 use serde_json::{Value, json};
 
+use crate::protocol::{ProviderProtocol, RequestProtocol};
+use crate::translation::TranslationResult;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
-use crate::translation::openai_responses::to_anthropic_messages::translate_request_payload;
+use crate::translation::openai_responses::to_anthropic_messages::translate_request_payload as translate_request_payload_with_translator;
+use crate::translation::test_support::request_scope;
+
+fn translate_request_payload(payload: &Value) -> TranslationResult<Value> {
+    let scope = request_scope(
+        RequestProtocol::OpenaiResponses,
+        ProviderProtocol::AnthropicMessages,
+    );
+    translate_request_payload_with_translator(payload, &scope)
+}
 
 #[test]
 fn translates_text_request_with_instructions_and_function_tool() {

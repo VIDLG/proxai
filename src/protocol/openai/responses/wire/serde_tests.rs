@@ -67,6 +67,14 @@ fn serializes_responses_nested_output_unions_as_type_tagged_wire() {
 }
 
 #[test]
+fn serializes_output_item_kind_as_wire_discriminator() {
+    assert_eq!(
+        serde_json::to_value(OutputItemKind::FunctionCall).unwrap(),
+        json!("function_call")
+    );
+}
+
+#[test]
 fn deserializes_recently_added_responses_output_item_variants() {
     let local_shell_output = json!({
         "type": "local_shell_call_output",
