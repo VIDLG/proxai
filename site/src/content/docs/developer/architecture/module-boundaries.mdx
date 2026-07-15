@@ -24,7 +24,8 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs, enums, and protocol-specific event payloads. No provider routing decisions.' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: 'Compile model rules, select provider labels by request protocol/model, rewrite upstream models, and enforce strict protocol guards.' },
     { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: 'Pure request/response/stream conversion between protocol pairs.' },
-    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation: model rewrite, provider compatibility projection, serialization.' },
+    { name: 'crates/proxai-core/src/provider/', icon: 'file', description: 'Carrier-independent provider compatibility policy and structured response normalization.' },
+    { name: 'src/provider/*/request', icon: 'file', description: 'Application-side provider request preparation: model rewrite, provider projection, serialization.' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: 'Upstream URL construction, provider-owned auth headers, HTTP send.' },
     { name: 'src/upstream/', icon: 'timer', description: 'Read provider status, headers, non-streaming body, and streaming byte carriers.' },
     { name: 'src/http_support/', icon: 'architecture', description: 'HTTP response reconstruction, content-type helpers, header filtering, byte stream carriers.' },
@@ -45,6 +46,7 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
     ['Does it select a provider label by protocol/model?', '`crates/proxai-core/src/routing/`'],
     ['Does it map a selected provider label to an HTTP transport?', '`src/pipeline/provider_request.rs`'],
     ['Does it convert one protocol payload into another protocol payload?', '`crates/proxai-core/src/translation/`'],
+    ['Does it repair a measured provider response gap on structured JSON/events?', '`crates/proxai-core/src/provider/`'],
     ['Does it rewrite provider model or provider-local request fields?', '`src/provider/*/request`'],
     ['Does it add provider auth headers or build upstream URLs?', '`src/provider/*/transport`'],
     ['Does it filter headers or rebuild an HTTP response?', '`src/http_support/`'],
@@ -56,7 +58,7 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
 
 ## Observation and logging boundary
 
-`proxai-core` defines the shared `Observer` contract, closed `Observation` variants, and a no-op default. Core ingress and translation emit typed variants through that contract. They do not select `tracing`, diagnostics files, capture storage, metrics backends, or any other concrete sink; the downstream application composes those implementations.
+`proxai-core` defines the shared `Observer` contract, closed `Observation` variants, and a no-op default. Core ingress, provider normalization, and translation emit typed variants through that contract. They do not select `tracing`, diagnostics files, capture storage, metrics backends, or any other concrete sink; the downstream application composes those implementations.
 
 For request-scoped code, emit stable lifecycle and domain events through `ObserveContext`. `ObserveSinks` then decides whether each point goes to logging, diagnostics, capture, or several sinks. The logging sink is the layer that translates an observation into a `tracing` event and chooses its level and output format.
 

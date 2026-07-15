@@ -1,7 +1,6 @@
 use axum::body::Body;
 use axum::http::Response;
 
-use crate::config::ProviderCompatibility;
 use crate::http_support::UpstreamResponseHead;
 use crate::http_support::response_with_headers;
 use crate::observe::{
@@ -13,13 +12,11 @@ use crate::upstream::{
     BodyAction, BodyObserver, UpstreamBodyStreamStats, UpstreamStreamError, prepare_response_stream,
 };
 
-use super::normalize;
 use super::state::{AnthropicResponseState, AnthropicUpstreamResponseSnapshot};
 
 pub(crate) fn handle_streaming_response(
     obs: &ObserveContext,
     policy: ProviderStreamingResponsePolicy,
-    compatibility: ProviderCompatibility,
     response: reqwest::Response,
 ) -> Response<Body> {
     let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
@@ -31,18 +28,6 @@ pub(crate) fn handle_streaming_response(
         response,
         body_observer,
     );
-
-    if matches!(
-        compatibility,
-        crate::config::ProviderCompatibility::AnthropicCompatible
-    ) {
-        let (status, headers) = outbound_head.clone().into_parts();
-        return response_with_headers(
-            status,
-            headers,
-            Body::from_stream(normalize::normalize_sse_stream(body_stream)),
-        );
-    }
 
     let (status, headers) = outbound_head.into_parts();
     response_with_headers(status, headers, Body::from_stream(body_stream))

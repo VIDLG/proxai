@@ -19,12 +19,13 @@ ProxAI 保持协议转换显式、按协议对组织。这里是开发者视角�
 
 - `crates/proxai-core/src/protocol/` 负责协议专属的 Rust wire model。
 - `src/pipeline/inbound.rs` 解析 HTTP body bytes 并映射应用错误/notices；`crates/proxai-core/src/ingress/` 负责翻译前的结构化归一化与校验。
-- `crates/proxai-core/src/translation/` 负责在入站 `request_protocol` 和出站 provider `protocol` 之间做纯跨协议转换。
+- `crates/proxai-core/src/provider/` 负责与 carrier 无关的 provider compatibility policy 和结构化响应归一化。
+- `crates/proxai-core/src/translation/` 负责入站 `request_protocol` 与出站 provider `protocol` 之间的纯跨协议转换。
 - `src/provider/request.rs` 负责 provider 请求准备，包括模型改写、projection/summary 提取和 JSON body 序列化。
 - `src/provider/transport.rs` 负责出站 HTTP 传输、认证头、上游 URL 构造和发送。
 - `src/http_support/` 负责 HTTP carrier 辅助能力，例如 `ByteStream`、content-type/header 辅助和响应重建。
 
-不要把通用跨协议转换隐藏在 provider 子树里。Provider 代码可以处理 provider 本地兼容性怪癖，但协议到协议的 shape 改写应该放在 `crates/proxai-core/src/translation/`。
+不要把通用跨协议转换隐藏在 provider 子树里。结构化 provider 怪癖属于 `crates/proxai-core/src/provider/`，HTTP carrier 适配留在应用层，协议到协议的 shape 改写应该放在 `crates/proxai-core/src/translation/`。
 
 Translation API 在 carrier 边界应保持纯粹：
 

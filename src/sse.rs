@@ -1,12 +1,9 @@
-use async_stream::try_stream;
 use bytes::{Bytes, BytesMut};
-use futures_util::{Stream, StreamExt};
+
 use getset::Getters;
 use serde::Serialize;
 use serde_json::Value;
 use sse_core::{SseDecoder, SseEvent as DecodedSseEvent};
-
-use crate::http_support::ByteStreamError;
 
 pub(crate) type SseResult<T> = Result<T, SseError>;
 
@@ -17,9 +14,6 @@ pub(crate) enum SseError {
 
     #[error("SSE JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
-
-    #[error("SSE payload missing field: {0}")]
-    MissingField(&'static str),
 }
 
 pub(crate) const DONE_SENTINEL_DATA: &str = "[DONE]";
@@ -31,20 +25,12 @@ pub(crate) fn done_sentinel_bytes() -> Bytes {
 
 /// A complete raw SSE frame, including its terminating blank line.
 ///
-/// Use this for wire-level transforms that must preserve non-target frames as
-/// bytes. Incomplete EOF bytes are represented as `SseSegment::Tail`, not as a
-/// frame.
+/// The scanner uses this internally to decode one complete frame without
+/// exposing chunk boundaries to provider observers.
 #[derive(Debug, Clone, PartialEq, Eq, Getters)]
 pub(crate) struct SseFrame {
     #[getset(get = "pub(crate)")]
     bytes: Bytes,
-}
-
-/// Output from raw SSE frame splitting.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum SseSegment {
-    Frame(SseFrame),
-    Tail(Bytes),
 }
 
 /// A decoded SSE message event.
@@ -124,26 +110,6 @@ impl SseEvent {
         serde_json::from_str(&self.data).ok()
     }
 
-    /// Re-encode a JSON payload using this event's SSE framing semantics.
-    ///
-    /// The default `message` event is represented by a bare `data:` frame;
-    /// emitting an explicit `event: message` would be wire-equivalent but adds
-    /// an unnecessary frame field to otherwise transparent normalization.
-    pub(crate) fn encode_json_payload(
-        &self,
-        payload: &impl Serialize,
-    ) -> serde_json::Result<Bytes> {
-        let data = serde_json::to_string(payload)?;
-        if self.is_default_event_type() {
-            Ok(Bytes::from(format!("data: {data}\n\n")))
-        } else {
-            Ok(Bytes::from(format!(
-                "event: {}\ndata: {data}\n\n",
-                self.event_type
-            )))
-        }
-    }
-
     pub(crate) fn payload_with_type(&self) -> SseResult<Value> {
         let mut payload = serde_json::from_str::<Value>(&self.data)?;
         if !self.is_default_event_type()
@@ -184,64 +150,6 @@ impl SseEventScanner {
         }
 
         frames
-    }
-}
-
-/// Convert a byte stream into raw SSE segments.
-///
-/// Completed frames are yielded with their original bytes. Any incomplete tail
-/// is yielded once at EOF so callers can preserve truncated upstream output.
-/// This is useful for selective wire-level transforms where decoded event
-/// semantics would lose formatting or unknown SSE fields.
-pub(crate) fn sse_frame_stream<S, E>(
-    input: S,
-) -> impl Stream<Item = Result<SseSegment, ByteStreamError>> + Send
-where
-    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
-    E: Into<ByteStreamError> + Send + 'static,
-{
-    try_stream! {
-        let mut input = Box::pin(input);
-        let mut buffer = BytesMut::new();
-
-        while let Some(chunk) = input.next().await {
-            let chunk = chunk.map_err(Into::into)?;
-            buffer.extend_from_slice(&chunk);
-            while let Some(frame_end) = complete_sse_frame_end(&buffer) {
-                yield SseSegment::Frame(SseFrame::new(buffer.split_to(frame_end).freeze()));
-            }
-        }
-
-        if !buffer.is_empty() {
-            yield SseSegment::Tail(buffer.freeze());
-        }
-    }
-}
-
-/// Convert a byte stream into decoded SSE message events.
-///
-/// This is the event-semantic layer above `sse_frame_stream`: complete frames
-/// are decoded into events, while incomplete EOF tails are ignored.
-pub(crate) fn sse_event_stream<S, E>(
-    input: S,
-) -> impl Stream<Item = Result<SseEvent, ByteStreamError>> + Send
-where
-    S: Stream<Item = Result<Bytes, E>> + Send + 'static,
-    E: Into<ByteStreamError> + Send + 'static,
-{
-    try_stream! {
-        let mut segments = Box::pin(sse_frame_stream(input));
-
-        while let Some(segment) = segments.next().await {
-            match segment? {
-                SseSegment::Frame(frame) => {
-                    if let Some(event) = Option::<SseEvent>::try_from(&frame).map_err(ByteStreamError::from)? {
-                        yield event;
-                    }
-                }
-                SseSegment::Tail(_) => {}
-            }
-        }
     }
 }
 

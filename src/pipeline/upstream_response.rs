@@ -4,10 +4,8 @@ use crate::http_support::response_is_sse;
 use crate::observe::UpstreamErrorResponseReceived;
 
 use crate::protocol::RequestProtocol;
-use crate::provider::{
-    ProviderResponseContext, handle_non_streaming_success_response,
-    handle_streaming_success_response,
-};
+use crate::provider::{ProviderResponseContext, handle_streaming_success_response};
+use crate::upstream::forward_non_streaming_response;
 
 use super::ProxyFlow;
 use super::provider_response::{
@@ -41,6 +39,7 @@ impl UpstreamHttpFlow {
         } = self;
 
         let provider_protocol = provider_response.protocol();
+        let normalizer = provider_response.normalizer(obs.clone());
         if !response.status().is_success() {
             let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
             let body = match response.bytes().await {
@@ -81,6 +80,7 @@ impl UpstreamHttpFlow {
                 stage: ProviderStreamingHttp {
                     inbound_protocol,
                     provider_protocol,
+                    normalizer,
                     response,
                 },
             }));
@@ -98,7 +98,7 @@ impl UpstreamHttpFlow {
                 return Err(error);
             }
         };
-        let response = handle_non_streaming_success_response(provider_response, &obs, head, body);
+        let response = forward_non_streaming_response(&obs, head, body);
         Ok(ProviderHttpFlow::NonStreaming(
             ProviderNonStreamingHttpFlow {
                 method,
@@ -109,6 +109,7 @@ impl UpstreamHttpFlow {
                 stage: ProviderNonStreamingHttp {
                     inbound_protocol,
                     provider_protocol,
+                    normalizer,
                     response,
                 },
             },

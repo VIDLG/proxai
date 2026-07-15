@@ -20,12 +20,13 @@ ProxAI keeps protocol conversion explicit and pair-oriented. The conversion rule
 
 - `crates/proxai-core/src/protocol/` owns protocol-specific Rust wire models.
 - `src/pipeline/inbound.rs` parses HTTP body bytes and maps application errors/notices; `crates/proxai-core/src/ingress/` owns structured normalization and validation before translation.
+- `crates/proxai-core/src/provider/` owns carrier-independent provider compatibility policy and structured response normalization.
 - `crates/proxai-core/src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
 - `src/provider/request.rs` owns provider request preparation, including model rewrite, projection/summary extraction, and JSON body serialization.
 - `src/provider/transport.rs` owns outbound HTTP transport, auth headers, upstream URL construction, and send.
 - `src/http_support/` owns HTTP carrier helpers such as `ByteStream`, content-type/header helpers, and response reconstruction.
 
-Do not hide general cross-protocol conversion inside a provider subtree. Provider code may normalize provider-local quirks, but protocol-to-protocol shape changes belong in `crates/proxai-core/src/translation/`.
+Do not hide general cross-protocol conversion inside a provider subtree. Structured provider quirks belong in `crates/proxai-core/src/provider/`, HTTP carrier adaptation stays in the application, and protocol-to-protocol shape changes belong in `crates/proxai-core/src/translation/`.
 
 Translation APIs should stay pure at the carrier boundary:
 

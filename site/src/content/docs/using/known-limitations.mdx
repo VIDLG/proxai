@@ -35,7 +35,7 @@ This page sets expectations for what ProxAI intentionally does not do today. It 
     ['Streaming', 'Stream correctness depends on complete terminal events and provider event semantics.', '[Streaming Behavior](/protocol/streaming-behavior)'],
     ['Tool calls', 'Started-but-unfinished streamed tool arguments are bounded by semantic timeout, not guessed into valid calls.', '[Status and Stop Reasons](/reference/status-and-stop-reasons)'],
     ['Capture', 'Captures can contain private data and must stay local unless manually sanitized.', '[Privacy and Local Data](/using/privacy-and-local-data)'],
-    ['Provider quirks', 'Provider-local compatibility belongs in provider code; cross-protocol shape changes belong in translation.', '[Module Boundaries](/developer/architecture/module-boundaries)'],
+    ['Provider quirks', 'Structured compatibility belongs in core provider code; HTTP carrier adaptation stays in the application; cross-protocol shape changes belong in translation.', '[Module Boundaries](/developer/architecture/module-boundaries)'],
   ]}
   codeFirstColumn={false}
 />

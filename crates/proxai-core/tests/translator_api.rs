@@ -102,6 +102,7 @@ async fn translates_structured_streams_through_the_public_api() {
 
     let output = translator.translate_stream(input).collect::<Vec<_>>().await;
 
-    assert_eq!(output.len(), 1);
+    assert_eq!(output.len(), 2);
     assert_eq!(output[0].as_ref().unwrap().data["id"], "chatcmpl_1");
+    assert!(output[1].as_ref().unwrap().is_done_sentinel());
 }

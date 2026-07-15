@@ -8,6 +8,7 @@ use std::time::Duration;
 use strum::{Display, EnumString};
 use url::Url;
 
+pub use proxai_core::provider::ProviderCompatibility;
 use proxai_core::routing::normalize_provider_name;
 pub use proxai_core::routing::{DefaultProviderNames, ModelMatchKind, RouteRule, RoutingConfig};
 
@@ -138,17 +139,6 @@ pub struct ProviderConfig {
     #[serde_as(as = "DurationSeconds<u64>")]
     #[serde(rename = "read_idle_timeout_secs")]
     pub read_idle_timeout: Duration,
-}
-
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, Display, EnumString,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
-pub enum ProviderCompatibility {
-    #[default]
-    AnthropicCompatible,
-    Strict,
 }
 
 #[derive(Debug, Clone, Deserialize)]

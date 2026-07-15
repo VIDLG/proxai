@@ -1,54 +1,5 @@
-use super::{SseEvent, SseEventScanner, SseSegment, sse_event_stream, sse_frame_stream};
+use super::{SseEvent, SseEventScanner};
 use bytes::Bytes;
-use futures_util::{StreamExt, stream};
-
-#[tokio::test]
-async fn frame_stream_yields_completed_frames_and_flushes_tail() {
-    let segments = sse_frame_stream(stream::iter([
-        Ok::<_, std::io::Error>(Bytes::from_static(b"data: a\n")),
-        Ok(Bytes::from_static(b"\ndata: b\n\ntail")),
-    ]))
-    .collect::<Vec<_>>()
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .unwrap();
-
-    assert_eq!(segments.len(), 3);
-    let SseSegment::Frame(first) = &segments[0] else {
-        panic!("expected first complete frame");
-    };
-    let SseSegment::Frame(second) = &segments[1] else {
-        panic!("expected second complete frame");
-    };
-    let SseSegment::Tail(tail) = &segments[2] else {
-        panic!("expected EOF tail");
-    };
-    assert_eq!(first.bytes().as_ref(), b"data: a\n\n");
-    assert_eq!(second.bytes().as_ref(), b"data: b\n\n");
-    assert_eq!(tail.as_ref(), b"tail");
-}
-
-#[tokio::test]
-async fn event_stream_decodes_complete_frames_and_ignores_tail() {
-    let events = sse_event_stream(stream::iter([
-        Ok::<_, std::io::Error>(Bytes::from_static(b"event: custom\n")),
-        Ok(Bytes::from_static(b"data: one\n\ntail")),
-    ]))
-    .collect::<Vec<_>>()
-    .await
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .unwrap();
-
-    assert_eq!(
-        events,
-        vec![SseEvent {
-            event_type: "custom".to_string(),
-            data: "one".to_string(),
-        }]
-    );
-}
 
 #[test]
 fn frame_to_event_decodes_comments_retry_and_multiline_data() {

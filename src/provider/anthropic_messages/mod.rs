@@ -8,5 +8,4 @@ mod response;
 
 pub(crate) use self::response::{
     AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot, handle_streaming_response,
-    normalize_message_body_bytes,
 };

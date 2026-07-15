@@ -68,11 +68,11 @@ A provider describes a concrete upstream:
 protocol = "anthropic_messages"
 base_url = "https://example.invalid"
 api_key = "..."
-compatibility = "anthropic_compatible"
+compatibility = "compatible"
 read_idle_timeout_secs = 60
 ```
 
-Provider `protocol` controls whether request translation is needed. For example, an inbound `openai_chat_completions` request routed to an `anthropic_messages` provider requires the `openai_chat_completions -> anthropic_messages` conversion pair. Provider `api_key` is always sent upstream (`Authorization: Bearer` for OpenAI providers, `x-api-key` for Anthropic providers) and overrides any client-supplied auth header — see [Behavior Contract C11 and C12](/reference/behavior-contracts#provider-authentication).
+Provider `protocol` controls whether request translation is needed. For example, an inbound `openai_chat_completions` request routed to an `anthropic_messages` provider requires the `openai_chat_completions -> anthropic_messages` conversion pair. Provider `compatibility` defaults to `compatible`, which repairs only measured response-shape gaps before identity forwarding or cross-protocol translation; use `strict` to preserve successful provider payloads without repair. Provider `api_key` is always sent upstream (`Authorization: Bearer` for OpenAI providers, `x-api-key` for Anthropic providers) and overrides any client-supplied auth header — see [Behavior Contract C11 and C12](/reference/behavior-contracts#provider-authentication).
 
 ## Related docs
 

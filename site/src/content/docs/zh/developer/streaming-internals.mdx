@@ -92,7 +92,7 @@ upstream/streaming.rs
   调用 BodyObserver 生命周期 hook
 ```
 
-其中 `translation/` 不参与 provider response bytes 观察和 provider-local normalization。provider streaming 处理仍然位于 `provider/` 边界内；`sse_translation.rs` 负责在 SSE bytes 与 `translation/` 的结构化 `StreamEvent` API 之间适配。
+应用层 `provider/` 只负责 provider response bytes 观察、timeout 和 HTTP carrier；`crates/proxai-core/src/provider/` 负责与 carrier 无关的 compatibility policy 与结构化 payload/event normalization；`translation/` 只负责跨协议转换。`sse_translation.rs` 在 SSE bytes 与 core 的结构化 `StreamEvent` API 之间适配，并在 translation 前调用 `ProviderNormalizer`。
 
 ## 通用 streaming carrier
 
@@ -402,7 +402,7 @@ chunk
 `AnthropicResponseState::observe_events(...)` 负责：
 
 - 解析 SSE data JSON。
-- 对 Anthropic-compatible provider 的 stream event payload 做 provider-local normalization。
+- 使用无具体 sink 的 core `ProviderNormalizer` 做容错归一化，保证诊断 state 能识别已知 provider 偏差。
 - 解析为 `MessageStreamEvent`。
 - 记录 message id / model / token usage / stop reason / stream_done / summary。
 
@@ -416,19 +416,15 @@ state.stream_done()
 
 ### compatibility normalization
 
-Anthropic-compatible provider 可能返回非严格 Anthropic Messages 形状。相关 normalization 位于：
+Compatible provider 可能返回非严格官方形状。纯 normalization 位于：
 
 ```text
-src/provider/anthropic_messages/response/normalize/
+crates/proxai-core/src/provider/response/
 ```
 
-streaming response 中，如果 provider compatibility 是 `AnthropicCompatible`，outbound SSE body 会经过：
+当 provider compatibility 是 `compatible` 时，应用 carrier 在解析出 `Value` 或 `StreamEvent` 后先调用 `ProviderNormalizer`，再做 identity forwarding 或跨协议 translation。`strict` 则不修复成功响应；同协议 strict/no-op stream 可保留原始 SSE bytes 快速路径。
 
-```rust
-normalize::normalize_sse_stream(body_stream)
-```
-
-这属于 provider-local response normalization，不进入 `translation/`。
+这仍属于 provider response normalization，不进入 `translation/`；core 通过 typed `ProviderObservation` 报告实际发生的修复，具体 logging/diagnostics sink 由应用层组合。
 
 ## outcome 语义
 
@@ -531,8 +527,9 @@ streaming/
    - 不持有 HTTP response/body。
    - 不负责输出 body 转换。
 
-4. **provider compatibility 留在 provider 层**
-   - Anthropic normalization 不进入 translation。
+4. **provider compatibility 留在 core provider 层**
+   - 结构化 normalization 位于 `crates/proxai-core/src/provider/`，不进入 translation。
+   - HTTP/SSE bytes 适配、timeout 与具体 observation sink 留在应用层。
    - Responses diagnostics 不伪装成三协议通用事件。
 
 5. **诊断数据就近拥有**

@@ -50,6 +50,7 @@ read_idle_timeout_secs = 42
 protocol = "anthropic_messages"
 base_url = "https://api.anthropic.com"
 api_key = "anthropic-secret"
+compatibility = "compatible"
 read_idle_timeout_secs = 55
 
 [tool_calls]
@@ -113,6 +114,10 @@ outbound_response_enabled = false
     assert_eq!(
         config.providers["anthropic_default"].protocol,
         ProviderProtocol::AnthropicMessages
+    );
+    assert_eq!(
+        config.providers["anthropic_default"].compatibility,
+        ProviderCompatibility::Compatible
     );
     assert_eq!(config.logging.level, LogLevel::Debug);
     assert_eq!(config.logging.output_format, LogOutputFormat::Json);

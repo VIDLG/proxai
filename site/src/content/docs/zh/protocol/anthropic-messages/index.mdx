@@ -359,6 +359,6 @@ index=1  input_json_delta  "Cargo.toml"}
 2. translation 构造 `ProviderRequest::AnthropicMessages`，保留原始 body。
 3. provider 直接转发到上游。
 4. 非流式响应原样返回并可 capture。
-5. SSE 响应保留原始 bytes 和 headers；`AnthropicSseObserver` 使用 `SseEventScanner` 扫描事件，将 `MessageStreamEvent` 归纳到 `AnthropicResponseState`，并记录 completed/closed/error 日志。`AnthropicCompatible` provider 会先经过 provider-local SSE normalization。
+5. Strict 的同协议 SSE 响应保留原始 bytes 和 headers；`compatible` 模式会解析事件、调用 core `ProviderNormalizer`，再重新编码。`AnthropicSseObserver` 独立扫描上游事件，将 `MessageStreamEvent` 归纳到 `AnthropicResponseState`，并记录 completed/closed/error 日志。
 
 当前 Anthropic observer 不重组语义流，也不注入工具参数超时诊断。协议层的 `MessageStreamEvent` 主要用于 provider response 观察、摘要和跨协议翻译。

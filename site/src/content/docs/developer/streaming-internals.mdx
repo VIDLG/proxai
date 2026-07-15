@@ -24,7 +24,7 @@ ProxAI treats streaming as a byte-carrier problem plus protocol-specific event o
   ]}
 />
 
-`translation/` does not perform provider-local byte-stream observation. Provider streaming observation stays inside `provider/`; `sse_translation.rs` adapts SSE bytes to the structured `StreamEvent` API exposed by `translation/`.
+`translation/` does not perform provider byte-stream observation or compatibility repair. Streaming observation stays inside application `provider/`; `sse_translation.rs` adapts SSE bytes to structured `StreamEvent` values, applies core `ProviderNormalizer`, and then invokes `translation/`.
 
 ## BodyObserver lifecycle
 
@@ -107,12 +107,13 @@ The application and reusable translation core meet at a structured-event boundar
 ```text
 provider/upstream byte observation
   → sse_translation.rs parses SSE frames
+  → core ProviderNormalizer repairs configured compatibility gaps
   → Translator consumes and produces StreamEvent values
   → sse_translation.rs encodes target SSE frames
   → pipeline observes failures and renders client-facing errors
 ```
 
-Raw chunks, triggering SSE frames, HTTP metadata, diagnostics, and client error rendering remain in the application layer. The core returns semantic failures through `Stream<Item = Result<StreamEvent, StreamTranslationError>>`; the shared core `Observer` reports typed legal-but-lossy adaptations and is not an error channel.
+Raw chunks, triggering SSE frames, HTTP metadata, diagnostics, and client error rendering remain in the application layer. Carrier-independent provider compatibility policy and structured payload/event normalization live in `crates/proxai-core/src/provider/`; cross-protocol conversion remains in `crates/proxai-core/src/translation/`. The core returns semantic failures through `Stream<Item = Result<StreamEvent, StreamTranslationError>>`; the shared core `Observer` reports typed compatibility adaptations and legal-but-lossy translations, and is not an error channel.
 
 ## Translation stream lifecycle
 

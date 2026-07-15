@@ -1,3 +1,6 @@
+use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer};
+use proxai_core::translation::stream::StreamEvent as StructuredStreamEvent;
+
 use crate::http_support::UpstreamResponseHead;
 use crate::protocol::openai::chat_completions::{
     ChatStreamResponseProjection, CreateChatCompletionStreamResponse,
@@ -43,6 +46,10 @@ pub(crate) struct ChatUpstreamResponseState {
 
 impl ChatUpstreamResponseState {
     pub(crate) fn observe_events(&mut self, events: &[SseEvent]) {
+        let normalizer = ProviderNormalizer::new(
+            crate::protocol::ProviderProtocol::OpenaiChatCompletions,
+            ProviderCompatibility::Compatible,
+        );
         for event in events {
             if event.is_done_sentinel() {
                 self.stream_done = true;
@@ -51,9 +58,15 @@ impl ChatUpstreamResponseState {
             let Ok(payload) = event.payload_with_type() else {
                 continue;
             };
-            let Ok(response) = serde_json::from_value::<CreateChatCompletionStreamResponse>(
-                super::normalize::normalize_stream_event_payload(payload),
-            ) else {
+            let payload = normalizer
+                .normalize_stream_event(StructuredStreamEvent::new(
+                    event.event_type.clone(),
+                    payload,
+                ))
+                .data;
+            let Ok(response) =
+                serde_json::from_value::<CreateChatCompletionStreamResponse>(payload)
+            else {
                 continue;
             };
             let projection = ChatStreamResponseProjection::from(response);

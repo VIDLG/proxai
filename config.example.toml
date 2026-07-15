@@ -91,12 +91,12 @@ read_idle_timeout_secs = 120
 protocol = "anthropic_messages"
 base_url = "https://api.anthropic.com"
 api_key = "replace-with-your-api-key"
-# strict: do not rewrite successful upstream Anthropic Messages response bodies.
-# anthropic_compatible: fill conservative compatibility gaps, currently
-# missing SDK required-nullable response fields (including Chat stream
-# choices[].finish_reason), bare message_start events, measured MiniMax
-# thinking block missing-signature events, and measured GLM 5.1 partial
-# server_tool_use counters.
+# strict: preserve successful upstream response payloads without compatibility repair.
+# compatible: repair measured provider omissions before identity forwarding or
+# cross-protocol translation. Current repairs include required-nullable response
+# fields (including Chat stream choices[].finish_reason), bare Anthropic
+# message_start events, MiniMax thinking blocks without signatures, and GLM 5.1
+# partial server_tool_use counters.
 compatibility = "strict"
 read_idle_timeout_secs = 120
 

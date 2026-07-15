@@ -203,10 +203,11 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     { name: 'proxai-core/ingress/', icon: 'route', description: 'Carrier-independent structured request normalization, validation, model extraction, and typed ingress observations.' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default; no concrete sinks.' },
     { name: 'proxai-core/routing/', icon: 'flow', description: 'Carrier-independent provider-label selection from request protocol, model pattern, defaults, and route configuration.' },
+    { name: 'proxai-core/provider/', icon: 'key', description: 'Carrier-independent provider compatibility policy and structured response/event normalization.' },
     { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and emits typed observations through the shared `Observer`.' },
     { name: 'provider/', icon: 'key', description: 'Provider request rendering, model rewrite, auth headers, upstream URL construction, and transport.' },
     { name: 'upstream/', icon: 'terminal', description: 'Reading upstream status, headers, complete bodies, or streaming byte carriers.' },
-    { name: 'sse_translation.rs', icon: 'flow', description: 'Application carrier adapter: parses SSE bytes into `StreamEvent`, invokes the pure translator, retains failure context, and encodes translated events back to SSE.' },
+    { name: 'sse_translation.rs', icon: 'flow', description: 'Application carrier adapter: parses SSE bytes into `StreamEvent`, applies `ProviderNormalizer`, invokes the pure translator, retains failure context, and encodes output back to SSE.' },
     { name: 'http_support/', icon: 'file', description: 'Protocol-neutral HTTP helpers such as content-type checks, response reconstruction, and boxed byte streams.' },
     { name: 'observe/', icon: 'gauge', description: 'Capture artifacts, structured logging, request hints, and privacy-preserving diagnostics.' },
     { name: 'error/', icon: 'alert', description: 'Domain-specific error types and client-facing response rendering.' },
@@ -219,10 +220,11 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 - `proxai-core/ingress/` accepts structured JSON values and owns protocol normalization and validation; it never receives HTTP body bytes.
 - `src/pipeline/inbound.rs` is the application adapter for path detection, JSON byte parsing, error mapping, and request-scoped observer wiring.
 - `pipeline/` coordinates the full request lifecycle and owns phase order.
+- `proxai-core/provider/` owns carrier-independent provider compatibility policy and structured response/event normalization.
 - `proxai-core/translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
-- `sse_translation.rs` is the application adapter between upstream byte streams and the pure structured-event translator. It owns raw triggering frames and SSE output encoding.
-- `provider/` owns provider request rendering and transport details such as auth headers, upstream URLs, and idle-read timeout.
-- `proxai-core/observe/` defines the shared `Observer` contract and closed `Observation` enum. Core ingress and translation emit typed variants; `src/observe/` supplies the downstream implementation and owns logging, diagnostics, and capture.
+- `sse_translation.rs` is the application adapter between upstream byte streams and core provider/translation APIs. It owns raw triggering frames and SSE output encoding.
+- `provider/` owns application-side provider request rendering and transport details such as auth headers, upstream URLs, and idle-read timeout.
+- `proxai-core/observe/` defines the shared `Observer` contract and closed `Observation` enum. Core ingress, provider normalization, and translation emit typed variants; `src/observe/` supplies the downstream implementation and owns logging, diagnostics, and capture.
 - `observe/` cuts across the pipeline for diagnostics, but does not make routing or protocol decisions.
 - Semantic stream and HTTP errors should use domain errors instead of being hidden inside `std::io::Error`.
 
@@ -236,6 +238,7 @@ flowchart TD
   lib --> pipeline[pipeline/]
 
   pipeline --> core_ingress[proxai-core/ingress/]
+  pipeline --> core_provider[proxai-core/provider/]
   pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
@@ -246,12 +249,14 @@ flowchart TD
   pipeline --> error[error/]
 
   core_ingress --> protocol[proxai-core/protocol/]
+  core_provider --> protocol
   translation --> protocol
   provider --> protocol
   upstream --> http_support
   provider --> http_support
   sse_translation --> http_support
   sse_translation --> sse[sse.rs]
+  sse_translation --> core_provider
   sse_translation --> translation
   upstream --> sse
   observe --> error
@@ -262,10 +267,11 @@ flowchart TD
 Key rules:
 
 - `proxai-core/protocol/` is low-level wire modeling.
-- `proxai-core/ingress/` is the structured value boundary for normalization and validation; `src/pipeline/inbound.rs` adapts HTTP bytes and application diagnostics.
+- `proxai-core/ingress/` is the structured value boundary for inbound normalization and validation; `src/pipeline/inbound.rs` adapts HTTP bytes and application diagnostics.
+- `proxai-core/provider/` is the structured provider-response compatibility boundary; application pipeline/SSE adapters supply HTTP carriers and concrete observers.
 - `pipeline/` is the coordinator that knows about the full request lifecycle.
 - `proxai-core/translation/` depends only on protocol models, structured values/events, and the core observation contract; it does not depend on HTTP, SSE bytes, provider transport, or concrete application observation.
-- `sse_translation.rs` and `pipeline/` compose byte carriers, the pure translator, diagnostics, and client-facing error rendering.
+- `sse_translation.rs` and `pipeline/` compose byte carriers, core provider normalization, the pure translator, diagnostics, and client-facing error rendering.
 - `observe/` implements the core observation trait but does not make protocol or routing decisions.
 
 ## Translation selection

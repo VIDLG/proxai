@@ -141,10 +141,11 @@ async fn preserves_identity_structured_stream() {
 
     let output = translator.translate_stream(input).collect::<Vec<_>>().await;
 
-    assert_eq!(output.len(), 1);
+    assert_eq!(output.len(), 2);
     let event = output[0].as_ref().unwrap();
     assert_eq!(event.event_type, "message");
     assert_eq!(event.data, json!({"id": "chatcmpl_1"}));
+    assert!(output[1].as_ref().unwrap().is_done_sentinel());
 }
 
 #[tokio::test]

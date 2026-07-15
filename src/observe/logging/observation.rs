@@ -11,6 +11,12 @@ pub(super) fn emit(observation: &Observation) {
             budget_tokens,
             "accepted Anthropic legacy thinking.type=enabled budget_tokens; prefer output_config.effort or thinking.type=adaptive"
         ),
+        Observation::Provider(observation) => tracing::trace!(
+            provider_protocol = %observation.protocol,
+            phase = %observation.phase,
+            adaptation = %observation.adaptation,
+            "provider compatibility observation"
+        ),
         Observation::Translation(observation) => tracing::trace!(
             request_protocol = %observation.request_protocol,
             provider_protocol = %observation.provider_protocol,

@@ -1,4 +1,4 @@
-//! Carrier-independent ingress, routing, protocol models, and translation.
+//! Carrier-independent ingress, provider compatibility, routing, protocol models, and translation.
 //!
 //! The core accepts structured configuration, JSON values, or structured stream
 //! events. HTTP, SSE byte framing, provider transport, concrete observation
@@ -9,5 +9,6 @@ pub mod ingress;
 mod json;
 pub mod observe;
 pub mod protocol;
+pub mod provider;
 pub mod routing;
 pub mod translation;

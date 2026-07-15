@@ -6,6 +6,7 @@
 //! observation.
 
 use derive_more::From;
+use strum::Display;
 
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
@@ -13,6 +14,7 @@ use crate::protocol::{ProviderProtocol, RequestProtocol};
 #[derive(Debug, Clone, PartialEq, Eq, From)]
 pub enum Observation {
     Ingress(IngressObservation),
+    Provider(ProviderObservation),
     Translation(TranslationObservation),
 }
 
@@ -20,6 +22,31 @@ pub enum Observation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IngressObservation {
     AnthropicLegacyThinkingBudget { model: String, budget_tokens: u32 },
+}
+
+/// A provider compatibility repair applied before response translation or forwarding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderObservation {
+    pub protocol: ProviderProtocol,
+    pub phase: ProviderResponsePhase,
+    pub adaptation: ProviderResponseAdaptation,
+}
+
+/// Structured provider response phase where compatibility repair occurred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum ProviderResponsePhase {
+    NonStreaming,
+    Streaming,
+}
+
+/// Closed set of provider response compatibility repairs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum ProviderResponseAdaptation {
+    AnthropicMessagesShape,
+    AnthropicMessagesStreamEvent,
+    OpenaiChatCompletionsStreamEvent,
 }
 
 /// Core pipeline phase in which a translation observation was emitted.

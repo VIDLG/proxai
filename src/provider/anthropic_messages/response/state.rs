@@ -1,13 +1,14 @@
 use crate::http_support::UpstreamResponseHead;
 use crate::upstream::{UpstreamBodyStreamStats, UpstreamStreamMetrics};
 use getset::{CopyGetters, Getters};
+use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer};
+use proxai_core::translation::stream::StreamEvent as StructuredStreamEvent;
 
 use crate::protocol::anthropic::messages::{
     Message, MessageDeltaEvent, MessageStreamEvent, ResponseServiceTier, StopReason,
 };
 use crate::sse::SseEvent;
 
-use super::normalize::normalize_stream_event_payload;
 use super::summary::AnthropicResponseSummary;
 
 #[derive(Debug, Clone, Default, Getters, CopyGetters)]
@@ -35,13 +36,21 @@ pub(crate) struct AnthropicResponseState {
 
 impl AnthropicResponseState {
     pub(crate) fn observe_events(&mut self, events: &[SseEvent]) {
+        let normalizer = ProviderNormalizer::new(
+            crate::protocol::ProviderProtocol::AnthropicMessages,
+            ProviderCompatibility::Compatible,
+        );
         for event in events {
-            let Ok(payload) = serde_json::from_str::<serde_json::Value>(&event.data) else {
+            let Ok(payload) = event.payload_with_type() else {
                 continue;
             };
-            let Ok(event) = serde_json::from_value::<MessageStreamEvent>(
-                normalize_stream_event_payload(payload),
-            ) else {
+            let payload = normalizer
+                .normalize_stream_event(StructuredStreamEvent::new(
+                    event.event_type.clone(),
+                    payload,
+                ))
+                .data;
+            let Ok(event) = serde_json::from_value::<MessageStreamEvent>(payload) else {
                 continue;
             };
             self.record_stream_event(&event);

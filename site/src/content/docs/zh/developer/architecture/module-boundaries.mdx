@@ -24,7 +24,8 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs、enums 和协议专属 event payload。不做 provider routing 决策。' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: '编译模型规则，按 request protocol/model 选择 provider 标签，改写 upstream model，并执行严格协议 guard。' },
     { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: '协议 pair 之间的纯 request/response/stream 转换。' },
-    { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation：模型改写、provider compatibility projection、序列化。' },
+    { name: 'crates/proxai-core/src/provider/', icon: 'file', description: '与 carrier 无关的 provider compatibility policy 和结构化响应归一化。' },
+    { name: 'src/provider/*/request', icon: 'file', description: '应用层 Provider request preparation：模型改写、provider projection、序列化。' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: '上游 URL 构造、provider-owned auth headers、HTTP send。' },
     { name: 'src/upstream/', icon: 'timer', description: '读取 provider status、headers、非流式 body 和流式 byte carrier。' },
     { name: 'src/http_support/', icon: 'architecture', description: 'HTTP response reconstruction、content-type helpers、header filtering、byte stream carriers。' },
@@ -45,6 +46,7 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
     ['是否按协议/模型选择 provider 标签？', '`crates/proxai-core/src/routing/`'],
     ['是否把选中的 provider 标签映射到 HTTP transport？', '`src/pipeline/provider_request.rs`'],
     ['是否把一种协议 payload 转成另一种协议 payload？', '`crates/proxai-core/src/translation/`'],
+    ['是否修复已测量的 provider 结构化响应偏差？', '`crates/proxai-core/src/provider/`'],
     ['是否改写 provider model 或 provider-local request 字段？', '`src/provider/*/request`'],
     ['是否添加 provider 认证头或构造上游 URL？', '`src/provider/*/transport`'],
     ['是否过滤 headers 或重建 HTTP response？', '`src/http_support/`'],
@@ -56,7 +58,7 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
 
 ## Observation 与日志边界
 
-`proxai-core` 定义共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现。Core ingress 与 translation 通过该 contract 发出类型化 variants。它们不选择 `tracing`、诊断文件、capture 存储、metrics backend 或其他具体 sink；具体实现由下游应用组合层提供。
+`proxai-core` 定义共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现。Core ingress、provider normalization 与 translation 通过该 contract 发出类型化 variants。它们不选择 `tracing`、诊断文件、capture 存储、metrics backend 或其他具体 sink；具体实现由下游应用组合层提供。
 
 对于 request-scoped 代码，稳定的生命周期和领域事件应通过 `ObserveContext` 发出。`ObserveSinks` 再决定一个 point 应进入日志、diagnostics、capture，还是同时进入多个 sink。只有 logging sink 负责把 observation 转成 `tracing` event，并选择日志级别和输出格式。
 

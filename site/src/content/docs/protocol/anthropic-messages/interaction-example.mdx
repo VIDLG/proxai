@@ -47,5 +47,5 @@ partial_tool_inputs[index] += input_json_delta.partial_json
 When `content_block_stop(index=2)` arrives, the client can parse the accumulated partial JSON and use the same block's `ToolUseBlock.id` as the local tool call id.
 
 <ProxaiCallout type="note" title="ProxAI behavior">
-  For `anthropic_messages -> anthropic_messages`, ProxAI preserves raw SSE bytes. `AnthropicSseObserver` scans events for compact completed/closed/error diagnostics; provider-local compatibility normalization stays in the provider layer.
+  For strict `anthropic_messages -> anthropic_messages`, ProxAI preserves raw SSE bytes. In `compatible` mode, it parses events and applies core provider normalization before re-encoding them. `AnthropicSseObserver` independently scans the upstream bytes for compact completed/closed/error diagnostics.
 </ProxaiCallout>

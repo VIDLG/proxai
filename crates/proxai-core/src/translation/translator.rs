@@ -77,7 +77,10 @@ impl PairStreamingState {
 
     fn finish_stream(&mut self, end: StreamEnd) -> StreamTranslationResult<Vec<StreamEvent>> {
         match self {
-            Self::Identity => Ok(Vec::new()),
+            Self::Identity => Ok((end == StreamEnd::Done)
+                .then(StreamEvent::done)
+                .into_iter()
+                .collect()),
             Self::AnthropicToChat(state) => state.finish_stream(end),
             Self::AnthropicToResponses(state) => state.finish_stream(end),
             Self::ChatToAnthropic(state) => state.finish_stream(end),
