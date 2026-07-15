@@ -47,7 +47,3 @@ pub(crate) fn translate_request(
         }
     }
 }
-
-#[cfg(test)]
-#[path = "request_tests.rs"]
-mod tests;

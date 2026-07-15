@@ -11,9 +11,9 @@ import { FeatureGrid, ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
   protocol="openai_responses"
   requestPath="/v1/responses"
   codeAreas={[
-    'src/protocol/openai/responses/wire',
-    'src/protocol/openai/responses/request',
-    'src/protocol/openai/responses/response',
+    'crates/proxai-core/src/protocol/openai/responses/wire',
+    'crates/proxai-core/src/protocol/openai/responses/request',
+    'crates/proxai-core/src/protocol/openai/responses/response',
     'src/provider/openai/responses',
   ]}
   convertsTo={['openai_chat_completions', 'anthropic_messages']}
@@ -21,7 +21,7 @@ import { FeatureGrid, ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
 
 ## 请求模型
 
-运行时先由 ingress 解析入站 body，生成 `PreparedOpenaiResponsesRequest`。协议层的轻量投影是 `RequestProjection`，位于 `src/protocol/openai/responses/request/projection.rs`。
+运行时先由 ingress 解析入站 body，生成 `PreparedOpenaiResponsesRequest`。协议层的轻量投影是 `RequestProjection`，位于 `crates/proxai-core/src/protocol/openai/responses/request/projection.rs`。
 
 `RequestProjection` 保留路由、日志和诊断需要的字段，例如：
 

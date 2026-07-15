@@ -13,18 +13,18 @@ English version: [Protocol Conversion and Wire-Model Alignment](/developer/proto
 
 ProxAI 保持协议转换显式、按协议对组织。这里是开发者视角的总览，具体规则拆分到专题页，便于维护和查阅。
 
-> 这是 `src/translation/` 的开发者入口。如果你想看面向使用者的协议行为，请先看 [协议指南](/zh/protocol)。
+> 这是 `crates/proxai-core/src/translation/` 的开发者入口。如果你想看面向使用者的协议行为，请先看 [协议指南](/zh/protocol)。
 
 ## 边界
 
-- `src/protocol/` 负责协议专属的 Rust wire model。
+- `crates/proxai-core/src/protocol/` 负责协议专属的 Rust wire model。
 - `src/ingress/` 负责翻译前的入站解析与归一化。
-- `src/translation/` 负责在入站 `request_protocol` 和出站 provider `protocol` 之间做纯跨协议转换。
+- `crates/proxai-core/src/translation/` 负责在入站 `request_protocol` 和出站 provider `protocol` 之间做纯跨协议转换。
 - `src/provider/request.rs` 负责 provider 请求准备，包括模型改写、projection/summary 提取和 JSON body 序列化。
 - `src/provider/transport.rs` 负责出站 HTTP 传输、认证头、上游 URL 构造和发送。
 - `src/http_support/` 负责 HTTP carrier 辅助能力，例如 `ByteStream`、content-type/header 辅助和响应重建。
 
-不要把通用跨协议转换隐藏在 provider 子树里。Provider 代码可以处理 provider 本地兼容性怪癖，但协议到协议的 shape 改写应该放在 `src/translation/`。
+不要把通用跨协议转换隐藏在 provider 子树里。Provider 代码可以处理 provider 本地兼容性怪癖，但协议到协议的 shape 改写应该放在 `crates/proxai-core/src/translation/`。
 
 Translation API 在 carrier 边界应保持纯粹：
 
@@ -32,7 +32,7 @@ Translation API 在 carrier 边界应保持纯粹：
 - 非流式响应转换：`(request_protocol, provider_protocol, payload) -> payload`
 - 流式响应转换：`(request_protocol, provider_protocol, ByteStream) -> ByteStream`
 
-不要把 HTTP `Response`、`Body`、provider request struct 或路由/模型改写细节传进 `src/translation/`。
+不要把 HTTP `Response`、`Body`、provider request struct 或路由/模型改写细节传进 `crates/proxai-core/src/translation/`。
 
 
 ## 命名

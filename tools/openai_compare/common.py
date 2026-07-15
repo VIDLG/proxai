@@ -7,10 +7,10 @@ import tree_sitter_rust as ts_rust
 
 SCHEMA_PATH = Path("contrib/openai-openapi/openapi.yaml")
 PROTOCOL_DIRS = {
-    "responses": [Path("src/protocol/openai/responses/wire")],
+    "responses": [Path("crates/proxai-core/src/protocol/openai/responses/wire")],
     "chat": [
-        Path("src/protocol/openai/chat_completions/wire"),
-        Path("src/protocol/openai/chat_completions/request/wire"),
+        Path("crates/proxai-core/src/protocol/openai/chat_completions/wire"),
+        Path("crates/proxai-core/src/protocol/openai/chat_completions/request/wire"),
     ],
 }
 

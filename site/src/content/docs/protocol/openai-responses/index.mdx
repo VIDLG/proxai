@@ -13,9 +13,9 @@ ProxAI uses the protocol name `openai_responses` for the OpenAI Responses API.
   protocol="openai_responses"
   requestPath="/v1/responses"
   codeAreas={[
-    'src/protocol/openai/responses/wire',
-    'src/protocol/openai/responses/request',
-    'src/protocol/openai/responses/response',
+    'crates/proxai-core/src/protocol/openai/responses/wire',
+    'crates/proxai-core/src/protocol/openai/responses/request',
+    'crates/proxai-core/src/protocol/openai/responses/response',
     'src/provider/openai/responses',
   ]}
   convertsTo={['openai_chat_completions', 'anthropic_messages']}
@@ -23,7 +23,7 @@ ProxAI uses the protocol name `openai_responses` for the OpenAI Responses API.
 
 ## Request model
 
-At runtime, ingress parses the inbound body and produces `PreparedOpenaiResponsesRequest`. The protocol-layer lightweight projection is `RequestProjection`, located in `src/protocol/openai/responses/request/projection.rs`.
+At runtime, ingress parses the inbound body and produces `PreparedOpenaiResponsesRequest`. The protocol-layer lightweight projection is `RequestProjection`, located in `crates/proxai-core/src/protocol/openai/responses/request/projection.rs`.
 
 `RequestProjection` keeps the fields needed for routing, logging, and diagnostics, for example:
 

@@ -104,16 +104,21 @@ Provider names are user labels. They are not semantic protocol identifiers.
   - error/ — domain errors and rendering
   - http_support/ — HTTP carrier helpers
   - ingress/ — inbound protocol parsing and normalization
-  - protocol/ — protocol wire types and protocol enums
   - routing/ — route matching
   - provider/ — provider request preparation and HTTP transport
   - upstream/ — upstream response reading
-  - translation/ — cross-protocol conversion
   - pipeline/ — typed proxy pipeline
   - observe/ — capture, logging, diagnostics
   - mcp/ — MCP control surface
+- crates/
+  - proxai-core/
+    - src/
+      - protocol/ — protocol wire types and protocol enums
+      - translation/ — carrier-independent cross-protocol conversion
 
 </FileTree>
+
+The application crate re-exports `proxai_core::{protocol, translation}` from `src/lib.rs`, preserving the existing application-side module paths while keeping the implementation and dependency boundary in `proxai-core`.
 
 ## Request lifecycle
 
@@ -165,7 +170,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'provider_request',
-      modules: ['pipeline/provider_request.rs', 'provider/request', 'translation/request'],
+      modules: ['pipeline/provider_request.rs', 'provider/request', 'proxai-core/translation/request'],
       responsibility: 'Translate request payload, rewrite provider model, serialize body.',
     },
     {
@@ -181,7 +186,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'outbound_response',
-      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'translation/response', 'translation/streaming'],
+      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'proxai-core/translation/response', 'proxai-core/translation/stream'],
       responsibility: 'Translate response back to the inbound protocol, adapt structured events to/from SSE bytes, observe failures, and rebuild the HTTP response.',
     },
   ]}
@@ -193,10 +198,10 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 <ModuleGrid
   modules={[
-    { name: 'protocol/', icon: 'protocol', description: 'Protocol wire shapes and shared protocol enums. Models JSON only; no conversion and no HTTP carrier types.' },
+    { name: 'proxai-core/protocol/', icon: 'protocol', description: 'Core crate protocol wire shapes and shared protocol enums. Models JSON only; no conversion and no HTTP carrier types.' },
     { name: 'ingress/', icon: 'route', description: 'Inbound protocol detection, parsing, and normalization before routing and translation.' },
     { name: 'routing/', icon: 'flow', description: 'Provider selection from request protocol, model pattern, defaults, and route configuration.' },
-    { name: 'translation/', icon: 'protocol', description: 'Pure request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and `TranslationObserver` extension point.' },
+    { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate request, response, and structured-event conversion across explicit protocol pairs. Exposes the `Translator` façade and `TranslationObserver` extension point.' },
     { name: 'provider/', icon: 'key', description: 'Provider request rendering, model rewrite, auth headers, upstream URL construction, and transport.' },
     { name: 'upstream/', icon: 'terminal', description: 'Reading upstream status, headers, complete bodies, or streaming byte carriers.' },
     { name: 'sse_translation.rs', icon: 'flow', description: 'Application carrier adapter: parses SSE bytes into `StreamEvent`, invokes the pure translator, retains failure context, and encodes translated events back to SSE.' },
@@ -208,12 +213,12 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 ## Boundary rules
 
-- `protocol/` is low-level wire modeling: JSON shapes only, no conversion.
+- `proxai-core/protocol/` is low-level wire modeling: JSON shapes only, no conversion.
 - `pipeline/` coordinates the full request lifecycle and owns phase order.
-- `translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
+- `proxai-core/translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
 - `sse_translation.rs` is the application adapter between upstream byte streams and the pure structured-event translator. It owns raw triggering frames and SSE output encoding.
 - `provider/` owns provider request rendering and transport details such as auth headers, upstream URLs, and idle-read timeout.
-- `translation/` defines the narrow `TranslationObserver` trait for legal-but-lossy adaptation telemetry; `observe/` supplies the application implementation and owns logging, diagnostics, and capture.
+- `proxai-core/translation/` defines the narrow `TranslationObserver` trait for legal-but-lossy adaptation telemetry; `observe/` supplies the application implementation and owns logging, diagnostics, and capture.
 - `observe/` cuts across the pipeline for diagnostics, but does not make routing or protocol decisions.
 - Semantic stream and HTTP errors should use domain errors instead of being hidden inside `std::io::Error`.
 
@@ -231,12 +236,12 @@ flowchart TD
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
   pipeline --> sse_translation[sse_translation.rs]
-  pipeline --> translation[translation/]
+  pipeline --> translation[proxai-core/translation/]
   pipeline --> observe[observe/]
   pipeline --> http_support[http_support/]
   pipeline --> error[error/]
 
-  ingress --> protocol[protocol/]
+  ingress --> protocol[proxai-core/protocol/]
   translation --> protocol
   provider --> protocol
   upstream --> http_support
@@ -253,9 +258,9 @@ flowchart TD
 
 Key rules:
 
-- `protocol/` is low-level wire modeling.
+- `proxai-core/protocol/` is low-level wire modeling.
 - `pipeline/` is the coordinator that knows about the full request lifecycle.
-- `translation/` depends only on protocol models and structured values/events; it does not depend on HTTP, SSE bytes, provider transport, or application observation.
+- `proxai-core/translation/` depends only on protocol models and structured values/events; it does not depend on HTTP, SSE bytes, provider transport, or application observation.
 - `sse_translation.rs` and `pipeline/` compose byte carriers, the pure translator, diagnostics, and client-facing error rendering.
 - `observe/` implements the core observation trait but does not make protocol or routing decisions.
 
@@ -269,7 +274,7 @@ Key rules:
 Rules:
 
 - Same protocol: pass through without protocol conversion.
-- Different protocols: dispatch to `translation/<inbound_protocol>/to_<provider_protocol>/`.
+- Different protocols: dispatch to `crates/proxai-core/src/translation/<inbound_protocol>/to_<provider_protocol>/`.
 - Unsupported pairs fail explicitly.
 
 `Translator` is the single public façade. It owns a crate-private `TranslationContext`, which atomically carries the selected route and observation hook. Each entrypoint derives a phase-bound `TranslationScope`: request, non-streaming response, or streaming response. Pair code therefore calls observation methods without separately supplying a phase, so an operation cannot accidentally report telemetry under the wrong pipeline phase. Value translation borrows its derived scope; structured stream translation consumes `Translator`, moves a streaming-response scope into the returned stream, and lazily creates a private closed `PairStreamingState` containing exactly one of the six cross-protocol state machines or the identity path. This avoids allocating stream state for value-only translation and prevents pair state from being reused across streams. Context and scope definitions live below the façade in `translation/context.rs`; top-level dispatch and pair code receive only `&TranslationScope`, so dispatch, phase, and observation cannot disagree about the active operation. Protocol-neutral event, error, terminal, identity, and lifecycle types live in dependency-free `translation/stream.rs`. Pair implementations depend only on `context.rs` and `stream.rs`, while `Translator` depends on those foundations plus pair states, so every dependency edge remains one-directional. Carrier adapters call `Translator::translate_stream` rather than driving pair events or terminal handling directly.

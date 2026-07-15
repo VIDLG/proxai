@@ -49,10 +49,10 @@ export const lifecycleEdges = [
   stages={[
     { name: 'inbound_request', modules: ['src/ingress/', 'src/pipeline/inbound.rs'], responsibility: '检测请求路径，读取 body，解析协议 payload，并规范化入站请求元数据。' },
     { name: 'routing', codeName: false, modules: ['src/routing/', 'src/config.rs'], responsibility: '解析显式路由或协议感知默认 provider；执行 request_protocol guard。' },
-    { name: 'provider_request', modules: ['src/provider/*/request', 'src/translation/'], responsibility: '协议不同时转换 payload，重写 provider model，并序列化上游请求。' },
+    { name: 'provider_request', modules: ['src/provider/*/request', 'crates/proxai-core/src/translation/'], responsibility: '协议不同时转换 payload，重写 provider model，并序列化上游请求。' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: '构造上游 URL，附加 provider-owned 认证头，并通过 HTTP 发送。' },
     { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: '读取状态、headers、非流式 body 或流式 byte carrier。' },
-    { name: 'outbound_response', modules: ['src/translation/', 'src/http_support/'], responsibility: '把 provider response 转回入站协议，并重建客户端 HTTP response。' },
+    { name: 'outbound_response', modules: ['crates/proxai-core/src/translation/', 'src/http_support/'], responsibility: '把 provider response 转回入站协议，并重建客户端 HTTP response。' },
   ]}
 />
 

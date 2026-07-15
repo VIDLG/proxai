@@ -31,3 +31,6 @@ pub(crate) fn prepare_openai_responses_request(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod translation_tests;

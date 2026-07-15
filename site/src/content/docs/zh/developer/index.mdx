@@ -19,9 +19,9 @@ import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@com
 <PipelineStageCards
   labels={{ modules: '模块', responsibility: '职责' }}
   stages={[
-    { name: 'ingress', codeName: false, modules: ['src/ingress/', 'src/protocol/'], responsibility: '检测入站协议、解析 payload，并规范化入站请求形状。' },
+    { name: 'ingress', codeName: false, modules: ['src/ingress/', 'crates/proxai-core/src/protocol/'], responsibility: '检测入站协议、解析 payload，并规范化入站请求形状。' },
     { name: 'routing', codeName: false, modules: ['src/config.rs', 'pipeline routing'], responsibility: '通过协议感知 defaults 或显式模型 route 选择 provider。' },
-    { name: 'translation', codeName: false, modules: ['src/translation/'], responsibility: '在纯协议边界上转换协议 payload 和 streams。' },
+    { name: 'translation', codeName: false, modules: ['crates/proxai-core/src/translation/'], responsibility: '在纯协议边界上转换协议 payload 和 streams。' },
     { name: 'provider', codeName: false, modules: ['src/provider/*/request', 'src/provider/*/transport'], responsibility: '准备 provider request payload、改写模型、添加 provider auth、构造上游 URL 并发送。' },
     { name: 'response reconstruction', codeName: false, modules: ['src/http_support', 'src/error/'], responsibility: '把响应翻译回入站协议，并渲染紧凑的客户端错误。' },
   ]}
@@ -32,8 +32,8 @@ import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@com
 <ModuleGrid
   modules={[
     { name: 'src/ingress/', icon: 'route', description: '入站 HTTP path/protocol 检测、请求解析，以及 routing 前的 normalization。' },
-    { name: 'src/protocol/', icon: 'protocol', description: 'OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 和 SSE payload 的 wire data models。' },
-    { name: 'src/translation/', icon: 'flow', description: '显式 pair 之间的纯协议 payload 和 stream 转换。' },
+    { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 和 SSE payload 的 wire data models。' },
+    { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: '显式 pair 之间的纯协议 payload 和 stream 转换。' },
     { name: 'src/provider/*/request', icon: 'file', description: 'Provider request preparation、projection、provider model rewrite 和 outbound payload serialization。' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: '上游 URL 构造、provider authentication headers 和 HTTP send 行为。' },
     { name: 'src/provider/*/response', icon: 'timer', description: 'Provider response summaries、streaming observers、协议状态机和 outcome diagnostics。' },

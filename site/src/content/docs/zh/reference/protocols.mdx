@@ -63,15 +63,15 @@ ProxAI 协议取值的统一参考：是什么、用在哪里、支持哪些转�
 ## 模块命名约定
 
 ```text
-src/translation/<inbound_protocol>/to_<provider_protocol>/
+crates/proxai-core/src/translation/<inbound_protocol>/to_<provider_protocol>/
 ```
 
 示例：
 
 ```text
-src/translation/openai_responses/to_anthropic_messages/
-src/translation/anthropic_messages/to_openai_responses/
-src/translation/openai_chat_completions/to_anthropic_messages/
+crates/proxai-core/src/translation/openai_responses/to_anthropic_messages/
+crates/proxai-core/src/translation/anthropic_messages/to_openai_responses/
+crates/proxai-core/src/translation/openai_chat_completions/to_anthropic_messages/
 ```
 
 转换设计规则见 [协议转换](/zh/developer/protocol-conversion)。

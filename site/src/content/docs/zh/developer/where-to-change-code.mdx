@@ -19,11 +19,11 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@component
 <ModuleGrid
   modules={[
     { name: '运行时配置项', icon: 'config', description: '从 `src/config.rs` 开始；更新 `config.example.toml`、`src/main.rs` 或 `src/lib.rs` 的 wiring、用户文档、参考文档和配置加载测试。' },
-    { name: '入站协议解析', icon: 'route', description: '从 `src/ingress/` 和 `src/protocol/` 开始；保持基于 path 的 request protocol detection，并在 routing 前 normalize。' },
+    { name: '入站协议解析', icon: 'route', description: '从 `src/ingress/` 和 `crates/proxai-core/src/protocol/` 开始；保持基于 path 的 request protocol detection，并在 routing 前 normalize。' },
     { name: 'Route matching', icon: 'route', description: '从 `src/routing/` 开始；保持严格 `request_protocol` guard，不要让显式 guard mismatch 静默 fallthrough。' },
     { name: 'Provider request 行为', icon: 'file', description: '从 `src/provider/*/request` 开始；model rewrite、projection 和 serialization 属于 provider 侧。' },
     { name: 'Provider transport', icon: 'terminal', description: '从 `src/provider/*/transport` 开始；auth headers、上游 URL 构造和 HTTP send 不应进入纯 translation。' },
-    { name: '协议转换', icon: 'flow', description: '从 `src/translation/` 开始；保持 request/response/stream conversion 在 carrier 边界上是纯协议转换。' },
+    { name: '协议转换', icon: 'flow', description: '从 `crates/proxai-core/src/translation/` 开始；保持 request/response/stream conversion 在 carrier 边界上是纯协议转换。' },
     { name: '流式语义', icon: 'timer', description: '从 SSE scanner、streaming translation modules 和 provider response observers 开始；保持终止事件、Unicode 安全和工具调用卡住处理。' },
     { name: '客户端错误', icon: 'alert', description: '从 `src/error/` 开始；保持稳定、紧凑、安全的错误投影和安全上游 header 保留。' },
     { name: 'Capture/logging', icon: 'gauge', description: '从 `src/observe/` 开始；日志保持紧凑、结构化、body-safe，并与 reference phase 名称一致。' },
@@ -75,8 +75,8 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable, TaskSteps } from '@component
     ['生成的 app-directory defaults', '`src/paths.rs`、配置加载代码', '`config.example.toml`、配置测试'],
     ['Route protocol guards', '`src/routing/`', '`reference/route-matching`、proxy e2e route tests'],
     ['Provider model rewrite', '`src/provider/*/request`', 'Provider 设置文档和兼容性矩阵'],
-    ['Anthropic wire structs', '`src/protocol/anthropic/`', 'SDK alignment 文档和转换测试'],
-    ['OpenAI Responses wire 行为', '`src/protocol/openai/responses/`', 'Responses 协议文档和转换测试'],
+    ['Anthropic wire structs', '`crates/proxai-core/src/protocol/anthropic/`', 'SDK alignment 文档和转换测试'],
+    ['OpenAI Responses wire 行为', '`crates/proxai-core/src/protocol/openai/responses/`', 'Responses 协议文档和转换测试'],
     ['Capture phase 名称', '`src/observe/` 和 flow locals', '`reference/capture-phases`、docs checker phase coverage'],
     ['Docs IA 或双语页面', '`site/src/content/docs/`', '`tools/check_docs_i18n.py`、`developer/docs-maintenance`'],
   ]}

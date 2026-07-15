@@ -21,13 +21,13 @@ pub mod mcp;
 pub mod observe;
 pub mod paths;
 pub(crate) mod pipeline;
-pub mod protocol;
+pub use proxai_core::protocol;
 pub mod provider;
 pub mod request;
 pub mod routing;
 pub mod sse;
 mod sse_translation;
-pub mod translation;
+pub use proxai_core::translation;
 pub(crate) mod upstream;
 
 use config::{

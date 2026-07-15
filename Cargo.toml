@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/proxai-core"]
+resolver = "2"
+
 [package]
 name = "proxai"
 version = "0.8.0"
@@ -18,12 +22,12 @@ humantime = "2"
 http = "1"
 indexmap = "2"
 owo-colors = "4"
+proxai-core = { path = "crates/proxai-core" }
 reqwest = { version = "0.13", features = ["json", "stream"] }
 rmcp = { version = "1.6.0", features = ["server", "macros", "schemars", "transport-streamable-http-server", "transport-streamable-http-server-session"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_path_to_error = "0.1"
 serde_plain = "1"
 serde_with = "3"
 sse-core = { version = "0.2", default-features = false, features = ["std"] }

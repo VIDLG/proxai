@@ -53,15 +53,15 @@ Each new pair must add runtime routing, request/response conversion, streaming c
 ## Module naming convention
 
 ```text
-src/translation/<inbound_protocol>/to_<provider_protocol>/
+crates/proxai-core/src/translation/<inbound_protocol>/to_<provider_protocol>/
 ```
 
 Examples:
 
 ```text
-src/translation/openai_responses/to_anthropic_messages/
-src/translation/anthropic_messages/to_openai_responses/
-src/translation/openai_chat_completions/to_anthropic_messages/
+crates/proxai-core/src/translation/openai_responses/to_anthropic_messages/
+crates/proxai-core/src/translation/anthropic_messages/to_openai_responses/
+crates/proxai-core/src/translation/openai_chat_completions/to_anthropic_messages/
 ```
 
 For the conversion design rules, see [Protocol Conversion](/developer/protocol-conversion).

@@ -80,7 +80,8 @@ impl StreamEvent {
         }
     }
 
-    pub(crate) fn is_done_sentinel(&self) -> bool {
+    /// Returns whether this event represents the Chat Completions `[DONE]` sentinel.
+    pub fn is_done_sentinel(&self) -> bool {
         self.event_type == DEFAULT_EVENT_TYPE
             && self.data == Value::String(DONE_SENTINEL_DATA.to_string())
     }

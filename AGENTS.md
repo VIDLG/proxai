@@ -55,10 +55,11 @@ Use phase names for capture artifacts/config, flow locals, and logging fields th
 
 ## Translation Layer
 
-Keep cross-protocol conversion in `src/translation/`:
+Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 
-- `ingress/` owns inbound protocol parsing and normalization.
-- `translation/` owns protocol-to-protocol conversion.
+- `src/ingress/` owns inbound protocol parsing and normalization.
+- `crates/proxai-core/src/protocol/` owns wire models.
+- `crates/proxai-core/src/translation/` owns protocol-to-protocol conversion.
 - `provider/request` owns provider request preparation, including provider model rewrite, projection/summary extraction, and body serialization.
 - `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
 - `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
@@ -67,13 +68,13 @@ Translation should stay pure at the carrier boundary:
 
 - request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
 - non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
-- streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
+- streaming response translation: `(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`
 
-Do not pass HTTP `Response`, `Body`, route/model rewrite details, or provider request structs into `translation/`.
+Do not pass HTTP `Response`, `Body`, `ByteStream`, SSE frames, route/model rewrite details, or provider request structs into core translation.
 
 Prefer pair-oriented conversion names such as `openai_responses -> anthropic_messages`. For protocol-specific request/response data, prefer top-level enums keyed by protocol over parallel fields that can drift into impossible states.
 
-When a target protocol cannot represent a source field or block, skip it explicitly with a `tracing::trace!` call that records the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`, the trace log only makes the drop observable.
+When a target protocol cannot represent a source field or block, report it through the core `TranslationObserver` with the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`; the application observer decides how to log or diagnose the loss.
 
 ## Logging / Errors / Streaming
 
@@ -152,7 +153,7 @@ Synthetic tests keep their normal names (`translates_xxx`, `rejects_xxx`, ...). 
 Recommended layout for a module that owns both kinds of tests:
 
 ```rust
-// src/translation/foo.rs
+// crates/proxai-core/src/translation/foo.rs
 #[cfg(test)]
 #[path = "foo_tests.rs"]
 mod tests;
@@ -202,9 +203,9 @@ Keep local/private artifacts uncommitted: `config.toml`, `captures/`, `logs/`, f
 Preferred checks:
 
 - `just check` for the normal full local validation path
-- `cargo fmt --check` for formatting-only checks
-- `pixi run cargo clippy --lib --tests -- -D warnings` for warning-free Rust checks
-- `pixi run cargo test --lib` for quick unit coverage
+- `cargo fmt --all --check` for formatting-only checks
+- `pixi run cargo clippy --workspace --all-targets -- -D warnings` for warning-free Rust checks
+- `pixi run cargo test --workspace --lib` for quick unit coverage
 - `just test-e2e` when changing proxy behavior, SSE handling, capture behavior, or request normalization
 - `just probe-model-limits --models gpt-5.4,gpt-5.5,gpt-5.3-codex` when practical upstream Responses API limits must be measured
 

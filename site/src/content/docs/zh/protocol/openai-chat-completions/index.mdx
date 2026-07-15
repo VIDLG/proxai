@@ -11,9 +11,9 @@ import { FeatureGrid, ProtocolQuickFacts } from '@components/ProxaiDocs.jsx';
   protocol="openai_chat_completions"
   requestPath="/v1/chat/completions"
   codeAreas={[
-    'src/protocol/openai/chat_completions/wire',
-    'src/protocol/openai/chat_completions/request',
-    'src/protocol/openai/chat_completions/response',
+    'crates/proxai-core/src/protocol/openai/chat_completions/wire',
+    'crates/proxai-core/src/protocol/openai/chat_completions/request',
+    'crates/proxai-core/src/protocol/openai/chat_completions/response',
     'src/provider/openai/chat_completions',
   ]}
   convertsTo={['anthropic_messages']}
@@ -65,7 +65,7 @@ enum ChatCompletionRequestMessage {
 
 ### Zed reasoning 兼容扩展
 
-`reasoning_content` 不属于官方 OpenAI Chat Completions OpenAPI schema，因此不会出现在 `src/protocol/openai/chat_completions/wire` 的 official wire structs 中。proxai 在 translation 边界从 Zed assistant 历史中提取该字段，并在生成非流式 message 或 SSE delta 后再注入。
+`reasoning_content` 不属于官方 OpenAI Chat Completions OpenAPI schema，因此不会出现在 `crates/proxai-core/src/protocol/openai/chat_completions/wire` 的 official wire structs 中。proxai 在 translation 边界从 Zed assistant 历史中提取该字段，并在生成非流式 message 或 SSE delta 后再注入。
 
 当前 Zed 源码的行为是：assistant 历史使用 `reasoning_content`；流式响应同时接受 `delta.reasoning` 和 `delta.reasoning_content`，并将二者转换为 thinking events。proxai 出站统一使用 `reasoning_content`，以便 Zed 在下一轮 assistant history 中原样回放。这里没有 `reasoning_context` 字段。
 

@@ -48,10 +48,10 @@ This page describes the source-level request path. User-facing behavior lives in
   stages={[
     { name: 'inbound_request', modules: ['src/ingress/', 'src/pipeline/inbound.rs'], responsibility: 'Detect request path, read body, parse protocol payload, normalize inbound request metadata.' },
     { name: 'routing', codeName: false, modules: ['src/routing/', 'src/config.rs'], responsibility: 'Resolve explicit route or protocol-aware default provider; enforce request_protocol guards.' },
-    { name: 'provider_request', modules: ['src/provider/*/request', 'src/translation/'], responsibility: 'Translate payload if protocols differ, rewrite provider model, serialize the upstream request.' },
+    { name: 'provider_request', modules: ['src/provider/*/request', 'crates/proxai-core/src/translation/'], responsibility: 'Translate payload if protocols differ, rewrite provider model, serialize the upstream request.' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: 'Construct upstream URL, attach provider-owned auth headers, and send via HTTP.' },
     { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: 'Read status, headers, non-streaming body, or streaming byte carrier.' },
-    { name: 'outbound_response', modules: ['src/translation/', 'src/http_support/'], responsibility: 'Translate provider response back to the inbound protocol and rebuild the client HTTP response.' },
+    { name: 'outbound_response', modules: ['crates/proxai-core/src/translation/', 'src/http_support/'], responsibility: 'Translate provider response back to the inbound protocol and rebuild the client HTTP response.' },
   ]}
 />
 

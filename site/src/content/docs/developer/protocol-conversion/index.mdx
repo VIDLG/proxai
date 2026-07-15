@@ -14,18 +14,18 @@ import { JsonExample } from '@components/JsonExample.jsx';
 
 ProxAI keeps protocol conversion explicit and pair-oriented. The conversion rules are split into focused developer topics so each page answers one maintenance question.
 
-> This is the developer entry point for `src/translation/`. If you are looking for user-facing protocol behavior, start with [Protocol Guide](/protocol).
+> This is the developer entry point for `crates/proxai-core/src/translation/`. If you are looking for user-facing protocol behavior, start with [Protocol Guide](/protocol).
 
 ## Boundaries
 
-- `src/protocol/` owns protocol-specific Rust wire models.
+- `crates/proxai-core/src/protocol/` owns protocol-specific Rust wire models.
 - `src/ingress/` owns inbound parsing and normalization before translation.
-- `src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
+- `crates/proxai-core/src/translation/` owns pure cross-protocol conversion between an inbound `request_protocol` and an outbound provider `protocol`.
 - `src/provider/request.rs` owns provider request preparation, including model rewrite, projection/summary extraction, and JSON body serialization.
 - `src/provider/transport.rs` owns outbound HTTP transport, auth headers, upstream URL construction, and send.
 - `src/http_support/` owns HTTP carrier helpers such as `ByteStream`, content-type/header helpers, and response reconstruction.
 
-Do not hide general cross-protocol conversion inside a provider subtree. Provider code may normalize provider-local quirks, but protocol-to-protocol shape changes belong in `src/translation/`.
+Do not hide general cross-protocol conversion inside a provider subtree. Provider code may normalize provider-local quirks, but protocol-to-protocol shape changes belong in `crates/proxai-core/src/translation/`.
 
 Translation APIs should stay pure at the carrier boundary:
 
@@ -33,7 +33,7 @@ Translation APIs should stay pure at the carrier boundary:
 - non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
 - streaming response translation: `(request_protocol, provider_protocol, ByteStream) -> ByteStream`
 
-Do not pass HTTP `Response`, `Body`, provider request structs, or route/model rewrite details into `src/translation/`. This is the carrier-boundary purity required by [Behavior Contract C26](/reference/behavior-contracts#translation-purity).
+Do not pass HTTP `Response`, `Body`, provider request structs, or route/model rewrite details into `crates/proxai-core/src/translation/`. This is the carrier-boundary purity required by [Behavior Contract C26](/reference/behavior-contracts#translation-purity).
 
 
 ## Naming

@@ -37,6 +37,7 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
     assert_eq!(provider_body["messages"][1]["role"], "user");
     assert_eq!(provider_body["messages"][1]["content"][0]["text"], "hello");
 }
+
 #[test]
 fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
     let inbound_body = serde_json::to_vec(&json!({
