@@ -4,9 +4,9 @@
 //! `translation/` or `provider/`, such as protocol-native request and response
 //! projections and reusable Responses-specific logic.
 
-pub mod request;
-pub mod response;
-pub mod wire;
+pub(crate) mod request;
+pub(crate) mod response;
+pub(crate) mod wire;
 
 #[allow(unused_imports, reason = "OpenAI Responses facade re-exports.")]
 pub use self::request::*;

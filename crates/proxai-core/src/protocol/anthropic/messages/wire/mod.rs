@@ -3,17 +3,16 @@
     reason = "Anthropic facade re-exports generated helper names that overlap across request and tool schemas."
 )]
 
-pub mod blocks;
-pub mod citations;
-pub mod common;
-pub mod content;
-pub mod message;
-pub mod request;
-pub mod stream;
-pub mod tools;
+mod blocks;
+mod citations;
+mod common;
+mod content;
+mod message;
+mod request;
+mod stream;
+mod tools;
 
-// Re-export everything from submodules at `pub` visibility so the facade is fully
-// accessible from `messages/mod.rs` and from integration tests.
+// Re-export protocol types through the parent Messages facade.
 #[allow(
     unused_imports,
     reason = "Anthropic Messages protocol facade re-exports."

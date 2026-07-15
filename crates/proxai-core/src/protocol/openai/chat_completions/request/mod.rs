@@ -1,7 +1,7 @@
 //! OpenAI Chat Completions request protocol projection facade.
 
 mod projection;
-pub mod wire;
+pub(crate) mod wire;
 
 pub use projection::RequestProjection;
 pub use wire::{

@@ -23,7 +23,6 @@ pub mod stream;
 pub(crate) mod text;
 mod translator;
 
-pub use context::TranslationRoute;
 pub(crate) use context::TranslationScope;
 pub use error::{Result as TranslationResult, TranslationError};
 pub(crate) use request::translate_request;

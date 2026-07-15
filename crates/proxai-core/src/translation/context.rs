@@ -12,9 +12,9 @@ use crate::observe::{
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TranslationRoute {
-    pub request_protocol: RequestProtocol,
-    pub provider_protocol: ProviderProtocol,
+pub(crate) struct TranslationRoute {
+    pub(crate) request_protocol: RequestProtocol,
+    pub(crate) provider_protocol: ProviderProtocol,
 }
 
 #[derive(Clone)]

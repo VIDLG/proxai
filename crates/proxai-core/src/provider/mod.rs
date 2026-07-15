@@ -15,10 +15,8 @@ use getset::CopyGetters;
 use crate::protocol::ProviderProtocol;
 
 pub use error::{ProviderError, normalize_provider_error};
-pub use normalizer::{
-    ProviderCompatibility, normalize_provider_response, normalize_provider_stream_event,
-    requires_structured_normalization,
-};
+pub use normalizer::{ProviderCompatibility, normalize_provider_stream_event};
+pub(crate) use normalizer::{normalize_provider_response, requires_structured_normalization};
 pub use request::prepare_provider_request;
 
 /// Carrier-independent properties of a configured provider.

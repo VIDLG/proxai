@@ -6,8 +6,9 @@ use serde_json::{Value, json};
 use crate::observe::{NoopObserver, TranslationPhase};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
+use super::context::TranslationRoute;
 use super::stream::{StreamEnd, StreamEvent, StreamTranslationInput};
-use super::{TranslationRoute, TranslationScope, Translator};
+use super::{TranslationScope, Translator};
 
 pub(crate) fn request_scope(
     request_protocol: RequestProtocol,

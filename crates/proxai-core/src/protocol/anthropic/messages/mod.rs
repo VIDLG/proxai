@@ -1,6 +1,7 @@
 //! Anthropic Messages protocol-native helpers and schema behavior.
 
-pub mod wire;
+pub(crate) mod wire;
 
-// Re-export everything from protocol at pub level so tests can access the full schema.
+// Expose protocol types through one stable facade instead of duplicating the
+// public API under a nested `wire` namespace.
 pub use wire::*;

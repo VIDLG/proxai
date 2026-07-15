@@ -29,7 +29,7 @@ pub enum ProviderCompatibility {
 ///
 /// Carriers may use this to preserve raw bytes for identity forwarding when no
 /// compatibility repair is configured for the provider protocol.
-pub fn requires_structured_normalization(behavior: ProviderBehavior) -> bool {
+pub(crate) fn requires_structured_normalization(behavior: ProviderBehavior) -> bool {
     behavior.compatibility() == ProviderCompatibility::Compatible
         && matches!(
             behavior.protocol(),
@@ -39,7 +39,7 @@ pub fn requires_structured_normalization(behavior: ProviderBehavior) -> bool {
 
 /// Normalize one non-streaming provider response payload when the configured
 /// provider behavior requires it.
-pub fn normalize_provider_response(
+pub(crate) fn normalize_provider_response(
     behavior: ProviderBehavior,
     payload: Value,
     observer: &dyn Observer,

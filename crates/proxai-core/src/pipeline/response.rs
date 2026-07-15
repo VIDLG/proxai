@@ -30,7 +30,7 @@ impl ResponsePipeline {
         }
     }
 
-    pub fn with_observer(mut self, observer: Arc<dyn Observer>) -> Self {
+    pub(crate) fn with_observer(mut self, observer: Arc<dyn Observer>) -> Self {
         self.translator = self.translator.with_observer(observer);
         self
     }

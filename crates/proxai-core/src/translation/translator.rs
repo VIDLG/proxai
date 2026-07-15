@@ -153,7 +153,7 @@ impl PairStreamingState {
 /// stream, so state cannot accidentally be reused across streams.
 #[derive(Clone, CopyGetters, Getters)]
 pub struct Translator {
-    #[getset(get_copy = "pub")]
+    #[getset(get_copy = "pub(crate)")]
     route: TranslationRoute,
     #[getset(get = "pub(crate)")]
     observer: Arc<dyn Observer>,

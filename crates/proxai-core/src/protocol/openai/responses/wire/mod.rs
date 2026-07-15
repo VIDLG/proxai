@@ -11,7 +11,7 @@ mod output_item;
 mod prompt;
 mod reasoning;
 mod request;
-pub mod response;
+mod response;
 mod shared;
 mod stream;
 mod tool_choice;
