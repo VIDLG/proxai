@@ -2,10 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::json;
 
-use crate::observe::{Observation, Observer, ProviderObservation, ProviderRequestAdaptation};
+use crate::observe::{
+    NoopObserver, Observation, Observer, ProviderObservation, ProviderRequestAdaptation,
+};
 use crate::protocol::ProviderProtocol;
 
-use super::ProviderRequestPreparer;
+use super::prepare_provider_request;
 
 #[test]
 fn rewrites_existing_model_for_every_provider_protocol() {
@@ -14,8 +16,12 @@ fn rewrites_existing_model_for_every_provider_protocol() {
         ProviderProtocol::OpenaiChatCompletions,
         ProviderProtocol::AnthropicMessages,
     ] {
-        let prepared = ProviderRequestPreparer::new(protocol)
-            .prepare(json!({"model": "client-model"}), "upstream-model");
+        let prepared = prepare_provider_request(
+            protocol,
+            json!({"model": "client-model"}),
+            "upstream-model",
+            &NoopObserver,
+        );
 
         assert_eq!(prepared["model"], "upstream-model");
     }
@@ -25,8 +31,12 @@ fn rewrites_existing_model_for_every_provider_protocol() {
 fn does_not_invent_a_missing_model_field() {
     let payload = json!({"input": "hello"});
 
-    let prepared = ProviderRequestPreparer::new(ProviderProtocol::OpenaiResponses)
-        .prepare(payload.clone(), "upstream-model");
+    let prepared = prepare_provider_request(
+        ProviderProtocol::OpenaiResponses,
+        payload.clone(),
+        "upstream-model",
+        &NoopObserver,
+    );
 
     assert_eq!(prepared, payload);
 }
@@ -59,8 +69,12 @@ fn responses_preparation_removes_only_output_fields_invalid_as_input() {
         ]
     });
 
-    let prepared = ProviderRequestPreparer::new(ProviderProtocol::OpenaiResponses)
-        .prepare(payload, "upstream-model");
+    let prepared = prepare_provider_request(
+        ProviderProtocol::OpenaiResponses,
+        payload,
+        "upstream-model",
+        &NoopObserver,
+    );
 
     assert_eq!(prepared["model"], "upstream-model");
     assert_eq!(prepared["status"], "completed");
@@ -82,9 +96,12 @@ fn responses_preparation_emits_typed_request_adaptation() {
         ]
     });
 
-    ProviderRequestPreparer::new(ProviderProtocol::OpenaiResponses)
-        .with_observer(observer)
-        .prepare(payload, "upstream-model");
+    prepare_provider_request(
+        ProviderProtocol::OpenaiResponses,
+        payload,
+        "upstream-model",
+        &observer,
+    );
 
     assert!(matches!(
         recorded.lock().unwrap().as_slice(),

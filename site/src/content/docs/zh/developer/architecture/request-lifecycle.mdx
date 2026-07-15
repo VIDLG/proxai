@@ -47,12 +47,12 @@ export const lifecycleEdges = [
 <PipelineStageCards
   labels={{ modules: '模块', responsibility: '职责' }}
   stages={[
-    { name: 'inbound_request', modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/ingress/'], responsibility: '检测请求路径，读取并解析 body bytes，再归一化和校验结构化协议 payload。' },
-    { name: 'routing', codeName: false, modules: ['crates/proxai-core/src/routing/', 'src/pipeline/provider_request.rs'], responsibility: '从结构化规则解析 provider 标签与 upstream model，再把标签映射到应用层 HTTP transport。' },
-    { name: 'provider_request', modules: ['crates/proxai-core/src/translation/', 'crates/proxai-core/src/provider/request/', 'src/provider/*/request'], responsibility: '转换 payload，在 core 中改写并适配结构化 provider value，再由应用层序列化上游请求。' },
+    { name: 'inbound_request', modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/ingress/'], responsibility: '应用层检测请求路径并解析 body bytes，再由 core pipeline 归一化和校验结构化 payload。' },
+    { name: 'routing', codeName: false, modules: ['crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/routing/', 'src/pipeline/provider_request.rs'], responsibility: 'Core 解析 provider 标签、协议、compatibility policy 与 upstream model，再由应用层把标签映射到 HTTP transport。' },
+    { name: 'provider_request', modules: ['crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/translation/', 'crates/proxai-core/src/provider/request/', 'src/provider/*/request'], responsibility: 'Core 返回准备好的 provider value 和匹配的 response pipeline，再由应用层序列化上游请求。' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: '构造上游 URL，附加 provider-owned 认证头，并通过 HTTP 发送。' },
     { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: '读取状态、headers、非流式 body 或流式 byte carrier。' },
-    { name: 'outbound_response', modules: ['crates/proxai-core/src/translation/', 'src/http_support/'], responsibility: '把 provider response 转回入站协议，并重建客户端 HTTP response。' },
+    { name: 'outbound_response', modules: ['crates/proxai-core/src/pipeline/', 'src/sse_translation.rs', 'src/http_support/'], responsibility: '通过 `ResponsePipeline` 执行结构化 provider normalization 与 translation，再由应用层重建客户端 HTTP/SSE response。' },
   ]}
 />
 

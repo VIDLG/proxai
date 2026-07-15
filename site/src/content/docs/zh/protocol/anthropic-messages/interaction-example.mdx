@@ -699,7 +699,7 @@ message_delta(stop_reason=end_turn)
 message_stop
 ```
 
-proxai 在这条链路中不重组这些事件。Strict 的同协议 Anthropic provider 保留原始 SSE bytes；`compatible` 模式会解析事件、调用 core `ProviderNormalizer`，再重新编码输出。`AnthropicSseObserver` 独立使用 `SseEventScanner` 扫描上游事件并归纳到 `AnthropicResponseState`，用于 completed/closed/error 日志。
+proxai 在这条链路中不重组这些事件。Strict 的同协议 Anthropic provider 保留原始 SSE bytes；`compatible` 模式会解析事件、调用 core `normalize_provider_stream_event`，再重新编码输出。`AnthropicSseObserver` 独立使用 `SseEventScanner` 扫描上游事件并归纳到 `AnthropicResponseState`，用于 completed/closed/error 日志。
 
 ### 示例边界
 

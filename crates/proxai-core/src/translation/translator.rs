@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_stream::stream;
-use delegate::delegate;
 use futures_util::{Stream, StreamExt};
+use getset::{CopyGetters, Getters};
 use serde_json::Value;
 
 use crate::observe::{NoopObserver, Observer, TranslationPhase};
@@ -14,7 +14,7 @@ use crate::translation::openai_chat_completions::to_openai_responses::ChatToResp
 use crate::translation::openai_responses::to_anthropic_messages::ResponsesToAnthropicStreaming;
 use crate::translation::openai_responses::to_openai_chat_completions::ResponsesToChatStreaming;
 
-use super::context::{TranslationContext, TranslationRoute, TranslationScope};
+use super::context::{TranslationRoute, TranslationScope};
 use super::stream::{
     StreamEnd, StreamEvent, StreamEventStream, StreamTranslationInput, StreamTranslationResult,
 };
@@ -151,9 +151,12 @@ impl PairStreamingState {
 /// Value translation borrows the translator. Stream translation consumes it
 /// and creates one private protocol-pair state machine inside the returned
 /// stream, so state cannot accidentally be reused across streams.
-#[derive(Clone)]
+#[derive(Clone, CopyGetters, Getters)]
 pub struct Translator {
-    context: TranslationContext,
+    #[getset(get_copy = "pub")]
+    route: TranslationRoute,
+    #[getset(get = "pub(crate)")]
+    observer: Arc<dyn Observer>,
 }
 
 impl Translator {
@@ -163,29 +166,28 @@ impl Translator {
             provider_protocol,
         };
         Self {
-            context: TranslationContext::new(route, Arc::new(NoopObserver)),
+            route,
+            observer: Arc::new(NoopObserver),
         }
     }
 
-    pub fn with_observer(mut self, observer: impl Observer + 'static) -> Self {
-        self.context = self.context.with_observer(Arc::new(observer));
+    pub fn with_observer(mut self, observer: Arc<dyn Observer>) -> Self {
+        self.observer = observer;
         self
     }
 
-    delegate! {
-        to self.context {
-            pub fn route(&self) -> TranslationRoute;
-        }
+    fn scope(&self, phase: TranslationPhase) -> TranslationScope {
+        TranslationScope::new(self.route, phase, Arc::clone(&self.observer))
     }
 
     pub fn translate_request(&self, payload: &Value) -> TranslationResult<Value> {
-        translate_request(payload, &self.context.scope(TranslationPhase::Request))
+        translate_request(payload, &self.scope(TranslationPhase::Request))
     }
 
     pub fn translate_response(&self, payload: Value) -> TranslationResult<Value> {
         translate_non_streaming_response(
             payload,
-            &self.context.scope(TranslationPhase::NonStreamingResponse),
+            &self.scope(TranslationPhase::NonStreamingResponse),
         )
     }
 
@@ -197,10 +199,7 @@ impl Translator {
     where
         S: Stream<Item = StreamTranslationResult<StreamTranslationInput>> + Send + 'static,
     {
-        PairStreamingState::translate_stream(
-            input,
-            self.context.scope(TranslationPhase::StreamingResponse),
-        )
+        PairStreamingState::translate_stream(input, self.scope(TranslationPhase::StreamingResponse))
     }
 }
 

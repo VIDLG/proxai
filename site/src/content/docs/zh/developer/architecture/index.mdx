@@ -112,6 +112,7 @@ Provider 名字只是用户标签，不是语义协议标识。
   - proxai-core/
     - src/
       - ingress/ — 与 carrier 无关的入站归一化与校验
+      - pipeline/ — 组合 ingress、routing、translation 与 provider adaptation 的 carrier-independent façade
       - protocol/ — 各协议 wire 类型与协议枚举
       - routing/ — 编译后的协议/模型路由与 provider 标签选择
       - provider/ — 与 carrier 无关的 provider request preparation 与响应/错误归一化
@@ -119,7 +120,7 @@ Provider 名字只是用户标签，不是语义协议标识。
 
 </FileTree>
 
-应用 crate 在 `src/lib.rs` 中重新导出 `proxai_core::{protocol, routing, translation}`。HTTP ingress、provider projection/序列化、transport lookup 和 SSE carrier adaptation 留在 `src/`，结构化 ingress、provider 标签路由、provider request/response adaptation 与 translation 则位于 `proxai-core`。
+HTTP ingress、provider projection/序列化、transport lookup 和 SSE carrier adaptation 留在 `src/`。`proxai-core::pipeline` 把结构化 ingress、provider 标签路由、provider request/response adaptation 与 translation 组合成可复用的 `Value`/`StreamEvent` façade。
 
 ## 请求生命周期
 
@@ -135,9 +136,11 @@ Provider 名字只是用户标签，不是语义协议标识。
 
 ```rust
 let prepared_provider = inbound_http
-    .prepare_inbound()?                  // ingress: 解析 + 归一化
-    .route_to_provider(...)?             // routing: 选择 provider
-    .prepare_provider_request()?;        // provider/request + translation
+    .parse_inbound()?                    // 应用：path + JSON bytes
+    .prepare_provider_request(           // core：ingress + route + translate + adapt
+        &state.core_pipeline,
+        &state.providers,
+    )?;
 
 run_provider_flow(prepared_provider).await
 ```
@@ -161,19 +164,19 @@ provider_http.translate_to_outbound().await?  // translation + http_support
   stages={[
     {
       name: 'inbound_request',
-      modules: ['src/pipeline/inbound.rs', 'proxai-core/ingress/'],
-      responsibility: '读取 body bytes、检测协议、解析 JSON，再归一化和校验结构化请求。',
+      modules: ['src/pipeline/inbound.rs', 'proxai-core/pipeline/', 'proxai-core/ingress/'],
+      responsibility: '应用层读取 body bytes、检测协议并解析 JSON；core pipeline 归一化和校验结构化请求。',
     },
     {
       name: '路由',
       codeName: false,
-      modules: ['pipeline/provider_request.rs', 'proxai-core/routing/'],
-      responsibility: '按协议和模型匹配 route，解析 provider 标签和 upstream model，再选择应用层 transport。',
+      modules: ['pipeline/provider_request.rs', 'proxai-core/pipeline/', 'proxai-core/routing/'],
+      responsibility: 'Core 解析 provider 标签、协议、compatibility policy 与 upstream model，再选择应用层 transport。',
     },
     {
       name: 'provider_request',
-      modules: ['pipeline/provider_request.rs', 'proxai-core/translation/request', 'proxai-core/provider/request', 'provider/request'],
-      responsibility: '转换请求，在 core 中改写并适配结构化 provider value，再由应用层提取诊断 projection 并序列化 body。',
+      modules: ['pipeline/provider_request.rs', 'proxai-core/pipeline/', 'proxai-core/translation/request', 'proxai-core/provider/request', 'provider/request'],
+      responsibility: 'Core 返回准备好的 provider value 和匹配的 response pipeline，再由应用层提取诊断 projection 并序列化 body。',
     },
     {
       name: '发送上游',
@@ -188,8 +191,8 @@ provider_http.translate_to_outbound().await?  // translation + http_support
     },
     {
       name: 'outbound_response',
-      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'proxai-core/translation/response', 'proxai-core/translation/stream'],
-      responsibility: '将响应翻译回入站协议，在结构化事件与 SSE bytes 之间适配、观测失败并重建 HTTP 响应。',
+      modules: ['pipeline/provider_response.rs', 'sse_translation.rs', 'proxai-core/pipeline/', 'proxai-core/translation/response', 'proxai-core/translation/stream'],
+      responsibility: '通过 `ResponsePipeline` 执行结构化响应 normalization 与 translation，在事件和 SSE bytes 之间适配、观测失败并重建 HTTP。',
     },
   ]}
 />
@@ -201,15 +204,16 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 <ModuleGrid
   modules={[
     { name: 'proxai-core/protocol/', icon: 'protocol', description: 'Core crate 的协议 wire shape 与共享协议枚举。只建模 JSON，不做转换，不依赖 HTTP 载体。' },
-    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'HTTP path 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'HTTP path 检测、JSON bytes 解析，以及结构化 core preparation 前的 carrier 错误映射。' },
     { name: 'proxai-core/ingress/', icon: 'route', description: '与 carrier 无关的结构化请求归一化、校验、模型提取和类型化 ingress observations。' },
+    { name: 'proxai-core/pipeline/', icon: 'flow', description: '组合 ingress、routing、request preparation、response normalization 与 translation 的可复用结构化 façade。' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: '共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现；不包含具体 sink。' },
     { name: 'proxai-core/routing/', icon: 'flow', description: '根据请求协议、模型模式、默认值和 route 配置选择 provider 标签，不依赖 carrier。' },
     { name: 'proxai-core/provider/', icon: 'key', description: '与 carrier 无关的 provider request value preparation、响应 compatibility policy、结构化 response/event 与 error-payload normalization 和类型化 adaptation observations。' },
     { name: 'proxai-core/translation/', icon: 'protocol', description: 'Core crate 在显式协议 pair 之间做请求、响应与结构化事件转换，暴露 `Translator` façade，并通过共享 `Observer` 发出类型化 observations。' },
     { name: 'provider/', icon: 'key', description: 'Provider projection/summary 提取、request 序列化、响应观测、认证 header、上游 URL 构造和 transport。' },
     { name: 'upstream/', icon: 'terminal', description: '读取上游状态码、headers、完整 body 或流式 byte carrier。' },
-    { name: 'sse_translation.rs', icon: 'flow', description: '应用层 carrier 适配器：把 SSE bytes 解析成 `StreamEvent`，调用 `ProviderNormalizer` 和纯 translator，保留失败现场，再编码回 SSE。' },
+    { name: 'sse_translation.rs', icon: 'flow', description: '应用层 carrier 适配器：把 SSE bytes 解析成 `StreamTranslationInput`，调用 core `ResponsePipeline`，保留原始失败现场，再编码回 SSE。' },
     { name: 'http_support/', icon: 'file', description: '协议无关的 HTTP 工具，例如 content-type 检测、响应重建和 boxed byte stream。' },
     { name: 'observe/', icon: 'gauge', description: 'Capture artifact、结构化日志、request hints 和隐私友好的诊断。' },
     { name: 'error/', icon: 'alert', description: '领域错误类型与面向客户端的响应渲染。' },
@@ -220,8 +224,9 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 - `proxai-core/protocol/` 是底层 wire 建模：只描述 JSON shape，不做转换。
 - `proxai-core/ingress/` 接收结构化 JSON value，负责协议归一化和校验，绝不接收 HTTP body bytes。
-- `src/pipeline/inbound.rs` 是负责 path 检测、JSON bytes 解析、错误映射和 request-scoped observer 接线的应用 adapter。
-- `pipeline/` 协调完整请求生命周期，并保持 phase 顺序显式。
+- `src/pipeline/inbound.rs` 是负责 path 检测和 JSON bytes 解析的应用 adapter。
+- `proxai-core/pipeline/` 组合完整结构化 request/response 路径并绑定 request-scoped core observer，但不拥有 transport。
+- `src/pipeline/` 围绕 core façade 协调 HTTP carrier 与 transport，并保持 phase 顺序显式。
 - `proxai-core/provider/` 负责与 carrier 无关的 provider request value preparation、响应 compatibility policy、结构化 response/event 与 error-payload normalization 和类型化 adaptation observations。
 - `proxai-core/translation/` 与 carrier 无关：`Translator` 只接收 JSON `Value` 或结构化 `StreamEvent`，不接收 HTTP response/body、SSE bytes 或 provider 私有结构。
 - `sse_translation.rs` 是 upstream byte stream 与 core provider/translation API 之间的应用层适配器，负责保留触发失败的原始 frame 和 SSE 输出编码。
@@ -239,13 +244,14 @@ flowchart TD
   paths[paths.rs] --> cli
   lib --> pipeline[pipeline/]
 
-  pipeline --> core_ingress[proxai-core/ingress/]
-  pipeline --> core_provider[proxai-core/provider/]
-  pipeline --> routing[proxai-core/routing/]
+  pipeline --> core_pipeline[proxai-core/pipeline/]
+  core_pipeline --> core_ingress[proxai-core/ingress/]
+  core_pipeline --> core_provider[proxai-core/provider/]
+  core_pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
   pipeline --> sse_translation[sse_translation.rs]
-  pipeline --> translation[proxai-core/translation/]
+  core_pipeline --> translation[proxai-core/translation/]
   pipeline --> observe[observe/]
   pipeline --> http_support[http_support/]
   pipeline --> error[error/]
@@ -258,8 +264,7 @@ flowchart TD
   provider --> http_support
   sse_translation --> http_support
   sse_translation --> sse[sse.rs]
-  sse_translation --> core_provider
-  sse_translation --> translation
+  sse_translation --> core_pipeline
   upstream --> sse
   observe --> error
   lib --> observe
@@ -270,10 +275,10 @@ flowchart TD
 
 - `proxai-core/protocol/` 是底层 wire 建模。
 - `proxai-core/ingress/` 是入站归一化与校验的结构化 value 边界；`src/pipeline/inbound.rs` 适配 HTTP bytes 和应用诊断。
-- `proxai-core/provider/` 是 provider 响应 compatibility 的结构化边界；应用 pipeline/SSE adapter 提供 HTTP carrier 与具体 observer。
-- `pipeline/` 是知道完整请求生命周期的协调者。
+- `proxai-core/provider/` 是 provider 响应 compatibility 的结构化边界。
+- `proxai-core/pipeline/` 是 carrier-independent composition root；`src/pipeline/` 协调 HTTP 生命周期并把选中的 provider 标签映射到 transport。
 - `proxai-core/translation/` 只依赖协议模型、结构化 value/event 和 core observation contract，不依赖 HTTP、SSE bytes、provider transport 或具体应用观测实现。
-- `sse_translation.rs` 与 `pipeline/` 组合 byte carrier、core provider normalization、纯 translator、诊断和客户端错误渲染。
+- `sse_translation.rs` 把 byte carrier 适配到 core `ResponsePipeline`；应用 pipeline 负责诊断和客户端错误渲染。
 - `observe/` 实现核心 observation trait，但不参与协议或路由决策。
 
 ## 翻译路径选择
@@ -289,7 +294,7 @@ flowchart TD
 - 协议不同：进入 `crates/proxai-core/src/translation/<inbound_protocol>/to_<provider_protocol>/`。
 - 未实现的协议对显式失败。
 
-`Translator` 是唯一公开的 façade，只持有一个 crate-private `TranslationContext`；该 context 原子地携带所选 route 与 observation hook。每个入口会派生一个绑定 phase 的 `TranslationScope`：request、non-streaming response 或 streaming response。Pair code 因此无需在 observation 调用中单独传 phase，也就不可能把一次操作的遥测误记到其他 pipeline phase。Value translation 借用派生出的 scope；structured stream translation 消费 `Translator`，把 streaming-response scope 移入返回的 stream，并在其中惰性创建私有、封闭的 `PairStreamingState`，其恰好包含六种跨协议状态机之一，或 identity 路径。这样 value-only translation 不会分配无用流状态，同时 pair state 也不可能被跨 stream 复用。Context 与 scope 定义位于 façade 下层的 `translation/context.rs`；顶层分发和 pair code 只接收 `&TranslationScope`，因此 dispatch、phase 与 observation 不可能对当前操作产生分歧。协议无关的 event、error、terminal、identity 与 lifecycle 类型集中在无外部依赖的 `translation/stream.rs`。Pair 只依赖 `context.rs` 与 `stream.rs`，`Translator` 再依赖这些底层和 pair state，所有依赖边保持单向。Carrier adapter 只调用 `Translator::translate_stream`，不再直接驱动 pair event 或 terminal handling。
+`Translator` 是唯一公开的 façade，直接持有所选 route 与 observation hook。每个入口会派生一个绑定 phase 的 `TranslationScope`：request、non-streaming response 或 streaming response。Pair code 因此无需在 observation 调用中单独传 phase，也就不可能把一次操作的遥测误记到其他 pipeline phase。Value translation 借用派生出的 scope；structured stream translation 消费 `Translator`，把 streaming-response scope 移入返回的 stream，并在其中惰性创建私有、封闭的 `PairStreamingState`，其恰好包含六种跨协议状态机之一，或 identity 路径。这样 value-only translation 不会分配无用流状态，同时 pair state 也不可能被跨 stream 复用。TranslationRoute 与 TranslationScope 定义位于 façade 下层的 `translation/context.rs`；顶层分发和 pair code 只接收 `&TranslationScope`，因此 dispatch、phase 与 observation 不可能对当前操作产生分歧。协议无关的 event、error、terminal、identity 与 lifecycle 类型集中在无外部依赖的 `translation/stream.rs`。Pair 只依赖 `context.rs` 与 `stream.rs`，`Translator` 再依赖这些底层和 pair state，所有依赖边保持单向。Carrier adapter 只调用 `Translator::translate_stream`，不再直接驱动 pair event 或 terminal handling。
 
 ## 数据类型约定
 

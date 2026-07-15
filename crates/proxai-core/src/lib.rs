@@ -8,6 +8,7 @@ pub mod error;
 pub mod ingress;
 mod json;
 pub mod observe;
+pub mod pipeline;
 pub mod protocol;
 pub mod provider;
 pub mod routing;

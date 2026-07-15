@@ -24,7 +24,7 @@ ProxAI treats streaming as a byte-carrier problem plus protocol-specific event o
   ]}
 />
 
-`translation/` does not perform provider byte-stream observation or compatibility repair. Streaming observation stays inside application `provider/`; `sse_translation.rs` adapts SSE bytes to structured `StreamEvent` values, applies core `ProviderNormalizer`, and then invokes `translation/`.
+`translation/` does not perform provider byte-stream observation or compatibility repair. Streaming observation stays inside application `provider/`; `sse_translation.rs` adapts SSE bytes to `StreamTranslationInput` values and invokes core `ResponsePipeline`, which composes provider normalization with structured translation.
 
 ## BodyObserver lifecycle
 
@@ -106,9 +106,8 @@ The application and reusable translation core meet at a structured-event boundar
 
 ```text
 provider/upstream byte observation
-  → sse_translation.rs parses SSE frames
-  → core ProviderNormalizer repairs configured compatibility gaps
-  → Translator consumes and produces StreamEvent values
+  → sse_translation.rs parses SSE frames into StreamTranslationInput
+  → core ResponsePipeline normalizes provider events and translates StreamEvent values
   → sse_translation.rs encodes target SSE frames
   → pipeline observes failures and renders client-facing errors
 ```

@@ -3,12 +3,16 @@ use std::sync::{Arc, Mutex};
 use serde_json::json;
 
 use crate::observe::{
-    Observation, Observer, ProviderObservation, ProviderResponseAdaptation, ProviderResponsePhase,
+    NoopObserver, Observation, Observer, ProviderObservation, ProviderResponseAdaptation,
+    ProviderResponsePhase,
 };
 use crate::protocol::ProviderProtocol;
 use crate::translation::stream::StreamEvent;
 
-use super::{ProviderCompatibility, ProviderNormalizer};
+use super::{
+    ProviderBehavior, ProviderCompatibility, normalize_provider_response,
+    normalize_provider_stream_event, requires_structured_normalization,
+};
 
 #[test]
 fn structured_normalization_is_required_only_for_supported_compatible_protocols() {
@@ -16,23 +20,20 @@ fn structured_normalization_is_required_only_for_supported_compatible_protocols(
         ProviderProtocol::AnthropicMessages,
         ProviderProtocol::OpenaiChatCompletions,
     ] {
-        assert!(
-            ProviderNormalizer::new(protocol, ProviderCompatibility::Compatible)
-                .requires_structured_normalization()
-        );
-        assert!(
-            !ProviderNormalizer::new(protocol, ProviderCompatibility::Strict)
-                .requires_structured_normalization()
-        );
+        assert!(requires_structured_normalization(ProviderBehavior::new(
+            protocol,
+            ProviderCompatibility::Compatible,
+        )));
+        assert!(!requires_structured_normalization(ProviderBehavior::new(
+            protocol,
+            ProviderCompatibility::Strict,
+        )));
     }
 
-    assert!(
-        !ProviderNormalizer::new(
-            ProviderProtocol::OpenaiResponses,
-            ProviderCompatibility::Compatible,
-        )
-        .requires_structured_normalization()
-    );
+    assert!(!requires_structured_normalization(ProviderBehavior::new(
+        ProviderProtocol::OpenaiResponses,
+        ProviderCompatibility::Compatible,
+    )));
 }
 
 #[test]
@@ -45,11 +46,14 @@ fn strict_mode_preserves_provider_payloads() {
         "usage": {"input_tokens": 1, "output_tokens": 1}
     });
 
-    let normalized = ProviderNormalizer::new(
-        ProviderProtocol::AnthropicMessages,
-        ProviderCompatibility::Strict,
-    )
-    .normalize_response(payload.clone());
+    let normalized = normalize_provider_response(
+        ProviderBehavior::new(
+            ProviderProtocol::AnthropicMessages,
+            ProviderCompatibility::Strict,
+        ),
+        payload.clone(),
+        &NoopObserver,
+    );
 
     assert_eq!(normalized, payload);
 }
@@ -63,11 +67,14 @@ fn compatible_mode_normalizes_structured_stream_events() {
     }))
     .unwrap();
 
-    let normalized = ProviderNormalizer::new(
-        ProviderProtocol::AnthropicMessages,
-        ProviderCompatibility::Compatible,
-    )
-    .normalize_stream_event(event);
+    let normalized = normalize_provider_stream_event(
+        ProviderBehavior::new(
+            ProviderProtocol::AnthropicMessages,
+            ProviderCompatibility::Compatible,
+        ),
+        event,
+        &NoopObserver,
+    );
 
     assert_eq!(normalized.event_type, "message_delta");
     assert_eq!(normalized.data["delta"]["stop_sequence"], json!(null));
@@ -83,12 +90,14 @@ fn compatible_mode_emits_typed_provider_observation() {
     }))
     .unwrap();
 
-    ProviderNormalizer::new(
-        ProviderProtocol::OpenaiChatCompletions,
-        ProviderCompatibility::Compatible,
-    )
-    .with_observer(observations)
-    .normalize_stream_event(event);
+    normalize_provider_stream_event(
+        ProviderBehavior::new(
+            ProviderProtocol::OpenaiChatCompletions,
+            ProviderCompatibility::Compatible,
+        ),
+        event,
+        &observations,
+    );
 
     assert!(matches!(
         recorded.lock().unwrap().as_slice(),

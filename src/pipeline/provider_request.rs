@@ -1,73 +1,35 @@
 use std::collections::BTreeMap;
 
 use axum::http::HeaderMap;
-use proxai_core::ingress::PreparedInboundRequest;
-
-use crate::error::{InternalError, Result};
-use crate::observe::{
-    ProviderProtocolRequestPrepared, ProviderRequestBodySizes, RequestTranslationFailure,
+use proxai_core::pipeline::{
+    Pipeline as CorePipeline, PrepareRequestError, PreparedRequest, ResponsePipeline,
 };
-use crate::protocol::RequestProtocol;
+
+use crate::error::{Error, InternalError, RequestError, Result};
+use crate::observe::{
+    InboundRequestPrepared, ProviderProtocolRequestPrepared, ProviderRequestBodySizes,
+    RequestTranslationFailure,
+};
 use crate::provider::{self, ProviderRequest, ProviderTransport, ProviderTransportError};
-use crate::routing::{ResolvedRoute, RoutingTable};
-use crate::translation::Translator;
 
 use super::ProxyFlow;
-use super::inbound::{PreparedInbound, PreparedInboundFlow};
+use super::inbound::{ParsedInbound, ParsedInboundFlow};
 use super::upstream_response::{UpstreamHttp, UpstreamHttpFlow};
 
-pub(crate) struct RoutedInbound {
-    request: PreparedInboundRequest,
-    route: ResolvedRoute,
-    transport: ProviderTransport,
-}
-
 pub(crate) struct PreparedProvider {
-    pub(super) inbound_protocol: RequestProtocol,
     transport: ProviderTransport,
     request: ProviderRequest,
+    response_pipeline: ResponsePipeline,
 }
 
-pub(crate) type RoutedInboundFlow = ProxyFlow<RoutedInbound>;
 pub(crate) type PreparedProviderFlow = ProxyFlow<PreparedProvider>;
 
-impl PreparedInboundFlow {
-    pub(crate) fn route_to_provider(
+impl ParsedInboundFlow {
+    pub(crate) fn prepare_provider_request(
         self,
-        routing: &RoutingTable,
+        pipeline: &CorePipeline,
         providers: &BTreeMap<String, ProviderTransport>,
-    ) -> Result<RoutedInboundFlow, InternalError> {
-        let Self {
-            method,
-            uri,
-            headers,
-            obs,
-            error_response_format,
-            stage: PreparedInbound { request },
-        } = self;
-        let route = routing.resolve(request.protocol(), request.model())?;
-        let transport = providers.get(&route.provider).cloned().ok_or_else(|| {
-            InternalError::MissingProviderTransport {
-                provider: route.provider.clone(),
-            }
-        })?;
-        Ok(RoutedInboundFlow {
-            method,
-            uri,
-            headers,
-            obs,
-            error_response_format,
-            stage: RoutedInbound {
-                request,
-                route,
-                transport,
-            },
-        })
-    }
-}
-
-impl RoutedInboundFlow {
-    pub(crate) fn prepare_provider_request(self) -> Result<PreparedProviderFlow, InternalError> {
+    ) -> Result<PreparedProviderFlow> {
         let Self {
             method,
             uri,
@@ -75,57 +37,78 @@ impl RoutedInboundFlow {
             obs,
             error_response_format,
             stage:
-                RoutedInbound {
-                    request,
-                    route:
-                        ResolvedRoute {
-                            provider: provider_name,
-                            route_name,
-                            upstream_model,
-                        },
-                    transport,
+                ParsedInbound {
+                    protocol,
+                    payload,
+                    body,
                 },
         } = self;
 
-        let provider_protocol = transport.protocol();
-        let translator =
-            Translator::new(request.protocol(), provider_protocol).with_observer(obs.clone());
-        let translated_payload = match translator.translate_request(request.normalized_payload()) {
-            Ok(payload) => payload,
-            Err(error) => {
+        let prepared = match pipeline
+            .clone()
+            .with_observer(obs.clone())
+            .prepare_request(protocol, payload)
+        {
+            Ok(prepared) => prepared,
+            Err(PrepareRequestError::Ingress(error)) => {
+                return Err(RequestError::from(error).into());
+            }
+            Err(PrepareRequestError::Routing(error)) => {
+                return Err(InternalError::from(error).into());
+            }
+            Err(PrepareRequestError::Translation(failure)) => {
+                let inbound = failure.inbound();
+                let provider = failure.provider();
                 obs.observe_request_translation_failure(RequestTranslationFailure {
                     method: &method,
                     uri: &uri,
-                    normalized_payload: request.normalized_payload(),
-                    inbound_request_bytes: request.normalized_payload_len(),
-                    request_protocol: request.protocol(),
-                    provider: &provider_name,
-                    route_name: route_name.as_deref(),
-                    provider_protocol,
-                    model: request.model(),
-                    error: &error,
+                    normalized_payload: inbound.normalized_payload(),
+                    inbound_request_bytes: inbound.normalized_payload_len(),
+                    request_protocol: inbound.protocol(),
+                    provider: provider.name(),
+                    route_name: provider.route_name().as_deref(),
+                    provider_protocol: provider.protocol(),
+                    model: inbound.model(),
+                    error: failure.translation_error(),
                 });
-                return Err(error.into());
+                return Err(Error::from(InternalError::from(
+                    (*failure).into_translation_error(),
+                )));
             }
         };
-        let provider_request = provider::prepare_request(
-            provider_protocol,
-            translated_payload,
-            &upstream_model,
-            &obs,
-        )?;
+
+        obs.observe_inbound_request_prepared(InboundRequestPrepared {
+            method: &method,
+            uri: &uri,
+            headers: &headers,
+            body: &body,
+        });
+
+        let PreparedRequest {
+            inbound,
+            provider,
+            provider_payload,
+            response,
+        } = prepared;
+        let transport = providers.get(provider.name()).cloned().ok_or_else(|| {
+            InternalError::MissingProviderTransport {
+                provider: provider.name().to_string(),
+            }
+        })?;
+        let provider_request =
+            provider::assemble_request(provider.protocol(), provider_payload, &obs)?;
 
         obs.observe_provider_request_prepared(ProviderProtocolRequestPrepared {
             method: method.clone(),
             uri: uri.clone(),
             request_sizes: ProviderRequestBodySizes {
-                inbound: request.normalized_payload_len(),
+                inbound: inbound.normalized_payload_len(),
                 provider: provider_request.body().len(),
             },
-            request_protocol: request.protocol(),
-            provider: provider_name,
-            route_name: route_name.clone(),
-            provider_protocol,
+            request_protocol: inbound.protocol(),
+            provider: provider.name().to_string(),
+            route_name: provider.route_name().clone(),
+            provider_protocol: provider.protocol(),
             provider_request: provider_request.view(),
         });
 
@@ -136,9 +119,9 @@ impl RoutedInboundFlow {
             obs,
             error_response_format,
             stage: PreparedProvider {
-                inbound_protocol: request.protocol(),
                 transport,
                 request: provider_request,
+                response_pipeline: response,
             },
         })
     }
@@ -154,9 +137,9 @@ impl PreparedProviderFlow {
             error_response_format,
             stage:
                 PreparedProvider {
-                    inbound_protocol,
                     transport,
                     request,
+                    response_pipeline,
                 },
         } = self;
         let inbound_query = uri.query().map(ToOwned::to_owned);
@@ -178,9 +161,9 @@ impl PreparedProviderFlow {
             obs,
             error_response_format,
             stage: UpstreamHttp {
-                inbound_protocol,
                 response,
                 provider_response,
+                response_pipeline,
             },
         })
     }

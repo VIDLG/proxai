@@ -4,12 +4,12 @@ use std::sync::{Arc, Mutex};
 use async_stream::stream;
 use bytes::Bytes;
 use futures_util::{Stream, StreamExt};
-use proxai_core::provider::ProviderNormalizer;
+use proxai_core::pipeline::ResponsePipeline;
 use strum::AsRefStr;
 
 use crate::http_support::{ByteStream, ByteStreamError};
 use crate::sse::{SseError, SseEvent, SseEventScanner, done_sentinel_bytes, encode_sse_json};
-use crate::translation::Translator;
+
 use crate::translation::stream::{
     StreamEnd, StreamEvent, StreamTranslationError, StreamTranslationInput, StreamTranslationResult,
 };
@@ -112,12 +112,11 @@ impl SseInputContext {
 /// failures to the HTTP client.
 pub(crate) fn translate_sse_stream(
     input: ByteStream,
-    normalizer: ProviderNormalizer,
-    translator: Translator,
+    response_pipeline: ResponsePipeline,
 ) -> SseTranslationStream {
     let context = Arc::new(Mutex::new(SseInputContext::default()));
-    let translation_input = decode_sse_stream(input, normalizer, context.clone());
-    let translated = translator.translate_stream(translation_input);
+    let translation_input = decode_sse_stream(input, context.clone());
+    let translated = response_pipeline.translate_stream(translation_input);
 
     Box::pin(stream! {
         futures_util::pin_mut!(translated);
@@ -155,7 +154,6 @@ pub(crate) fn translate_sse_stream(
 
 fn decode_sse_stream(
     input: ByteStream,
-    normalizer: ProviderNormalizer,
     context: Arc<Mutex<SseInputContext>>,
 ) -> impl Stream<Item = StreamTranslationResult<StreamTranslationInput>> + Send + 'static {
     stream! {
@@ -210,9 +208,10 @@ fn decode_sse_stream(
                     }
                 };
 
-                yield Ok(StreamTranslationInput::Event(
-                    normalizer.normalize_stream_event(StreamEvent::new(event.event_type, data)),
-                ));
+                yield Ok(StreamTranslationInput::Event(StreamEvent::new(
+                    event.event_type,
+                    data,
+                )));
             }
         }
 

@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use futures_util::{StreamExt, stream};
-use proxai_core::ingress::{prepare_inbound_request, prepare_inbound_request_with_observer};
-use proxai_core::observe::{IngressObservation, Observation, Observer};
+use proxai_core::ingress::prepare_inbound_request;
+use proxai_core::observe::{IngressObservation, NoopObserver, Observation, Observer};
 use proxai_core::protocol::{ProviderProtocol, RequestProtocol};
 use proxai_core::translation::Translator;
 use proxai_core::translation::stream::{StreamEnd, StreamEvent, StreamTranslationInput};
@@ -24,7 +24,7 @@ fn reports_ingress_observations_to_a_downstream_implementation() {
     let observer = RecordingObserver::default();
     let observations = observer.observations.clone();
 
-    prepare_inbound_request_with_observer(
+    prepare_inbound_request(
         RequestProtocol::AnthropicMessages,
         json!({
             "model": "claude-test",
@@ -55,6 +55,7 @@ fn prepares_and_translates_values_through_the_public_api() {
             "model": "gpt-5.1",
             "input": [{"role": "system", "content": "be concise"}, {"role": "user", "content": "hello"}]
         }),
+        &NoopObserver,
     )
     .unwrap();
     assert_eq!(request.model(), "gpt-5.1");

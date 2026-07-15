@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 use crate::observe::{NoopObserver, TranslationPhase};
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 
-use super::context::TranslationContext;
 use super::stream::{StreamEnd, StreamEvent, StreamTranslationInput};
 use super::{TranslationRoute, TranslationScope, Translator};
 
@@ -37,14 +36,14 @@ fn translation_scope(
     provider_protocol: ProviderProtocol,
     phase: TranslationPhase,
 ) -> TranslationScope {
-    TranslationContext::new(
+    TranslationScope::new(
         TranslationRoute {
             request_protocol,
             provider_protocol,
         },
+        phase,
         Arc::new(NoopObserver),
     )
-    .scope(phase)
 }
 
 pub(crate) async fn translate_sse_fixture(fixture: &str, translator: Translator) -> String {

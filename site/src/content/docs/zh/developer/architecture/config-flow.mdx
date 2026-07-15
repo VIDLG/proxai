@@ -54,7 +54,7 @@ export const configEdges = [
     ['配置 schema', '`src/config.rs`'],
     ['App directory 解析', '`src/paths.rs`'],
     ['CLI flags 和临时 overrides', '`src/cli/`'],
-    ['从配置中选择 provider', '`crates/proxai-core/src/routing/`；pipeline 把选中的标签映射到 transport'],
+    ['从配置选择 Provider', '`crates/proxai-core/src/pipeline/` 组合 routing 与 provider 协议/compatibility；应用层再把选中的标签映射到 transport'],
     ['运行时请求访问', '`src/lib.rs` 中的 `AppState`'],
     ['用户可见示例', '`config.example.toml`、`using/configuration`、`reference/configuration`'],
   ]}

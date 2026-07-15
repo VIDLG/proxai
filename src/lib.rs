@@ -6,6 +6,8 @@ use axum::{Router, routing::any};
 use observe::{CaptureController, InboundRequestReceived, RequestFailed};
 
 use getset::{CopyGetters, Getters};
+use proxai_core::pipeline::Pipeline as CorePipeline;
+use proxai_core::provider::ProviderBehavior;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -36,11 +38,10 @@ use observe::ObserveContext;
 pub use observe::TOOL_NAME_ALIASES;
 use pipeline::{InboundHttpFlow, run_provider_flow};
 use provider::ProviderTransport;
-use routing::RoutingTable;
 
 #[derive(Clone, Getters, CopyGetters)]
 pub struct AppState {
-    routing: RoutingTable,
+    core_pipeline: CorePipeline,
     providers: BTreeMap<String, ProviderTransport>,
     #[getset(get_copy = "pub(crate)")]
     error_response_format: ErrorResponseFormat,
@@ -55,8 +56,17 @@ impl AppState {
         routing: RoutingConfig,
         providers: BTreeMap<String, ProviderConfig>,
     ) -> Result<Self> {
-        let routing =
-            RoutingTable::build(routing, providers.keys()).map_err(InternalError::from)?;
+        let provider_behaviors = providers
+            .iter()
+            .map(|(name, config)| {
+                (
+                    name.clone(),
+                    ProviderBehavior::new(config.protocol, config.compatibility),
+                )
+            })
+            .collect();
+        let core_pipeline =
+            CorePipeline::build(routing, provider_behaviors).map_err(InternalError::from)?;
         let provider_transports = providers
             .into_iter()
             .map(|(name, config)| {
@@ -66,7 +76,7 @@ impl AppState {
             .collect::<Result<BTreeMap<_, _>>>()?;
 
         Ok(Self {
-            routing,
+            core_pipeline,
             providers: provider_transports,
             error_response_format: ErrorResponseFormat::Text,
             capture: CaptureController::new(None, CaptureConfig::default()),
@@ -178,9 +188,8 @@ async fn proxy_inner(
         state.error_response_format(),
     );
     let prepared_provider = inbound_http
-        .prepare_inbound()?
-        .route_to_provider(&state.routing, &state.providers)?
-        .prepare_provider_request()?;
+        .parse_inbound()?
+        .prepare_provider_request(&state.core_pipeline, &state.providers)?;
 
     run_provider_flow(prepared_provider).await
 }

@@ -2,7 +2,7 @@ use async_stream::stream;
 use axum::body::{Body, to_bytes};
 use axum::http::Response;
 use futures_util::StreamExt;
-use proxai_core::provider::ProviderNormalizer;
+use proxai_core::pipeline::ResponsePipeline;
 
 use crate::error::{ErrorResponseFields, InternalError, Result};
 use crate::http_support::{
@@ -10,23 +10,17 @@ use crate::http_support::{
     sse_response_from_parts,
 };
 use crate::observe::StreamingTranslationFailure;
-use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::sse_translation::{SseTranslationStreamError, translate_sse_stream};
-use crate::translation::Translator;
 
 use super::ProxyFlow;
 
 pub(crate) struct ProviderStreamingHttp {
-    pub(super) inbound_protocol: RequestProtocol,
-    pub(super) provider_protocol: ProviderProtocol,
-    pub(super) normalizer: ProviderNormalizer,
+    pub(super) response_pipeline: ResponsePipeline,
     pub(super) response: Response<Body>,
 }
 
 pub(crate) struct ProviderNonStreamingHttp {
-    pub(super) inbound_protocol: RequestProtocol,
-    pub(super) provider_protocol: ProviderProtocol,
-    pub(super) normalizer: ProviderNormalizer,
+    pub(super) response_pipeline: ResponsePipeline,
     pub(super) response: Response<Body>,
 }
 
@@ -55,25 +49,21 @@ impl ProviderStreamingHttpFlow {
             obs,
             stage:
                 ProviderStreamingHttp {
-                    inbound_protocol,
-                    provider_protocol,
-                    normalizer,
+                    response_pipeline,
                     response,
                 },
             ..
         } = self;
 
+        let request_protocol = response_pipeline.request_protocol();
+        let provider_protocol = response_pipeline.provider_protocol();
         let (parts, body) = response.into_parts();
         let input = into_byte_stream(body.into_data_stream());
-        if inbound_protocol.matches_provider_protocol(provider_protocol)
-            && !normalizer.requires_structured_normalization()
-        {
+        if !response_pipeline.requires_structured_processing() {
             return Ok(sse_response_from_parts(parts, obs.instrument_stream(input)));
         }
 
-        let translator =
-            Translator::new(inbound_protocol, provider_protocol).with_observer(obs.clone());
-        let mut input = translate_sse_stream(input, normalizer, translator);
+        let mut input = translate_sse_stream(input, response_pipeline);
         let failure_obs = obs.clone();
         let stream: ByteStream = Box::pin(stream! {
             while let Some(item) = input.next().await {
@@ -84,7 +74,7 @@ impl ProviderStreamingHttpFlow {
                             StreamingTranslationFailure {
                                 method: &method,
                                 uri: &uri,
-                                request_protocol: inbound_protocol,
+                                request_protocol,
                                 provider_protocol,
                                 failure: &failure,
                             },
@@ -117,12 +107,9 @@ impl ProviderStreamingHttpFlow {
 impl ProviderNonStreamingHttpFlow {
     pub(crate) async fn translate_to_outbound(self) -> Result<Response<Body>, InternalError> {
         let Self {
-            obs,
             stage:
                 ProviderNonStreamingHttp {
-                    inbound_protocol,
-                    provider_protocol,
-                    normalizer,
+                    response_pipeline,
                     response,
                 },
             ..
@@ -135,10 +122,7 @@ impl ProviderNonStreamingHttpFlow {
         if !parts.status.is_success() {
             return Ok(Response::from_parts(parts, Body::from(body)));
         }
-        let payload = normalizer.normalize_response(serde_json::from_slice(&body)?);
-        let translated = Translator::new(inbound_protocol, provider_protocol)
-            .with_observer(obs)
-            .translate_response(payload)?;
+        let translated = response_pipeline.translate_response(serde_json::from_slice(&body)?)?;
         Ok(json_response_from_parts(
             parts,
             serde_json::to_vec(&translated)?,

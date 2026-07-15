@@ -92,7 +92,7 @@ upstream/streaming.rs
   调用 BodyObserver 生命周期 hook
 ```
 
-应用层 `provider/` 只负责 provider response bytes 观察、timeout 和 HTTP carrier；`crates/proxai-core/src/provider/` 负责与 carrier 无关的 compatibility policy 与结构化 payload/event normalization；`translation/` 只负责跨协议转换。`sse_translation.rs` 在 SSE bytes 与 core 的结构化 `StreamEvent` API 之间适配，并在 translation 前调用 `ProviderNormalizer`。
+应用层 `provider/` 只负责 provider response bytes 观察、timeout 和 HTTP carrier；`crates/proxai-core/src/provider/` 负责与 carrier 无关的 compatibility policy 与结构化 payload/event normalization；`translation/` 只负责跨协议转换。`sse_translation.rs` 把 SSE bytes 适配为 `StreamTranslationInput`，再调用组合 provider normalization 与结构化 translation 的 core `ResponsePipeline`。
 
 ## 通用 streaming carrier
 
@@ -402,7 +402,7 @@ chunk
 `AnthropicResponseState::observe_events(...)` 负责：
 
 - 解析 SSE data JSON。
-- 使用无具体 sink 的 core `ProviderNormalizer` 做容错归一化，保证诊断 state 能识别已知 provider 偏差。
+- 使用无具体 sink 的 core `normalize_provider_stream_event` 做容错归一化，保证诊断 state 能识别已知 provider 偏差。
 - 解析为 `MessageStreamEvent`。
 - 记录 message id / model / token usage / stop reason / stream_done / summary。
 
@@ -422,7 +422,7 @@ Compatible provider 可能返回非严格官方形状。纯 normalization 位于
 crates/proxai-core/src/provider/response/
 ```
 
-当 provider compatibility 是 `compatible` 时，应用 carrier 在解析出 `Value` 或 `StreamEvent` 后先调用 `ProviderNormalizer`，再做 identity forwarding 或跨协议 translation。`strict` 则不修复成功响应；同协议 strict/no-op stream 可保留原始 SSE bytes 快速路径。
+当 provider compatibility 是 `compatible` 时，core `ResponsePipeline` 会先归一化解析出的 `Value` 或 `StreamEvent`，再做 identity forwarding 或跨协议 translation。`strict` 则不修复成功响应；同协议 strict/no-op stream 可由应用层保留原始 SSE bytes 快速路径。
 
 这仍属于 provider response normalization，不进入 `translation/`；core 通过 typed `ProviderObservation` 报告实际发生的修复，具体 logging/diagnostics sink 由应用层组合。
 

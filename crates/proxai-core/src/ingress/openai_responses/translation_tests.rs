@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::ingress::prepare_inbound_request;
+use crate::observe::NoopObserver;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::translation::Translator;
 
@@ -19,6 +20,7 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
             "stream": true,
             "max_output_tokens": 64
         }),
+        &NoopObserver,
     )
     .unwrap();
 
@@ -54,6 +56,7 @@ fn translates_glm_openai_responses_inbound_to_anthropic_provider_request() {
             "stream": false,
             "max_output_tokens": 64
         }),
+        &NoopObserver,
     )
     .unwrap();
 

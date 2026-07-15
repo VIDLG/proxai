@@ -59,6 +59,7 @@ Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 
 - `src/pipeline/inbound.rs` owns inbound path detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.
 - `crates/proxai-core/src/ingress/` owns structured inbound normalization and validation.
+- `crates/proxai-core/src/pipeline/` is the carrier-independent composition façade across ingress, routing, translation, and provider adaptation. It accepts structured values/events and returns `PreparedRequest` / `ResponsePipeline`; it never owns transport.
 - `crates/proxai-core/src/observe.rs` owns the shared core observation contract and typed variants.
 - `crates/proxai-core/src/protocol/` owns wire models.
 - `crates/proxai-core/src/routing/` owns carrier-independent route configuration, matcher compilation, provider-label selection, upstream model rewrite, and typed routing errors.
@@ -68,13 +69,14 @@ Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 - `provider/transport` owns target-provider HTTP transport, auth headers, upstream URL construction, and send.
 - `http_support` owns HTTP carrier helpers such as response header/body reconstruction and boxed byte streams.
 
-Core ingress, routing, and translation should stay pure at the carrier boundary:
+Core composition, ingress, routing, provider adaptation, and translation should stay pure at the carrier boundary:
 
+- pipeline request preparation: `(request_protocol, payload) -> PreparedRequest`
 - inbound preparation: `(request_protocol, payload) -> prepared_request`
 - route resolution: `(routing_config, provider_names, request_protocol, model) -> resolved_route`
 - request translation: `(request_protocol, provider_protocol, normalized_payload) -> payload`
-- non-streaming response translation: `(request_protocol, provider_protocol, payload) -> payload`
-- streaming response translation: `(request_protocol, provider_protocol, Stream<StreamTranslationInput>) -> Stream<StreamEvent>`
+- non-streaming response processing: `(provider_payload) -> outbound_payload`
+- streaming response processing: `Stream<StreamTranslationInput> -> Stream<StreamEvent>`
 
 Do not pass HTTP `Response`, `Body`, `ByteStream`, SSE frames, route/model rewrite details, or provider request structs into core translation.
 

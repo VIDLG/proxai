@@ -18,8 +18,9 @@ This section is for maintainers changing ProxAI internals. It focuses on source-
 
 <PipelineStageCards
   stages={[
+    { name: 'core pipeline', codeName: false, modules: ['crates/proxai-core/src/pipeline/', 'src/pipeline/'], responsibility: 'Compose structured ingress, routing, translation, and provider adaptation in core while the app owns HTTP carriers and transport.' },
     { name: 'ingress', codeName: false, modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/ingress/'], responsibility: 'Detect inbound protocol and parse HTTP bytes in the application adapter, then normalize and validate structured payloads in core.' },
-    { name: 'routing', codeName: false, modules: ['src/config.rs', 'pipeline routing'], responsibility: 'Select provider by protocol-aware defaults or explicit model routes.' },
+    { name: 'routing', codeName: false, modules: ['src/config.rs', 'crates/proxai-core/src/pipeline/'], responsibility: 'Select provider by protocol-aware defaults or explicit model routes.' },
     { name: 'translation', codeName: false, modules: ['crates/proxai-core/src/translation/'], responsibility: 'Convert protocol payloads and streams across pure protocol boundaries.' },
     { name: 'provider', codeName: false, modules: ['crates/proxai-core/src/provider/', 'src/provider/*/request', 'src/provider/*/transport'], responsibility: 'Prepare structured provider values in core, then project, serialize, authenticate, and send them in the application.' },
     { name: 'response reconstruction', codeName: false, modules: ['src/http_support', 'src/error/'], responsibility: 'Translate responses back to the inbound protocol and render compact client-facing errors.' },
@@ -30,7 +31,8 @@ This section is for maintainers changing ProxAI internals. It focuses on source-
 
 <ModuleGrid
   modules={[
-    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'Inbound HTTP path/protocol detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'Inbound HTTP path/protocol detection, JSON byte parsing, and application error mapping.' },
+    { name: 'crates/proxai-core/src/pipeline/', icon: 'flow', description: 'Carrier-independent request/response composition façade and request-scoped core observer binding.' },
     { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: 'Carrier-independent request normalization, protocol validation, model extraction, and typed ingress observations.' },
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default.' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire data models for OpenAI Responses, OpenAI Chat Completions, Anthropic Messages, and SSE payloads.' },

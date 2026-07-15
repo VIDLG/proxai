@@ -1,16 +1,20 @@
 use axum::body::{Body, Bytes, to_bytes};
 use futures_util::{StreamExt, stream};
-use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer};
+use proxai_core::pipeline::ResponsePipeline;
+use proxai_core::provider::{ProviderBehavior, ProviderCompatibility};
 
 use crate::http_support::into_byte_stream;
-use crate::protocol::ProviderProtocol;
+use crate::protocol::{ProviderProtocol, RequestProtocol};
 
 use super::{SseTranslationStreamError, translate_sse_stream};
 
-fn chat_normalizer() -> ProviderNormalizer {
-    ProviderNormalizer::new(
-        ProviderProtocol::OpenaiChatCompletions,
-        ProviderCompatibility::Compatible,
+fn response_pipeline(
+    request_protocol: RequestProtocol,
+    provider_protocol: ProviderProtocol,
+) -> ResponsePipeline {
+    ResponsePipeline::new(
+        request_protocol,
+        ProviderBehavior::new(provider_protocol, ProviderCompatibility::Compatible),
     )
 }
 
@@ -19,13 +23,15 @@ async fn normalizes_compatible_identity_stream_before_forwarding() {
     let input = into_byte_stream(stream::iter([Ok::<_, std::io::Error>(Bytes::from_static(
         b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}]}\n\ndata: [DONE]\n\n",
     ))]));
-    let translator = crate::translation::Translator::new(
-        crate::protocol::RequestProtocol::OpenaiChatCompletions,
-        ProviderProtocol::OpenaiChatCompletions,
-    );
 
     let body = to_bytes(
-        Body::from_stream(translate_sse_stream(input, chat_normalizer(), translator)),
+        Body::from_stream(translate_sse_stream(
+            input,
+            response_pipeline(
+                RequestProtocol::OpenaiChatCompletions,
+                ProviderProtocol::OpenaiChatCompletions,
+            ),
+        )),
         usize::MAX,
     )
     .await
@@ -43,11 +49,13 @@ async fn returns_the_raw_triggering_sse_event_with_the_stream_error() {
         b"data: {\"type\":\"example\",\"private\":\"redacted\"}\n\n",
     ))]));
 
-    let translator = crate::translation::Translator::new(
-        crate::protocol::RequestProtocol::OpenaiResponses,
-        crate::protocol::ProviderProtocol::OpenaiChatCompletions,
+    let mut translated = translate_sse_stream(
+        input,
+        response_pipeline(
+            RequestProtocol::OpenaiResponses,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
     );
-    let mut translated = translate_sse_stream(input, chat_normalizer(), translator);
     let error = translated.next().await.unwrap().unwrap_err();
     let SseTranslationStreamError::Translation(failure) = error else {
         panic!("expected a structured translation failure");
@@ -69,12 +77,14 @@ async fn finish_error_retains_the_last_upstream_event_and_end_kind() {
     let input = into_byte_stream(stream::iter([Ok::<_, std::io::Error>(Bytes::from(
         format!("data: {chunk}\n\ndata: [DONE]\n\n"),
     ))]));
-    let translator = crate::translation::Translator::new(
-        crate::protocol::RequestProtocol::AnthropicMessages,
-        crate::protocol::ProviderProtocol::OpenaiChatCompletions,
-    );
 
-    let mut translated = translate_sse_stream(input, chat_normalizer(), translator);
+    let mut translated = translate_sse_stream(
+        input,
+        response_pipeline(
+            RequestProtocol::AnthropicMessages,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
+    );
     let error = loop {
         let item = translated
             .next()
@@ -101,12 +111,14 @@ async fn preserves_upstream_stream_errors_instead_of_reporting_eof() {
     let input = into_byte_stream(stream::iter([Err::<Bytes, _>(std::io::Error::other(
         "upstream body failed",
     ))]));
-    let translator = crate::translation::Translator::new(
-        crate::protocol::RequestProtocol::OpenaiResponses,
-        crate::protocol::ProviderProtocol::OpenaiChatCompletions,
-    );
 
-    let mut translated = translate_sse_stream(input, chat_normalizer(), translator);
+    let mut translated = translate_sse_stream(
+        input,
+        response_pipeline(
+            RequestProtocol::OpenaiResponses,
+            ProviderProtocol::OpenaiChatCompletions,
+        ),
+    );
     let error = translated.next().await.unwrap().unwrap_err();
 
     assert!(matches!(error, SseTranslationStreamError::Upstream(_)));

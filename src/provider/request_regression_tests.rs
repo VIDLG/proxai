@@ -1,3 +1,4 @@
+use proxai_core::provider::prepare_provider_request;
 use serde_json::json;
 
 use super::*;
@@ -47,13 +48,15 @@ fn regression_zed_reasoning_output_fields_rejected_by_strict_responses_upstream(
         ]
     });
 
-    let request = prepare_request(
+    let obs = test_obs();
+    let provider_payload = prepare_provider_request(
         ProviderProtocol::OpenaiResponses,
         payload,
         "gpt-upstream",
-        &test_obs(),
-    )
-    .expect("prepare provider request");
+        &obs,
+    );
+    let request = assemble_request(ProviderProtocol::OpenaiResponses, provider_payload, &obs)
+        .expect("assemble provider request");
     let body = serde_json::from_slice::<serde_json::Value>(request.body()).unwrap();
 
     assert_eq!(body["model"], "gpt-upstream");

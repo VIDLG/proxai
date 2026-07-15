@@ -18,8 +18,9 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
 
 <ModuleGrid
   modules={[
-    { name: 'src/pipeline/inbound.rs', icon: 'route', description: '从 HTTP path 检测入站协议，解析 JSON bytes，映射应用错误并接入 request-scoped observer。' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: '从 HTTP path 检测入站协议，解析 JSON bytes，并在 core preparation 前映射 carrier 错误。' },
     { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: '在 routing 和 translation 前归一化并校验结构化入站 payload。' },
+    { name: 'crates/proxai-core/src/pipeline/', icon: 'flow', description: '组合 ingress、routing、translation、provider request adaptation 与 response processing 的 carrier-independent façade。' },
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: '共享 observer contract、封闭的 core observation variants 和 no-op 默认实现；不包含具体 sink。' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs、enums 和协议专属 event payload。不做 provider routing 决策。' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: '编译模型规则，按 request protocol/model 选择 provider 标签，改写 upstream model，并执行严格协议 guard。' },
@@ -40,6 +41,7 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
   columns={['问题', '放在']}
   rows={[
     ['是否解析客户端请求 path 或 body bytes？', '`src/pipeline/inbound.rs`'],
+    ['是否在不引入 HTTP carrier 的前提下组合完整结构化 request/response 路径？', '`crates/proxai-core/src/pipeline/`'],
     ['是否归一化或校验结构化入站 payload？', '`crates/proxai-core/src/ingress/`'],
     ['是否定义可复用的 core observation contract 或 event？', '`crates/proxai-core/src/observe.rs`'],
     ['是否定义协议 JSON wire shape？', '`crates/proxai-core/src/protocol/`'],

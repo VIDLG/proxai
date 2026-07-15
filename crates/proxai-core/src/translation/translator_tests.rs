@@ -74,7 +74,7 @@ fn binds_request_observations_to_request_phase() {
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
     )
-    .with_observer(observer);
+    .with_observer(Arc::new(observer));
     let payload = json!({
         "model": "gpt-5.1",
         "messages": [{"role": "user", "content": "hello"}],
@@ -96,7 +96,7 @@ fn binds_response_observations_to_non_streaming_response_phase() {
         RequestProtocol::AnthropicMessages,
         ProviderProtocol::OpenaiChatCompletions,
     )
-    .with_observer(observer);
+    .with_observer(Arc::new(observer));
     let payload = json!({
         "id": "chatcmpl_reasoning",
         "object": "chat.completion",
@@ -156,7 +156,7 @@ async fn reports_unrepresentable_stream_output_through_observer() {
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
     )
-    .with_observer(observer);
+    .with_observer(Arc::new(observer));
     let input = stream::iter([
         Ok(StreamTranslationInput::Event(StreamEvent::new(
             "response.created",

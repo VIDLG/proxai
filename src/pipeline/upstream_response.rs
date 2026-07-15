@@ -3,9 +3,9 @@ use crate::http_support::UpstreamResponseHead;
 use crate::http_support::response_is_sse;
 use crate::observe::UpstreamErrorResponseReceived;
 
-use crate::protocol::RequestProtocol;
 use crate::provider::{ProviderResponseContext, handle_streaming_success_response};
 use crate::upstream::forward_non_streaming_response;
+use proxai_core::pipeline::ResponsePipeline;
 
 use super::ProxyFlow;
 use super::provider_response::{
@@ -14,9 +14,9 @@ use super::provider_response::{
 };
 
 pub(crate) struct UpstreamHttp {
-    pub(super) inbound_protocol: RequestProtocol,
     pub(super) response: reqwest::Response,
     pub(super) provider_response: ProviderResponseContext,
+    pub(super) response_pipeline: ResponsePipeline,
 }
 
 pub(crate) type UpstreamHttpFlow = ProxyFlow<UpstreamHttp>;
@@ -31,15 +31,14 @@ impl UpstreamHttpFlow {
             error_response_format,
             stage:
                 UpstreamHttp {
-                    inbound_protocol,
                     response,
                     provider_response,
+                    response_pipeline,
                 },
             ..
         } = self;
 
-        let provider_protocol = provider_response.protocol();
-        let normalizer = provider_response.normalizer(obs.clone());
+        let provider_protocol = response_pipeline.provider_protocol();
         if !response.status().is_success() {
             let head = UpstreamResponseHead::from_response(&response, obs.elapsed());
             let body = match response.bytes().await {
@@ -68,8 +67,7 @@ impl UpstreamHttpFlow {
             return Err(error);
         }
 
-        let is_streaming = response_is_sse(&response);
-        if is_streaming {
+        if response_is_sse(&response) {
             let response = handle_streaming_success_response(provider_response, &obs, response);
             return Ok(ProviderHttpFlow::Streaming(ProviderStreamingHttpFlow {
                 method,
@@ -78,9 +76,7 @@ impl UpstreamHttpFlow {
                 obs,
                 error_response_format,
                 stage: ProviderStreamingHttp {
-                    inbound_protocol,
-                    provider_protocol,
-                    normalizer,
+                    response_pipeline,
                     response,
                 },
             }));
@@ -107,9 +103,7 @@ impl UpstreamHttpFlow {
                 obs,
                 error_response_format,
                 stage: ProviderNonStreamingHttp {
-                    inbound_protocol,
-                    provider_protocol,
-                    normalizer,
+                    response_pipeline,
                     response,
                 },
             },

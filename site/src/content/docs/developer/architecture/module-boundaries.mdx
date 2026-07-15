@@ -18,8 +18,9 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
 
 <ModuleGrid
   modules={[
-    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'Detect inbound protocol from HTTP path, parse JSON bytes, map application errors, and wire the request-scoped observer.' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'Detect inbound protocol from the HTTP path, parse JSON bytes, and map carrier errors before core preparation.' },
     { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: 'Normalize and validate structured inbound payloads before routing and translation.' },
+    { name: 'crates/proxai-core/src/pipeline/', icon: 'flow', description: 'Carrier-independent façade that composes ingress, routing, translation, provider request adaptation, and response processing.' },
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: 'Shared observer contract, closed core observation variants, and no-op default. No concrete sinks.' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs, enums, and protocol-specific event payloads. No provider routing decisions.' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: 'Compile model rules, select provider labels by request protocol/model, rewrite upstream models, and enforce strict protocol guards.' },
@@ -40,6 +41,7 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
   columns={['Question', 'Put it in']}
   rows={[
     ['Does it parse a client request path or body bytes?', '`src/pipeline/inbound.rs`'],
+    ['Does it compose the complete structured request/response path without HTTP carriers?', '`crates/proxai-core/src/pipeline/`'],
     ['Does it normalize or validate a structured inbound payload?', '`crates/proxai-core/src/ingress/`'],
     ['Does it define a reusable core observation contract or event?', '`crates/proxai-core/src/observe.rs`'],
     ['Does it define protocol JSON wire shape?', '`crates/proxai-core/src/protocol/`'],

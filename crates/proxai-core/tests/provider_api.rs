@@ -1,6 +1,8 @@
+use proxai_core::observe::NoopObserver;
 use proxai_core::protocol::ProviderProtocol;
 use proxai_core::provider::{
-    ProviderCompatibility, ProviderNormalizer, ProviderRequestPreparer, normalize_provider_error,
+    ProviderBehavior, ProviderCompatibility, normalize_provider_error,
+    normalize_provider_stream_event, prepare_provider_request,
 };
 use proxai_core::translation::stream::StreamEvent;
 use serde_json::json;
@@ -22,12 +24,14 @@ fn normalizes_provider_errors_through_the_public_api() {
 
 #[test]
 fn prepares_provider_request_values_through_the_public_api() {
-    let prepared = ProviderRequestPreparer::new(ProviderProtocol::OpenaiResponses).prepare(
+    let prepared = prepare_provider_request(
+        ProviderProtocol::OpenaiResponses,
         json!({
             "model": "client-model",
             "input": [{"type": "reasoning", "status": "completed", "content": []}]
         }),
         "upstream-model",
+        &NoopObserver,
     );
 
     assert_eq!(prepared["model"], "upstream-model");
@@ -42,11 +46,14 @@ fn normalizes_provider_stream_events_through_the_public_api() {
     }))
     .unwrap();
 
-    let normalized = ProviderNormalizer::new(
-        ProviderProtocol::OpenaiChatCompletions,
-        ProviderCompatibility::Compatible,
-    )
-    .normalize_stream_event(event);
+    let normalized = normalize_provider_stream_event(
+        ProviderBehavior::new(
+            ProviderProtocol::OpenaiChatCompletions,
+            ProviderCompatibility::Compatible,
+        ),
+        event,
+        &NoopObserver,
+    );
 
     assert_eq!(normalized.data["choices"][0]["finish_reason"], json!(null));
 }

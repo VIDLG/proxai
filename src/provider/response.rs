@@ -1,6 +1,5 @@
 use axum::body::Body;
 use axum::http::Response;
-use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer};
 
 use crate::observe::ObserveContext;
 use crate::protocol::ProviderProtocol;
@@ -11,28 +10,17 @@ use super::{ProviderStreamingResponsePolicy, anthropic_messages, openai};
 pub(crate) struct ProviderResponseContext {
     protocol: ProviderProtocol,
     streaming_policy: ProviderStreamingResponsePolicy,
-    compatibility: ProviderCompatibility,
 }
 
 impl ProviderResponseContext {
     pub(crate) fn new(
         protocol: ProviderProtocol,
         streaming_policy: ProviderStreamingResponsePolicy,
-        compatibility: ProviderCompatibility,
     ) -> Self {
         Self {
             protocol,
             streaming_policy,
-            compatibility,
         }
-    }
-
-    pub(crate) fn protocol(&self) -> ProviderProtocol {
-        self.protocol
-    }
-
-    pub(crate) fn normalizer(&self, obs: ObserveContext) -> ProviderNormalizer {
-        ProviderNormalizer::new(self.protocol, self.compatibility).with_observer(obs)
     }
 }
 

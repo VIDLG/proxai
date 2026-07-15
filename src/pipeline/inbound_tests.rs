@@ -22,7 +22,7 @@ fn rejects_non_json_payload_before_structured_ingress() {
         test_obs(),
         ErrorResponseFormat::default(),
     )
-    .prepare_inbound();
+    .parse_inbound();
 
     assert!(matches!(
         result,

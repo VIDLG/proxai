@@ -1,7 +1,10 @@
 use crate::http_support::UpstreamResponseHead;
 use crate::upstream::{UpstreamBodyStreamStats, UpstreamStreamMetrics};
 use getset::{CopyGetters, Getters};
-use proxai_core::provider::{ProviderCompatibility, ProviderNormalizer};
+use proxai_core::observe::NoopObserver;
+use proxai_core::provider::{
+    ProviderBehavior, ProviderCompatibility, normalize_provider_stream_event,
+};
 use proxai_core::translation::stream::StreamEvent as StructuredStreamEvent;
 
 use crate::protocol::anthropic::messages::{
@@ -36,7 +39,7 @@ pub(crate) struct AnthropicResponseState {
 
 impl AnthropicResponseState {
     pub(crate) fn observe_events(&mut self, events: &[SseEvent]) {
-        let normalizer = ProviderNormalizer::new(
+        let behavior = ProviderBehavior::new(
             crate::protocol::ProviderProtocol::AnthropicMessages,
             ProviderCompatibility::Compatible,
         );
@@ -44,12 +47,12 @@ impl AnthropicResponseState {
             let Ok(payload) = event.payload_with_type() else {
                 continue;
             };
-            let payload = normalizer
-                .normalize_stream_event(StructuredStreamEvent::new(
-                    event.event_type.clone(),
-                    payload,
-                ))
-                .data;
+            let payload = normalize_provider_stream_event(
+                behavior,
+                StructuredStreamEvent::new(event.event_type.clone(), payload),
+                &NoopObserver,
+            )
+            .data;
             let Ok(event) = serde_json::from_value::<MessageStreamEvent>(payload) else {
                 continue;
             };

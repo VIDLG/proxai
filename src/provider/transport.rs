@@ -5,7 +5,7 @@ use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
-use crate::config::{ProviderCompatibility, ProviderConfig};
+use crate::config::ProviderConfig;
 use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_support::filter_forwardable_request_headers;
 use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
@@ -44,8 +44,7 @@ pub(crate) struct ProviderTransport {
     name: String,
     #[getset(get_copy = "pub(crate)")]
     protocol: ProviderProtocol,
-    #[getset(get_copy = "pub(crate)")]
-    compatibility: ProviderCompatibility,
+
     #[getset(get_copy = "pub(crate)")]
     read_idle_timeout: Duration,
     #[getset(get_copy = "pub(crate)")]
@@ -74,7 +73,7 @@ impl ProviderTransport {
         Ok(Self {
             name: normalized_name,
             protocol: config.protocol,
-            compatibility: config.compatibility,
+
             read_idle_timeout: config.read_idle_timeout,
             sse_tool_call_timeout: Some(Duration::from_secs(120)),
             base_url,
@@ -91,11 +90,7 @@ impl ProviderTransport {
     }
 
     pub(crate) fn response_context(&self) -> ProviderResponseContext {
-        ProviderResponseContext::new(
-            self.protocol,
-            self.streaming_response_policy(),
-            self.compatibility,
-        )
+        ProviderResponseContext::new(self.protocol, self.streaming_response_policy())
     }
 
     pub(crate) fn set_sse_tool_call_timeout(&mut self, timeout: Option<Duration>) {

@@ -1,8 +1,8 @@
-//! Shared translation context available to dispatch and protocol-pair code.
+//! Phase-bound translation context available to dispatch and protocol-pair code.
 //!
-//! This module contains no façade or pair-state dependencies. `Translator` owns
-//! one configured `TranslationContext`; each translation operation derives a
-//! phase-bound `TranslationScope`. Pair functions receive only a borrowed scope.
+//! This module contains no façade or pair-state dependencies. `Translator`
+//! derives a `TranslationScope` for each operation; pair functions receive only
+//! a borrowed scope.
 
 use std::sync::Arc;
 
@@ -18,35 +18,6 @@ pub struct TranslationRoute {
 }
 
 #[derive(Clone)]
-pub(crate) struct TranslationContext {
-    route: TranslationRoute,
-    observer: Arc<dyn Observer>,
-}
-
-impl TranslationContext {
-    pub(crate) fn new(route: TranslationRoute, observer: Arc<dyn Observer>) -> Self {
-        Self { route, observer }
-    }
-
-    pub(crate) fn with_observer(mut self, observer: Arc<dyn Observer>) -> Self {
-        self.observer = observer;
-        self
-    }
-
-    pub(crate) fn route(&self) -> TranslationRoute {
-        self.route
-    }
-
-    pub(crate) fn scope(&self, phase: TranslationPhase) -> TranslationScope {
-        TranslationScope {
-            route: self.route,
-            phase,
-            observer: Arc::clone(&self.observer),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct TranslationScope {
     route: TranslationRoute,
     phase: TranslationPhase,
@@ -54,6 +25,18 @@ pub(crate) struct TranslationScope {
 }
 
 impl TranslationScope {
+    pub(crate) fn new(
+        route: TranslationRoute,
+        phase: TranslationPhase,
+        observer: Arc<dyn Observer>,
+    ) -> Self {
+        Self {
+            route,
+            phase,
+            observer,
+        }
+    }
+
     pub(crate) fn route(&self) -> TranslationRoute {
         self.route
     }

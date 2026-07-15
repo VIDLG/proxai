@@ -1,11 +1,10 @@
 use axum::body::Bytes;
 use axum::http::request::Parts;
-use proxai_core::ingress::{PreparedInboundRequest, prepare_inbound_request_with_observer};
 use serde_json::Value;
 
 use crate::config::ErrorResponseFormat;
-use crate::error::{RequestError, Result};
-use crate::observe::{InboundRequestPrepared, ObserveContext};
+use crate::error::RequestError;
+use crate::observe::ObserveContext;
 use crate::protocol::RequestProtocol;
 
 use super::ProxyFlow;
@@ -14,12 +13,14 @@ pub(crate) struct InboundHttp {
     body: Bytes,
 }
 
-pub(crate) struct PreparedInbound {
-    pub(super) request: PreparedInboundRequest,
+pub(crate) struct ParsedInbound {
+    pub(super) protocol: RequestProtocol,
+    pub(super) payload: Value,
+    pub(super) body: Bytes,
 }
 
 pub(crate) type InboundHttpFlow = ProxyFlow<InboundHttp>;
-pub(crate) type PreparedInboundFlow = ProxyFlow<PreparedInbound>;
+pub(crate) type ParsedInboundFlow = ProxyFlow<ParsedInbound>;
 
 impl InboundHttpFlow {
     pub(crate) fn new(
@@ -38,7 +39,7 @@ impl InboundHttpFlow {
         }
     }
 
-    pub(crate) fn prepare_inbound(self) -> Result<PreparedInboundFlow, RequestError> {
+    pub(crate) fn parse_inbound(self) -> Result<ParsedInboundFlow, RequestError> {
         let Self {
             method,
             uri,
@@ -48,7 +49,7 @@ impl InboundHttpFlow {
             stage: InboundHttp { body },
         } = self;
 
-        let request_protocol = match uri.path() {
+        let protocol = match uri.path() {
             "/v1/responses" | "/responses" => RequestProtocol::OpenaiResponses,
             "/v1/chat/completions" | "/chat/completions" => RequestProtocol::OpenaiChatCompletions,
             "/v1/messages" | "/messages" => RequestProtocol::AnthropicMessages,
@@ -58,26 +59,20 @@ impl InboundHttpFlow {
                 });
             }
         };
-        let payload =
-            serde_json::from_slice::<Value>(&body).map_err(|source| RequestError::InvalidJson {
-                protocol: request_protocol,
-                source,
-            })?;
-        let request = prepare_inbound_request_with_observer(request_protocol, payload, &obs)?;
-        obs.observe_inbound_request_prepared(InboundRequestPrepared {
-            method: &method,
-            uri: &uri,
-            headers: &headers,
-            body: &body,
-        });
+        let payload = serde_json::from_slice::<Value>(&body)
+            .map_err(|source| RequestError::InvalidJson { protocol, source })?;
 
-        Ok(PreparedInboundFlow {
+        Ok(ParsedInboundFlow {
             method,
             uri,
             headers,
             obs,
             error_response_format,
-            stage: PreparedInbound { request },
+            stage: ParsedInbound {
+                protocol,
+                payload,
+                body,
+            },
         })
     }
 }

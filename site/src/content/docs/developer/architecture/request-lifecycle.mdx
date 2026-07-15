@@ -46,12 +46,12 @@ This page describes the source-level request path. User-facing behavior lives in
 
 <PipelineStageCards
   stages={[
-    { name: 'inbound_request', modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/ingress/'], responsibility: 'Detect the request path, read and parse body bytes, then normalize and validate the structured protocol payload.' },
-    { name: 'routing', codeName: false, modules: ['crates/proxai-core/src/routing/', 'src/pipeline/provider_request.rs'], responsibility: 'Resolve a provider label and upstream model from structured rules, then map the label to an application HTTP transport.' },
-    { name: 'provider_request', modules: ['crates/proxai-core/src/translation/', 'crates/proxai-core/src/provider/request/', 'src/provider/*/request'], responsibility: 'Translate the payload, rewrite and adapt the structured provider value in core, then serialize the upstream request in the application.' },
+    { name: 'inbound_request', modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/ingress/'], responsibility: 'Detect the request path and parse body bytes in the app, then let the core pipeline normalize and validate the structured payload.' },
+    { name: 'routing', codeName: false, modules: ['crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/routing/', 'src/pipeline/provider_request.rs'], responsibility: 'Resolve a provider label, protocol, compatibility policy, and upstream model in core, then map the label to an application HTTP transport.' },
+    { name: 'provider_request', modules: ['crates/proxai-core/src/pipeline/', 'crates/proxai-core/src/translation/', 'crates/proxai-core/src/provider/request/', 'src/provider/*/request'], responsibility: 'Return a prepared provider value and matching response pipeline from core, then serialize the upstream request in the application.' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: 'Construct upstream URL, attach provider-owned auth headers, and send via HTTP.' },
     { name: 'upstream_response', modules: ['src/upstream/', 'src/provider/*/response'], responsibility: 'Read status, headers, non-streaming body, or streaming byte carrier.' },
-    { name: 'outbound_response', modules: ['crates/proxai-core/src/translation/', 'src/http_support/'], responsibility: 'Translate provider response back to the inbound protocol and rebuild the client HTTP response.' },
+    { name: 'outbound_response', modules: ['crates/proxai-core/src/pipeline/', 'src/sse_translation.rs', 'src/http_support/'], responsibility: 'Run structured provider normalization and translation through `ResponsePipeline`, then rebuild the client HTTP/SSE response in the application.' },
   ]}
 />
 

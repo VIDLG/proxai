@@ -1,4 +1,3 @@
-use proxai_core::provider::ProviderRequestPreparer;
 use serde_json::Value;
 
 use crate::error::{InternalError, Result};
@@ -10,16 +9,11 @@ use crate::protocol::openai::{chat_completions, responses as openai_responses};
 use crate::provider::anthropic_messages as anthropic_provider;
 use crate::provider::openai::{chat_completions as chat_provider, responses as responses_provider};
 
-pub(crate) fn prepare_request(
+pub(crate) fn assemble_request(
     protocol: ProviderProtocol,
-    payload: Value,
-    upstream_model: &str,
+    provider_payload: Value,
     obs: &ObserveContext,
 ) -> Result<ProviderRequest, InternalError> {
-    let provider_payload = ProviderRequestPreparer::new(protocol)
-        .with_observer(obs.clone())
-        .prepare(payload, upstream_model);
-
     match protocol {
         ProviderProtocol::OpenaiResponses => {
             let body = serde_json::to_vec(&provider_payload)?;

@@ -1,7 +1,7 @@
 use getset::{CopyGetters, Getters};
 use serde_json::Value;
 
-use crate::observe::{NoopObserver, Observer};
+use crate::observe::Observer;
 use crate::protocol::RequestProtocol;
 
 use super::IngressResult;
@@ -31,13 +31,6 @@ impl PreparedInboundRequest {
 }
 
 pub fn prepare_inbound_request(
-    protocol: RequestProtocol,
-    payload: Value,
-) -> IngressResult<PreparedInboundRequest> {
-    prepare_inbound_request_with_observer(protocol, payload, &NoopObserver)
-}
-
-pub fn prepare_inbound_request_with_observer(
     protocol: RequestProtocol,
     payload: Value,
     observer: &dyn Observer,
