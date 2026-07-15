@@ -103,10 +103,9 @@ Provider 名字只是用户标签，不是语义协议标识。
   - formatting.rs — 通用格式化工具
   - error/ — 领域错误类型与渲染
   - http_support/ — HTTP 载体工具
-  - ingress/ — HTTP ingress adapter：path 检测、JSON bytes 解析、错误与 notice 映射
   - provider/ — provider 请求构造与 HTTP transport
   - upstream/ — 上游响应读回
-  - pipeline/ — 类型化代理 pipeline
+  - pipeline/ — 类型化代理 pipeline，包含 HTTP ingress 适配
   - observe/ — 捕获、日志、诊断
   - mcp/ — MCP 控制面
 - crates/
@@ -161,7 +160,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
   stages={[
     {
       name: 'inbound_request',
-      modules: ['pipeline/inbound.rs', 'src/ingress/', 'proxai-core/ingress/'],
+      modules: ['src/pipeline/inbound.rs', 'proxai-core/ingress/'],
       responsibility: '读取 body bytes、检测协议、解析 JSON，再归一化和校验结构化请求。',
     },
     {
@@ -201,7 +200,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 <ModuleGrid
   modules={[
     { name: 'proxai-core/protocol/', icon: 'protocol', description: 'Core crate 的协议 wire shape 与共享协议枚举。只建模 JSON，不做转换，不依赖 HTTP 载体。' },
-    { name: 'src/ingress/', icon: 'route', description: 'HTTP path 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'HTTP path 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
     { name: 'proxai-core/ingress/', icon: 'route', description: '与 carrier 无关的结构化请求归一化、校验、模型提取和类型化 ingress observations。' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: '共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现；不包含具体 sink。' },
     { name: 'proxai-core/routing/', icon: 'flow', description: '根据请求协议、模型模式、默认值和 route 配置选择 provider 标签，不依赖 carrier。' },
@@ -219,7 +218,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 - `proxai-core/protocol/` 是底层 wire 建模：只描述 JSON shape，不做转换。
 - `proxai-core/ingress/` 接收结构化 JSON value，负责协议归一化和校验，绝不接收 HTTP body bytes。
-- `src/ingress/` 是负责 path 检测、JSON bytes 解析、错误映射和 request-scoped observer 接线的应用 adapter。
+- `src/pipeline/inbound.rs` 是负责 path 检测、JSON bytes 解析、错误映射和 request-scoped observer 接线的应用 adapter。
 - `pipeline/` 协调完整请求生命周期，并保持 phase 顺序显式。
 - `proxai-core/translation/` 与 carrier 无关：`Translator` 只接收 JSON `Value` 或结构化 `StreamEvent`，不接收 HTTP response/body、SSE bytes 或 provider 私有结构。
 - `sse_translation.rs` 是 upstream byte stream 与纯结构化事件 translator 之间的应用层适配器，负责保留触发失败的原始 frame 和 SSE 输出编码。
@@ -237,7 +236,7 @@ flowchart TD
   paths[paths.rs] --> cli
   lib --> pipeline[pipeline/]
 
-  pipeline --> app_ingress[src/ingress/]
+  pipeline --> core_ingress[proxai-core/ingress/]
   pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
@@ -247,7 +246,6 @@ flowchart TD
   pipeline --> http_support[http_support/]
   pipeline --> error[error/]
 
-  app_ingress --> core_ingress[proxai-core/ingress/]
   core_ingress --> protocol[proxai-core/protocol/]
   translation --> protocol
   provider --> protocol
@@ -256,7 +254,6 @@ flowchart TD
   sse_translation --> http_support
   sse_translation --> sse[sse.rs]
   sse_translation --> translation
-  app_ingress --> error
   upstream --> sse
   observe --> error
   lib --> observe
@@ -266,7 +263,7 @@ flowchart TD
 关键规则：
 
 - `proxai-core/protocol/` 是底层 wire 建模。
-- `proxai-core/ingress/` 是归一化与校验的结构化 value 边界；`src/ingress/` 适配 HTTP bytes 和应用诊断。
+- `proxai-core/ingress/` 是归一化与校验的结构化 value 边界；`src/pipeline/inbound.rs` 适配 HTTP bytes 和应用诊断。
 - `pipeline/` 是知道完整请求生命周期的协调者。
 - `proxai-core/translation/` 只依赖协议模型、结构化 value/event 和 core observation contract，不依赖 HTTP、SSE bytes、provider transport 或具体应用观测实现。
 - `sse_translation.rs` 与 `pipeline/` 组合 byte carrier、纯 translator、诊断和客户端错误渲染。
@@ -276,7 +273,7 @@ flowchart TD
 
 `Translator` 根据两个 protocol 值选择翻译路径：
 
-- `ingress/` 检测出的 inbound `request_protocol`
+- `pipeline/inbound.rs` 检测出的 inbound `request_protocol`
 - 选中 provider 配置的 `protocol`
 
 规则：

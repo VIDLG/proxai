@@ -103,10 +103,9 @@ Provider names are user labels. They are not semantic protocol identifiers.
   - formatting.rs — formatting helpers
   - error/ — domain errors and rendering
   - http_support/ — HTTP carrier helpers
-  - ingress/ — HTTP ingress adapter: path detection, JSON byte parsing, error/notice mapping
   - provider/ — provider request preparation and HTTP transport
   - upstream/ — upstream response reading
-  - pipeline/ — typed proxy pipeline
+  - pipeline/ — typed proxy pipeline, including HTTP ingress adaptation
   - observe/ — capture, logging, diagnostics
   - mcp/ — MCP control surface
 - crates/
@@ -160,7 +159,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
   stages={[
     {
       name: 'inbound_request',
-      modules: ['pipeline/inbound.rs', 'src/ingress/', 'proxai-core/ingress/'],
+      modules: ['src/pipeline/inbound.rs', 'proxai-core/ingress/'],
       responsibility: 'Read body bytes, detect protocol, parse JSON, then normalize and validate the structured request.',
     },
     {
@@ -200,7 +199,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 <ModuleGrid
   modules={[
     { name: 'proxai-core/protocol/', icon: 'protocol', description: 'Core crate protocol wire shapes and shared protocol enums. Models JSON only; no conversion and no HTTP carrier types.' },
-    { name: 'src/ingress/', icon: 'route', description: 'HTTP path detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: 'HTTP path detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.' },
     { name: 'proxai-core/ingress/', icon: 'route', description: 'Carrier-independent structured request normalization, validation, model extraction, and typed ingress observations.' },
     { name: 'proxai-core/observe/', icon: 'gauge', description: 'Shared `Observer` contract, closed `Observation` variants, and no-op default; no concrete sinks.' },
     { name: 'proxai-core/routing/', icon: 'flow', description: 'Carrier-independent provider-label selection from request protocol, model pattern, defaults, and route configuration.' },
@@ -218,7 +217,7 @@ provider_http.translate_to_outbound().await?  // translation + http_support
 
 - `proxai-core/protocol/` is low-level wire modeling: JSON shapes only, no conversion.
 - `proxai-core/ingress/` accepts structured JSON values and owns protocol normalization and validation; it never receives HTTP body bytes.
-- `src/ingress/` is the application adapter for path detection, JSON byte parsing, error mapping, and request-scoped observer wiring.
+- `src/pipeline/inbound.rs` is the application adapter for path detection, JSON byte parsing, error mapping, and request-scoped observer wiring.
 - `pipeline/` coordinates the full request lifecycle and owns phase order.
 - `proxai-core/translation/` is carrier-independent: `Translator` accepts JSON `Value`s or structured `StreamEvent`s and never receives HTTP responses, bodies, SSE bytes, or provider-private structs.
 - `sse_translation.rs` is the application adapter between upstream byte streams and the pure structured-event translator. It owns raw triggering frames and SSE output encoding.
@@ -236,7 +235,7 @@ flowchart TD
   paths[paths.rs] --> cli
   lib --> pipeline[pipeline/]
 
-  pipeline --> app_ingress[src/ingress/]
+  pipeline --> core_ingress[proxai-core/ingress/]
   pipeline --> routing[proxai-core/routing/]
   pipeline --> provider[provider/]
   pipeline --> upstream[upstream/]
@@ -246,7 +245,6 @@ flowchart TD
   pipeline --> http_support[http_support/]
   pipeline --> error[error/]
 
-  app_ingress --> core_ingress[proxai-core/ingress/]
   core_ingress --> protocol[proxai-core/protocol/]
   translation --> protocol
   provider --> protocol
@@ -255,7 +253,6 @@ flowchart TD
   sse_translation --> http_support
   sse_translation --> sse[sse.rs]
   sse_translation --> translation
-  app_ingress --> error
   upstream --> sse
   observe --> error
   lib --> observe
@@ -265,7 +262,7 @@ flowchart TD
 Key rules:
 
 - `proxai-core/protocol/` is low-level wire modeling.
-- `proxai-core/ingress/` is the structured value boundary for normalization and validation; `src/ingress/` adapts HTTP bytes and application diagnostics.
+- `proxai-core/ingress/` is the structured value boundary for normalization and validation; `src/pipeline/inbound.rs` adapts HTTP bytes and application diagnostics.
 - `pipeline/` is the coordinator that knows about the full request lifecycle.
 - `proxai-core/translation/` depends only on protocol models, structured values/events, and the core observation contract; it does not depend on HTTP, SSE bytes, provider transport, or concrete application observation.
 - `sse_translation.rs` and `pipeline/` compose byte carriers, the pure translator, diagnostics, and client-facing error rendering.
@@ -275,7 +272,7 @@ Key rules:
 
 `Translator` selects translation from two protocol values:
 
-- inbound `request_protocol`, detected by `ingress/`
+- inbound `request_protocol`, detected by `pipeline/inbound.rs`
 - provider `protocol`, configured on the selected provider
 
 Rules:

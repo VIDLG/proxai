@@ -18,7 +18,7 @@ ProxAI 保持协议转换显式、按协议对组织。这里是开发者视角�
 ## 边界
 
 - `crates/proxai-core/src/protocol/` 负责协议专属的 Rust wire model。
-- `src/ingress/` 解析 HTTP body bytes 并映射应用错误/notices；`crates/proxai-core/src/ingress/` 负责翻译前的结构化归一化与校验。
+- `src/pipeline/inbound.rs` 解析 HTTP body bytes 并映射应用错误/notices；`crates/proxai-core/src/ingress/` 负责翻译前的结构化归一化与校验。
 - `crates/proxai-core/src/translation/` 负责在入站 `request_protocol` 和出站 provider `protocol` 之间做纯跨协议转换。
 - `src/provider/request.rs` 负责 provider 请求准备，包括模型改写、projection/summary 提取和 JSON body 序列化。
 - `src/provider/transport.rs` 负责出站 HTTP 传输、认证头、上游 URL 构造和发送。

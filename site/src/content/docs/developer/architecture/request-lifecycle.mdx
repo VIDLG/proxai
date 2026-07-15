@@ -46,7 +46,7 @@ This page describes the source-level request path. User-facing behavior lives in
 
 <PipelineStageCards
   stages={[
-    { name: 'inbound_request', modules: ['src/ingress/', 'crates/proxai-core/src/ingress/', 'src/pipeline/inbound.rs'], responsibility: 'Detect the request path, read and parse body bytes, then normalize and validate the structured protocol payload.' },
+    { name: 'inbound_request', modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/ingress/'], responsibility: 'Detect the request path, read and parse body bytes, then normalize and validate the structured protocol payload.' },
     { name: 'routing', codeName: false, modules: ['crates/proxai-core/src/routing/', 'src/pipeline/provider_request.rs'], responsibility: 'Resolve a provider label and upstream model from structured rules, then map the label to an application HTTP transport.' },
     { name: 'provider_request', modules: ['src/provider/*/request', 'crates/proxai-core/src/translation/'], responsibility: 'Translate payload if protocols differ, rewrite provider model, serialize the upstream request.' },
     { name: 'provider transport', codeName: false, modules: ['src/provider/*/transport'], responsibility: 'Construct upstream URL, attach provider-owned auth headers, and send via HTTP.' },

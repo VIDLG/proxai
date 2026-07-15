@@ -19,7 +19,7 @@ import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@com
 <PipelineStageCards
   labels={{ modules: '模块', responsibility: '职责' }}
   stages={[
-    { name: 'ingress', codeName: false, modules: ['src/ingress/', 'crates/proxai-core/src/ingress/'], responsibility: '应用 adapter 检测入站协议并解析 HTTP bytes，core 再对结构化 payload 做归一化和校验。' },
+    { name: 'ingress', codeName: false, modules: ['src/pipeline/inbound.rs', 'crates/proxai-core/src/ingress/'], responsibility: '应用 adapter 检测入站协议并解析 HTTP bytes，core 再对结构化 payload 做归一化和校验。' },
     { name: 'routing', codeName: false, modules: ['src/config.rs', 'pipeline routing'], responsibility: '通过协议感知 defaults 或显式模型 route 选择 provider。' },
     { name: 'translation', codeName: false, modules: ['crates/proxai-core/src/translation/'], responsibility: '在纯协议边界上转换协议 payload 和 streams。' },
     { name: 'provider', codeName: false, modules: ['src/provider/*/request', 'src/provider/*/transport'], responsibility: '准备 provider request payload、改写模型、添加 provider auth、构造上游 URL 并发送。' },
@@ -31,7 +31,7 @@ import { FeatureGrid, ModuleGrid, PipelineStageCards, ProxaiCallout } from '@com
 
 <ModuleGrid
   modules={[
-    { name: 'src/ingress/', icon: 'route', description: '入站 HTTP path/protocol 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
+    { name: 'src/pipeline/inbound.rs', icon: 'route', description: '入站 HTTP path/protocol 检测、JSON bytes 解析、应用错误映射和 request-scoped observer 接线。' },
     { name: 'crates/proxai-core/src/ingress/', icon: 'route', description: '与 carrier 无关的请求归一化、协议校验、模型提取和类型化 ingress observations。' },
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: '共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现。' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 和 SSE payload 的 wire data models。' },

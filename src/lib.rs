@@ -16,7 +16,6 @@ pub mod config;
 pub mod error;
 pub mod formatting;
 pub mod http_support;
-pub mod ingress;
 pub mod mcp;
 pub mod observe;
 pub mod paths;

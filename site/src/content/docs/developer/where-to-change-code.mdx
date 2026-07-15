@@ -19,7 +19,7 @@ Use this page as a maintainer routing map. It points common change requests to t
 <ModuleGrid
   modules={[
     { name: 'Runtime setting', icon: 'config', description: 'Start in `src/config.rs`; update `config.example.toml`, wiring in `src/main.rs` or `src/lib.rs`, user docs, reference docs, and config-loading tests.' },
-    { name: 'Inbound protocol parsing', icon: 'route', description: 'Use `src/ingress/` for HTTP path/body adaptation, `crates/proxai-core/src/ingress/` for structured normalization/validation, and `crates/proxai-core/src/protocol/` for wire shapes.' },
+    { name: 'Inbound protocol parsing', icon: 'route', description: 'Use `src/pipeline/inbound.rs` for HTTP path/body adaptation, `crates/proxai-core/src/ingress/` for structured normalization/validation, and `crates/proxai-core/src/protocol/` for wire shapes.' },
     { name: 'Route matching', icon: 'route', description: 'Start in `crates/proxai-core/src/routing/`; preserve strict `request_protocol` guard behavior and avoid silent fallthrough for mismatched explicit guards.' },
     { name: 'Provider request behavior', icon: 'file', description: 'Start in `src/provider/*/request`; keep model rewrite, projection, and serialization provider-owned.' },
     { name: 'Provider transport', icon: 'terminal', description: 'Start in `src/provider/*/transport`; keep auth headers, upstream URL construction, and HTTP send behavior outside pure translation.' },

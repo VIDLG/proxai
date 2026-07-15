@@ -57,7 +57,7 @@ Use phase names for capture artifacts/config, flow locals, and logging fields th
 
 Keep cross-protocol conversion in `crates/proxai-core/src/translation/`:
 
-- `src/ingress/` owns inbound byte parsing, application error mapping, and request-scoped observer wiring.
+- `src/pipeline/inbound.rs` owns inbound path detection, JSON byte parsing, application error mapping, and request-scoped observer wiring.
 - `crates/proxai-core/src/ingress/` owns structured inbound normalization and validation.
 - `crates/proxai-core/src/observe.rs` owns the shared core observation contract and typed variants.
 - `crates/proxai-core/src/protocol/` owns wire models.

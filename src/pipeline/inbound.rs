@@ -1,9 +1,10 @@
 use axum::body::Bytes;
 use axum::http::request::Parts;
+use proxai_core::ingress::{PreparedInboundRequest, prepare_inbound_request_with_observer};
+use serde_json::Value;
 
 use crate::config::ErrorResponseFormat;
 use crate::error::{RequestError, Result};
-use crate::ingress::{PreparedInboundRequest, prepare_inbound_request};
 use crate::observe::{InboundRequestPrepared, ObserveContext};
 use crate::protocol::RequestProtocol;
 
@@ -57,7 +58,12 @@ impl InboundHttpFlow {
                 });
             }
         };
-        let request = prepare_inbound_request(request_protocol, &body, &obs)?;
+        let payload =
+            serde_json::from_slice::<Value>(&body).map_err(|source| RequestError::InvalidJson {
+                protocol: request_protocol,
+                source,
+            })?;
+        let request = prepare_inbound_request_with_observer(request_protocol, payload, &obs)?;
         obs.observe_inbound_request_prepared(InboundRequestPrepared {
             method: &method,
             uri: &uri,
@@ -75,3 +81,7 @@ impl InboundHttpFlow {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "inbound_tests.rs"]
+mod tests;

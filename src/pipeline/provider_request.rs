@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use axum::http::HeaderMap;
+use proxai_core::ingress::PreparedInboundRequest;
 
 use crate::error::{InternalError, Result};
-use crate::ingress::PreparedInboundRequest;
 use crate::observe::{
     ProviderProtocolRequestPrepared, ProviderRequestBodySizes, RequestTranslationFailure,
 };
