@@ -60,7 +60,7 @@ fn translates_openai_response_to_anthropic_message_shape() {
         ],
         "usage": {
             "input_tokens": 10,
-            "input_tokens_details": {"cached_tokens": 2},
+            "input_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 0},
             "output_tokens": 6,
             "output_tokens_details": {"reasoning_tokens": 1},
             "total_tokens": 16
@@ -110,7 +110,7 @@ fn maps_failed_responses_status_without_refusal_to_missing_anthropic_stop_reason
         "created_at": 0,
         "model": "glm-5.1",
         "status": "failed",
-        "error": {"type": "server_error", "code": "upstream_failed", "message": "boom"},
+        "error": {"code": "server_error", "message": "boom"},
         "output": [{
             "type": "message",
             "id": "msg_1",

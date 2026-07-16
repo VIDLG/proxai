@@ -241,6 +241,89 @@ class TaggedUnionVariantTests(unittest.TestCase):
         self.assertIn("expected official `TextPayload`", gaps[0][2])
         self.assertIn("local `WrongTextPayload`", gaps[0][2])
 
+    def test_keeps_unique_payload_checks_when_a_union_discriminator_is_ambiguous(self):
+        schemas = {
+            "InputMessage": {
+                "type": "object",
+                "properties": {"type": {"type": "string", "enum": ["message"]}},
+            },
+            "OutputMessage": {
+                "type": "object",
+                "properties": {"type": {"type": "string", "enum": ["message"]}},
+            },
+            "AdditionalToolsItemParam": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string", "enum": ["additional_tools"]}
+                },
+            },
+        }
+        union = {
+            "oneOf": [
+                {"$ref": "#/components/schemas/InputMessage"},
+                {"$ref": "#/components/schemas/OutputMessage"},
+                {"$ref": "#/components/schemas/AdditionalToolsItemParam"},
+            ]
+        }
+
+        self.assertEqual(
+            openapi_schema._union_discriminator_payloads(union, "type", schemas, set()),
+            {"additional_tools": "AdditionalToolsItemParam"},
+        )
+
+        gaps = []
+        checks._check_tagged_union_payload_types(
+            {
+                "Item": {
+                    "tag": "type",
+                    "variant_payloads": {"additional_tools": "AdditionalTools"},
+                }
+            },
+            {"Item": union, **schemas},
+            gaps,
+        )
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("expected official `AdditionalToolsItemParam`", gaps[0][2])
+
+    def test_requires_untagged_local_union_for_ambiguous_discriminator_payloads(self):
+        schemas = {
+            "InputMessage": {
+                "type": "object",
+                "properties": {"type": {"type": "string", "enum": ["message"]}},
+            },
+            "OutputMessage": {
+                "type": "object",
+                "properties": {"type": {"type": "string", "enum": ["message"]}},
+            },
+        }
+        union = {
+            "oneOf": [
+                {"$ref": "#/components/schemas/InputMessage"},
+                {"$ref": "#/components/schemas/OutputMessage"},
+            ]
+        }
+        enum = {
+            "Item": {"tag": "type", "variant_payloads": {"message": "MessageItem"}},
+            "MessageItem": {
+                "untagged": True,
+                "payloads": ["InputMessage", "OutputMessage"],
+            },
+        }
+
+        gaps = []
+        checks._check_tagged_union_payload_types(
+            enum, {"Item": union, **schemas}, gaps
+        )
+        self.assertEqual(gaps, [])
+
+        enum["MessageItem"]["payloads"] = ["InputMessage"]
+        checks._check_tagged_union_payload_types(
+            enum, {"Item": union, **schemas}, gaps
+        )
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("expected an untagged local union", gaps[0][2])
+        self.assertIn("OutputMessage", gaps[0][2])
+
     def test_collects_payload_types_from_referenced_union_branches(self):
         schemas = {
             "TextPayload": {
@@ -266,6 +349,38 @@ class TaggedUnionVariantTests(unittest.TestCase):
             openapi_schema._union_discriminator_payloads(union, "type", schemas, set()),
             {"text": "TextPayload", "image": "ImagePayload"},
         )
+
+
+class NamedFieldTypeTests(unittest.TestCase):
+    def test_reports_wrong_named_object_reference(self):
+        gaps = []
+        schemas = {
+            "InputItemParam": {"type": "object"},
+            "OutputItem": {"type": "object"},
+        }
+        checks._check_named_field_types(
+            "Carrier",
+            {"item": "OutputItem"},
+            {"item": {"$ref": "#/components/schemas/InputItemParam"}},
+            schemas,
+            gaps,
+        )
+
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("expected `InputItemParam`, found `OutputItem`", gaps[0][2])
+
+    def test_accepts_matching_named_object_reference_through_nullable_carrier(self):
+        gaps = []
+        schemas = {"InputItemParam": {"type": "object"}}
+        checks._check_named_field_types(
+            "Carrier",
+            {"item": "OptionalNullable<InputItemParam>"},
+            {"item": {"$ref": "#/components/schemas/InputItemParam"}},
+            schemas,
+            gaps,
+        )
+
+        self.assertEqual(gaps, [])
 
 
 class FieldShapeTests(unittest.TestCase):

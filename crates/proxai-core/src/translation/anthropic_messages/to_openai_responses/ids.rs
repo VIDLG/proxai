@@ -2,14 +2,13 @@
 //!
 //! Used by both the non-streaming translator (`response.rs`) and the streaming
 //! translator (`streaming.rs`) to assign stable, collision-free ids like
-//! `msg_<message_id>[_<n>]`, `rs_<message_id>[_<n>]`, `fco_<message_id>[_<n>]`.
+//! `msg_<message_id>[_<n>]` and `rs_<message_id>[_<n>]`.
 
 #[derive(Debug)]
 pub(super) struct OutputItemIdAllocator {
     message_id: String,
     next_message_index: u32,
     next_reasoning_index: u32,
-    next_function_call_output_index: u32,
 }
 
 impl OutputItemIdAllocator {
@@ -18,7 +17,6 @@ impl OutputItemIdAllocator {
             message_id: message_id.into(),
             next_message_index: 0,
             next_reasoning_index: 0,
-            next_function_call_output_index: 0,
         }
     }
 
@@ -31,17 +29,6 @@ impl OutputItemIdAllocator {
     pub(super) fn reasoning(&mut self) -> String {
         let id = Self::indexed_id("rs", &self.message_id, self.next_reasoning_index);
         self.next_reasoning_index = self.next_reasoning_index.saturating_add(1);
-        id
-    }
-
-    pub(super) fn function_call_output(&mut self) -> String {
-        let id = Self::indexed_id(
-            "fco",
-            &self.message_id,
-            self.next_function_call_output_index,
-        );
-        self.next_function_call_output_index =
-            self.next_function_call_output_index.saturating_add(1);
         id
     }
 

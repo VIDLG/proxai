@@ -8,6 +8,8 @@
 
 use std::collections::BTreeMap;
 
+use strum::Display;
+
 use crate::translation::openai_responses::streaming::{
     ForwardedContent, ResponsesOutputSegmentKey,
 };
@@ -20,7 +22,15 @@ pub(super) struct StreamingState {
     next_tool_call_index: u32,
     tool_call_indexes: BTreeMap<u32, u32>,
     forwarded_content: BTreeMap<ResponsesOutputSegmentKey, ForwardedContent>,
-    emitted_content: bool,
+    visible_content: Option<VisibleContentKind>,
+    emitted_reasoning: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
+#[strum(serialize_all = "snake_case")]
+pub(super) enum VisibleContentKind {
+    Text,
+    Refusal,
 }
 
 impl StreamingState {
@@ -82,12 +92,29 @@ impl StreamingState {
             })
     }
 
-    pub(super) fn mark_content(&mut self) {
-        self.emitted_content = true;
+    pub(super) fn observe_visible_content(
+        &mut self,
+        kind: VisibleContentKind,
+    ) -> StreamTranslationResult<()> {
+        if let Some(observed) = self.visible_content
+            && observed != kind
+        {
+            return Err(StreamTranslationError::Semantic(format!(
+                "Responses stream mixed {kind} with previously emitted {observed}; Chat Completions cannot represent mixed text and refusal semantics"
+            )));
+        }
+        self.visible_content = Some(kind);
+        Ok(())
+    }
+
+    pub(super) fn mark_reasoning(&mut self) {
+        self.emitted_reasoning = true;
     }
 
     pub(super) fn has_representable_output(&self) -> bool {
-        self.emitted_content || !self.tool_call_indexes.is_empty()
+        self.visible_content.is_some()
+            || self.emitted_reasoning
+            || !self.tool_call_indexes.is_empty()
     }
 
     pub(super) fn has_tool_calls(&self) -> bool {

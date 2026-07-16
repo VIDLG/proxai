@@ -156,9 +156,15 @@ impl StreamingState {
                 );
                 Ok(Vec::new())
             }
-            item @ OutputItem::Compaction(_) => {
+            item @ (OutputItem::Compaction(_) | OutputItem::AdditionalTools(_)) => {
                 scope.dropped(format!("Responses output item `{}`", item.as_ref()),
-                    "Responses compaction item is internal transcript state with no Anthropic Messages stream representation",
+                    "Responses transcript control item has no Anthropic Messages stream representation",
+                );
+                Ok(Vec::new())
+            }
+            item @ (OutputItem::Program(_) | OutputItem::ProgramOutput(_)) => {
+                scope.dropped(format!("Responses output item `{}`", item.as_ref()),
+                    "Responses programmatic tool execution has no Anthropic Messages stream representation",
                 );
                 Ok(Vec::new())
             }
@@ -175,7 +181,7 @@ impl StreamingState {
         event: &str,
     ) -> StreamTranslationResult<()> {
         if let Some((key, _)) = self.blocks.iter().find(|(key, block)| {
-            matches!(block, ProjectedBlock::Active(_)) && key.output_index() == output_index
+            matches!(block, ProjectedBlock::Active(_)) && key.output_index() == Some(output_index)
         }) {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} before {} was closed",
@@ -424,6 +430,35 @@ impl StreamingState {
             text,
             event,
         )
+    }
+
+    pub(super) fn project_mantle_reasoning_delta(
+        &mut self,
+        output_index: Option<u32>,
+        delta: String,
+        event: &str,
+    ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
+        self.forward_text_like_delta(
+            ResponsesOutputSegmentKey::MantleReasoning { output_index },
+            delta,
+            event,
+        )
+    }
+
+    pub(super) fn project_mantle_reasoning_done(
+        &mut self,
+        output_index: Option<u32>,
+        text: Option<String>,
+        event: &str,
+    ) -> StreamTranslationResult<Vec<MessageStreamEvent>> {
+        let key = ResponsesOutputSegmentKey::MantleReasoning { output_index };
+        if let Some(text) = text {
+            return self.finish_text_like_block(key, text, event);
+        }
+        if self.has_active_block(key) {
+            return Ok(vec![self.stop_block(key, event)?]);
+        }
+        Ok(Vec::new())
     }
 
     pub(super) fn project_function_call_arguments_delta(

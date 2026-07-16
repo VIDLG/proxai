@@ -48,7 +48,7 @@ fn complete_response_snapshots(body: &str) -> String {
 async fn translates_openai_responses_stream_to_anthropic_messages_sse() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
 event: response.output_item.added\n\
 data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n\
 event: response.output_text.delta\n\
@@ -56,7 +56,7 @@ data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_in
 event: response.output_text.done\n\
 data: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"text\":\"ok\",\"logprobs\":[]}\n\n\
 event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n",
     )
     .await;
 
@@ -99,10 +99,55 @@ data: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\
 }
 
 #[tokio::test]
+async fn translates_mantle_reasoning_channel_to_thinking_block() {
+    // Synthetic compatibility coverage based on Zed v1.11.3's Bedrock Mantle
+    // `response.reasoning.delta/done` wire model. The delta carries Mantle's
+    // optional official-style identity while done omits it, exercising stable
+    // channel-coordinate inheritance. This is not a captured proxai regression.
+    let body = translate_body(
+        "event: response.created\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mantle_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
+event: response.reasoning.delta\n\
+data: {\"type\":\"response.reasoning.delta\",\"item_id\":\"rs_2\",\"output_index\":2,\"delta\":\"plan\"}\n\n\
+event: response.reasoning.done\n\
+data: {\"type\":\"response.reasoning.done\",\"text\":\"planning\"}\n\n\
+event: response.completed\n\
+data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_mantle_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
+    )
+    .await;
+
+    assert!(body.contains("\"type\":\"thinking\""));
+    assert!(body.contains("\"thinking\":\"plan\""));
+    assert!(body.contains("\"thinking\":\"ning\""));
+    assert!(body.contains("event: content_block_stop"));
+    assert!(!body.contains("stream translation error"));
+}
+
+#[tokio::test]
+async fn closes_mantle_thinking_block_when_done_omits_text() {
+    let body = translate_body(
+        "event: response.created\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mantle_done\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n\
+event: response.reasoning.delta\n\
+data: {\"type\":\"response.reasoning.delta\",\"delta\":\"thought\"}\n\n\
+event: response.reasoning.done\n\
+data: {\"type\":\"response.reasoning.done\"}\n\n\
+event: response.completed\n\
+data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_mantle_done\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n",
+    )
+    .await;
+
+    assert!(body.contains("\"thinking\":\"thought\""));
+    assert!(body.contains("event: content_block_stop"));
+    assert!(body.contains("event: message_stop"));
+    assert!(!body.contains("stream translation error"));
+}
+
+#[tokio::test]
 async fn rejects_output_text_delta_before_output_item_added() {
     let body = translate_body(
         "event: response.created\n\
-data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
+data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n\
 event: response.output_text.delta\n\
 data: {\"type\":\"response.output_text.delta\",\"sequence_number\":2,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\",\"logprobs\":[]}\n\n",
     )

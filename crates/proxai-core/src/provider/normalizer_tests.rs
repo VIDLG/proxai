@@ -11,29 +11,32 @@ use crate::translation::stream::StreamEvent;
 
 use super::{
     ProviderBehavior, ProviderCompatibility, normalize_provider_response,
-    normalize_provider_stream_event, requires_structured_normalization,
+    normalize_provider_stream_event,
 };
 
 #[test]
-fn structured_normalization_is_required_only_for_supported_compatible_protocols() {
+fn identity_normalization_is_required_only_for_measured_compatible_protocols() {
     for protocol in [
         ProviderProtocol::AnthropicMessages,
         ProviderProtocol::OpenaiChatCompletions,
     ] {
-        assert!(requires_structured_normalization(ProviderBehavior::new(
-            protocol,
-            ProviderCompatibility::Compatible,
-        )));
-        assert!(!requires_structured_normalization(ProviderBehavior::new(
-            protocol,
-            ProviderCompatibility::Strict,
-        )));
+        assert!(
+            ProviderBehavior::new(protocol, ProviderCompatibility::Compatible)
+                .requires_identity_normalization()
+        );
+        assert!(
+            !ProviderBehavior::new(protocol, ProviderCompatibility::Strict)
+                .requires_identity_normalization()
+        );
     }
 
-    assert!(!requires_structured_normalization(ProviderBehavior::new(
-        ProviderProtocol::OpenaiResponses,
-        ProviderCompatibility::Compatible,
-    )));
+    assert!(
+        !ProviderBehavior::new(
+            ProviderProtocol::OpenaiResponses,
+            ProviderCompatibility::Compatible,
+        )
+        .requires_identity_normalization()
+    );
 }
 
 #[test]
@@ -105,6 +108,45 @@ fn compatible_mode_emits_typed_provider_observation() {
             ProviderObservation::ResponseAdapted {
                 phase: ProviderResponsePhase::Streaming,
                 adaptation: ProviderResponseAdaptation::OpenaiChatCompletionsStreamEvent,
+                ..
+            }
+        )]
+    ));
+}
+
+#[test]
+fn compatible_responses_usage_repair_emits_typed_provider_observation() {
+    let observations = RecordingObserver::default();
+    let recorded = observations.values.clone();
+    let event = StreamEvent::message(json!({
+        "type": "response.completed",
+        "response": {
+            "usage": {
+                "input_tokens_details": {"cached_tokens": 1}
+            }
+        }
+    }))
+    .unwrap();
+
+    let normalized = normalize_provider_stream_event(
+        ProviderBehavior::new(
+            ProviderProtocol::OpenaiResponses,
+            ProviderCompatibility::Compatible,
+        ),
+        event,
+        &observations,
+    );
+
+    assert_eq!(
+        normalized.data["response"]["usage"]["input_tokens_details"]["cache_write_tokens"],
+        0
+    );
+    assert!(matches!(
+        recorded.lock().unwrap().as_slice(),
+        [Observation::Provider(
+            ProviderObservation::ResponseAdapted {
+                phase: ProviderResponsePhase::Streaming,
+                adaptation: ProviderResponseAdaptation::OpenaiResponsesUsageShape,
                 ..
             }
         )]

@@ -142,7 +142,14 @@ pub(crate) fn response_reasoning(payload: &Value) -> Result<Option<String>, Stri
     else {
         return Ok(None);
     };
-    combined_reasoning(message, "Chat response message")
+
+    // Zed deserializes a non-streaming `Choice.message` as
+    // `open_ai::RequestMessage`; its `Assistant` variant defines only
+    // `reasoning_content`. The `reasoning` alias belongs exclusively to
+    // `ResponseMessageDelta` and must not be inferred for full messages.
+    // Source: contrib/zed/crates/open_ai/src/open_ai.rs.
+    optional_string_extension(message, REASONING_CONTENT, "Chat response message")
+        .map(|reasoning| reasoning.map(str::to_string))
 }
 
 pub(crate) fn stream_reasoning(payload: &Value) -> Result<Option<String>, String> {
@@ -153,22 +160,30 @@ pub(crate) fn stream_reasoning(payload: &Value) -> Result<Option<String>, String
         return Ok(None);
     };
 
-    combined_reasoning(delta, "Chat stream delta")
-}
-
-fn combined_reasoning(
-    object: &serde_json::Map<String, Value>,
-    context: &str,
-) -> Result<Option<String>, String> {
+    // Zed's `open_ai::ResponseMessageDelta` defines both fields, and
+    // `OpenAiEventMapper::map_event` emits thinking events from them in this
+    // order. Commit 7187d65774 added `reasoning` specifically for common
+    // OpenAI-compatible streamed thinking fields.
+    // Sources: contrib/zed/crates/open_ai/src/{open_ai.rs,completion.rs}.
     let mut combined = String::new();
     for field in [REASONING, REASONING_CONTENT] {
-        match object.get(field) {
-            None | Some(Value::Null) => {}
-            Some(Value::String(reasoning)) => combined.push_str(reasoning),
-            Some(_) => return Err(format!("{context} `{field}` must be a string or null")),
+        if let Some(reasoning) = optional_string_extension(delta, field, "Chat stream delta")? {
+            combined.push_str(reasoning);
         }
     }
     Ok((!combined.is_empty()).then_some(combined))
+}
+
+fn optional_string_extension<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    field: &str,
+    context: &str,
+) -> Result<Option<&'a str>, String> {
+    match object.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok((!value.is_empty()).then_some(value.as_str())),
+        Some(_) => Err(format!("{context} `{field}` must be a string or null")),
+    }
 }
 
 #[cfg(test)]

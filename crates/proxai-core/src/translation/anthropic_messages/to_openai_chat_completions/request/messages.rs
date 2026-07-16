@@ -391,6 +391,7 @@ fn base64_pdf_file_part(
                 file_id: None,
                 filename,
             },
+            prompt_cache_breakpoint: None,
         },
     )
 }
@@ -405,6 +406,7 @@ impl From<anthropic::ContainerUploadBlockParam>
                 file_id: Some(block.file_id),
                 filename: None,
             },
+            prompt_cache_breakpoint: None,
         })
     }
 }
@@ -458,6 +460,7 @@ impl From<anthropic::ImageBlockParam> for chat::ChatCompletionRequestUserMessage
                         url: source.url,
                         detail: None,
                     },
+                    prompt_cache_breakpoint: None,
                 })
             }
             anthropic::ImageBlockSource::Base64(source) => {
@@ -466,6 +469,7 @@ impl From<anthropic::ImageBlockParam> for chat::ChatCompletionRequestUserMessage
                         url: format!("data:{};base64,{}", source.media_type.as_ref(), source.data),
                         detail: None,
                     },
+                    prompt_cache_breakpoint: None,
                 })
             }
         }

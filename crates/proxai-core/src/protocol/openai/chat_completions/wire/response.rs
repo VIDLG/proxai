@@ -1,6 +1,7 @@
 use crate::protocol::RequiredNullable;
 use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use strum::Display;
 
 use super::{CompletionUsage, ServiceTier};
@@ -181,4 +182,6 @@ pub struct CreateChatCompletionResponse {
         deserialize_with = "deserialize_present"
     )]
     pub usage: Option<CompletionUsage>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub moderation: OptionalNullable<Value>,
 }

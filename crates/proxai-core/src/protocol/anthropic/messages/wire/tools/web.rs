@@ -78,7 +78,8 @@ pub struct WebFetchBlock {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WebFetchToolResultContent {
-    Data(Vec<WebFetchBlock>),
+    Error(WebFetchToolResultErrorBlock),
+    Block(WebFetchBlock),
 }
 
 // ── Web Fetch result block ─────────────────────────────────────────
@@ -206,7 +207,8 @@ pub struct WebFetchBlockParam {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WebFetchToolResultParamContent {
-    Data(Vec<WebFetchBlockParam>),
+    Error(WebFetchToolResultErrorBlockParam),
+    Block(WebFetchBlockParam),
 }
 
 /// @sdk(shape = "WebFetchToolResultBlockParam")

@@ -216,12 +216,24 @@ pub struct ResponseReasoningSummaryPartAddedEvent {
     pub part: SummaryPart,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningSummaryPartDoneStatus {
+    Incomplete,
+}
+
 /// OpenAPI schema: `#/components/schemas/ResponseReasoningSummaryPartDoneEvent`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResponseReasoningSummaryPartDoneEvent {
     pub item_id: String,
     pub output_index: u32,
     pub summary_index: u32,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::protocol::deserialize_present"
+    )]
+    pub status: Option<ReasoningSummaryPartDoneStatus>,
 
     pub sequence_number: u64,
     pub part: SummaryPart,

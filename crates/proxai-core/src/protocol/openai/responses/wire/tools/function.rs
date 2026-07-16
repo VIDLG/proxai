@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::Display;
 
-use super::super::{InputContent, OutputStatus};
+use super::super::{
+    CallableToolAllowedCaller, InputContent, OutputStatus, ToolCallCaller, ToolCallCallerParam,
+};
 
 // ============================================================
 // Tool Choice
@@ -27,6 +29,8 @@ pub struct FunctionTool {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub description: OptionalNullable<String>,
     pub parameters: RequiredNullable<Value>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub output_schema: OptionalNullable<Value>,
     pub strict: RequiredNullable<bool>,
     #[serde(
         default,
@@ -34,6 +38,8 @@ pub struct FunctionTool {
         deserialize_with = "deserialize_present"
     )]
     pub defer_loading: Option<bool>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
 }
 
 /// OpenAPI schema: `#/components/schemas/FunctionToolParam`
@@ -46,12 +52,16 @@ pub struct FunctionToolParam {
     pub parameters: OptionalNullable<Value>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub strict: OptionalNullable<bool>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub output_schema: OptionalNullable<Value>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_present"
     )]
     pub defer_loading: Option<bool>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
 }
 
 // ============================================================
@@ -90,6 +100,8 @@ pub struct FunctionToolCall {
     )]
     pub id: Option<String>,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -127,6 +139,8 @@ pub struct FunctionCallOutputItemParam {
     pub call_id: String,
     pub output: FunctionCallOutput,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub status: OptionalNullable<OutputStatus>,
 }
 
@@ -149,6 +163,8 @@ pub struct FunctionToolCallResource {
 
     pub r#type: FunctionToolCallType,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -172,6 +188,8 @@ pub struct FunctionToolCallOutputResource {
     pub id: String,
 
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub output: FunctionCallOutput,
     pub status: FunctionCallOutputStatusEnum,
     #[serde(

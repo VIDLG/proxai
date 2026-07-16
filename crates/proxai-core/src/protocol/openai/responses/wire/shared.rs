@@ -4,7 +4,7 @@ use strum::Display;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum Filter {
+pub enum Filters {
     Comparison(ComparisonFilter),
     Compound(CompoundFilter),
 }
@@ -49,7 +49,7 @@ pub enum ComparisonType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CompoundFilter {
     pub r#type: CompoundType,
-    pub filters: Vec<Filter>,
+    pub filters: Vec<Filters>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]

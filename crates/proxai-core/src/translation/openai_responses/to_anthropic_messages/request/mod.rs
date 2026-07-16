@@ -27,6 +27,54 @@ pub(super) fn translate_request(
         request.input.as_ref(),
         scope,
     )?;
+    let reasoning = request.reasoning.as_non_null();
+    if reasoning
+        .and_then(|reasoning| reasoning.mode.as_ref())
+        .is_some()
+    {
+        scope.dropped(
+            "Responses reasoning.mode",
+            "Anthropic Messages has no equivalent reasoning execution mode",
+        );
+    }
+    if reasoning
+        .and_then(|reasoning| reasoning.context.as_non_null())
+        .is_some()
+    {
+        scope.dropped(
+            "Responses reasoning.context",
+            "Anthropic Messages has no equivalent reasoning history-selection control",
+        );
+    }
+    let reasoning_summary = reasoning.and_then(|reasoning| {
+        if let Some(summary) = reasoning.summary.as_non_null().copied() {
+            if reasoning.generate_summary.is_non_null() {
+                scope.dropped(
+                    "Responses reasoning.generate_summary",
+                    "reasoning.summary takes precedence over the deprecated field",
+                );
+            }
+            return Some(summary);
+        }
+        let summary = reasoning.generate_summary.as_non_null().copied()?;
+        scope.adapted(
+            "Responses reasoning.generate_summary",
+            "used as deprecated alias for reasoning.summary",
+        );
+        Some(summary)
+    });
+    if request.prompt_cache_options.is_some() {
+        scope.dropped(
+            "Responses prompt_cache_options",
+            "Anthropic prompt caching uses a different cache-control model",
+        );
+    }
+    if request.moderation.is_non_null() {
+        scope.dropped(
+            "Responses moderation",
+            "Anthropic Messages has no request-level moderation configuration",
+        );
+    }
 
     Ok(anthropic::MessageCreateParamsBase {
         max_tokens: request
@@ -44,9 +92,7 @@ pub(super) fn translate_request(
                 user_id: Some(user_id.clone()).into(),
             })
         }),
-        output_config: request
-            .reasoning
-            .as_non_null()
+        output_config: reasoning
             .and_then(|reasoning| reasoning.effort.as_non_null())
             .copied()
             .map(|effort| effort.try_into().map(output_config))
@@ -60,16 +106,11 @@ pub(super) fn translate_request(
             .as_non_null()
             .copied()
             .and_then(json_number_from_f32),
-        thinking: request
-            .reasoning
-            .as_non_null()
-            .and_then(|reasoning| reasoning.summary.as_non_null())
-            .copied()
-            .map(|summary| {
-                anthropic::ThinkingConfigParam::Adaptive(anthropic::ThinkingConfigAdaptive {
-                    display: Some(reasoning::thinking_display(summary, scope)).into(),
-                })
-            }),
+        thinking: reasoning_summary.map(|summary| {
+            anthropic::ThinkingConfigParam::Adaptive(anthropic::ThinkingConfigAdaptive {
+                display: Some(reasoning::thinking_display(summary, scope)).into(),
+            })
+        }),
         tool_choice: request
             .tool_choice
             .as_ref()

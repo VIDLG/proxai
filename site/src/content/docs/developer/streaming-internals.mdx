@@ -185,8 +185,10 @@ Most observers return `Continue`. `InjectAndClose` is reserved for cases where P
 Cross-protocol streaming code separates source lifecycle, pair state, and target construction:
 
 ```text
-translation/<source>/streaming.rs
+translation/<source>/streaming.rs or streaming/mod.rs
   source protocol parsing, identity, and lifecycle ordering
+translation/<source>/streaming/<dialect>.rs
+  optional source-specific compatibility dialect when a directory module is needed
 
 translation/<source>/to_<target>/streaming/
 ├── mod.rs       # routes source events through pair state and owns event/terminal timing

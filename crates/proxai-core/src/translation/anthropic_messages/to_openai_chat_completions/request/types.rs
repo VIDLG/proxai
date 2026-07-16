@@ -20,16 +20,14 @@ pub(super) fn non_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
     (!items.is_empty()).then_some(items)
 }
 
-impl From<anthropic::OutputFormat> for chat::ResponseFormat {
-    fn from(format: anthropic::OutputFormat) -> Self {
-        match format {
-            anthropic::OutputFormat::JsonSchema(schema) => Self::JsonSchema {
-                json_schema: ResponseFormatJsonSchema {
-                    description: None,
-                    name: "anthropic_json_schema".to_string(),
-                    schema: schema.schema,
-                    strict: None,
-                },
+impl From<anthropic::JsonOutputFormat> for chat::ResponseFormat {
+    fn from(format: anthropic::JsonOutputFormat) -> Self {
+        Self::JsonSchema {
+            json_schema: ResponseFormatJsonSchema {
+                description: None,
+                name: "anthropic_json_schema".to_string(),
+                schema: format.schema,
+                strict: None,
             },
         }
     }

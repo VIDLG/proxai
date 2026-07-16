@@ -44,6 +44,7 @@ impl From<responses::ReasoningEffort> for chat::ReasoningEffort {
             responses::ReasoningEffort::Medium => Self::Medium,
             responses::ReasoningEffort::High => Self::High,
             responses::ReasoningEffort::Xhigh => Self::Xhigh,
+            responses::ReasoningEffort::Max => Self::Max,
         }
     }
 }

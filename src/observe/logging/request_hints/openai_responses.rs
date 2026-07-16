@@ -137,6 +137,7 @@ fn render_tool_category_compact(category: ToolCategory) -> &'static str {
         ToolCategory::Shell => "sh",
         ToolCategory::ApplyPatch => "patch",
         ToolCategory::Namespace => "ns",
+        ToolCategory::ProgrammaticToolCalling => "ptc",
         ToolCategory::ToolSearch => "tool_search",
     }
 }

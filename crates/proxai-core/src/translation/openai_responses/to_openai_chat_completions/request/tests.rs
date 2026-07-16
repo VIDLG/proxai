@@ -39,9 +39,6 @@ fn translates_responses_request_to_chat_completions_shape() {
         "tool_choice": "required",
         "tools": [{
             "type": "function",
-            "parameters": null,
-            "strict": null,
-            "parameters": null,
             "strict": null,
             "name": "lookup",
             "description": "Look up a record",
@@ -79,6 +76,18 @@ fn translates_responses_request_to_chat_completions_shape() {
     assert_eq!(translated["messages"][3]["role"], "tool");
     assert_eq!(translated["tools"][0]["type"], "function");
     assert_eq!(translated["tool_choice"], "required");
+}
+
+#[test]
+fn preserves_max_reasoning_effort_for_chat_completions() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": "think deeply",
+        "reasoning": {"effort": "max"}
+    }))
+    .unwrap();
+
+    assert_eq!(translated["reasoning_effort"], "max");
 }
 
 #[test]
@@ -269,7 +278,7 @@ fn skips_hosted_responses_tools_without_chat_equivalent() {
         "model": "glm-5.1",
         "input": [{"type": "message", "role": "user", "content": "search"}],
         "tools": [
-            {"type": "function", "parameters": null, "strict": null, "name": "lookup", "parameters": {"type": "object"}},
+            {"type": "function", "strict": null, "name": "lookup", "parameters": {"type": "object"}},
             {"type": "web_search"}
         ]
     });
@@ -278,4 +287,45 @@ fn skips_hosted_responses_tools_without_chat_equivalent() {
     let tools = translated["tools"].as_array().unwrap();
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0]["type"], "function");
+}
+
+#[test]
+fn skips_hosted_tool_choice_without_chat_equivalent() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": "search",
+        "tool_choice": {"type": "file_search"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert!(translated.get("tool_choice").is_none());
+}
+
+#[test]
+fn serializes_custom_tool_output_content_list_as_tool_message_text() {
+    let payload = json!({
+        "model": "glm-5.1",
+        "input": [
+            {
+                "type": "custom_tool_call",
+                "call_id": "call_1",
+                "name": "shell",
+                "input": "pwd"
+            },
+            {
+                "type": "custom_tool_call_output",
+                "call_id": "call_1",
+                "output": [{"type": "input_text", "text": "ok"}]
+            }
+        ]
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+    let content = translated["messages"][1]["content"].as_str().unwrap();
+
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(content).unwrap(),
+        json!([{"type": "input_text", "text": "ok"}])
+    );
 }

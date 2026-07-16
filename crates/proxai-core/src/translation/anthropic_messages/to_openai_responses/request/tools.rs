@@ -79,7 +79,9 @@ impl TryFrom<anthropic::ToolUnion> for responses::Tool {
                 parameters: Some(serde_json::to_value(tool.input_schema)?).into(),
                 strict: tool.strict.into(),
                 description: tool.description.into(),
+                output_schema: None.into(),
                 defer_loading: tool.defer_loading,
+                allowed_callers: None.into(),
             })),
             other => Err(TranslationError::InvalidPayload(format!(
                 "Anthropic tool `{}` cannot be translated to OpenAI Responses tools",

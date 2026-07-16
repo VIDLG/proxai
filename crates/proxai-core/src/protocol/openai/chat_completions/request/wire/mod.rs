@@ -1,3 +1,4 @@
+use crate::protocol::openai::PromptCacheBreakpointParam;
 use serde::{Deserialize, Serialize};
 mod audio;
 mod tools;
@@ -35,6 +36,7 @@ pub enum ReasoningEffort {
     Medium,
     High,
     Xhigh,
+    Max,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
@@ -85,6 +87,12 @@ pub enum ResponseFormat {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestMessageContentPartText {
     pub text: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::protocol::deserialize_present"
+    )]
+    pub prompt_cache_breakpoint: Option<PromptCacheBreakpointParam>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

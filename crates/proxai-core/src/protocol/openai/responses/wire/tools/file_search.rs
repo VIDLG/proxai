@@ -5,7 +5,7 @@ use strum::Display;
 
 use std::collections::HashMap;
 
-use super::super::Filter;
+use super::super::Filters;
 
 // ============================================================
 // Tool Definition Supporting Types
@@ -72,7 +72,7 @@ pub struct FileSearchTool {
     )]
     pub ranking_options: Option<RankingOptions>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
-    pub filters: OptionalNullable<Filter>,
+    pub filters: OptionalNullable<Filters>,
 }
 
 // ============================================================

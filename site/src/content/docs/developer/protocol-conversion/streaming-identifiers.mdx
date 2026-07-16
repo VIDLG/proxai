@@ -522,7 +522,10 @@ complete `OutputItem` for two downstream consumers: `response.output_item.done`
 array. Text needs `text` for the snapshot, `item_id` for every delta/done
 event, and `citations` for annotation translation. ToolUse needs accumulated
 `arguments` plus `name` and `item_id`. RedactedThinking has no streamed deltas
-but must surface its `data` payload as `encrypted_content`.
+but must surface its `data` payload as `encrypted_content`. These are the official
+Responses lifecycle requirements. On ingress, the Bedrock Mantle compatibility
+channel `response.reasoning.delta/done` may omit item and output coordinates;
+ProxAI keeps that channel explicitly unscoped instead of inventing identities.
 
 Field-by-field justification, classified by what consumes each field:
 
@@ -530,7 +533,7 @@ Field-by-field justification, classified by what consumes each field:
   columns={['Block kind', 'Field', 'Chat translator', 'Responses translator', 'Notes']}
   rows={[
     ['Text', 'discriminant', 'yes', 'yes', 'delta type validation'],
-    ['', '`item_id`', 'no', 'yes', 'Responses mandates `item_id` on every delta/done event; Chat has no item-level id'],
+    ['', '`item_id`', 'no', 'yes', 'Official Responses events mandate `item_id`; the inbound Mantle reasoning compatibility channel is explicitly unscoped'],
     ['', 'accumulated `text`', 'no', 'yes', 'Responses builds `output_text.done` + snapshot from it; Chat emits deltas immediately'],
     ['', '`citations`', 'no', 'yes', 'Responses `OutputTextContent.annotations`; Chat handles annotations differently'],
     ['Thinking', 'discriminant', 'yes', 'yes', 'delta type validation'],

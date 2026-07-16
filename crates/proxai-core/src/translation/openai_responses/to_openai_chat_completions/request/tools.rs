@@ -32,7 +32,7 @@ impl TryFrom<&responses::Tool> for chat::ChatCompletionTools {
             // no Chat Completions equivalent and are skipped at the call site.
             other => Err(TranslationError::InvalidPayload(format!(
                 "OpenAI Responses tool `{}` cannot be translated to Chat Completions",
-                tool_discriminant(other)
+                other.as_ref()
             ))),
         }
     }
@@ -62,29 +62,22 @@ impl From<responses::GrammarSyntax> for chat_request::GrammarSyntax {
 }
 
 pub(super) fn chat_tools(
-    tools: &Option<Vec<responses::Tool>>,
+    tools: Option<&[responses::Tool]>,
     scope: &TranslationScope,
-) -> TranslationResult<Option<Vec<chat::ChatCompletionTools>>> {
-    let tools = match tools {
-        None => return Ok(None),
-        Some(tools) => tools,
-    };
+) -> Option<Vec<chat::ChatCompletionTools>> {
+    let tools = tools?;
 
     let mut translated = Vec::new();
     for tool in tools {
         match chat::ChatCompletionTools::try_from(tool) {
             Ok(tool) => translated.push(tool),
             Err(error) => scope.dropped(
-                format!("Responses tool `{}`", tool_discriminant(tool)),
+                format!("Responses tool `{}`", tool.as_ref()),
                 error.to_string(),
             ),
         }
     }
-    if translated.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(translated))
-    }
+    (!translated.is_empty()).then_some(translated)
 }
 
 impl TryFrom<&responses::ToolChoiceParam> for chat::ChatCompletionToolChoiceOption {
@@ -127,7 +120,7 @@ impl TryFrom<&responses::ToolChoiceParam> for chat::ChatCompletionToolChoiceOpti
             // have no Chat representation.
             other => Err(TranslationError::InvalidPayload(format!(
                 "OpenAI Responses tool_choice `{}` cannot be translated to Chat Completions",
-                tool_choice_discriminant(other)
+                tool_choice_name(other)
             ))),
         }
     }
@@ -142,46 +135,27 @@ impl From<responses::ToolChoiceAllowedMode> for chat_request::ToolChoiceAllowedM
     }
 }
 
-fn tool_discriminant(tool: &responses::Tool) -> &'static str {
-    match tool {
-        responses::Tool::Function(_) => "function",
-        responses::Tool::FileSearch(_) => "file_search",
-        responses::Tool::ComputerUsePreview(_) => "computer_use_preview",
-        responses::Tool::WebSearch(_) => "web_search",
-        responses::Tool::WebSearch20250826(_) => "web_search_20250826",
-        responses::Tool::Mcp(_) => "mcp",
-        responses::Tool::CodeInterpreter(_) => "code_interpreter",
-        responses::Tool::ImageGeneration(_) => "image_generation",
-        responses::Tool::LocalShell => "local_shell",
-        responses::Tool::Shell(_) => "shell",
-        responses::Tool::Custom(_) => "custom",
-        responses::Tool::Computer(_) => "computer",
-        responses::Tool::Namespace(_) => "namespace",
-        responses::Tool::ToolSearch(_) => "tool_search",
-        responses::Tool::WebSearchPreview(_) => "web_search_preview",
-        responses::Tool::WebSearchPreview20250311(_) => "web_search_preview_20250311",
-        responses::Tool::ApplyPatch => "apply_patch",
+pub(super) fn chat_tool_choice(
+    choice: Option<&responses::ToolChoiceParam>,
+    scope: &TranslationScope,
+) -> Option<chat::ChatCompletionToolChoiceOption> {
+    let choice = choice?;
+    match chat::ChatCompletionToolChoiceOption::try_from(choice) {
+        Ok(choice) => Some(choice),
+        Err(error) => {
+            scope.dropped(
+                format!("Responses tool_choice `{}`", tool_choice_name(choice)),
+                error.to_string(),
+            );
+            None
+        }
     }
 }
 
-fn tool_choice_discriminant(choice: &responses::ToolChoiceParam) -> &'static str {
+fn tool_choice_name(choice: &responses::ToolChoiceParam) -> String {
     match choice {
-        responses::ToolChoiceParam::AllowedTools(_) => "allowed_tools",
-        responses::ToolChoiceParam::Function(_) => "function",
-        responses::ToolChoiceParam::Mcp(_) => "mcp",
-        responses::ToolChoiceParam::Custom(_) => "custom",
-        responses::ToolChoiceParam::ApplyPatch => "apply_patch",
-        responses::ToolChoiceParam::Shell => "shell",
-        responses::ToolChoiceParam::Hosted(hosted) => match hosted {
-            responses::ToolChoiceTypes::FileSearch => "file_search",
-            responses::ToolChoiceTypes::WebSearchPreview => "web_search_preview",
-            responses::ToolChoiceTypes::Computer => "computer",
-            responses::ToolChoiceTypes::ComputerUsePreview => "computer_use_preview",
-            responses::ToolChoiceTypes::ComputerUse => "computer_use",
-            responses::ToolChoiceTypes::WebSearchPreview20250311 => "web_search_preview_20250311",
-            responses::ToolChoiceTypes::CodeInterpreter => "code_interpreter",
-            responses::ToolChoiceTypes::ImageGeneration => "image_generation",
-        },
-        responses::ToolChoiceParam::Mode(_) => "mode",
+        responses::ToolChoiceParam::Hosted(choice) => choice.to_string(),
+        responses::ToolChoiceParam::Mode(choice) => choice.to_string(),
+        other => other.as_ref().to_string(),
     }
 }

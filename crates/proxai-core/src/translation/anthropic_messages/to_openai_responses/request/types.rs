@@ -11,23 +11,21 @@ pub(super) fn non_empty<T>(items: Vec<T>) -> Option<Vec<T>> {
     if items.is_empty() { None } else { Some(items) }
 }
 
-impl TryFrom<anthropic::OutputFormat> for responses::ResponseTextParam {
+impl TryFrom<anthropic::JsonOutputFormat> for responses::ResponseTextParam {
     type Error = TranslationError;
 
-    fn try_from(format: anthropic::OutputFormat) -> TranslationResult<Self> {
-        match format {
-            anthropic::OutputFormat::JsonSchema(schema) => Ok(Self {
-                format: Some(responses::TextResponseFormatConfiguration::JsonSchema(
-                    responses::TextResponseFormatJsonSchema {
-                        description: None,
-                        name: "anthropic_json_schema".to_string(),
-                        schema: schema.schema,
-                        strict: None.into(),
-                    },
-                )),
-                verbosity: None.into(),
-            }),
-        }
+    fn try_from(format: anthropic::JsonOutputFormat) -> TranslationResult<Self> {
+        Ok(Self {
+            format: Some(responses::TextResponseFormatConfiguration::JsonSchema(
+                responses::TextResponseFormatJsonSchema {
+                    description: None,
+                    name: "anthropic_json_schema".to_string(),
+                    schema: format.schema,
+                    strict: None.into(),
+                },
+            )),
+            verbosity: None.into(),
+        })
     }
 }
 
@@ -118,6 +116,7 @@ impl TryFrom<anthropic::ToolResultBlockParam> for responses::Item {
             responses::FunctionCallOutputItemParam {
                 call_id: block.tool_use_id,
                 output,
+                caller: None.into(),
                 id: None.into(), // No Anthropic equivalent; Responses item id is server-assigned.
                 status: Some(status).into(),
             },

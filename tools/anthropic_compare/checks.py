@@ -199,6 +199,222 @@ def serde_field_diffs(sdk_text, only_marked=False):
     return diffs
 
 
+def _sdk_named_type_options(type_text, sdk_shapes, seen=None, array_depth=0):
+    """Resolve named SDK leaves with their surrounding `Array` depth.
+
+    Primitive/literal aliases and mixed inline shapes deliberately return `None`:
+    they have no named wire-object identity for this check to verify.
+    """
+    seen = seen or set()
+    options = set()
+    for part in _split_top_level_union(_normalize_ts_type(type_text)):
+        part = part.strip()
+        if part == "null":
+            continue
+        part_array_depth = array_depth
+        while (match := re.fullmatch(r"Array<(.+)>", part)) is not None:
+            part = match.group(1).strip()
+            part_array_depth += 1
+        # `Array<A | B>` becomes a union only after the outer collection is
+        # removed, so split it recursively while retaining its array depth.
+        if len(_split_top_level_union(part)) > 1:
+            resolved = _sdk_named_type_options(
+                part, sdk_shapes, seen, part_array_depth
+            )
+            if not resolved:
+                return None
+            options.update(resolved)
+            continue
+        shape = sdk_shapes.get(part)
+        if not shape:
+            return None
+        if shape.get("kind") == "interface":
+            options.add((part, part_array_depth))
+            continue
+        if shape.get("kind") != "type" or part in seen:
+            return None
+        rhs = shape.get("rhs", "")
+        # Synthetic/self aliases have no further information to expand; retain
+        # their own name so unit fixtures can model a nominal SDK reference.
+        if rhs == part:
+            options.add((part, part_array_depth))
+            continue
+        resolved = _sdk_named_type_options(
+            rhs, sdk_shapes, seen | {part}, part_array_depth
+        )
+        if not resolved:
+            return None
+        options.update(resolved)
+    return options or None
+
+
+def _rust_named_type_options(type_text, rust_items):
+    """Return local wire leaves paired with their surrounding `Vec` depth."""
+    type_text = (type_text or "").strip().strip("()")
+    array_depth = 0
+    while True:
+        if match := re.fullmatch(r"Vec<(.+)>", type_text):
+            type_text = match.group(1).strip()
+            array_depth += 1
+            continue
+        if match := re.fullmatch(
+            r"(?:Option|OptionalNullable|RequiredNullable|Box)<(.+)>", type_text
+        ):
+            type_text = match.group(1).strip()
+            continue
+        break
+    return {
+        (name, array_depth)
+        for name in _type_names_from_text(type_text)
+        if name in rust_items
+    }
+
+
+def _sdk_rust_type_candidates(sdk_shapes, rust_items, bindings, markers):
+    """Map each named SDK shape to every compatible local wire type."""
+    candidates = {name: set() for name in sdk_shapes}
+    for binding in bindings:
+        candidates.setdefault(binding["sdk_name"], set()).add(binding["item"])
+    for sdk_name, rust_name in markers.get("aliases", {}).items():
+        candidates.setdefault(sdk_name, set()).add(rust_name)
+    for sdk_name in sdk_shapes:
+        candidates[sdk_name].update(
+            rust_name
+            for rust_name in rust_items
+            if norm(sdk_name) == norm(rust_name)
+        )
+    return candidates
+
+
+def _local_payload_sdk_types(local_union, rust_items, rust_to_sdk, outer_array_depth=0):
+    """Return SDK identities covered by all modeled payloads of one local enum.
+
+    Tree-sitter reports generic containers (for example `Vec` in `Vec<Block>`)
+    alongside their arguments. A payload is therefore a locally modeled wire
+    type, not a token matched against a container-name allowlist.
+    """
+    payloads = set()
+    for variant in local_union.get("variants", {}).values():
+        payload_types = variant.get("payload_types")
+        if payload_types is None:
+            payloads.update((payload, 0) for payload in variant.get("payloads", []) if payload in rust_items)
+        else:
+            for payload_type in payload_types:
+                payloads.update(_rust_named_type_options(payload_type, rust_items))
+    if not payloads:
+        return None
+    covered = set()
+    for payload, array_depth in payloads:
+        sdk_types = rust_to_sdk.get(payload)
+        if not sdk_types:
+            return None
+        covered.update(
+            (sdk_type, outer_array_depth + array_depth)
+            for sdk_type in sdk_types
+        )
+    return covered
+
+
+def named_field_type_diffs(sdk_text, only_marked=False):
+    """Compare auditable SDK named field references with Rust wire identities.
+
+    A field union may use a tagged or untagged Rust enum. Its transport tagging
+    is checked separately; this check only verifies the set of object payloads.
+    """
+    sdk_shapes = sdk_comment_shapes(sdk_text)
+    rust_items = rust_serde_items()
+    markers = rust_sdk_markers()
+    bindings = rust_item_shape_bindings(sdk_shapes, only_marked=only_marked)
+    sdk_to_rust = _sdk_rust_type_candidates(
+        sdk_shapes, rust_items, bindings, markers
+    )
+    rust_to_sdk = {}
+    for sdk_name, rust_names in sdk_to_rust.items():
+        for rust_name in rust_names:
+            rust_to_sdk.setdefault(rust_name, set()).add(sdk_name)
+
+    diffs = []
+    suppressed_by_item = markers.get("field_suppressed", {})
+    for binding in bindings:
+        sdk_shape = binding["sdk_shape"]
+        rust_item = rust_items.get(binding["item"])
+        if not rust_item or sdk_shape.get("kind") != "interface":
+            continue
+        suppressed = suppressed_by_item.get(binding["item"], set())
+        for sdk_field in sdk_shape.get("fields", []):
+            wire_name = sdk_field["name"]
+            if wire_name in suppressed:
+                continue
+            expected_sdk_types = _sdk_named_type_options(
+                sdk_field["type"], sdk_shapes
+            )
+            if not expected_sdk_types or not all(
+                sdk_to_rust.get(sdk_type)
+                for sdk_type, _array_depth in expected_sdk_types
+            ):
+                continue
+            _rust_name, rust_field = _field_by_wire_name(rust_item, wire_name)
+            if not rust_field:
+                continue
+            actual_types = _rust_named_type_options(
+                rust_field.get("type"), rust_items
+            )
+            actual_type_names = {name for name, _array_depth in actual_types}
+            expected_sdk_names = {
+                name for name, _array_depth in expected_sdk_types
+            }
+            location = f"{rust_item['file']}:{rust_field['line']}"
+            field_name = f"{binding['sdk_name']}.{wire_name}"
+
+            if len(expected_sdk_types) == 1:
+                expected_sdk_type, expected_array_depth = next(iter(expected_sdk_types))
+                if any(
+                    expected_sdk_type in rust_to_sdk.get(actual, set())
+                    and actual_array_depth == expected_array_depth
+                    for actual, actual_array_depth in actual_types
+                ):
+                    continue
+                diffs.append(
+                    (
+                        binding["item"],
+                        location,
+                        [
+                            f"SDK field `{field_name}` references {sorted(expected_sdk_names)}, "
+                            f"but Rust field uses {sorted(actual_type_names)}"
+                        ],
+                    )
+                )
+                continue
+
+            local_payload_sdk_types = None
+            if len(actual_types) == 1:
+                local_union_name, outer_array_depth = next(iter(actual_types))
+                local_union = rust_items.get(local_union_name)
+                if local_union and local_union.get("kind") == "enum_item":
+                    local_payload_sdk_types = _local_payload_sdk_types(
+                        local_union,
+                        rust_items,
+                        rust_to_sdk,
+                        outer_array_depth,
+                    )
+                    if local_payload_sdk_types == expected_sdk_types:
+                        continue
+            diffs.append(
+                (
+                    binding["item"],
+                    location,
+                    [
+                        f"SDK field `{field_name}` is a named union over "
+                        f"{sorted(expected_sdk_names)}; Rust must use an enum whose payloads cover "
+                        f"exactly those SDK types and collection depths, found "
+                        f"{sorted(actual_type_names)} and payload coverage "
+                        f"{sorted(local_payload_sdk_types or ())}"
+                    ],
+                )
+            )
+    return diffs
+
+
 def _sdk_field_carrier(sdk_field):
     return expected_carrier(
         required=not sdk_field["optional"],

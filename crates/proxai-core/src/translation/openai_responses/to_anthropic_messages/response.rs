@@ -126,7 +126,7 @@ impl From<&responses::ResponseUsage> for Usage {
     fn from(usage: &responses::ResponseUsage) -> Self {
         Self {
             cache_creation: None.into(),
-            cache_creation_input_tokens: None.into(),
+            cache_creation_input_tokens: Some(usage.input_tokens_details.cache_write_tokens).into(),
             cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens).into(),
             inference_geo: None.into(),
             input_tokens: usage.input_tokens,
@@ -145,7 +145,7 @@ impl From<&responses::ResponseUsage> for Usage {
 impl From<&responses::ResponseUsage> for MessageDeltaUsage {
     fn from(usage: &responses::ResponseUsage) -> Self {
         Self {
-            cache_creation_input_tokens: None.into(),
+            cache_creation_input_tokens: Some(usage.input_tokens_details.cache_write_tokens).into(),
             cache_read_input_tokens: Some(usage.input_tokens_details.cached_tokens).into(),
             input_tokens: Some(usage.input_tokens).into(),
             output_tokens: usage.output_tokens,

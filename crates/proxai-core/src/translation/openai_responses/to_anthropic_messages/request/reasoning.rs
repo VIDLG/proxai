@@ -28,6 +28,7 @@ impl TryFrom<responses::ReasoningEffort> for anthropic::OutputEffort {
             responses::ReasoningEffort::Medium => Ok(Self::Medium),
             responses::ReasoningEffort::High => Ok(Self::High),
             responses::ReasoningEffort::Xhigh => Ok(Self::Xhigh),
+            responses::ReasoningEffort::Max => Ok(Self::Max),
             responses::ReasoningEffort::None | responses::ReasoningEffort::Minimal => {
                 Err(TranslationError::InvalidPayload(format!(
                     "OpenAI Responses reasoning effort `{effort}` cannot be translated to Anthropic output_config.effort"

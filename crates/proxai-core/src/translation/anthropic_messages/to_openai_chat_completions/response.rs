@@ -115,6 +115,7 @@ pub(super) fn translate_response(
             system_fingerprint: None,
             object: CreateChatCompletionResponseObject::ChatCompletion,
             usage: Some((&message.usage).into()),
+            moderation: None.into(),
         }, (!reasoning_content.is_empty()).then_some(reasoning_content)))
 }
 

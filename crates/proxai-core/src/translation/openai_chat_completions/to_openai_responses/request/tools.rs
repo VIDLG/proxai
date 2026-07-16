@@ -16,7 +16,9 @@ impl TryFrom<&chat::ChatCompletionTools> for responses::Tool {
                     parameters: tool.function.parameters.clone().into(),
                     strict: tool.function.strict.unwrap_or_default().into(),
                     description: tool.function.description.clone().into(),
+                    output_schema: None.into(),
                     defer_loading: None,
+                    allowed_callers: None.into(),
                 }))
             }
             chat::ChatCompletionTools::Custom(tool) => {
@@ -25,6 +27,7 @@ impl TryFrom<&chat::ChatCompletionTools> for responses::Tool {
                     description: tool.custom.description.clone(),
                     format: tool.custom.format.clone().map(Into::into),
                     defer_loading: None,
+                    allowed_callers: None.into(),
                 }))
             }
         }

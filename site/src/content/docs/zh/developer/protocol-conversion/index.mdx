@@ -116,7 +116,7 @@ Anthropic 的响应 item（`ToolUseBlock`, `ThinkingBlock` 等）在返回给客
 
 OpenAI Responses 与 Anthropic-compatible Messages 对 reasoning 控制项的拆分不同：
 
-- Responses `reasoning.effort` 会映射到 Anthropic `output_config.effort`，支持的 effort 值为 `low`、`medium`、`high`、`xhigh`。这是 Anthropic 侧首选的 effort 字段。
+- Responses `reasoning.effort` 会映射到 Anthropic `output_config.effort`，支持的 effort 值为 `low`、`medium`、`high`、`xhigh`、`max`。这是 Anthropic 侧首选的 effort 字段。
 - Responses `reasoning.summary`（`auto`、`concise`、`detailed`）只能有损映射为 Anthropic `thinking.display: "summarized"`；Anthropic 没有等价的 summary 细粒度。
 - 只有 Responses `reasoning.summary`、没有 effort 时，映射为 Anthropic `thinking: {"type":"adaptive", "display":"summarized"}`。
 - 同时存在 Responses `reasoning.effort` 与 `reasoning.summary` 时，映射为 `output_config.effort` 加 adaptive `thinking.display`；ProxAI 不会凭空生成 legacy `thinking.budget_tokens`。

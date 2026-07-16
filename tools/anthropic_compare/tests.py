@@ -179,6 +179,286 @@ class FieldCarrierTests(unittest.TestCase):
         self.assertIn("must not be omitted", diffs[0][2][0])
 
 
+class NamedFieldReferenceTests(unittest.TestCase):
+    def run_check(self, *, sdk_type, rust_type, rust_items, markers=None):
+        sdk_shapes = {
+            "Envelope": {
+                "kind": "interface",
+                "fields": [
+                    {"name": "payload", "optional": False, "type": sdk_type}
+                ],
+            },
+            **{name: {"kind": "type", "rhs": name} for name in rust_items},
+        }
+        rust_items = {
+            "Envelope": {
+                "kind": "struct_item",
+                "file": "envelope.rs",
+                "line": 1,
+                "attrs": [],
+                "fields": {"payload": {"type": rust_type, "line": 2, "attrs": []}},
+                "variants": {},
+            },
+            **rust_items,
+        }
+        bindings = [
+            {
+                "item": "Envelope",
+                "sdk_name": "Envelope",
+                "sdk_shape": sdk_shapes["Envelope"],
+            }
+        ]
+        with (
+            patch.object(checks, "sdk_comment_shapes", return_value=sdk_shapes),
+            patch.object(checks, "rust_serde_items", return_value=rust_items),
+            patch.object(
+                checks, "rust_item_shape_bindings", return_value=bindings
+            ),
+            patch.object(
+                checks,
+                "rust_sdk_markers",
+                return_value=markers
+                or {"aliases": {}, "field_suppressed": {}},
+            ),
+        ):
+            return checks.named_field_type_diffs("sdk")
+
+    def test_rejects_wrong_named_input_output_reference(self):
+        diffs = self.run_check(
+            sdk_type="InputItem | null",
+            rust_type="OptionalNullable<OutputItem>",
+            rust_items={
+                "InputItem": {"kind": "struct_item", "attrs": [], "variants": {}},
+                "OutputItem": {"kind": "struct_item", "attrs": [], "variants": {}},
+            },
+        )
+
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("references ['InputItem']", diffs[0][2][0])
+        self.assertIn("uses ['OutputItem']", diffs[0][2][0])
+
+    def test_accepts_explicit_sdk_alias_for_named_reference(self):
+        diffs = self.run_check(
+            sdk_type="InputItem",
+            rust_type="InputItemParam",
+            rust_items={
+                "InputItemParam": {
+                    "kind": "struct_item",
+                    "attrs": [],
+                    "variants": {},
+                }
+            },
+            markers={
+                "aliases": {"InputItem": "InputItemParam"},
+                "field_suppressed": {},
+            },
+        )
+
+        self.assertEqual(diffs, [])
+
+    def test_requires_complete_payload_coverage_for_named_sdk_unions(self):
+        rust_items = {
+            "InputA": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "InputB": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "Payload": {
+                "kind": "enum_item",
+                "attrs": ['#[serde(tag = "type")]'],
+                "variants": {
+                    "A": {"payloads": ["InputA"]},
+                    "B": {"payloads": ["InputB"]},
+                },
+            },
+        }
+        diffs = self.run_check(
+            sdk_type="InputA | InputB",
+            rust_type="Payload",
+            rust_items=rust_items,
+        )
+        self.assertEqual(diffs, [])
+
+        rust_items["Payload"]["variants"]["B"]["payloads"] = ["InputA"]
+        diffs = self.run_check(
+            sdk_type="InputA | InputB",
+            rust_type="Payload",
+            rust_items=rust_items,
+        )
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("named union", diffs[0][2][0])
+
+    def test_rejects_extra_payload_in_named_sdk_union(self):
+        rust_items = {
+            "InputA": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "InputB": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "Extra": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "Payload": {
+                "kind": "enum_item",
+                "attrs": [],
+                "variants": {
+                    "A": {"payloads": ["InputA"]},
+                    "B": {"payloads": ["InputB"]},
+                    "Extra": {"payloads": ["Extra"]},
+                },
+            },
+        }
+        diffs = self.run_check(
+            sdk_type="InputA | InputB",
+            rust_type="Payload",
+            rust_items=rust_items,
+        )
+
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("('Extra', 0)", diffs[0][2][0])
+
+    def test_rejects_array_depth_mismatch_for_named_reference(self):
+        diffs = self.run_check(
+            sdk_type="InputItem",
+            rust_type="Vec<InputItem>",
+            rust_items={
+                "InputItem": {"kind": "struct_item", "attrs": [], "variants": {}}
+            },
+        )
+
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("references ['InputItem']", diffs[0][2][0])
+
+    def test_accepts_multiple_local_bindings_for_one_sdk_shape(self):
+        sdk_shapes = {
+            "Envelope": {
+                "kind": "interface",
+                "fields": [
+                    {"name": "payload", "optional": False, "type": "TextBlockParam"}
+                ],
+            },
+            "TextBlockParam": {"kind": "interface", "fields": []},
+        }
+        rust_items = {
+            "Envelope": {
+                "kind": "struct_item",
+                "file": "envelope.rs",
+                "line": 1,
+                "attrs": [],
+                "fields": {"payload": {"type": "TypedTextBlockParam", "line": 2, "attrs": []}},
+                "variants": {},
+            },
+            "TypedTextBlockParam": {
+                "kind": "struct_item",
+                "file": "text.rs",
+                "line": 1,
+                "attrs": [],
+                "fields": {},
+                "variants": {},
+            },
+        }
+        bindings = [
+            {"item": "Envelope", "sdk_name": "Envelope", "sdk_shape": sdk_shapes["Envelope"]},
+            {
+                "item": "TypedTextBlockParam",
+                "sdk_name": "TextBlockParam",
+                "sdk_shape": sdk_shapes["TextBlockParam"],
+            },
+        ]
+        with (
+            patch.object(checks, "sdk_comment_shapes", return_value=sdk_shapes),
+            patch.object(checks, "rust_serde_items", return_value=rust_items),
+            patch.object(checks, "rust_item_shape_bindings", return_value=bindings),
+            patch.object(
+                checks,
+                "rust_sdk_markers",
+                return_value={"aliases": {}, "field_suppressed": {}},
+            ),
+        ):
+            diffs = checks.named_field_type_diffs("sdk")
+
+        self.assertEqual(diffs, [])
+
+    def test_accepts_tagged_union_and_normalized_payload_names(self):
+        sdk_shapes = {
+            "Envelope": {
+                "kind": "interface",
+                "fields": [
+                    {
+                        "name": "payload",
+                        "optional": False,
+                        "type": "Base64ImageSource | URLImageSource",
+                    }
+                ],
+            },
+            "Base64ImageSource": {"kind": "interface", "fields": []},
+            "URLImageSource": {"kind": "interface", "fields": []},
+        }
+        rust_items = {
+            "Envelope": {
+                "kind": "struct_item",
+                "file": "envelope.rs",
+                "line": 1,
+                "attrs": [],
+                "fields": {"payload": {"type": "ImageSource", "line": 2, "attrs": []}},
+                "variants": {},
+            },
+            "Base64ImageSource": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "UrlImageSource": {"kind": "struct_item", "attrs": [], "variants": {}},
+            "ImageSource": {
+                "kind": "enum_item",
+                "attrs": ['#[serde(tag = "type")]'],
+                "variants": {
+                    "Base64": {"payloads": ["Base64ImageSource"]},
+                    "Url": {"payloads": ["UrlImageSource"]},
+                },
+            },
+        }
+        bindings = [
+            {"item": "Envelope", "sdk_name": "Envelope", "sdk_shape": sdk_shapes["Envelope"]}
+        ]
+        with (
+            patch.object(checks, "sdk_comment_shapes", return_value=sdk_shapes),
+            patch.object(checks, "rust_serde_items", return_value=rust_items),
+            patch.object(checks, "rust_item_shape_bindings", return_value=bindings),
+            patch.object(
+                checks,
+                "rust_sdk_markers",
+                return_value={"aliases": {}, "field_suppressed": {}},
+            ),
+        ):
+            diffs = checks.named_field_type_diffs("sdk")
+
+        self.assertEqual(diffs, [])
+
+    def test_skips_primitive_sdk_aliases(self):
+        sdk_shapes = {
+            "Envelope": {
+                "kind": "interface",
+                "fields": [{"name": "payload", "optional": False, "type": "Model"}],
+            },
+            "Model": {"kind": "type", "rhs": "string"},
+        }
+        rust_items = {
+            "Envelope": {
+                "kind": "struct_item",
+                "file": "envelope.rs",
+                "line": 1,
+                "attrs": [],
+                "fields": {"payload": {"type": "String", "line": 2, "attrs": []}},
+                "variants": {},
+            }
+        }
+        bindings = [
+            {"item": "Envelope", "sdk_name": "Envelope", "sdk_shape": sdk_shapes["Envelope"]}
+        ]
+        with (
+            patch.object(checks, "sdk_comment_shapes", return_value=sdk_shapes),
+            patch.object(checks, "rust_serde_items", return_value=rust_items),
+            patch.object(checks, "rust_item_shape_bindings", return_value=bindings),
+            patch.object(
+                checks,
+                "rust_sdk_markers",
+                return_value={"aliases": {}, "field_suppressed": {}},
+            ),
+        ):
+            diffs = checks.named_field_type_diffs("sdk")
+
+        self.assertEqual(diffs, [])
+
+
 class ExplicitProvenanceTests(unittest.TestCase):
     def run_check(self, *, docs, markers):
         sdk_shapes = {"Message": {"kind": "interface", "fields": []}}

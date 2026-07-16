@@ -26,6 +26,7 @@ def render_report(result, level=2):
     serde_diffs = result.serde_diffs
     serde_field_semantic_diffs = result.serde_field_diffs
     field_carrier_semantic_diffs = result.field_carrier_diffs
+    named_field_type_semantic_diffs = result.named_field_type_diffs
     required_nullable_modeled = result.required_nullable_fields
     field_suppress_marker_diffs = result.field_suppress_diffs
     enum_semantic_diffs = result.enum_diffs
@@ -84,6 +85,13 @@ def render_report(result, level=2):
             field_carrier_semantic_diffs,
             level,
             drift_word="carrier mismatch",
+        )
+        _print_diff_section(
+            "Named field references",
+            "Named SDK field references match Rust wire carrier identities",
+            named_field_type_semantic_diffs,
+            level,
+            drift_word="reference mismatch",
         )
         _print_required_nullable_section(required_nullable_modeled, level)
         _print_diff_section(

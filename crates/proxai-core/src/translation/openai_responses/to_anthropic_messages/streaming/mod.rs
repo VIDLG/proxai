@@ -14,7 +14,8 @@ use crate::protocol::anthropic::messages::{MessageStreamEvent, StopReason};
 use crate::protocol::openai_responses::{Response, ResponseStreamEvent};
 
 use crate::translation::openai_responses::streaming::{
-    ResponsesInboundLifecycle, response_failure_error,
+    MantleStreamEvent, ResponsesInboundLifecycle, ResponsesInboundStreamEvent,
+    response_failure_error,
 };
 
 use crate::translation::TranslationScope;
@@ -40,9 +41,36 @@ impl ResponsesToAnthropicStreaming {
         event: StreamEvent,
         scope: &TranslationScope,
     ) -> StreamTranslationResult<Vec<StreamEvent>> {
-        let parsed = self.lifecycle.parse_stream_event(event.data)?;
-        let event_type = parsed.as_ref().to_string();
+        let inbound = self.lifecycle.parse_stream_event(event.data)?;
+        let event_type = inbound.event_type().to_string();
         let mut events = Vec::new();
+        let parsed = match inbound {
+            ResponsesInboundStreamEvent::Official(event) => *event,
+            ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDelta {
+                output_index,
+                delta,
+                ..
+            }) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_mantle_reasoning_delta(output_index, delta, &event_type)?,
+                );
+                return typed_stream_events(events);
+            }
+            ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDone {
+                output_index,
+                text,
+                ..
+            }) => {
+                events.extend(
+                    self.lifecycle
+                        .streaming_state_mut()?
+                        .project_mantle_reasoning_done(output_index, text, &event_type)?,
+                );
+                return typed_stream_events(events);
+            }
+        };
 
         match parsed {
             ResponseStreamEvent::ResponseCreated(event) => {
@@ -134,6 +162,7 @@ impl ResponsesToAnthropicStreaming {
                     &event_type,
                 )?);
             }
+
             ResponseStreamEvent::ResponseContentPartDone(event) => {
                 events.extend(
                     self.lifecycle

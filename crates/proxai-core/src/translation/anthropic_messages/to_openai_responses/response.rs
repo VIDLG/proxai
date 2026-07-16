@@ -1,9 +1,6 @@
-use crate::protocol::anthropic::messages::{
-    ContentBlock, Message, ToolResultBlock, ToolResultContentParam,
-};
+use crate::protocol::anthropic::messages::{ContentBlock, Message};
 use crate::protocol::openai::responses::{
-    FunctionCallOutput, FunctionCallOutputStatusEnum, FunctionToolCallOutputResource, OutputItem,
-    Response, ResponseObject, ServiceTier, Status, ToolChoiceOptions, ToolChoiceParam,
+    OutputItem, Response, ResponseObject, ServiceTier, Status, ToolChoiceOptions, ToolChoiceParam,
 };
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_responses::outbound::{response_id, text_message_item};
@@ -30,6 +27,7 @@ pub(super) fn translate_response(
         id: response_id(&message.id),
         incomplete_details: incomplete_details_from_stop_reason(stop_reason).into(),
         instructions: None.into(),
+        moderation: None.into(),
         max_output_tokens: None.into(),
         max_tool_calls: None.into(),
         metadata: None.into(),
@@ -42,6 +40,7 @@ pub(super) fn translate_response(
         prompt: None.into(),
         prompt_cache_key: None,
         prompt_cache_retention: None.into(),
+        prompt_cache_options: None,
         reasoning: None.into(),
         safety_identifier: None,
         service_tier: message
@@ -119,9 +118,6 @@ fn translate_output(
             ContentBlock::ToolUse(block) => {
                 output.push(OutputItem::FunctionCall(block.try_into()?));
             }
-            ContentBlock::ToolResult(block) => {
-                output.push(tool_result_output_item(ids.function_call_output(), block)?);
-            }
             other => {
                 return Err(TranslationError::InvalidPayload(format!(
                     "Anthropic response content block `{}` cannot be translated to OpenAI Responses output item",
@@ -132,39 +128,6 @@ fn translate_output(
     }
 
     Ok(output)
-}
-
-fn tool_result_output_item(id: String, block: &ToolResultBlock) -> TranslationResult<OutputItem> {
-    let output = match block.content.clone() {
-        Some(ToolResultContentParam::Text(text)) => FunctionCallOutput::Text(text),
-        Some(ToolResultContentParam::Blocks(blocks)) => {
-            let parts = blocks
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<TranslationResult<Vec<_>>>()?;
-            FunctionCallOutput::Content(parts)
-        }
-        None => FunctionCallOutput::Content(Vec::new()),
-    };
-    // Anthropic `is_error = true` means the tool execution failed but the
-    // result has still been delivered. OpenAI Responses has no `Failed` value
-    // in `FunctionCallOutputStatusEnum` (only `InProgress` / `Completed` /
-    // `Incomplete`), and `Incomplete` specifically means the output was
-    // truncated mid-stream, which is a different semantic. Treat every
-    // non-streaming tool result as `Completed`: the error context survives in
-    // the `output` payload, which is how OpenAI clients and models normally
-    // distinguish successful vs. failed tool executions.
-    let status = FunctionCallOutputStatusEnum::Completed;
-
-    Ok(OutputItem::FunctionCallOutput(
-        FunctionToolCallOutputResource {
-            id,
-            call_id: block.tool_use_id.clone(),
-            output,
-            status,
-            created_by: None,
-        },
-    ))
 }
 
 #[cfg(test)]

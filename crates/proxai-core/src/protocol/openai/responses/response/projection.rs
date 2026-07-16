@@ -61,7 +61,10 @@ impl From<&Response> for ResponseProjection {
             conversation: response.conversation.clone().into_non_null(),
             created_at: response.created_at,
             completed_at: response.completed_at.into_non_null(),
-            error: response.error.as_non_null().cloned(),
+            error: response.error.as_non_null().map(|error| ErrorObject {
+                code: error.code.to_string(),
+                message: error.message.clone(),
+            }),
             id: response.id.clone(),
             incomplete_details: response.incomplete_details.as_non_null().cloned(),
             instructions: response.instructions.as_non_null().cloned(),

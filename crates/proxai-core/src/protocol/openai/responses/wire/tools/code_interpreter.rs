@@ -4,6 +4,8 @@ use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
+use super::CallableToolAllowedCaller;
+
 // ============================================================
 // Tool Definition Supporting Types
 // ============================================================
@@ -43,6 +45,8 @@ pub enum CodeInterpreterToolContainer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeInterpreterTool {
     pub container: CodeInterpreterToolContainer,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
 }
 
 // ============================================================

@@ -1,5 +1,6 @@
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
+use crate::protocol::openai::{PromptCacheBreakpointConfig, PromptCacheBreakpointParam};
 use crate::protocol::openai_responses as responses;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
 use crate::translation::openai_responses::outbound::{easy_message, function_call_output_item};
@@ -9,6 +10,12 @@ use crate::translation::{TranslationError, TranslationResult};
 pub(super) struct ResponsesInput {
     pub instructions: Option<String>,
     pub items: Vec<responses::InputItem>,
+}
+
+impl From<&PromptCacheBreakpointParam> for PromptCacheBreakpointConfig {
+    fn from(value: &PromptCacheBreakpointParam) -> Self {
+        Self { mode: value.mode }
+    }
 }
 
 pub(super) fn responses_input_from_messages(
@@ -319,6 +326,10 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContentPart> for responses::
                     detail: part.image_url.detail.map(Into::into).unwrap_or_default(),
                     file_id: None.into(),
                     image_url: Some(part.image_url.url.clone()).into(),
+                    prompt_cache_breakpoint: part
+                        .prompt_cache_breakpoint
+                        .as_ref()
+                        .map(Into::into),
                 }))
             }
             chat::ChatCompletionRequestUserMessageContentPart::File(part) => {
@@ -328,6 +339,10 @@ impl TryFrom<&chat::ChatCompletionRequestUserMessageContentPart> for responses::
                     file_url: None,
                     filename: part.file.filename.clone(),
                     detail: None,
+                    prompt_cache_breakpoint: part
+                        .prompt_cache_breakpoint
+                        .as_ref()
+                        .map(Into::into),
                 }))
             }
             chat::ChatCompletionRequestUserMessageContentPart::InputAudio(_) => Err(
@@ -344,6 +359,7 @@ impl From<&ChatCompletionRequestMessageContentPartText> for responses::InputCont
     fn from(part: &ChatCompletionRequestMessageContentPartText) -> Self {
         Self::InputText(responses::InputTextContent {
             text: part.text.clone(),
+            prompt_cache_breakpoint: part.prompt_cache_breakpoint.as_ref().map(Into::into),
         })
     }
 }
@@ -365,6 +381,7 @@ impl From<&chat::ChatCompletionMessageToolCalls> for responses::Item {
                 responses::Item::FunctionCall(responses::FunctionToolCall {
                     arguments: call.function.arguments.clone(),
                     call_id: call.id.clone(),
+                    caller: None.into(),
                     namespace: None,
                     name: call.function.name.clone(),
                     id: Some(call.id.clone()),
@@ -374,6 +391,7 @@ impl From<&chat::ChatCompletionMessageToolCalls> for responses::Item {
             chat::ChatCompletionMessageToolCalls::Custom(call) => {
                 responses::Item::CustomToolCall(responses::CustomToolCall {
                     call_id: call.id.clone(),
+                    caller: None.into(),
                     namespace: None,
                     input: call.custom.input.clone(),
                     name: call.custom.name.clone(),

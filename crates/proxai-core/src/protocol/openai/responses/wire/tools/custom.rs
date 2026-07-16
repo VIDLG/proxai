@@ -1,9 +1,10 @@
-use crate::protocol::deserialize_present;
+use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
 use super::super::InputContent;
 use super::function::{FunctionCallOutputStatusEnum, FunctionCallStatus};
+use super::{CallableToolAllowedCaller, ToolCallCaller, ToolCallCallerParam};
 
 // ============================================================
 // Tool Choice
@@ -70,6 +71,8 @@ pub struct CustomToolParam {
         deserialize_with = "deserialize_present"
     )]
     pub defer_loading: Option<bool>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
 }
 
 // ============================================================
@@ -98,6 +101,8 @@ pub struct CustomToolCallOutput {
     pub id: Option<String>,
 
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub output: CustomToolCallOutputOutput,
 }
 
@@ -116,6 +121,8 @@ pub struct CustomToolCall {
     pub id: Option<String>,
 
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -140,6 +147,8 @@ pub struct CustomToolCallResource {
     pub r#type: CustomToolCallType,
     pub id: String,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -163,6 +172,8 @@ pub struct CustomToolCallOutputResource {
     pub id: String,
 
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub output: CustomToolCallOutputOutput,
     pub status: FunctionCallOutputStatusEnum,
     #[serde(

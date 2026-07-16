@@ -36,10 +36,16 @@ the `reasoning_content` extension in assistant history, non-streaming messages,
 and streaming deltas. Zed also accepts `reasoning` in streaming deltas, while it
 replays assistant history as `reasoning_content`. These compatibility fields are
 injected and extracted at the translation boundary; the official OpenAI Chat wire
-types remain aligned with the OpenAPI schema. In provider compatibility mode,
+types remain aligned with the OpenAPI schema. Zed Responses request replay is
+normalized separately before strict parsing: ProxAI completes compact assistant
+output envelopes, id-less reasoning summary items, and omitted message-image
+`detail` defaults while keeping the official Responses wire types unchanged. In
+provider compatibility mode,
 ProxAI also repairs measured upstream omissions such as MiniMax Chat streaming
-chunks without required-nullable `choices[].finish_reason`. Redacted or encrypted
-reasoning is never exposed as ordinary visible content.
+chunks without required-nullable `choices[].finish_reason`. It also accepts
+Bedrock Mantle's coordinate-optional `response.reasoning.delta/done` events
+without inventing Responses item identities. Redacted or encrypted reasoning is
+never exposed as ordinary visible content.
 
 When translating Anthropic thinking across turns, ProxAI uses a versioned,
 client-carried continuation envelope: Responses uses `reasoning.encrypted_content`,

@@ -319,6 +319,7 @@ def rust_serde_items():
                                             continue
                                         vname = None
                                         payloads = []
+                                        payload_types = []
                                         for vc in variant.children:
                                             if (
                                                 vc.type == "identifier"
@@ -328,6 +329,11 @@ def rust_serde_items():
                                                     "utf-8", errors="replace"
                                                 )
                                             else:
+                                                payload_types.append(
+                                                    vc.text.decode(
+                                                        "utf-8", errors="replace"
+                                                    )
+                                                )
                                                 payloads.extend(
                                                     sorted(_type_names_in_node(vc))
                                                 )
@@ -335,6 +341,7 @@ def rust_serde_items():
                                             info["variants"][vname] = {
                                                 "attrs": _item_attributes(variant),
                                                 "line": variant.start_point[0] + 1,
+                                                "payload_types": payload_types,
                                                 "payloads": [
                                                     p
                                                     for p in payloads

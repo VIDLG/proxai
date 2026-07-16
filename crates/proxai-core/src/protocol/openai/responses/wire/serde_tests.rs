@@ -3,6 +3,23 @@ use serde_json::json;
 use super::*;
 
 #[test]
+fn response_error_uses_the_official_closed_error_code_set() {
+    let error = serde_json::from_value::<ResponseError>(json!({
+        "code": "server_error",
+        "message": "upstream failed"
+    }))
+    .unwrap();
+    assert_eq!(error.code, ResponseErrorCode::ServerError);
+    assert!(
+        serde_json::from_value::<ResponseError>(json!({
+            "code": "upstream_failed",
+            "message": "upstream failed"
+        }))
+        .is_err()
+    );
+}
+
+#[test]
 fn serializes_responses_reasoning_parts_as_type_tagged_wire() {
     let reasoning = ReasoningItemContent::ReasoningText(ReasoningTextContent {
         text: "thinking".to_string(),
@@ -141,6 +158,16 @@ fn deserializes_official_responses_audio_stream_events() {
 }
 
 #[test]
+fn rejects_provider_dialect_events_as_official_responses_wire() {
+    for payload in [
+        json!({"type": "response.reasoning.delta", "delta": "thought"}),
+        json!({"type": "response.reasoning.done"}),
+    ] {
+        assert!(serde_json::from_value::<ResponseStreamEvent>(payload).is_err());
+    }
+}
+
+#[test]
 fn rejects_unknown_responses_stream_event_types() {
     let payload = json!({
         "type": "response.future_progress",
@@ -177,7 +204,9 @@ fn serializes_responses_shell_and_namespace_unions_as_type_tagged_wire() {
             description: None.into(),
             parameters: None.into(),
             strict: None.into(),
+            output_schema: None.into(),
             defer_loading: None,
+            allowed_callers: None.into(),
         }))
         .unwrap(),
         json!({

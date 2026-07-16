@@ -56,12 +56,13 @@ impl From<&ResponseUsage> for CompletionUsage {
             prompt_tokens: usage.input_tokens,
             completion_tokens: usage.output_tokens,
             total_tokens: usage.total_tokens,
-            prompt_tokens_details: (usage.input_tokens_details.cached_tokens > 0).then_some(
-                PromptTokensDetails {
+            prompt_tokens_details: (usage.input_tokens_details.cached_tokens > 0
+                || usage.input_tokens_details.cache_write_tokens > 0)
+                .then_some(PromptTokensDetails {
                     audio_tokens: None,
                     cached_tokens: Some(usage.input_tokens_details.cached_tokens),
-                },
-            ),
+                    cache_write_tokens: Some(usage.input_tokens_details.cache_write_tokens),
+                }),
             completion_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0)
                 .then_some(CompletionTokensDetails {
                     accepted_prediction_tokens: None,

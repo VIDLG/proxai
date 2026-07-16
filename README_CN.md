@@ -35,10 +35,14 @@ Anthropic Messages 的 no-conversion 转发，也支持若干显式跨协议转�
 `reasoning_content` 扩展保留在 assistant 历史消息、非流式 message 和流式
 delta 中。Zed 的流式响应还接受 `reasoning`，但 assistant 历史回放使用
 `reasoning_content`。这些兼容字段只在 translation 边界提取和注入，官方
-OpenAI Chat wire types 仍严格对齐 OpenAPI schema。在 provider compatibility
-模式下，ProxAI 还会修复已测量到的上游缺失字段，例如 MiniMax Chat 流式 chunk
-缺少 required-nullable `choices[].finish_reason`。Redacted 或 encrypted reasoning
-不会伪装成普通可见正文。
+OpenAI Chat wire types 仍严格对齐 OpenAPI schema。Zed Responses 请求历史则在
+严格解析前单独归一化：ProxAI 会补全紧凑 assistant output envelope、缺少
+schema-required `id` 的 reasoning summary item，以及 message image 省略的 `detail`
+默认值，同时保持官方 Responses wire types 不变。在 provider compatibility 模式下，
+ProxAI 还会修复已测量到的上游缺失字段，例如 MiniMax Chat 流式 chunk
+缺少 required-nullable `choices[].finish_reason`。ProxAI 也会接受 Bedrock Mantle
+坐标可缺省的 `response.reasoning.delta/done` 事件，而不伪造 Responses item
+身份。Redacted 或 encrypted reasoning 不会伪装成普通可见正文。
 
 Anthropic thinking 的跨轮续接使用带版本的、由客户端携带的 continuation envelope：
 Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在

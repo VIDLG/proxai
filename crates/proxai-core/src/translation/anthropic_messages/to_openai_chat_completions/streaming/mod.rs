@@ -137,8 +137,7 @@ impl AnthropicToChatStreaming {
                             .register_redacted_thinking_block(index, block.data.clone())?;
                     }
 
-                    other @ (ContentBlock::ToolResult(_)
-                    | ContentBlock::ServerToolUse(_)
+                    other @ (ContentBlock::ServerToolUse(_)
                     | ContentBlock::WebSearchToolResult(_)
                     | ContentBlock::WebFetchToolResult(_)
                     | ContentBlock::CodeExecutionToolResult(_)

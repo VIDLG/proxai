@@ -77,6 +77,23 @@ fn reads_non_streaming_zed_reasoning_content() {
 }
 
 #[test]
+fn ignores_stream_only_reasoning_alias_in_non_streaming_message() {
+    let reasoning = response_reasoning(&json!({
+        "choices": [{
+            "message": {
+                "content": null,
+                "refusal": null,
+                "role": "assistant",
+                "reasoning": "stream-only alias"
+            }
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(reasoning, None);
+}
+
+#[test]
 fn reads_both_zed_supported_stream_reasoning_fields_in_zed_order() {
     let reasoning = stream_reasoning(&json!({
         "choices": [{

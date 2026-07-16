@@ -79,6 +79,7 @@ pub(crate) fn completed_function_tool_call(
 ) -> responses::FunctionToolCall {
     responses::FunctionToolCall {
         call_id: call_id.into(),
+        caller: None.into(),
         name: name.into(),
         arguments: arguments.into(),
         id: None,
@@ -103,6 +104,7 @@ pub(crate) fn in_progress_function_call_item(
     responses::OutputItem::FunctionCall(responses::FunctionToolCall {
         id: Some(item_id.clone()),
         call_id: item_id,
+        caller: None.into(),
         name: name.into(),
         arguments: String::new(),
         status: Some(responses::OutputStatus::InProgress),
@@ -119,6 +121,7 @@ pub(crate) fn completed_function_call_item_with_id(
     responses::OutputItem::FunctionCall(responses::FunctionToolCall {
         id: Some(item_id.clone()),
         call_id: item_id,
+        caller: None.into(),
         name: name.into(),
         arguments: arguments.into(),
         status: Some(responses::OutputStatus::Completed),

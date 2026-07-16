@@ -2,6 +2,8 @@ use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
+use super::{ToolCallCaller, ToolCallCallerParam};
+
 // ============================================================
 // Input / Context Item Supporting Types
 // ============================================================
@@ -64,6 +66,8 @@ pub struct ApplyPatchToolCallItemParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub id: OptionalNullable<String>,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub status: ApplyPatchCallStatusParam,
     pub operation: ApplyPatchOperationParam,
 }
@@ -74,6 +78,8 @@ pub struct ApplyPatchToolCallOutputItemParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub id: OptionalNullable<String>,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub status: ApplyPatchCallOutputStatusParam,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub output: OptionalNullable<String>,
@@ -140,6 +146,8 @@ pub enum ApplyPatchOperation {
 pub struct ApplyPatchToolCall {
     pub id: String,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     pub status: ApplyPatchCallStatus,
     pub operation: ApplyPatchOperation,
     #[serde(
@@ -155,6 +163,8 @@ pub struct ApplyPatchToolCall {
 pub struct ApplyPatchToolCallOutput {
     pub id: String,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     pub status: ApplyPatchCallOutputStatus,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub output: OptionalNullable<String>,

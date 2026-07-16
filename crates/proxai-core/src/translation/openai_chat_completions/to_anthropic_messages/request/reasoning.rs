@@ -20,7 +20,8 @@ pub(super) fn thinking_config(
         chat::ReasoningEffort::Low
         | chat::ReasoningEffort::Medium
         | chat::ReasoningEffort::High
-        | chat::ReasoningEffort::Xhigh => None,
+        | chat::ReasoningEffort::Xhigh
+        | chat::ReasoningEffort::Max => None,
     }
 }
 
@@ -34,6 +35,7 @@ impl From<chat::ReasoningEffort> for Option<anthropic::OutputEffort> {
             chat::ReasoningEffort::Medium => Some(anthropic::OutputEffort::Medium),
             chat::ReasoningEffort::High => Some(anthropic::OutputEffort::High),
             chat::ReasoningEffort::Xhigh => Some(anthropic::OutputEffort::Xhigh),
+            chat::ReasoningEffort::Max => Some(anthropic::OutputEffort::Max),
         }
     }
 }

@@ -68,6 +68,43 @@ async fn proxy_moves_system_to_instructions_and_overrides_authorization() {
 }
 
 #[tokio::test]
+async fn proxy_normalizes_zed_responses_request_defaults() {
+    let capture = Arc::new(Capture::default());
+    let upstream_address = spawn_upstream(capture.clone()).await;
+    let shim_address = spawn_shim(upstream_address).await;
+
+    let response = local_client()
+        .post(format!("http://{shim_address}/v1/responses"))
+        .json(&json!({
+            "model": "gpt-5.6",
+            "input": [{
+                "type": "message",
+                "role": "user",
+                "content": [{
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,c2FuaXRpemVk"
+                }]
+            }],
+            "reasoning": {"effort": "max"},
+            "tools": [{
+                "type": "function",
+                "name": "lookup",
+                "parameters": {"type": "object", "properties": {}}
+            }]
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payloads = capture.payloads.lock().await;
+    assert_eq!(payloads.len(), 1);
+    assert_eq!(payloads[0]["input"][0]["content"][0]["detail"], "auto");
+    assert_eq!(payloads[0]["reasoning"]["effort"], "max");
+    assert_eq!(payloads[0]["tools"][0]["strict"], Value::Null);
+}
+
+#[tokio::test]
 async fn proxy_does_not_duplicate_provider_api_root_path() {
     let capture = Arc::new(Capture::default());
     let upstream_address = spawn_upstream(capture.clone()).await;

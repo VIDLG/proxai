@@ -58,6 +58,18 @@ fn translates_text_request_with_instructions_and_function_tool() {
 }
 
 #[test]
+fn preserves_max_reasoning_effort_for_anthropic() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": "think deeply",
+        "reasoning": {"effort": "max"}
+    }))
+    .unwrap();
+
+    assert_eq!(translated["output_config"]["effort"], "max");
+}
+
+#[test]
 fn reports_json_location_for_invalid_responses_request_payload() {
     let payload = json!({
         "model": "gpt-5.5",

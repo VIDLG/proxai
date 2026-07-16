@@ -25,18 +25,6 @@ pub enum ProviderCompatibility {
     Strict,
 }
 
-/// Returns whether this provider behavior can alter structured responses.
-///
-/// Carriers may use this to preserve raw bytes for identity forwarding when no
-/// compatibility repair is configured for the provider protocol.
-pub(crate) fn requires_structured_normalization(behavior: ProviderBehavior) -> bool {
-    behavior.compatibility() == ProviderCompatibility::Compatible
-        && matches!(
-            behavior.protocol(),
-            ProviderProtocol::AnthropicMessages | ProviderProtocol::OpenaiChatCompletions
-        )
-}
-
 /// Normalize one non-streaming provider response payload when the configured
 /// provider behavior requires it.
 pub(crate) fn normalize_provider_response(
@@ -44,19 +32,21 @@ pub(crate) fn normalize_provider_response(
     payload: Value,
     observer: &dyn Observer,
 ) -> Value {
-    if !requires_structured_normalization(behavior) {
+    if !behavior.uses_compatibility_repairs() {
         return payload;
     }
 
     let original = payload.clone();
     let (normalized, adaptation) = match behavior.protocol() {
         ProviderProtocol::AnthropicMessages => (
-            response::anthropic_messages::normalize_message_payload(payload),
+            response::anthropic_messages::normalize_response_payload(payload),
             ProviderResponseAdaptation::AnthropicMessagesShape,
         ),
-        ProviderProtocol::OpenaiResponses | ProviderProtocol::OpenaiChatCompletions => {
-            return payload;
-        }
+        ProviderProtocol::OpenaiResponses => (
+            response::openai_responses::normalize_response_payload(payload),
+            ProviderResponseAdaptation::OpenaiResponsesUsageShape,
+        ),
+        ProviderProtocol::OpenaiChatCompletions => return payload,
     };
     if normalized != original {
         observer.observe(
@@ -78,7 +68,7 @@ pub fn normalize_provider_stream_event(
     mut event: StreamEvent,
     observer: &dyn Observer,
 ) -> StreamEvent {
-    if !requires_structured_normalization(behavior) || event.is_done_sentinel() {
+    if !behavior.uses_compatibility_repairs() || event.is_done_sentinel() {
         return event;
     }
 
@@ -87,6 +77,12 @@ pub fn normalize_provider_stream_event(
     let adaptation = match behavior.protocol() {
         ProviderProtocol::AnthropicMessages => {
             event.data = response::anthropic_messages::normalize_stream_event_payload(event.data);
+            // Anthropic duplicates its stream discriminator in the named SSE
+            // event and JSON `type`. Identity normalization re-encodes the
+            // structured event, so recover the canonical name from the payload
+            // when a compatible provider omitted or misstated the `event:` line.
+            // Chat uses unnamed `data:` events, while Responses identity
+            // forwarding deliberately preserves the original SSE bytes.
             if let Some(event_type) = event.data.get("type").and_then(Value::as_str) {
                 event.event_type = event_type.to_string();
             }
@@ -97,7 +93,10 @@ pub fn normalize_provider_stream_event(
                 response::openai_chat_completions::normalize_stream_event_payload(event.data);
             ProviderResponseAdaptation::OpenaiChatCompletionsStreamEvent
         }
-        ProviderProtocol::OpenaiResponses => return event,
+        ProviderProtocol::OpenaiResponses => {
+            event.data = response::openai_responses::normalize_stream_event_payload(event.data);
+            ProviderResponseAdaptation::OpenaiResponsesUsageShape
+        }
     };
     if event.data != original_data || event.event_type != original_event_type {
         observer.observe(

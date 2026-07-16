@@ -69,6 +69,7 @@ check:
     just clippy
     just test
     just protocol-compare
+    just anthropic-protocol-compare
 
 test:
     CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --workspace
@@ -103,9 +104,14 @@ capture-disable:
 # Fast OpenAI protocol drift gate used by the full local check.
 protocol-compare:
     {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.openai_compare.tests
-    {{ pixi }} run -- python tools/compare_openai_protocol.py --quiet
+    {{ pixi }} run -- python tools/compare_openai_protocol.py --quiet --structural
 
-# Compare proxai Anthropic protocol types against official SDK
+# Fast Anthropic protocol drift gate used by the full local check.
+anthropic-protocol-compare:
+    {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.anthropic_compare.tests
+    {{ pixi }} run -- python tools/compare_anthropic_protocol.py --quiet
+
+# Compare proxai Anthropic protocol types against official SDK with a detailed report.
 compare-anthropic-protocol level="2":
     {{ pixi }} run -- python -m unittest tools.protocol_compare.tests tools.anthropic_compare.tests
     {{ pixi }} run -- python tools/compare_anthropic_protocol.py --level {{ level }}

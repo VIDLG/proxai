@@ -89,6 +89,7 @@ pub(crate) fn chat_choice_chunk(
         system_fingerprint: None,
         object: CreateChatCompletionStreamResponseObject::ChatCompletionChunk,
         usage: None.into(),
+        moderation: None.into(),
     }
 }
 
@@ -105,5 +106,6 @@ pub(crate) fn chat_usage_chunk(
         system_fingerprint: None,
         object: CreateChatCompletionStreamResponseObject::ChatCompletionChunk,
         usage: Some(usage).into(),
+        moderation: None.into(),
     }
 }

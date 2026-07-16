@@ -15,6 +15,7 @@ pub enum ReasoningEffort {
     Medium,
     High,
     Xhigh,
+    Max,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -26,13 +27,43 @@ pub enum ReasoningSummary {
     Detailed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ReasoningMode {
+    Named(ReasoningModeName),
+    Custom(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningModeName {
+    Standard,
+    Pro,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningContext {
+    Auto,
+    CurrentTurn,
+    AllTurns,
+}
+
 /// OpenAPI schema: `#/components/schemas/Reasoning`
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Reasoning {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub mode: Option<ReasoningMode>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub effort: OptionalNullable<ReasoningEffort>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub summary: OptionalNullable<ReasoningSummary>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub context: OptionalNullable<ReasoningContext>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub generate_summary: OptionalNullable<ReasoningSummary>,
 }

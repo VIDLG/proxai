@@ -15,8 +15,8 @@ use getset::CopyGetters;
 use crate::protocol::ProviderProtocol;
 
 pub use error::{ProviderError, normalize_provider_error};
+pub(crate) use normalizer::normalize_provider_response;
 pub use normalizer::{ProviderCompatibility, normalize_provider_stream_event};
-pub(crate) use normalizer::{normalize_provider_response, requires_structured_normalization};
 pub use request::prepare_provider_request;
 
 /// Carrier-independent properties of a configured provider.
@@ -37,5 +37,20 @@ impl ProviderBehavior {
             protocol,
             compatibility,
         }
+    }
+
+    /// Returns whether structured provider responses may receive compatibility repairs.
+    pub(crate) fn uses_compatibility_repairs(self) -> bool {
+        self.compatibility == ProviderCompatibility::Compatible
+    }
+
+    /// Returns whether identity forwarding must decode structured responses so
+    /// measured provider compatibility gaps can be repaired.
+    pub(crate) fn requires_identity_normalization(self) -> bool {
+        self.uses_compatibility_repairs()
+            && matches!(
+                self.protocol,
+                ProviderProtocol::AnthropicMessages | ProviderProtocol::OpenaiChatCompletions
+            )
     }
 }

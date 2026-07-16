@@ -21,9 +21,11 @@ pub(super) fn request_reasoning(
 
     if effort.is_some() || summary.is_some() {
         Some(responses::Reasoning {
+            mode: None,
             effort: effort.into(),
-            generate_summary: None.into(),
             summary: summary.into(),
+            context: None.into(),
+            generate_summary: None.into(),
         })
     } else {
         None
@@ -81,7 +83,8 @@ impl From<anthropic::OutputEffort> for responses::ReasoningEffort {
             anthropic::OutputEffort::Low => Self::Low,
             anthropic::OutputEffort::Medium => Self::Medium,
             anthropic::OutputEffort::High => Self::High,
-            anthropic::OutputEffort::Xhigh | anthropic::OutputEffort::Max => Self::Xhigh,
+            anthropic::OutputEffort::Xhigh => Self::Xhigh,
+            anthropic::OutputEffort::Max => Self::Max,
         }
     }
 }

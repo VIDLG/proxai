@@ -61,10 +61,20 @@ pub enum ThinkingConfigParam {
 
 // ── Output config types ──────────────────────────────────────────────────
 
+/// @sdk(proxai_internal = "discriminator")
+/// Discriminator value required by `JSONOutputFormat.type`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JsonOutputFormatType {
+    JsonSchema,
+}
+
 /// @sdk(shape = "JSONOutputFormat")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonOutputFormat {
     pub schema: Value,
+    #[serde(rename = "type")]
+    pub type_: JsonOutputFormatType,
 }
 
 /// @sdk(proxai_internal = "field_literal_wrapper")
@@ -79,21 +89,13 @@ pub enum OutputEffort {
     Max,
 }
 
-/// OutputConfig.format wrapper for `JSONOutputFormat`.
-/// @sdk(proxai_internal = "union_wrapper")
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum OutputFormat {
-    JsonSchema(JsonOutputFormat),
-}
-
 /// @sdk(shape = "OutputConfig")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OutputConfig {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub effort: OptionalNullable<OutputEffort>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
-    pub format: OptionalNullable<OutputFormat>,
+    pub format: OptionalNullable<JsonOutputFormat>,
 }
 
 // ── System prompt types ──────────────────────────────────────────────────

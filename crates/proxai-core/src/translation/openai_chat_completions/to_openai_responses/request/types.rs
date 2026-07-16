@@ -26,6 +26,7 @@ impl From<chat::PromptCacheRetention> for responses::PromptCacheRetention {
 impl From<chat::ReasoningEffort> for responses::Reasoning {
     fn from(effort: chat::ReasoningEffort) -> Self {
         Self {
+            mode: None,
             effort: Some(match effort {
                 chat::ReasoningEffort::None => responses::ReasoningEffort::None,
                 chat::ReasoningEffort::Minimal => responses::ReasoningEffort::Minimal,
@@ -33,10 +34,12 @@ impl From<chat::ReasoningEffort> for responses::Reasoning {
                 chat::ReasoningEffort::Medium => responses::ReasoningEffort::Medium,
                 chat::ReasoningEffort::High => responses::ReasoningEffort::High,
                 chat::ReasoningEffort::Xhigh => responses::ReasoningEffort::Xhigh,
+                chat::ReasoningEffort::Max => responses::ReasoningEffort::Max,
             })
             .into(),
-            generate_summary: None.into(),
             summary: None.into(),
+            context: None.into(),
+            generate_summary: None.into(),
         }
     }
 }

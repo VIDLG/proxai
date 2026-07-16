@@ -7,7 +7,10 @@ use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 
 pub(crate) fn text_part(text: impl Into<String>) -> ChatCompletionRequestMessageContentPartText {
-    ChatCompletionRequestMessageContentPartText { text: text.into() }
+    ChatCompletionRequestMessageContentPartText {
+        text: text.into(),
+        prompt_cache_breakpoint: None,
+    }
 }
 
 pub(crate) fn system_message(

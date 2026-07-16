@@ -9,6 +9,7 @@ from .checks import (
     explicit_provenance_diffs,
     field_carrier_diffs,
     field_suppress_diffs,
+    named_field_type_diffs,
     proxai_internal_diffs,
     serde_field_diffs,
     serde_wire_diffs,
@@ -130,6 +131,7 @@ class AnthropicComparison:
     serde_diffs: list
     serde_field_diffs: list
     field_carrier_diffs: list
+    named_field_type_diffs: list
     required_nullable_fields: list
     field_suppress_diffs: list
     enum_diffs: list
@@ -154,6 +156,9 @@ def compare_protocol(*, only_marked=False):
     serde_diffs = serde_wire_diffs(text, only_marked=only_marked)
     serde_field_semantic_diffs = serde_field_diffs(text, only_marked=only_marked)
     field_carrier_semantic_diffs, required_nullable_modeled = field_carrier_diffs(
+        text, only_marked=only_marked
+    )
+    named_field_type_semantic_diffs = named_field_type_diffs(
         text, only_marked=only_marked
     )
     field_suppress_marker_diffs = field_suppress_diffs(
@@ -274,6 +279,7 @@ def compare_protocol(*, only_marked=False):
         or serde_diffs
         or serde_field_semantic_diffs
         or field_carrier_semantic_diffs
+        or named_field_type_semantic_diffs
         or field_suppress_marker_diffs
         or enum_semantic_diffs
         or union_semantic_diffs
@@ -303,6 +309,7 @@ def compare_protocol(*, only_marked=False):
         serde_diffs=serde_diffs,
         serde_field_diffs=serde_field_semantic_diffs,
         field_carrier_diffs=field_carrier_semantic_diffs,
+        named_field_type_diffs=named_field_type_semantic_diffs,
         required_nullable_fields=required_nullable_modeled,
         field_suppress_diffs=field_suppress_marker_diffs,
         enum_diffs=enum_semantic_diffs,

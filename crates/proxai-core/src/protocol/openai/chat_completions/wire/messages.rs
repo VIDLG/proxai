@@ -4,8 +4,10 @@
 )]
 
 use crate::protocol::RequiredNullable;
+use crate::protocol::openai::PromptCacheBreakpointParam;
 use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use strum::Display;
 
@@ -102,6 +104,12 @@ pub struct FileObject {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestMessageContentPartFile {
     pub file: FileObject,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub prompt_cache_breakpoint: Option<PromptCacheBreakpointParam>,
 }
 
 // ============================================================
@@ -118,6 +126,12 @@ pub struct ChatCompletionRequestMessageContentPartRefusal {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionRequestMessageContentPartImage {
     pub image_url: ImageUrl,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub prompt_cache_breakpoint: Option<PromptCacheBreakpointParam>,
 }
 
 /// OpenAPI schema: `#/components/schemas/InputAudio`
@@ -345,6 +359,12 @@ pub struct CreateChatCompletionRequest {
     pub service_tier: OptionalNullable<ServiceTier>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub prompt_cache_retention: OptionalNullable<PromptCacheRetention>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub prompt_cache_options: Option<Value>,
 
     pub messages: Vec<ChatCompletionRequestMessage>,
     pub model: String,
@@ -376,6 +396,8 @@ pub struct CreateChatCompletionRequest {
     pub audio: OptionalNullable<ChatCompletionAudio>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub store: OptionalNullable<bool>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub moderation: OptionalNullable<Value>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub stream: OptionalNullable<bool>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]

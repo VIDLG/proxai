@@ -423,7 +423,7 @@ enum StreamBlock {
 
 Chat 只区分 block 类型，加上一个整数（`chat_tool_index`），它必须在每个 `tool_calls[].index` chunk 上回填。可见文本、tool 参数和普通 reasoning 逐步 emit。对于 Anthropic thinking continuation，ProxAI 则会在相关 block 结束前累积 signature 与 redacted payload，随后在最后一个 `reasoning_content` delta 里追加带版本的 continuation envelope。该 envelope 由客户端而非代理持有，供后续回放。
 
-Responses 累积内容，因为每个 block 最终必须为两个下游消费者产生一个完整的 `OutputItem`：`response.output_item.done`（携带最终化的 item）和 `response.completed` 快照的 `output` 数组。Text 需要 `text` 给快照、`item_id` 给每个 delta/done 事件、`citations` 给 annotation 转换。ToolUse 需要累积的 `arguments` 加上 `name` 和 `item_id`。RedactedThinking 没有流式 delta，但必须把其 `data` payload 表达为 `encrypted_content`。
+Responses 累积内容，因为每个 block 最终必须为两个下游消费者产生一个完整的 `OutputItem`：`response.output_item.done`（携带最终化的 item）和 `response.completed` 快照的 `output` 数组。Text 需要 `text` 给快照、`item_id` 给每个 delta/done 事件、`citations` 给 annotation 转换。ToolUse 需要累积的 `arguments` 加上 `name` 和 `item_id`。RedactedThinking 没有流式 delta，但必须把其 `data` payload 表达为 `encrypted_content`。这些是官方 Responses lifecycle 的要求；在入站方向，Bedrock Mantle 的兼容 channel `response.reasoning.delta/done` 可以省略 item 和 output 坐标，ProxAI 会将它明确保留为无坐标 channel，而不是伪造身份。
 
 逐字段论证，按每个字段的消费者分类：
 
@@ -431,7 +431,7 @@ Responses 累积内容，因为每个 block 最终必须为两个下游消费者
   columns={['Block 类型', '字段', 'Chat 翻译器', 'Responses 翻译器', '备注']}
   rows={[
     ['Text', 'discriminant', '是', '是', 'delta 类型校验'],
-    ['', '`item_id`', '否', '是', 'Responses 在每个 delta/done 事件上强制 `item_id`；Chat 没有 item-level id'],
+    ['', '`item_id`', '否', '是', '官方 Responses 事件强制 `item_id`；入站 Mantle reasoning 兼容 channel 明确保留为无坐标'],
     ['', '累积的 `text`', '否', '是', 'Responses 从它构建 `output_text.done` + 快照；Chat 立刻 emit delta'],
     ['', '`citations`', '否', '是', 'Responses `OutputTextContent.annotations`；Chat 用不同方式处理 annotations'],
     ['Thinking', 'discriminant', '是', '是', 'delta 类型校验'],

@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::protocol::anthropic::messages::{Message, MessageStreamEvent, MessageType};
 
-use super::{normalize_message_payload, normalize_stream_event_payload};
+use super::{normalize_response_payload, normalize_stream_event_payload};
 
 #[test]
 fn normalizes_non_stream_provider_message_required_nullable_fields() {
@@ -39,7 +39,7 @@ fn normalizes_non_stream_provider_message_required_nullable_fields() {
         }
     });
 
-    let normalized = normalize_message_payload(payload);
+    let normalized = normalize_response_payload(payload);
     assert_eq!(normalized["usage"]["cache_creation"], json!(null));
     assert_eq!(
         normalized["usage"]["cache_creation_input_tokens"],
@@ -60,7 +60,7 @@ fn normalizes_non_stream_provider_message_required_nullable_fields() {
 fn leaves_non_message_json_body_unchanged() {
     let payload = json!({"ok": true});
 
-    assert_eq!(normalize_message_payload(payload.clone()), payload);
+    assert_eq!(normalize_response_payload(payload.clone()), payload);
 }
 
 #[test]

@@ -39,6 +39,11 @@ impl From<&Usage> for ResponseUsage {
                     .as_non_null()
                     .copied()
                     .unwrap_or_default(),
+                cache_write_tokens: usage
+                    .cache_creation_input_tokens
+                    .as_non_null()
+                    .copied()
+                    .unwrap_or_default(),
             },
             output_tokens: usage.output_tokens,
             output_tokens_details: OutputTokenDetails {
@@ -80,6 +85,7 @@ impl TryFrom<&ToolUseBlock> for FunctionToolCall {
         Ok(Self {
             id: Some(block.id.clone()),
             call_id: block.id.clone(),
+            caller: None.into(),
             name: block.name.clone(),
             arguments: serde_json::to_string(&block.input)?,
             status: Some(OutputStatus::Completed),

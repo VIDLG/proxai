@@ -49,9 +49,9 @@ pub enum ToolSearchToolResultErrorCode {
     ExecutionTimeExceeded,
 }
 
-// ── ToolReference block param ──────────────────────────────────────────────
+// ── Tool reference blocks ──────────────────────────────────────────────────
 
-use super::tool_use::ToolReferenceBlockParam;
+use super::tool_use::{ToolReferenceBlock, ToolReferenceBlockParam};
 
 /// @sdk(shape = "SearchResultBlockParam")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,7 +85,7 @@ pub struct ToolSearchToolResultError {
 /// @sdk(shape = "ToolSearchToolSearchResultBlock")
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolSearchToolSearchResultBlock {
-    pub tool_references: Vec<ToolReferenceBlockParam>,
+    pub tool_references: Vec<ToolReferenceBlock>,
     #[serde(rename = "type")]
     pub type_: ToolSearchToolSearchResultType,
 }

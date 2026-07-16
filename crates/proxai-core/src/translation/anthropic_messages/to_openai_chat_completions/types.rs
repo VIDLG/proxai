@@ -50,6 +50,7 @@ impl From<&Usage> for CompletionUsage {
             usage.input_tokens,
             usage.output_tokens,
             usage.cache_read_input_tokens.as_non_null().copied(),
+            usage.cache_creation_input_tokens.as_non_null().copied(),
         )
     }
 }
@@ -60,6 +61,7 @@ impl From<MessageDeltaUsage> for CompletionUsage {
             usage.input_tokens.as_non_null().copied().unwrap_or(0),
             usage.output_tokens,
             usage.cache_read_input_tokens.into_non_null(),
+            usage.cache_creation_input_tokens.into_non_null(),
         )
     }
 }
@@ -68,18 +70,18 @@ fn completion_usage_from_anthropic(
     input_tokens: u32,
     output_tokens: u32,
     cache_read_input_tokens: Option<u32>,
+    cache_write_input_tokens: Option<u32>,
 ) -> CompletionUsage {
     CompletionUsage {
         prompt_tokens: input_tokens,
         completion_tokens: output_tokens,
         total_tokens: input_tokens.saturating_add(output_tokens),
-        prompt_tokens_details: cache_read_input_tokens.map(|cached_tokens| {
-            // Anthropic cache-read input tokens are the closest equivalent to
-            // OpenAI Chat prompt cached tokens.
-            PromptTokensDetails {
-                audio_tokens: None,
-                cached_tokens: Some(cached_tokens),
-            }
+        prompt_tokens_details: (cache_read_input_tokens.is_some()
+            || cache_write_input_tokens.is_some())
+        .then_some(PromptTokensDetails {
+            audio_tokens: None,
+            cached_tokens: cache_read_input_tokens,
+            cache_write_tokens: cache_write_input_tokens,
         }),
         // Anthropic usage has no completion-side token breakdown for Chat's
         // reasoning/audio/prediction detail fields.

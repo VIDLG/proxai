@@ -14,8 +14,9 @@ from .schema import (
     _closed_string_enum_values,
     _schema_array_item_identity,
     _schema_array_item_schema,
+    _schema_item_identity,
     _schema_shape_categories,
-    _union_discriminator_payloads,
+    _union_discriminator_payload_options,
     _union_discriminator_values,
 )
 from .rust import (
@@ -24,6 +25,7 @@ from .rust import (
     _rust_array_item_identity,
     _rust_base_type,
     _rust_builtin_shape,
+    _rust_type_identity,
     _serde_tag_values,
 )
 
@@ -78,21 +80,45 @@ def _check_tagged_union_payload_types(enums, schemas, gaps):
         schema = schemas.get(enum_name)
         if tag is None or not isinstance(schema, dict):
             continue
-        official_payloads = _union_discriminator_payloads(
+        official_payload_options = _union_discriminator_payload_options(
             schema, tag, schemas, set()
         )
-        if not official_payloads:
+        if not official_payload_options:
             continue
         for wire_value, local_payload in enum["variant_payloads"].items():
-            official_payload = official_payloads.get(wire_value)
-            if official_payload is None or local_payload == official_payload:
+            official_payloads = official_payload_options.get(wire_value)
+            if not official_payloads:
+                continue
+            if len(official_payloads) == 1:
+                official_payload = next(iter(official_payloads))
+                if local_payload == official_payload:
+                    continue
+                gaps.append(
+                    (
+                        enum_name,
+                        wire_value,
+                        "tagged union payload type differs: expected official "
+                        f"`{official_payload}`, found local `{local_payload}`",
+                    )
+                )
+                continue
+
+            local_union = enums.get(_rust_base_type(local_payload))
+            local_payloads = (
+                {_rust_base_type(payload) for payload in local_union["payloads"]}
+                if local_union is not None and local_union["untagged"]
+                else None
+            )
+            if local_payloads == official_payloads:
                 continue
             gaps.append(
                 (
                     enum_name,
                     wire_value,
-                    "tagged union payload type differs: expected official "
-                    f"`{official_payload}`, found local `{local_payload}`",
+                    "tagged union discriminator maps to multiple official payloads; "
+                    f"expected an untagged local union over {sorted(official_payloads)}, "
+                    f"found `{local_payload}` with "
+                    f"{sorted(local_payloads) if local_payloads is not None else 'no untagged payload union'}",
                 )
             )
 
@@ -194,6 +220,40 @@ def _check_field_shapes(type_name, local, properties, schemas, gaps):
                 f"shape(s) {sorted(official_shapes)} for Rust type `{rust_type}`",
             )
         )
+
+def _check_named_field_types(
+    type_name, local, properties, schemas, gaps, local_provenance=None
+):
+    for field_name, rust_type in local.items():
+        if _is_serde_tag_type(rust_type) or field_name not in properties:
+            continue
+        local_type = _rust_type_identity(rust_type)
+        official_type = _schema_item_identity(properties[field_name], schemas, set())
+        # Scalars and container shapes are checked separately. This check is
+        # intentionally limited to a field that resolves to one named official
+        # object schema, where comparing the model identity is unambiguous.
+        local_schema_pointer = (local_provenance or {}).get(local_type)
+        local_official_type = (
+            local_schema_pointer.removeprefix("#/components/schemas/")
+            if local_schema_pointer and local_schema_pointer.startswith("#/components/schemas/")
+            else local_type
+        )
+        if (
+            local_type is None
+            or official_type is None
+            or official_type not in schemas
+            or local_official_type == official_type
+        ):
+            continue
+        gaps.append(
+            (
+                type_name,
+                field_name,
+                "local named field type differs from official schema reference: "
+                f"expected `{official_type}`, found `{local_official_type}`",
+            )
+        )
+
 
 def _check_array_item_types(type_name, local, properties, schemas, enums, gaps):
     for field_name, rust_type in local.items():

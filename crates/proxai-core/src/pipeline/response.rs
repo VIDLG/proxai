@@ -7,7 +7,6 @@ use crate::observe::Observer;
 use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::{
     ProviderBehavior, normalize_provider_response, normalize_provider_stream_event,
-    requires_structured_normalization,
 };
 use crate::translation::stream::{
     StreamEventStream, StreamTranslationInput, StreamTranslationResult,
@@ -51,7 +50,7 @@ impl ResponsePipeline {
             .route()
             .request_protocol
             .matches_provider_protocol(self.behavior.protocol())
-            || requires_structured_normalization(self.behavior)
+            || self.behavior.requires_identity_normalization()
     }
 
     pub fn translate_response(&self, payload: Value) -> TranslationResult<Value> {

@@ -110,6 +110,7 @@ pub(super) fn translate_response(
         incomplete_details: incomplete_details_from_finish_reason(Some(choice.finish_reason))
             .into(),
         instructions: None.into(),
+        moderation: None.into(),
         max_output_tokens: None.into(),
         max_tool_calls: None.into(),
         metadata: None.into(),
@@ -122,6 +123,7 @@ pub(super) fn translate_response(
         prompt: None.into(),
         prompt_cache_key: None,
         prompt_cache_retention: None.into(),
+        prompt_cache_options: None,
         reasoning: None.into(),
         safety_identifier: None,
         service_tier: None.into(),

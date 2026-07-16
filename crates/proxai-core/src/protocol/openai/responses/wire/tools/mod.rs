@@ -42,6 +42,22 @@ pub use self::tool_search::*;
 #[allow(unused_imports, reason = "Family facade re-exports.")]
 pub use self::web_search::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallableToolAllowedCaller {
+    Direct,
+    Programmatic,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToolCallCaller {
+    Direct,
+    Program { caller_id: String },
+}
+
+pub type ToolCallCallerParam = ToolCallCaller;
+
 #[allow(
     clippy::enum_variant_names,
     reason = "Mirrors OpenAI Responses Tool variant names."
@@ -65,6 +81,7 @@ pub enum Tool {
     Custom(CustomToolParam),
     Computer(ComputerTool),
     Namespace(NamespaceToolParam),
+    ProgrammaticToolCalling,
     ToolSearch(ToolSearchToolParam),
     WebSearchPreview(WebSearchPreviewTool),
     #[serde(rename = "web_search_preview_2025_03_11")]

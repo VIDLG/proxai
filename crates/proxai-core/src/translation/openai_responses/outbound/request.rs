@@ -8,7 +8,10 @@ use crate::protocol::openai_responses as responses;
 // ── Input content ─────────────────────────────────────────────────────────
 
 pub(crate) fn input_text(text: impl Into<String>) -> responses::InputContent {
-    responses::InputContent::InputText(responses::InputTextContent { text: text.into() })
+    responses::InputContent::InputText(responses::InputTextContent {
+        text: text.into(),
+        prompt_cache_breakpoint: None,
+    })
 }
 
 pub(crate) fn input_image_url(url: impl Into<String>) -> responses::InputContent {
@@ -16,6 +19,7 @@ pub(crate) fn input_image_url(url: impl Into<String>) -> responses::InputContent
         image_url: Some(url.into()).into(),
         detail: responses::ImageDetail::Auto,
         file_id: None.into(),
+        prompt_cache_breakpoint: None,
     })
 }
 
@@ -29,6 +33,7 @@ pub(crate) fn input_file_data(
         file_url: None,
         filename,
         detail: None,
+        prompt_cache_breakpoint: None,
     })
 }
 
@@ -42,6 +47,7 @@ pub(crate) fn input_file_url(
         file_url: Some(url.into()),
         filename,
         detail: None,
+        prompt_cache_breakpoint: None,
     })
 }
 
@@ -68,6 +74,7 @@ pub(crate) fn pending_function_tool_call(
 ) -> responses::FunctionToolCall {
     responses::FunctionToolCall {
         call_id: call_id.into(),
+        caller: None.into(),
         name: name.into(),
         arguments: arguments.into(),
         id: None,
@@ -84,6 +91,7 @@ pub(crate) fn function_call_output_item(
     responses::Item::FunctionCallOutput(responses::FunctionCallOutputItemParam {
         call_id: call_id.into(),
         output,
+        caller: None.into(),
         id: None.into(),
         status: None.into(),
     })

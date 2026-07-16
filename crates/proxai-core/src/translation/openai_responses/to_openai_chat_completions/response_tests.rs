@@ -11,7 +11,7 @@ fn translate_response(response: &Response) -> TranslationResult<CreateChatComple
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
     );
-    super::translate_response(response, &scope).map(|(response, _)| response)
+    super::translate_response_payload(response, &scope).map(|(response, _)| response)
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn translates_responses_message_response_to_chat_completion() {
             "input_tokens": 8,
             "output_tokens": 2,
             "total_tokens": 10,
-            "input_tokens_details": {"cached_tokens": 3},
+            "input_tokens_details": {"cached_tokens": 3, "cache_write_tokens": 0},
             "output_tokens_details": {"reasoning_tokens": 1}
         }
     });

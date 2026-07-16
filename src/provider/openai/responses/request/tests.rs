@@ -77,9 +77,11 @@ fn request_projection_uses_typed_parse_for_standard_response_fields() {
     assert_eq!(
         projection.reasoning,
         Some(Reasoning {
+            mode: None,
             effort: Some(ReasoningEffort::High).into(),
-            generate_summary: None.into(),
             summary: Some(ReasoningSummary::Auto).into(),
+            context: None.into(),
+            generate_summary: None.into(),
         })
     );
     assert_eq!(projection.stream, Some(true));

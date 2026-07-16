@@ -1,5 +1,6 @@
 use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 use super::{
@@ -57,6 +58,12 @@ pub struct CreateResponseRequest {
     pub service_tier: OptionalNullable<ServiceTier>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub prompt_cache_retention: OptionalNullable<PromptCacheRetention>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub prompt_cache_options: Option<Value>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub previous_response_id: OptionalNullable<String>,
     #[serde(
@@ -65,9 +72,6 @@ pub struct CreateResponseRequest {
         deserialize_with = "deserialize_present"
     )]
     pub model: Option<String>,
-    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
-    pub reasoning: OptionalNullable<Reasoning>,
-
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub background: OptionalNullable<bool>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
@@ -94,6 +98,8 @@ pub struct CreateResponseRequest {
     pub prompt: OptionalNullable<Prompt>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub truncation: OptionalNullable<Truncation>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub reasoning: OptionalNullable<Reasoning>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -108,6 +114,8 @@ pub struct CreateResponseRequest {
     pub store: OptionalNullable<bool>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub instructions: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub moderation: OptionalNullable<Value>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub stream: OptionalNullable<bool>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]

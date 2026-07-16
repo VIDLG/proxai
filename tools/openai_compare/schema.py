@@ -16,7 +16,8 @@ def _load_schemas():
         raise SystemExit(f"OpenAPI schema has no components.schemas: {SCHEMA_PATH}")
     return document, schemas
 
-def _union_discriminator_payloads(schema, tag, schemas, seen):
+def _union_discriminator_payload_options(schema, tag, schemas, seen):
+    """Map each discriminator value to every official payload schema it permits."""
     reference = schema.get("$ref")
     if reference:
         if reference in seen:
@@ -25,7 +26,7 @@ def _union_discriminator_payloads(schema, tag, schemas, seen):
         if target is None:
             return None
         if target.get("oneOf") or target.get("anyOf"):
-            return _union_discriminator_payloads(
+            return _union_discriminator_payload_options(
                 target, tag, schemas, seen | {reference}
             )
         properties, _ = _object_contract(target, schemas, seen | {reference})
@@ -35,7 +36,7 @@ def _union_discriminator_payloads(schema, tag, schemas, seen):
         if values is None or len(values) != 1:
             return None
         payload_name = reference.removeprefix("#/components/schemas/")
-        return {next(iter(values)): payload_name}
+        return {next(iter(values)): {payload_name}}
 
     branches = [
         branch
@@ -47,17 +48,29 @@ def _union_discriminator_payloads(schema, tag, schemas, seen):
         return None
     payloads = {}
     for branch in branches:
-        branch_payloads = _union_discriminator_payloads(
+        branch_payloads = _union_discriminator_payload_options(
             branch, tag, schemas, seen
         )
+        # A union may contain a branch whose payload cannot be mapped through
+        # this tag. Retain every mapping that is still objectively auditable.
         if branch_payloads is None:
-            return None
-        for wire_value, payload_name in branch_payloads.items():
-            existing = payloads.get(wire_value)
-            if existing is not None and existing != payload_name:
-                return None
-            payloads[wire_value] = payload_name
-    return payloads
+            continue
+        for wire_value, payload_names in branch_payloads.items():
+            payloads.setdefault(wire_value, set()).update(payload_names)
+    return payloads or None
+
+
+def _union_discriminator_payloads(schema, tag, schemas, seen):
+    """Return only discriminator values with one unambiguous payload schema."""
+    options = _union_discriminator_payload_options(schema, tag, schemas, seen)
+    if not options:
+        return None
+    payloads = {
+        wire_value: next(iter(payload_names))
+        for wire_value, payload_names in options.items()
+        if len(payload_names) == 1
+    }
+    return payloads or None
 
 def _union_discriminator_values(schema, tag, schemas, seen):
     if "$ref" in schema:

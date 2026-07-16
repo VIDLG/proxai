@@ -2,9 +2,9 @@ use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use strum::Display;
+use strum::{Display, EnumString};
 
-use crate::protocol::{ErrorObject, RequiredNullable};
+use crate::protocol::RequiredNullable;
 
 use super::{
     InputItem, OutputItem, Prompt, PromptCacheRetention, Reasoning, ServiceTier, Tool,
@@ -16,6 +16,39 @@ use super::{
 pub enum Instructions {
     Text(String),
     Array(Vec<InputItem>),
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseErrorCode`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
+pub enum ResponseErrorCode {
+    ServerError,
+    RateLimitExceeded,
+    InvalidPrompt,
+    BioPolicy,
+    VectorStoreTimeout,
+    InvalidImage,
+    InvalidImageFormat,
+    InvalidBase64Image,
+    InvalidImageUrl,
+    ImageTooLarge,
+    ImageTooSmall,
+    ImageParseError,
+    ImageContentPolicyViolation,
+    InvalidImageMode,
+    ImageFileTooLarge,
+    UnsupportedImageMediaType,
+    EmptyImageFile,
+    FailedToDownloadImage,
+    ImageFileNotFound,
+}
+
+/// OpenAPI schema: `#/components/schemas/ResponseError`
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResponseError {
+    pub code: ResponseErrorCode,
+    pub message: String,
 }
 
 /// OpenAPI schema:
@@ -56,6 +89,7 @@ pub enum Status {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputTokenDetails {
     pub cached_tokens: u32,
+    pub cache_write_tokens: u32,
 }
 
 /// OpenAPI schema: `#/components/schemas/ResponseUsage/properties/output_tokens_details`
@@ -166,9 +200,6 @@ pub struct Response {
     pub previous_response_id: OptionalNullable<String>,
     pub model: String,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
-    pub reasoning: OptionalNullable<Reasoning>,
-
-    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub background: OptionalNullable<bool>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub max_tool_calls: OptionalNullable<u32>,
@@ -195,9 +226,11 @@ pub struct Response {
     pub created_at: f64,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub completed_at: OptionalNullable<f64>,
-    pub error: RequiredNullable<ErrorObject>,
+    pub error: RequiredNullable<ResponseError>,
     pub incomplete_details: RequiredNullable<IncompleteDetails>,
     pub output: Vec<OutputItem>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub reasoning: OptionalNullable<Reasoning>,
     pub instructions: RequiredNullable<Instructions>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub output_text: OptionalNullable<String>,
@@ -207,6 +240,14 @@ pub struct Response {
         deserialize_with = "deserialize_present"
     )]
     pub usage: Option<ResponseUsage>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub prompt_cache_options: Option<Value>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub moderation: OptionalNullable<Value>,
     pub parallel_tool_calls: bool,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub conversation: OptionalNullable<Conversation>,

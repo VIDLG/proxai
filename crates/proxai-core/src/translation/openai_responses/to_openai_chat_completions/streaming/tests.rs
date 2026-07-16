@@ -56,7 +56,7 @@ fn chat_stream_payloads(body: &str) -> Vec<Value> {
 async fn translates_responses_text_stream_to_chat_completions_sse() {
     let body = concat!(
         "event: response.created\n",
-        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":8}}}\n\n",
         "event: response.output_item.added\n",
         "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
         "event: response.output_text.delta\n",
@@ -64,7 +64,7 @@ async fn translates_responses_text_stream_to_chat_completions_sse() {
         "event: response.output_text.delta\n",
         "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"lo\",\"logprobs\":[]}\n\n",
         "event: response.completed\n",
-        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n"
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":10}}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
@@ -130,6 +130,26 @@ async fn translates_responses_refusal_to_chat_refusal_delta() {
     assert!(text.contains("\"refusal\":\"cannot comply\""));
     assert!(text.contains("\"finish_reason\":\"stop\""));
     assert!(text.contains("data: [DONE]"));
+}
+
+#[tokio::test]
+async fn rejects_responses_stream_mixing_text_and_refusal() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mixed\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.output_item.added\n",
+        "data: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+        "event: response.output_text.delta\n",
+        "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"ordinary text\",\"logprobs\":[]}\n\n",
+        "event: response.refusal.delta\n",
+        "data: {\"type\":\"response.refusal.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"delta\":\"cannot comply\"}\n\n"
+    );
+    let text = translate_responses_stream_body(body).await;
+
+    assert!(text.contains("\"content\":\"ordinary text\""));
+    assert!(text.contains("stream translation error"));
+    assert!(text.contains("cannot represent mixed text and refusal semantics"));
+    assert!(!text.contains("\"refusal\":\"cannot comply\""));
 }
 
 #[tokio::test]
@@ -317,6 +337,31 @@ async fn forwards_reasoning_suffix_from_done_snapshot() {
         "data: {\"type\":\"response.reasoning_text.done\",\"sequence_number\":4,\"item_id\":\"rs_1\",\"output_index\":0,\"content_index\":0,\"text\":\"planning\"}\n\n",
         "event: response.completed\n",
         "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_reasoning_suffix\",\"object\":\"response\",\"created_at\":0,\"model\":\"test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
+    );
+    let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
+    let reasoning = chunks
+        .iter()
+        .filter_map(|chunk| chunk["choices"][0]["delta"]["reasoning_content"].as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(reasoning, ["plan", "ning"]);
+}
+
+#[tokio::test]
+async fn translates_mantle_reasoning_channel_to_chat_reasoning_content() {
+    // Synthetic compatibility coverage based on Zed v1.11.3's Bedrock Mantle
+    // `response.reasoning.delta/done` wire model. The delta carries Mantle's
+    // optional official-style identity while done omits it, exercising stable
+    // channel-coordinate inheritance. This is not a captured proxai regression.
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mantle_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.reasoning.delta\n",
+        "data: {\"type\":\"response.reasoning.delta\",\"item_id\":\"rs_2\",\"output_index\":2,\"delta\":\"plan\"}\n\n",
+        "event: response.reasoning.done\n",
+        "data: {\"type\":\"response.reasoning.done\",\"text\":\"planning\"}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_mantle_reasoning\",\"object\":\"response\",\"created_at\":0,\"model\":\"mantle-test\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
     );
     let chunks = chat_stream_payloads(&translate_responses_stream_body(body).await);
     let reasoning = chunks

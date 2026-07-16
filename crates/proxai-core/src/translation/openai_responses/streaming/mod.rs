@@ -13,6 +13,8 @@
 //! envelope: identity initialization, terminal detection, and source-side typed
 //! event parsing.
 
+mod mantle;
+
 use std::collections::BTreeMap;
 
 use delegate::delegate;
@@ -29,6 +31,8 @@ use crate::translation::stream::{
     StreamTranslationError, StreamTranslationResult,
 };
 
+pub(crate) use mantle::MantleStreamEvent;
+
 /// Inbound lifecycle wrapper for translators rooted at `openai_responses`.
 ///
 /// `S` is the pair-private streaming state (e.g. open block tracking). The
@@ -40,6 +44,7 @@ use crate::translation::stream::{
 pub(crate) struct ResponsesInboundLifecycle<S> {
     inner: InboundStreamLifecycle<S, S>,
     output_items: BTreeMap<u32, ObservedOutputItem>,
+    mantle_reasoning: MantleReasoningChannel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -80,6 +85,18 @@ struct ObservedOutputItem {
     completed: bool,
 }
 
+/// Lifecycle state for Mantle's coordinate-optional reasoning channel.
+///
+/// Once a channel starts unscoped it remains unscoped; a later event cannot
+/// retroactively re-key already forwarded text.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum MantleReasoningChannel {
+    #[default]
+    Inactive,
+    Unscoped,
+    Scoped(u32),
+}
+
 pub(crate) fn response_failure_error(response: &Response) -> StreamTranslationError {
     let detail = response
         .error
@@ -89,12 +106,35 @@ pub(crate) fn response_failure_error(response: &Response) -> StreamTranslationEr
     StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))
 }
 
+/// Parsed Responses ingress event.
+///
+/// The official OpenAI union stays isolated in `protocol::openai::responses::wire`.
+/// Known provider dialects are represented here because they are accepted only
+/// while translating an upstream Responses stream, never advertised as official
+/// protocol variants or synthesized during identity forwarding.
+#[derive(Debug)]
+pub(crate) enum ResponsesInboundStreamEvent {
+    /// Event defined by the pinned official OpenAI Responses OpenAPI schema.
+    Official(Box<ResponseStreamEvent>),
+    /// Known event from AWS Bedrock Mantle's Responses-compatible dialect.
+    Mantle(MantleStreamEvent),
+}
+
+impl ResponsesInboundStreamEvent {
+    pub(crate) fn event_type(&self) -> &str {
+        match self {
+            Self::Official(event) => event.as_ref().as_ref(),
+            Self::Mantle(event) => event.as_ref(),
+        }
+    }
+}
+
 /// Source-side identity for one incremental Responses output segment.
 ///
-/// This is a wire-coordinate key only: it deliberately contains neither an
-/// Anthropic `content_block.index` nor a Chat tool-call index. Target pairs may
-/// use it to track projection state or reconcile authoritative `*.done`
-/// snapshots without duplicating their source coordinate model.
+/// This is a source-segment key only: it deliberately contains neither an
+/// Anthropic `content_block.index` nor a Chat tool-call index. Official events
+/// retain their wire coordinates; compatibility channels that provide no stable
+/// coordinates remain explicitly unscoped rather than receiving invented ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ResponsesOutputSegmentKey {
     Text {
@@ -113,6 +153,9 @@ pub(crate) enum ResponsesOutputSegmentKey {
         output_index: u32,
         summary_index: u32,
     },
+    MantleReasoning {
+        output_index: Option<u32>,
+    },
     FunctionArguments {
         output_index: u32,
     },
@@ -122,21 +165,24 @@ pub(crate) enum ResponsesOutputSegmentKey {
 }
 
 impl ResponsesOutputSegmentKey {
-    pub(crate) fn output_index(self) -> u32 {
+    pub(crate) fn output_index(self) -> Option<u32> {
         match self {
             Self::Text { output_index, .. }
             | Self::Refusal { output_index, .. }
             | Self::ReasoningText { output_index, .. }
             | Self::ReasoningSummary { output_index, .. }
             | Self::FunctionArguments { output_index }
-            | Self::CustomToolInput { output_index } => output_index,
+            | Self::CustomToolInput { output_index } => Some(output_index),
+            Self::MantleReasoning { output_index } => output_index,
         }
     }
 
     pub(crate) fn is_reasoning(self) -> bool {
         matches!(
             self,
-            Self::ReasoningText { .. } | Self::ReasoningSummary { .. }
+            Self::ReasoningText { .. }
+                | Self::ReasoningSummary { .. }
+                | Self::MantleReasoning { .. }
         )
     }
 
@@ -167,6 +213,12 @@ impl ResponsesOutputSegmentKey {
             } => format!(
                 "reasoning summary output_index {output_index} summary_index {summary_index}"
             ),
+            Self::MantleReasoning {
+                output_index: Some(output_index),
+            } => format!("Mantle reasoning output_index {output_index}"),
+            Self::MantleReasoning { output_index: None } => {
+                "unscoped Mantle reasoning channel".to_string()
+            }
             Self::FunctionArguments { output_index } => {
                 format!("function arguments output_index {output_index}")
             }
@@ -216,10 +268,25 @@ impl<S> ResponsesInboundLifecycle<S> {
     pub(crate) fn parse_stream_event(
         &mut self,
         payload: Value,
-    ) -> StreamTranslationResult<ResponseStreamEvent> {
-        let parsed =
-            deserialize_value::<ResponseStreamEvent>(&payload, "OpenAI Responses stream event")?;
-        self.apply_output_item_lifecycle(&parsed)?;
+    ) -> StreamTranslationResult<ResponsesInboundStreamEvent> {
+        let mut parsed = if let Some(event) = mantle::parse_stream_event(&payload) {
+            ResponsesInboundStreamEvent::Mantle(event?)
+        } else {
+            ResponsesInboundStreamEvent::Official(Box::new(
+                deserialize_value::<ResponseStreamEvent>(
+                    &payload,
+                    "OpenAI Responses stream event",
+                )?,
+            ))
+        };
+        match &mut parsed {
+            ResponsesInboundStreamEvent::Official(event) => {
+                self.apply_output_item_lifecycle(event)?;
+            }
+            ResponsesInboundStreamEvent::Mantle(event) => {
+                self.observe_mantle_reasoning_event(event)?;
+            }
+        }
         Ok(parsed)
     }
 
@@ -461,6 +528,86 @@ impl<S> ResponsesInboundLifecycle<S> {
                 "Responses stream emitted {event} for output_index {output_index} before response.output_item.added"
             ))
         })?;
+        Self::validate_and_observe_output_item(
+            observed,
+            output_index,
+            Some(item_id),
+            expected_kind,
+            event,
+        )
+    }
+
+    /// Validate Mantle's optional official-style identity and assign one stable
+    /// projection coordinate to the active compatibility reasoning channel.
+    ///
+    /// A missing coordinate may inherit an already observed `output_index`, but
+    /// a channel that started unscoped stays unscoped: already-forwarded content
+    /// cannot be retroactively moved to a keyed target block.
+    fn observe_mantle_reasoning_event(
+        &mut self,
+        event: &mut MantleStreamEvent,
+    ) -> StreamTranslationResult<()> {
+        let (raw_output_index, item_id) = match &*event {
+            MantleStreamEvent::ReasoningDelta {
+                output_index,
+                item_id,
+                ..
+            }
+            | MantleStreamEvent::ReasoningDone {
+                output_index,
+                item_id,
+                ..
+            } => (*output_index, item_id.as_deref()),
+        };
+        self.require_streaming_output_item_event(event.as_ref())?;
+        if let Some(output_index) = raw_output_index
+            && let Some(observed) = self.output_items.get_mut(&output_index)
+        {
+            Self::validate_and_observe_output_item(
+                observed,
+                output_index,
+                item_id,
+                ResponsesOutputKind::Reasoning,
+                event.as_ref(),
+            )?;
+        }
+
+        let stable_output_index = match (self.mantle_reasoning, raw_output_index) {
+            (MantleReasoningChannel::Inactive, output_index) => output_index,
+            (MantleReasoningChannel::Unscoped, _) => None,
+            (MantleReasoningChannel::Scoped(expected), Some(actual)) if expected != actual => {
+                return Err(StreamTranslationError::Semantic(format!(
+                    "Responses stream changed Mantle reasoning output_index from {expected} to {actual} before response.reasoning.done"
+                )));
+            }
+            (MantleReasoningChannel::Scoped(expected), _) => Some(expected),
+        };
+
+        match event {
+            MantleStreamEvent::ReasoningDelta { output_index, .. } => {
+                if self.mantle_reasoning == MantleReasoningChannel::Inactive {
+                    self.mantle_reasoning = match stable_output_index {
+                        Some(output_index) => MantleReasoningChannel::Scoped(output_index),
+                        None => MantleReasoningChannel::Unscoped,
+                    };
+                }
+                *output_index = stable_output_index;
+            }
+            MantleStreamEvent::ReasoningDone { output_index, .. } => {
+                *output_index = stable_output_index;
+                self.mantle_reasoning = MantleReasoningChannel::Inactive;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_and_observe_output_item(
+        observed: &mut ObservedOutputItem,
+        output_index: u32,
+        item_id: Option<&str>,
+        expected_kind: ResponsesOutputKind,
+        event: &str,
+    ) -> StreamTranslationResult<()> {
         if observed.completed {
             return Err(StreamTranslationError::Semantic(format!(
                 "Responses stream emitted {event} for output_index {output_index} after response.output_item.done"
@@ -472,14 +619,16 @@ impl<S> ResponsesInboundLifecycle<S> {
                 observed.kind
             )));
         }
-        match observed.item_id.as_deref() {
-            Some(expected_item_id) if expected_item_id != item_id => {
-                return Err(StreamTranslationError::Semantic(format!(
-                    "Responses stream emitted {event} with item_id {item_id} for output_index {output_index}; expected item_id {expected_item_id}"
-                )));
+        if let Some(item_id) = item_id {
+            match observed.item_id.as_deref() {
+                Some(expected_item_id) if expected_item_id != item_id => {
+                    return Err(StreamTranslationError::Semantic(format!(
+                        "Responses stream emitted {event} with item_id {item_id} for output_index {output_index}; expected item_id {expected_item_id}"
+                    )));
+                }
+                Some(_) => {}
+                None => observed.item_id = Some(item_id.to_string()),
             }
-            Some(_) => {}
-            None => observed.item_id = Some(item_id.to_string()),
         }
         Ok(())
     }
@@ -582,5 +731,4 @@ impl<S> ResponsesInboundLifecycle<S> {
 }
 
 #[cfg(test)]
-#[path = "streaming_tests.rs"]
 mod tests;

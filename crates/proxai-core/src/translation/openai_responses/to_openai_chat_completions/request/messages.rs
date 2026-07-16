@@ -1,11 +1,19 @@
 use crate::protocol::openai::chat_completions as chat;
+use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 use crate::protocol::openai::responses;
+use crate::protocol::openai::{PromptCacheBreakpointConfig, PromptCacheBreakpointParam};
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_message, developer_text_message, system_text_message, text_part, tool_message,
     user_message, user_text_message,
 };
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
+
+impl From<&PromptCacheBreakpointConfig> for PromptCacheBreakpointParam {
+    fn from(value: &PromptCacheBreakpointConfig) -> Self {
+        Self { mode: value.mode }
+    }
+}
 
 pub(super) fn chat_messages(
     instructions: Option<&str>,
@@ -141,7 +149,7 @@ fn messages_from_item(
             messages.push(tool_message(
                 chat::ChatCompletionRequestToolMessageContent::Text(custom_tool_output_to_string(
                     &output.output,
-                )),
+                )?),
                 output.call_id.clone(),
             ));
         }
@@ -291,7 +299,13 @@ fn push_input_message(
                 .filter_map(|content| match content {
                     responses::InputContent::InputText(text) => {
                         Some(chat::ChatCompletionRequestUserMessageContentPart::Text(
-                            text_part(text.text.clone()),
+                            ChatCompletionRequestMessageContentPartText {
+                                text: text.text.clone(),
+                                prompt_cache_breakpoint: text
+                                    .prompt_cache_breakpoint
+                                    .as_ref()
+                                    .map(Into::into),
+                            },
                         ))
                     }
                     responses::InputContent::InputImage(image) => {
@@ -316,6 +330,10 @@ fn push_input_message(
                                     url,
                                     detail: Some(detail),
                                 },
+                                prompt_cache_breakpoint: image
+                                    .prompt_cache_breakpoint
+                                    .as_ref()
+                                    .map(Into::into),
                             },
                         ))
                     }
@@ -364,10 +382,7 @@ fn text_parts_from_easy_content(
                 responses::InputContent::InputText(text) => Some(text.text.clone()),
                 other => {
                     scope.dropped(
-                        format!(
-                            "Responses instruction content {:?}",
-                            std::mem::discriminant(other)
-                        ),
+                        format!("Responses instruction content `{}`", other.as_ref()),
                         "Chat instruction messages can only represent text",
                     );
                     None
@@ -387,10 +402,7 @@ fn join_input_text(
             responses::InputContent::InputText(text) => Some(text.text.clone()),
             other => {
                 scope.dropped(
-                    format!(
-                        "Responses instruction content {:?}",
-                        std::mem::discriminant(other)
-                    ),
+                    format!("Responses instruction content `{}`", other.as_ref()),
                     "Chat instruction messages can only represent text",
                 );
                 None
@@ -424,10 +436,7 @@ fn assistant_content_from_easy(
                     );
                 } else {
                     scope.dropped(
-                        format!(
-                            "Responses assistant content {:?}",
-                            std::mem::discriminant(part)
-                        ),
+                        format!("Responses assistant content `{}`", part.as_ref()),
                         "Chat assistant history content can only represent text here",
                     );
                 }
@@ -443,11 +452,13 @@ fn assistant_content_from_easy(
     }
 }
 
-fn custom_tool_output_to_string(output: &responses::CustomToolCallOutputOutput) -> String {
+fn custom_tool_output_to_string(
+    output: &responses::CustomToolCallOutputOutput,
+) -> TranslationResult<String> {
     match output {
-        responses::CustomToolCallOutputOutput::Text(text) => text.clone(),
+        responses::CustomToolCallOutputOutput::Text(text) => Ok(text.clone()),
         responses::CustomToolCallOutputOutput::List(list) => {
-            serde_json::to_string(list).unwrap_or_default()
+            serde_json::to_string(list).map_err(Into::into)
         }
     }
 }
@@ -493,7 +504,15 @@ impl TryFrom<&responses::InputContent> for chat::ChatCompletionRequestUserMessag
                             .to_string(),
                     ));
                 }
-                Ok(Self::Text(text_part(text.text.clone())))
+                Ok(Self::Text(
+                    ChatCompletionRequestMessageContentPartText {
+                        text: text.text.clone(),
+                        prompt_cache_breakpoint: text
+                            .prompt_cache_breakpoint
+                            .as_ref()
+                            .map(Into::into),
+                    },
+                ))
             }
             responses::InputContent::InputImage(image) => {
                 let url = image.image_url.as_non_null().cloned().ok_or_else(|| {
@@ -507,6 +526,10 @@ impl TryFrom<&responses::InputContent> for chat::ChatCompletionRequestUserMessag
                         url,
                         detail: Some(image.detail.try_into()?),
                     },
+                    prompt_cache_breakpoint: image
+                        .prompt_cache_breakpoint
+                        .as_ref()
+                        .map(Into::into),
                 }))
             }
             responses::InputContent::InputFile(_) => Err(TranslationError::InvalidPayload(
@@ -532,10 +555,7 @@ fn function_output_content(
                     responses::InputContent::InputText(text) => Some(text_part(text.text.clone())),
                     other => {
                         scope.dropped(
-                            format!(
-                                "Responses function output content {:?}",
-                                std::mem::discriminant(other)
-                            ),
+                            format!("Responses function output content `{}`", other.as_ref()),
                             "Chat tool messages can only represent text output parts",
                         );
                         None

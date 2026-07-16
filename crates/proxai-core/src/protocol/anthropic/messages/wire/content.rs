@@ -13,8 +13,8 @@ use super::{
     citations::TextCitation,
     common::CacheControlEphemeral,
     tools::{
-        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlock, ToolResultBlockParam,
-        ToolUseBlock, ToolUseBlockParam,
+        ServerToolUseBlock, ServerToolUseBlockParam, ToolResultBlockParam, ToolUseBlock,
+        ToolUseBlockParam,
         bash::{BashCodeExecutionToolResultBlock, BashCodeExecutionToolResultBlockParam},
         code_execution::{CodeExecutionToolResultBlock, CodeExecutionToolResultBlockParam},
         search::{
@@ -121,7 +121,6 @@ pub enum ContentBlock {
     Thinking(ThinkingBlock),
     RedactedThinking(RedactedThinkingBlock),
     ToolUse(ToolUseBlock),
-    ToolResult(ToolResultBlock),
     ServerToolUse(ServerToolUseBlock),
     WebSearchToolResult(WebSearchToolResultBlock),
     WebFetchToolResult(WebFetchToolResultBlock),

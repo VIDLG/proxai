@@ -3,8 +3,9 @@
 // Keep this narrow and explicit:
 // - only inspect the top-level request `input` array;
 // - move top-level system messages from `input` into `instructions`;
-// - complete Zed's compact assistant replay messages into standard Responses
-//   output-message items;
+// - complete Zed's compact assistant replay messages and id-less reasoning
+//   history into standard Responses items;
+// - supply the official default detail for Zed message images;
 // - complete compact top-level function tool definitions with the required
 //   nullable `strict` carrier field;
 // - leave nested tool schemas and unrelated payload fields untouched.
@@ -60,11 +61,41 @@ fn normalize_input_items(items: &mut Vec<Value>, can_extract_system_messages: bo
             continue;
         }
 
+        normalize_zed_message_images(&mut item);
         normalize_zed_assistant_replay(&mut item, input_index);
+        normalize_zed_reasoning_replay(&mut item, input_index);
         items.push(item);
     }
 
     system_texts
+}
+
+fn normalize_zed_message_images(item: &mut Value) {
+    let Some(message) = item.as_object_mut() else {
+        return;
+    };
+    if message.get("type").and_then(Value::as_str) != Some("message") {
+        return;
+    }
+    let Some(content) = message.get_mut("content").and_then(Value::as_array_mut) else {
+        return;
+    };
+
+    for part in content {
+        let Some(image) = part.as_object_mut() else {
+            continue;
+        };
+        if image.get("type").and_then(Value::as_str) == Some("input_image") {
+            // Zed's message image model has no `detail` field, while the
+            // official `InputImageContent` requires it and defines `auto` as the
+            // default. Function-call outputs use a different official image
+            // parameter where omission is valid, so only message content is
+            // normalized here.
+            image
+                .entry("detail".to_string())
+                .or_insert_with(|| Value::String("auto".to_string()));
+        }
+    }
 }
 
 fn normalize_zed_assistant_replay(item: &mut Value, input_index: usize) {
@@ -111,6 +142,28 @@ fn normalize_zed_assistant_replay(item: &mut Value, input_index: usize) {
         Value::String(format!("msg_zed_replay_{input_index}")),
     );
     message.insert("status".to_string(), Value::String("completed".to_string()));
+}
+
+fn normalize_zed_reasoning_replay(item: &mut Value, input_index: usize) {
+    let Some(reasoning) = item.as_object_mut() else {
+        return;
+    };
+    if reasoning.get("type").and_then(Value::as_str) != Some("reasoning")
+        || reasoning.contains_key("id")
+        || !reasoning.get("summary").is_some_and(Value::is_array)
+    {
+        return;
+    }
+
+    // The official `ReasoningItem` requires `id`, but Zed's
+    // `ResponseReasoningInputItem` intentionally models it as optional and
+    // replays id-less summary items (`contrib/zed`, commit `78c889c21d7`). The
+    // generated id is deterministic and exists only to restore the official
+    // request envelope before routing and projection.
+    reasoning.insert(
+        "id".to_string(),
+        Value::String(format!("rs_zed_replay_{input_index}")),
+    );
 }
 
 fn is_assistant_output_content(part: &Value) -> bool {

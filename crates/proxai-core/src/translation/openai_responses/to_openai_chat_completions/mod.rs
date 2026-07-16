@@ -1,4 +1,7 @@
 //! `openai_responses -> openai_chat_completions` translation.
+//!
+//! Request translation lives in `request`, non-streaming response in
+//! `response`, streaming in `streaming`.
 
 mod request;
 mod response;
@@ -32,7 +35,7 @@ pub(crate) fn translate_non_streaming_response(
     scope: &TranslationScope,
 ) -> TranslationResult<Value> {
     let response = deserialize_value::<Response>(&payload, "OpenAI Responses response payload")?;
-    let (translated, reasoning) = response::translate_response(&response, scope)?;
+    let (translated, reasoning) = response::translate_response_payload(&response, scope)?;
     let mut payload = serde_json::to_value(translated)?;
     inject_response_reasoning(&mut payload, reasoning)?;
     Ok(payload)

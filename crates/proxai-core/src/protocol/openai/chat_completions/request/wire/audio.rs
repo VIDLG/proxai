@@ -1,24 +1,12 @@
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
-#[allow(
-    dead_code,
-    reason = "Retained for full request schema projection coverage."
-)]
-#[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
-pub enum ChatCompletionAudioVoice {
-    Alloy,
-    Ash,
-    Ballad,
-    Coral,
-    Echo,
-    Fable,
-    Nova,
-    Onyx,
-    Sage,
-    Shimmer,
+/// OpenAPI schema: `#/components/schemas/VoiceIdsOrCustomVoice`
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum VoiceIdsOrCustomVoice {
+    BuiltIn(String),
+    Custom { id: String },
 }
 
 #[allow(
@@ -44,6 +32,10 @@ pub enum ChatCompletionAudioFormat {
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatCompletionAudio {
-    pub voice: ChatCompletionAudioVoice,
+    pub voice: VoiceIdsOrCustomVoice,
     pub format: ChatCompletionAudioFormat,
 }
+
+#[cfg(test)]
+#[path = "audio_tests.rs"]
+mod tests;

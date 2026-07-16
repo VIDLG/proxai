@@ -11,7 +11,7 @@ use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 use super::types::chat_id;
 
-pub(super) fn translate_response(
+pub(super) fn translate_response_payload(
     response: &Response,
     scope: &TranslationScope,
 ) -> TranslationResult<(CreateChatCompletionResponse, Option<String>)> {
@@ -76,34 +76,38 @@ pub(super) fn translate_response(
         ));
     }
 
-    Ok((CreateChatCompletionResponse {
-            // Keep the upstream id embedded while presenting an OpenAI-shaped id.
-            id: chat_id(&response.id),
-            choices: vec![ChatChoice {
-                index: 0,
-                message: assistant_response_message(
-                    (!content.is_empty()).then_some(content),
-                    (!refusal.is_empty()).then_some(refusal),
-                    (!tool_calls.is_empty()).then_some(tool_calls),
-                    None,
-                ),
-                finish_reason: chat_finish_reason(response, scope).ok_or_else(|| {
-                    TranslationError::InvalidPayload(
-                        "OpenAI Responses response has no terminal state required for Chat Completions finish_reason"
-                            .to_string(),
-                    )
-                })?,
-                logprobs: None.into(),
-            }],
-            // Responses responses carry a `created_at` Unix timestamp.
-            created: response.created_at as u32,
-            model: response.model.clone(),
-            // Responses has no Chat-style service tier field on the response body.
-            service_tier: None.into(),
-            system_fingerprint: None,
-            object: CreateChatCompletionResponseObject::ChatCompletion,
-            usage: response.usage.as_ref().map(Into::into),
-        }, (!reasoning_content.is_empty()).then_some(reasoning_content)))
+    let translated = CreateChatCompletionResponse {
+        // Keep the upstream id embedded while presenting an OpenAI-shaped id.
+        id: chat_id(&response.id),
+        choices: vec![ChatChoice {
+            index: 0,
+            message: assistant_response_message(
+                (!content.is_empty()).then_some(content),
+                (!refusal.is_empty()).then_some(refusal),
+                (!tool_calls.is_empty()).then_some(tool_calls),
+                None,
+            ),
+            finish_reason: chat_finish_reason(response, scope).ok_or_else(|| {
+                TranslationError::InvalidPayload(
+                    "OpenAI Responses response has no terminal state required for Chat Completions finish_reason"
+                        .to_string(),
+                )
+            })?,
+            logprobs: None.into(),
+        }],
+        // Responses responses carry a `created_at` Unix timestamp.
+        created: response.created_at as u32,
+        model: response.model.clone(),
+        // Responses has no Chat-style service tier field on the response body.
+        service_tier: None.into(),
+        system_fingerprint: None,
+        object: CreateChatCompletionResponseObject::ChatCompletion,
+        usage: response.usage.as_ref().map(Into::into),
+        moderation: None.into(),
+    };
+    let reasoning = (!reasoning_content.is_empty()).then_some(reasoning_content);
+
+    Ok((translated, reasoning))
 }
 
 fn chat_finish_reason(response: &Response, scope: &TranslationScope) -> Option<FinishReason> {

@@ -89,6 +89,42 @@ fn binds_request_observations_to_request_phase() {
 }
 
 #[test]
+fn reports_request_content_observations_with_wire_discriminants() {
+    let observer = RecordingObserver::default();
+    let observations = observer.observations.clone();
+    let translator = Translator::new(
+        RequestProtocol::OpenaiResponses,
+        ProviderProtocol::OpenaiChatCompletions,
+    )
+    .with_observer(Arc::new(observer));
+    let payload = json!({
+        "model": "gpt-5.1",
+        "input": [{
+            "type": "message",
+            "role": "system",
+            "content": [{
+                "type": "input_image",
+                "image_url": "https://example.test/image.png"
+            }]
+        }]
+    });
+
+    translator.translate_request(&payload).unwrap();
+
+    assert_eq!(
+        observations.lock().unwrap().as_slice(),
+        &[TranslationObservation {
+            request_protocol: RequestProtocol::OpenaiResponses,
+            provider_protocol: ProviderProtocol::OpenaiChatCompletions,
+            phase: TranslationPhase::Request,
+            kind: TranslationObservationKind::Dropped,
+            subject: "Responses instruction content `input_image`".to_string(),
+            detail: "Chat instruction messages can only represent text".to_string(),
+        }]
+    );
+}
+
+#[test]
 fn binds_response_observations_to_non_streaming_response_phase() {
     let observer = RecordingObserver::default();
     let observations = observer.observations.clone();

@@ -9,6 +9,7 @@ from .checks import (
     _check_field_order,
     _check_field_shapes,
     _check_flatten_contract,
+    _check_named_field_types,
     _check_serde_tag_fields,
     _check_tagged_union_payload_types,
     _check_tagged_union_variants,
@@ -132,6 +133,9 @@ def compare_protocol(protocol, document, schemas, *, structural):
                 type_name, local, properties, schemas, local_enums, gaps
             )
             _check_field_shapes(type_name, local, properties, schemas, gaps)
+            _check_named_field_types(
+                type_name, local, properties, schemas, gaps, local_provenance
+            )
             _check_array_item_types(
                 type_name, local, properties, schemas, local_enums, gaps
             )

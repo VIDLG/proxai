@@ -234,7 +234,7 @@ Streaming identity（`StreamIdentity`）属于协议无关的 inbound lifecycle 
 
 跨协议流式转换按 source lifecycle、pair state 和 target constructor 分层：
 
-- `translation/<source>/streaming.rs` 负责 source typed event、identity 与生命周期顺序；
+- `translation/<source>/streaming.rs` 或 `streaming/mod.rs` 负责 source typed event、identity 与生命周期顺序；需要目录模块时，可选的 source compatibility dialect 放在 `streaming/<dialect>.rs`；
 - `translation/<source>/to_<target>/streaming/mod.rs` 负责事件分发和 event/terminal timing；
 - pair `state.rs` 负责一次原子 source→target transition 的校验、累积、目标 index 分配，并返回 typed target events；
 - `translation/<target>/outbound/` 提供跨 pair 复用的无状态 target wire constructors；

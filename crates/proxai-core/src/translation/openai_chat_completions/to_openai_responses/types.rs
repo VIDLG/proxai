@@ -42,6 +42,10 @@ impl From<&CompletionUsage> for ResponseUsage {
                     .prompt_tokens_details
                     .and_then(|details| details.cached_tokens)
                     .unwrap_or_default(),
+                cache_write_tokens: usage
+                    .prompt_tokens_details
+                    .and_then(|details| details.cache_write_tokens)
+                    .unwrap_or_default(),
             },
             output_tokens: usage.completion_tokens,
             output_tokens_details: OutputTokenDetails {
@@ -64,6 +68,7 @@ impl From<&ChatCompletionMessageToolCalls> for OutputItem {
             ChatCompletionMessageToolCalls::Custom(call) => Self::CustomToolCall(CustomToolCall {
                 id: Some(call.id.clone()),
                 call_id: call.id.clone(),
+                caller: None.into(),
                 name: call.custom.name.clone(),
                 input: call.custom.input.clone(),
                 namespace: None,

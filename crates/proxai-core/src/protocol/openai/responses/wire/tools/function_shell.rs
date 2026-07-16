@@ -3,6 +3,8 @@ use crate::protocol::{OptionalNullable, deserialize_present};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
+use super::{CallableToolAllowedCaller, ToolCallCaller, ToolCallCallerParam};
+
 // ============================================================
 // Tool Definition Supporting Types
 // ============================================================
@@ -166,6 +168,8 @@ pub enum FunctionShellEnvironment {
 pub struct FunctionShellToolParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub environment: OptionalNullable<FunctionShellEnvironment>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
 }
 
 // ============================================================
@@ -229,6 +233,8 @@ pub struct FunctionShellCallItemParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub id: OptionalNullable<String>,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub action: FunctionShellActionParam,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub status: OptionalNullable<FunctionShellCallItemStatus>,
@@ -242,6 +248,8 @@ pub struct FunctionShellCallOutputItemParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub id: OptionalNullable<String>,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCallerParam>,
     pub output: Vec<FunctionShellCallOutputContentParam>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub status: OptionalNullable<FunctionShellCallItemStatus>,
@@ -338,6 +346,8 @@ pub struct FunctionShellCallOutputContent {
 pub struct FunctionShellCall {
     pub id: String,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     pub action: FunctionShellAction,
     pub status: FunctionShellCallStatus,
     pub environment: RequiredNullable<FunctionShellCallEnvironment>,
@@ -354,6 +364,8 @@ pub struct FunctionShellCall {
 pub struct FunctionShellCallOutput {
     pub id: String,
     pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub caller: OptionalNullable<ToolCallCaller>,
     pub status: FunctionShellCallOutputStatusEnum,
     pub output: Vec<FunctionShellCallOutputContent>,
     pub max_output_length: RequiredNullable<u64>,

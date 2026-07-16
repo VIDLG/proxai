@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::Display;
 
+use super::CallableToolAllowedCaller;
+
 // ============================================================
 // Tool Choice
 // ============================================================
@@ -120,6 +122,12 @@ pub struct MCPTool {
         skip_serializing_if = "Option::is_none",
         deserialize_with = "deserialize_present"
     )]
+    pub tunnel_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
     pub authorization: Option<String>,
     #[serde(
         default,
@@ -131,6 +139,8 @@ pub struct MCPTool {
     pub headers: OptionalNullable<Value>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub allowed_tools: OptionalNullable<MCPToolAllowedTools>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub allowed_callers: OptionalNullable<Vec<CallableToolAllowedCaller>>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub require_approval: OptionalNullable<MCPToolRequireApproval>,
     #[serde(

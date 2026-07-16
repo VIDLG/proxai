@@ -688,7 +688,7 @@ data: {\"type\":\"response.output_item.done\",\"sequence_number\":3,\"item\":{\"
             )),
             Ok(Bytes::from_static(
                 b"event: response.completed\n\
-data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_metadata\",\"model\":\"gpt-5.4\",\"status\":\"completed\",\"service_tier\":\"default\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"total_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":80},\"output_tokens_details\":{\"reasoning_tokens\":7}},\"output\":[{\"id\":\"fc_metadata\",\"type\":\"function_call\",\"name\":\"edit_file\"}]}}\n\n",
+data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\":\"resp_metadata\",\"model\":\"gpt-5.4\",\"status\":\"completed\",\"service_tier\":\"default\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"total_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":80,\"cache_write_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":7}},\"output\":[{\"id\":\"fc_metadata\",\"type\":\"function_call\",\"name\":\"edit_file\"}]}}\n\n",
             )),
         ]);
 

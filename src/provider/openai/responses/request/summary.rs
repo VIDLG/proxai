@@ -17,6 +17,7 @@ pub(crate) enum ToolCategory {
     Shell,
     ApplyPatch,
     Namespace,
+    ProgrammaticToolCalling,
     ToolSearch,
 }
 
@@ -66,6 +67,7 @@ fn extract_tool_inventory(items: Option<&[Tool]>) -> Vec<ToolInventoryItem> {
             Tool::Custom(tool) => (ToolCategory::Custom, vec![tool.name.clone()]),
             Tool::Computer(_) => (ToolCategory::Computer, Vec::new()),
             Tool::Namespace(tool) => (ToolCategory::Namespace, vec![tool.name.clone()]),
+            Tool::ProgrammaticToolCalling => (ToolCategory::ProgrammaticToolCalling, Vec::new()),
             Tool::ToolSearch(_) => (ToolCategory::ToolSearch, Vec::new()),
             Tool::WebSearchPreview(_) => (ToolCategory::WebSearch, Vec::new()),
             Tool::WebSearchPreview20250311(_) => (ToolCategory::WebSearch, Vec::new()),

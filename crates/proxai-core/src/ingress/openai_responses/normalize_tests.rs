@@ -7,7 +7,11 @@ fn moves_system_input_to_instructions_and_normalizes_compact_tools() {
         "model": "gpt-5.5",
         "instructions": "Existing instructions.",
         "prompt_cache_key": "zed-session",
-        "tools": [{"type": "function", "name": "shell"}],
+        "tools": [{
+            "type": "function",
+            "name": "shell",
+            "parameters": {"type": "object", "properties": {}}
+        }],
         "input": [
             {
                 "type": "message",
@@ -37,7 +41,12 @@ fn moves_system_input_to_instructions_and_normalizes_compact_tools() {
     assert_eq!(normalized["prompt_cache_key"], "zed-session");
     assert_eq!(
         normalized["tools"],
-        json!([{"type": "function", "name": "shell", "strict": null}])
+        json!([{
+            "type": "function",
+            "name": "shell",
+            "parameters": {"type": "object", "properties": {}},
+            "strict": null
+        }])
     );
 }
 
@@ -135,6 +144,94 @@ fn does_not_normalize_mixed_assistant_replay_content() {
     assert!(normalized["input"][0].get("status").is_none());
     serde_json::from_value::<crate::protocol::openai_responses::CreateResponseRequest>(normalized)
         .expect_err("mixed assistant replay content should not be partially normalized");
+}
+
+#[test]
+fn normalizes_zed_message_image_detail_to_official_default() {
+    let payload = json!({
+        "model": "glm-5.2",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_image", "image_url": "data:image/png;base64,c2FuaXRpemVk"},
+                    {"type": "input_image", "image_url": "https://example.com/image.png", "detail": "high"}
+                ]
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": [{
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,c2FuaXRpemVk"
+                }]
+            }
+        ]
+    });
+
+    let normalized = normalize_payload(payload);
+
+    assert_eq!(normalized["input"][0]["content"][0]["detail"], "auto");
+    assert_eq!(normalized["input"][0]["content"][1]["detail"], "high");
+    assert!(normalized["input"][1]["output"][0].get("detail").is_none());
+    serde_json::from_value::<crate::protocol::openai_responses::CreateResponseRequest>(normalized)
+        .expect("normalized Zed message images must match the Responses request schema");
+}
+
+#[test]
+fn keeps_official_compatible_zed_context_items_unchanged() {
+    let payload = json!({
+        "model": "glm-5.2",
+        "input": [
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "lookup",
+                "arguments": "{}"
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "sanitized result"
+            },
+            {
+                "type": "compaction",
+                "encrypted_content": "sanitized-compaction"
+            },
+            {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": []
+            }
+        ],
+        "include": ["reasoning.encrypted_content"],
+        "stream": true,
+        "store": false,
+        "service_tier": "priority",
+        "reasoning": {"effort": "max", "summary": "auto"},
+        "context_management": [{"type": "compaction", "compact_threshold": 1000}]
+    });
+
+    let normalized = normalize_payload(payload.clone());
+
+    assert_eq!(normalized, payload);
+    serde_json::from_value::<crate::protocol::openai_responses::CreateResponseRequest>(normalized)
+        .expect("official-compatible Zed context items must parse without normalization");
+}
+
+#[test]
+fn does_not_invent_function_parameters_that_zed_builder_always_supplies() {
+    let normalized = normalize_payload(json!({
+        "model": "glm-5.2",
+        "input": "sanitized",
+        "tools": [{"type": "function", "name": "lookup"}]
+    }));
+
+    assert_eq!(normalized["tools"][0]["strict"], serde_json::Value::Null);
+    assert!(normalized["tools"][0].get("parameters").is_none());
+    serde_json::from_value::<crate::protocol::openai_responses::CreateResponseRequest>(normalized)
+        .expect_err("missing function parameters are not a Zed builder compatibility shape");
 }
 
 #[test]

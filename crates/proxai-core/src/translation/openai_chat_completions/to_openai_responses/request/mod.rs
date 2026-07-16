@@ -91,11 +91,13 @@ pub(super) fn translate_request(
             .copied()
             .map(responses::PromptCacheRetention::from)
             .into(),
+        prompt_cache_options: request.prompt_cache_options.clone(),
         truncation: None.into(),
 
         // Chat has direct equivalents for the remaining fields.
         input: Some(responses::InputParam::Items(items)),
         instructions: instructions.into(),
+        moderation: request.moderation.clone(),
         max_output_tokens: request
             .max_completion_tokens
             .as_non_null()

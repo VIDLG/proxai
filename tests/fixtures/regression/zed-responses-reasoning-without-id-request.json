@@ -1,0 +1,30 @@
+{
+  "model": "glm-5.2",
+  "input": [
+    {
+      "type": "reasoning",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "Sanitized reasoning summary."
+        }
+      ]
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_existing",
+      "encrypted_content": "sanitized-provider-content",
+      "summary": []
+    },
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "Sanitized follow-up request."
+        }
+      ]
+    }
+  ]
+}

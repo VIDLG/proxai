@@ -2,7 +2,9 @@ use serde_json::{Value, json};
 
 use crate::translation::stream::{StreamIdentity, StreamTranslationError};
 
-use super::{ForwardedContent, ResponsesInboundLifecycle};
+use super::{
+    ForwardedContent, MantleStreamEvent, ResponsesInboundLifecycle, ResponsesInboundStreamEvent,
+};
 
 fn output_item_added() -> Value {
     json!({
@@ -43,6 +45,150 @@ fn streaming_lifecycle() -> ResponsesInboundLifecycle<()> {
         )
         .unwrap();
     lifecycle
+}
+
+#[test]
+fn parses_mantle_reasoning_as_translation_ingress_compatibility_events() {
+    let mut lifecycle = streaming_lifecycle();
+
+    let delta = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "delta": "thought"
+        }))
+        .unwrap();
+    assert!(matches!(
+        delta,
+        ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDelta {
+            delta,
+            output_index: None,
+            ..
+        }) if delta == "thought"
+    ));
+
+    let done = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.done"
+        }))
+        .unwrap();
+    assert!(matches!(
+        done,
+        ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDone { text: None, .. })
+    ));
+}
+
+#[test]
+fn mantle_reasoning_done_inherits_active_output_index() {
+    let mut lifecycle = streaming_lifecycle();
+
+    let delta = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "item_id": "rs_3",
+            "output_index": 3,
+            "delta": "thought"
+        }))
+        .unwrap();
+    assert!(matches!(
+        delta,
+        ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDelta {
+            output_index: Some(3),
+            ..
+        })
+    ));
+
+    let done = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.done",
+            "text": "thought"
+        }))
+        .unwrap();
+    assert!(matches!(
+        done,
+        ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDone {
+            output_index: Some(3),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn mantle_reasoning_channel_that_starts_unscoped_remains_unscoped() {
+    let mut lifecycle = streaming_lifecycle();
+    lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "delta": "thought"
+        }))
+        .unwrap();
+
+    let done = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.done",
+            "output_index": 3,
+            "text": "thought"
+        }))
+        .unwrap();
+    assert!(matches!(
+        done,
+        ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDone {
+            output_index: None,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn rejects_mantle_reasoning_output_index_change_within_active_channel() {
+    let mut lifecycle = streaming_lifecycle();
+    lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "output_index": 1,
+            "delta": "first"
+        }))
+        .unwrap();
+
+    let error = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "output_index": 2,
+            "delta": "second"
+        }))
+        .unwrap_err();
+    assert!(matches!(&error, StreamTranslationError::Semantic(_)));
+    assert!(error.to_string().contains(
+        "changed Mantle reasoning output_index from 1 to 2 before response.reasoning.done"
+    ));
+}
+
+#[test]
+fn validates_mantle_reasoning_identity_against_observed_output_item() {
+    let mut lifecycle = streaming_lifecycle();
+    lifecycle
+        .parse_stream_event(json!({
+            "type": "response.output_item.added",
+            "sequence_number": 1,
+            "output_index": 0,
+            "item": {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": [],
+                "status": "in_progress"
+            }
+        }))
+        .unwrap();
+
+    let error = lifecycle
+        .parse_stream_event(json!({
+            "type": "response.reasoning.delta",
+            "item_id": "rs_other",
+            "output_index": 0,
+            "delta": "thought"
+        }))
+        .unwrap_err();
+    assert!(matches!(&error, StreamTranslationError::Semantic(_)));
+    assert!(error.to_string().contains("expected item_id rs_1"));
 }
 
 #[test]

@@ -142,56 +142,6 @@ fn preserves_interleaved_text_reasoning_and_tool_order() {
 }
 
 #[test]
-fn translates_anthropic_tool_result_to_function_call_output() {
-    let message: Message = serde_json::from_value(json!({
-        "id": "msg_tool_result",
-        "container": null,
-        "type": "message",
-        "role": "assistant",
-        "model": "glm-5.1",
-        "content": [
-            {
-                "type": "tool_use",
-                "id": "toolu_1",
-                "caller": {"type": "direct"},
-                "name": "lookup",
-                "input": {"q": "proxai"}
-            },
-            {
-                "type": "tool_result",
-                "tool_use_id": "toolu_1",
-                "content": "found"
-            }
-        ],
-        "stop_details": null,
-        "stop_reason": "end_turn",
-        "stop_sequence": null,
-        "usage": {
-            "output_tokens_details": null,
-            "input_tokens": 10,
-            "output_tokens": 6,
-            "cache_creation": null,
-            "cache_creation_input_tokens": null,
-            "cache_read_input_tokens": null,
-            "inference_geo": null,
-            "server_tool_use": null,
-            "service_tier": null
-        }
-    }))
-    .unwrap();
-
-    let translated = translate_message_response(&message).unwrap();
-    let value = serde_json::to_value(translated).unwrap();
-
-    assert_eq!(value["output"][0]["type"], "function_call");
-    assert_eq!(value["output"][1]["type"], "function_call_output");
-    assert_eq!(value["output"][1]["id"], "fco_msg_tool_result");
-    assert_eq!(value["output"][1]["call_id"], "toolu_1");
-    assert_eq!(value["output"][1]["output"], "found");
-    assert_eq!(value["output"][1]["status"], "completed");
-}
-
-#[test]
 fn translates_max_tokens_stop_to_incomplete_details() {
     let message: Message = serde_json::from_value(json!({
         "id": "msg_incomplete",

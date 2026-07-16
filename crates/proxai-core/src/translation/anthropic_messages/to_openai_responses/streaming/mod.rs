@@ -149,8 +149,7 @@ impl AnthropicToResponsesStreaming {
                             in_progress_function_call_item(item_id, name),
                         ));
                     }
-                    ContentBlock::ToolResult(_)
-                    | ContentBlock::ServerToolUse(_)
+                    ContentBlock::ServerToolUse(_)
                     | ContentBlock::WebSearchToolResult(_)
                     | ContentBlock::WebFetchToolResult(_)
                     | ContentBlock::CodeExecutionToolResult(_)

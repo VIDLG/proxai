@@ -233,6 +233,7 @@ impl StreamingState {
             id: self.response_id.clone(),
             incomplete_details: incomplete_details.into(),
             instructions: None.into(),
+            moderation: None.into(),
             max_output_tokens: None.into(),
             max_tool_calls: None.into(),
             metadata: None.into(),
@@ -245,6 +246,7 @@ impl StreamingState {
             prompt: None.into(),
             prompt_cache_key: None,
             prompt_cache_retention: None.into(),
+            prompt_cache_options: None,
             reasoning: None.into(),
             safety_identifier: None,
             service_tier: None.into(),
@@ -259,7 +261,10 @@ impl StreamingState {
             user: None,
             usage: Some(ResponseUsage {
                 input_tokens,
-                input_tokens_details: InputTokenDetails { cached_tokens: 0 },
+                input_tokens_details: InputTokenDetails {
+                    cached_tokens: 0,
+                    cache_write_tokens: 0,
+                },
                 output_tokens,
                 output_tokens_details: OutputTokenDetails {
                     reasoning_tokens: 0,

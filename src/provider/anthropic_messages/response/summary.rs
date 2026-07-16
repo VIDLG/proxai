@@ -15,7 +15,6 @@ pub(crate) enum AnthropicResponseOutputKind {
     Thinking,
     RedactedThinking,
     ToolUse,
-    ToolResult,
     ServerToolUse,
     WebSearchToolResult,
     WebFetchToolResult,
@@ -138,9 +137,7 @@ impl AnthropicResponseSummary {
                 self.increment_item_kind(AnthropicResponseOutputKind::ToolUse);
                 *self.tool_uses.entry(block.name.clone()).or_default() += 1;
             }
-            ContentBlock::ToolResult(_) => {
-                self.increment_item_kind(AnthropicResponseOutputKind::ToolResult)
-            }
+
             ContentBlock::ServerToolUse(block) => {
                 self.increment_item_kind(AnthropicResponseOutputKind::ServerToolUse);
                 *self

@@ -16,6 +16,12 @@ pub struct PromptTokensDetails {
         deserialize_with = "deserialize_present"
     )]
     pub cached_tokens: Option<u32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub cache_write_tokens: Option<u32>,
 }
 
 /// OpenAPI schema: `#/components/schemas/CompletionUsage/properties/completion_tokens_details`

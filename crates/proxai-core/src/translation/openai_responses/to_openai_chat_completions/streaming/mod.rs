@@ -22,13 +22,14 @@ use crate::translation::openai_chat_completions::outbound::{
     refusal_delta, text_delta, tool_arguments_delta, tool_call_start_delta,
 };
 use crate::translation::openai_responses::streaming::{
-    ResponsesInboundLifecycle, ResponsesOutputSegmentKey, response_failure_error,
+    MantleStreamEvent, ResponsesInboundLifecycle, ResponsesInboundStreamEvent,
+    ResponsesOutputSegmentKey, response_failure_error,
 };
 use crate::translation::stream::{
     StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
 };
 
-use state::StreamingState;
+use state::{StreamingState, VisibleContentKind};
 
 fn reasoning_stream_event(
     identity: &StreamIdentity,
@@ -50,9 +51,48 @@ impl ResponsesToChatStreaming {
         event: StreamEvent,
         scope: &TranslationScope,
     ) -> StreamTranslationResult<Vec<StreamEvent>> {
-        let parsed = self.lifecycle.parse_stream_event(event.data)?;
-        let event_type = parsed.as_ref().to_string();
+        let inbound = self.lifecycle.parse_stream_event(event.data)?;
+        let event_type = inbound.event_type().to_string();
         let mut chunks = Vec::new();
+        let parsed = match inbound {
+            ResponsesInboundStreamEvent::Official(event) => *event,
+            ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDelta {
+                output_index,
+                delta,
+                ..
+            }) => {
+                self.lifecycle.streaming_state_mut()?.append_content(
+                    ResponsesOutputSegmentKey::MantleReasoning { output_index },
+                    &delta,
+                );
+                if let Some(chunk) = self.emit_reasoning_chunk(delta)? {
+                    chunks.push(chunk);
+                }
+                return Ok(chunks);
+            }
+            ResponsesInboundStreamEvent::Mantle(MantleStreamEvent::ReasoningDone {
+                output_index,
+                text,
+                ..
+            }) => {
+                if let Some(text) = text {
+                    let suffix = self
+                        .lifecycle
+                        .streaming_state_mut()?
+                        .reconcile_content_snapshot(
+                            ResponsesOutputSegmentKey::MantleReasoning { output_index },
+                            &text,
+                            &event_type,
+                        )?;
+                    if let Some(suffix) = suffix
+                        && let Some(chunk) = self.emit_reasoning_chunk(suffix)?
+                    {
+                        chunks.push(chunk);
+                    }
+                }
+                return Ok(chunks);
+            }
+        };
 
         match parsed {
             ResponseStreamEvent::ResponseCreated(event) => {
@@ -221,6 +261,7 @@ impl ResponsesToChatStreaming {
                     chunks.push(chunk);
                 }
             }
+
             ResponseStreamEvent::ResponseContentPartDone(event) => match event.part {
                 OutputContent::OutputText(part) => {
                     let suffix = self
@@ -450,7 +491,9 @@ impl ResponsesToChatStreaming {
         if text.is_empty() {
             return Ok(None);
         }
-        self.lifecycle.streaming_state_mut()?.mark_content();
+        self.lifecycle
+            .streaming_state_mut()?
+            .observe_visible_content(VisibleContentKind::Text)?;
         let identity = self.lifecycle.stream_identity()?.clone();
         StreamEvent::message(chat_choice_chunk(&identity, text_delta(text), None)).map(Some)
     }
@@ -462,7 +505,9 @@ impl ResponsesToChatStreaming {
         if refusal.is_empty() {
             return Ok(None);
         }
-        self.lifecycle.streaming_state_mut()?.mark_content();
+        self.lifecycle
+            .streaming_state_mut()?
+            .observe_visible_content(VisibleContentKind::Refusal)?;
         let identity = self.lifecycle.stream_identity()?.clone();
         StreamEvent::message(chat_choice_chunk(&identity, refusal_delta(refusal), None)).map(Some)
     }
@@ -474,7 +519,7 @@ impl ResponsesToChatStreaming {
         if reasoning.is_empty() {
             return Ok(None);
         }
-        self.lifecycle.streaming_state_mut()?.mark_content();
+        self.lifecycle.streaming_state_mut()?.mark_reasoning();
         let identity = self.lifecycle.stream_identity()?.clone();
         reasoning_stream_event(&identity, reasoning).map(Some)
     }

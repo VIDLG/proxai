@@ -62,6 +62,7 @@ pub enum ProviderResponseAdaptation {
     AnthropicMessagesShape,
     AnthropicMessagesStreamEvent,
     OpenaiChatCompletionsStreamEvent,
+    OpenaiResponsesUsageShape,
 }
 
 /// Core pipeline phase in which a translation observation was emitted.

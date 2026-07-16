@@ -61,7 +61,8 @@ impl From<anthropic::OutputEffort> for chat::ReasoningEffort {
             anthropic::OutputEffort::Low => Self::Low,
             anthropic::OutputEffort::Medium => Self::Medium,
             anthropic::OutputEffort::High => Self::High,
-            anthropic::OutputEffort::Xhigh | anthropic::OutputEffort::Max => Self::Xhigh,
+            anthropic::OutputEffort::Xhigh => Self::Xhigh,
+            anthropic::OutputEffort::Max => Self::Max,
         }
     }
 }
