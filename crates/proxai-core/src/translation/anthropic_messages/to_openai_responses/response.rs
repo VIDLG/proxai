@@ -9,8 +9,9 @@ use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 use super::citations::text_block_annotations;
 use super::ids::OutputItemIdAllocator;
 use super::types::{
-    incomplete_details_from_stop_reason, reasoning_item_from_redacted_thinking,
-    reasoning_item_from_thinking, responses_status_from_anthropic_stop_reason,
+    incomplete_details_from_stop_reason, observe_stop_reason_projection,
+    reasoning_item_from_redacted_thinking, reasoning_item_from_thinking,
+    response_error_from_stop_reason, responses_status_from_anthropic_stop_reason,
 };
 
 pub(super) fn translate_response(
@@ -18,12 +19,15 @@ pub(super) fn translate_response(
     scope: &TranslationScope,
 ) -> TranslationResult<Response> {
     let stop_reason = message.stop_reason.as_non_null().copied();
+    if let Some(stop_reason) = stop_reason {
+        observe_stop_reason_projection(stop_reason, scope);
+    }
     Ok(Response {
         background: None.into(),
         conversation: None.into(),
         created_at: 0.0,
         completed_at: None.into(),
-        error: None.into(),
+        error: response_error_from_stop_reason(stop_reason).into(),
         id: response_id(&message.id),
         incomplete_details: incomplete_details_from_stop_reason(stop_reason).into(),
         instructions: None.into(),

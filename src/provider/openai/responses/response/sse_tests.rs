@@ -12,6 +12,10 @@ fn classifies_terminal_and_tool_stream_events() {
         event_type: SseEvent::DEFAULT_EVENT_TYPE.to_string(),
         data: "{\"type\":\"response.error\"}".to_string(),
     };
+    let generic_error = SseEvent {
+        event_type: SseEvent::DEFAULT_EVENT_TYPE.to_string(),
+        data: "{\n  \"type\" : \"error\",\n  \"error\": {}\n}".to_string(),
+    };
     let tool_delta = SseEvent {
         event_type: "response.function_call_arguments.delta".to_string(),
         data: "{}".to_string(),
@@ -23,6 +27,7 @@ fn classifies_terminal_and_tool_stream_events() {
 
     assert!(is_terminal_event(&explicit_terminal));
     assert!(is_terminal_event(&data_only_terminal));
+    assert!(is_terminal_event(&generic_error));
     assert!(is_tool_argument_delta(&tool_delta));
     assert!(is_tool_argument_done(&tool_done));
 }

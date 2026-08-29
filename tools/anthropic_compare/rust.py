@@ -101,6 +101,7 @@ def rust_sdk_markers():
     proxai_internals = {}
     externals = set()
     field_suppressed = {}
+    enum_extras = {}
     legacy = []
     for item in rust_doc_items():
         for line in item["doc"]:
@@ -132,6 +133,14 @@ def rust_sdk_markers():
             m = re.match(r'^@sdk\(field_suppress\s*=\s*"([A-Za-z_]\w*)"\)$', text)
             if m:
                 field_suppressed.setdefault(item["name"], set()).add(m.group(1))
+                continue
+            m = re.match(
+                r'^@sdk\(enum_extra\s*=\s*"([a-z0-9_]+)",\s*source\s*=\s*"([A-Za-z_]\w*)"\)$',
+                text,
+            )
+            if m:
+                literal, source = m.groups()
+                enum_extras.setdefault(item["name"], {})[literal] = source
                 continue
 
             if text.startswith("SDK "):
@@ -169,6 +178,7 @@ def rust_sdk_markers():
         "proxai_internals": proxai_internals,
         "externals": externals,
         "field_suppressed": field_suppressed,
+        "enum_extras": enum_extras,
         "union_variants": union_variants,
         "legacy": legacy,
     }

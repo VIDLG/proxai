@@ -19,7 +19,7 @@ import { ConfigMap, PipelineStrip, ProxaiCallout, ReferenceTable } from '@compon
   groups={[
     { title: '本地监听', icon: 'terminal', description: 'Proxy 和 MCP 控制面的 HTTP 地址。', keys: ['[server]', '[mcp]'] },
     { title: '路由', icon: 'route', description: '默认 providers 和显式 model/protocol routes。', keys: ['[routing.default_provider_names]', '[[routing.routes]]'] },
-    { title: 'Providers', icon: 'protocol', description: '上游 endpoint、provider protocol、API key 和兼容模式。', keys: ['[providers.<name>]'] },
+    { title: 'Providers', icon: 'protocol', description: '上游 endpoint、具名出站代理、provider protocol、API key 和兼容模式。', keys: ['[proxies.<name>]', '[providers.<name>]'] },
     { title: '流式安全', icon: 'timer', description: '未完成 streamed tool-call arguments 和上游 idle read 的超时。', keys: ['[tool_calls]', 'read_idle_timeout_secs'] },
     { title: '诊断', icon: 'gauge', description: 'Capture 开关、日志格式和耗时颜色阈值。', keys: ['[capture]', '[logging]', '[logging.duration_thresholds]'] },
     { title: '客户端错误', icon: 'alert', description: '适合 Zed 阅读的 text errors，或给 OpenAI 兼容客户端的 JSON errors。', keys: ['[error_responses]'] },
@@ -81,6 +81,33 @@ api_key = "..."
 <ProxaiCallout type="caution" title="不要提交密钥">
   `api_key` 只应出现在本地 `config.toml`，不要放进 tracked examples、logs、docs、captures 或 fixtures。
 </ProxaiCallout>
+
+## 为 provider 指定具名代理
+
+可以在 `[proxies.<name>]` 下定义任意数量的 proxy profile，再通过 `proxy = "<name>"` 让单个 provider 选择代理。Provider 没有配置 `proxy` 时保持现有直连/系统代理行为。即使指定了代理，loopback provider URL（`localhost`、`127.0.0.0/8` 和 `::1`）仍始终直连。
+
+```toml
+[proxies.local]
+url = "http://127.0.0.1:7897"
+
+[proxies.corporate]
+url = "http://proxy.example:8080"
+no_proxy = [".internal.example"]
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+proxy = "local"
+
+[providers.anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "..."
+proxy = "corporate"
+```
+
+省略 `no_proxy` 时默认使用 `localhost`、`127.0.0.0/8` 和 `::1`。自定义值支持 reqwest 的标准域名（同时匹配子域名）、IPv4/IPv6、CIDR 和 `*` pattern。Proxy 名称与 provider 引用不区分大小写，并在启动时校验。
 
 ## 添加 provider
 

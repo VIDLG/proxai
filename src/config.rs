@@ -23,6 +23,7 @@ const DEFAULT_TOOL_CALLS_TIMEOUT_SECS: u64 = 120;
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppConfig {
+    pub proxies: BTreeMap<String, ProxyConfig>,
     pub server: ServerConfig,
     pub mcp: McpConfig,
     pub routing: RoutingConfig,
@@ -44,6 +45,30 @@ impl AppConfig {
                 path: path.clone(),
                 message: source.to_string(),
             })?;
+        let mut proxy_names = BTreeSet::new();
+        for (name, proxy) in &config.proxies {
+            let normalized_name = normalize_provider_name(name);
+            if normalized_name.is_empty() {
+                return Err(ConfigError::Invalid {
+                    path: path.clone(),
+                    message: "proxy name must be a non-empty string".to_string(),
+                });
+            }
+            if !proxy_names.insert(normalized_name.clone()) {
+                return Err(ConfigError::Invalid {
+                    path: path.clone(),
+                    message: format!(
+                        "proxies.{name} duplicates normalized proxy name `{normalized_name}`"
+                    ),
+                });
+            }
+            if proxy.no_proxy.iter().any(|rule| rule.trim().is_empty()) {
+                return Err(ConfigError::Invalid {
+                    path: path.clone(),
+                    message: format!("proxies.{name}.no_proxy entries must be non-empty strings"),
+                });
+            }
+        }
         if config.server.max_request_body_bytes == 0 {
             return Err(ConfigError::Invalid {
                 path: path.clone(),
@@ -79,6 +104,17 @@ impl AppConfig {
                     message: format!("providers.{name}.api_key must be a non-empty string"),
                 });
             }
+            if let Some(proxy) = provider.proxy.as_deref() {
+                let normalized_proxy = normalize_provider_name(proxy);
+                if !proxy_names.contains(&normalized_proxy) {
+                    return Err(ConfigError::Invalid {
+                        path: path.clone(),
+                        message: format!(
+                            "providers.{name}.proxy references missing proxy `{proxy}`"
+                        ),
+                    });
+                }
+            }
         }
         config
             .routing
@@ -89,6 +125,21 @@ impl AppConfig {
             })?;
         Ok(config)
     }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProxyConfig {
+    pub url: Url,
+    #[serde(default = "default_no_proxy")]
+    pub no_proxy: Vec<String>,
+}
+
+fn default_no_proxy() -> Vec<String> {
+    ["localhost", "127.0.0.0/8", "::1"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -134,6 +185,8 @@ pub struct ProviderConfig {
     pub protocol: ProviderProtocol,
     pub base_url: Url,
     pub api_key: String,
+    #[serde(default)]
+    pub proxy: Option<String>,
     #[serde(default)]
     pub compatibility: ProviderCompatibility,
     #[serde_as(as = "DurationSeconds<u64>")]

@@ -1,6 +1,7 @@
 use crate::sse::SseEvent;
 
 const TERMINAL_EVENT_TYPES: &[&str] = &[
+    "error",
     "response.function_call_arguments.done",
     "response.completed",
     "response.incomplete",
@@ -21,8 +22,6 @@ pub(super) fn is_terminal_event(event: &SseEvent) -> bool {
         .iter()
         .copied()
         .any(|event_type| event.matches_type_or_data(event_type))
-        || event.data.contains("\"type\":\"error\"")
-        || event.data.contains("\"type\": \"error\"")
 }
 
 #[cfg(test)]

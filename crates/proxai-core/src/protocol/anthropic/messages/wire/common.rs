@@ -11,6 +11,7 @@ use strum::Display;
 // ── Primitive enums ───────────────────────────────────────────────────────
 
 /// @sdk(shape = "StopReason")
+/// @sdk(enum_extra = "model_context_window_exceeded", source = "BetaStopReason")
 /// 🎯 @use: stop reason — explains why the model stopped generating.
 /// Used by: message, stream
 ///
@@ -31,6 +32,10 @@ pub enum StopReason {
     ToolUse,
     PauseTurn,
     Refusal,
+    /// Defined by the official Beta `BetaStopReason` union and observed on the
+    /// stable Messages stream in diagnostic
+    /// `1784598362-1784598351961` (2026-07-21).
+    ModelContextWindowExceeded,
 }
 
 /// @sdk(proxai_internal = "field_literal_wrapper")

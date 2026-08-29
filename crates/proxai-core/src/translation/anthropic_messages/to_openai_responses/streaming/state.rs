@@ -17,7 +17,8 @@ use crate::translation::stream::{StreamIdentity, StreamTranslationError, StreamT
 
 use super::super::ids::OutputItemIdAllocator;
 use super::super::types::{
-    incomplete_details_from_stop_reason, responses_status_from_anthropic_stop_reason,
+    incomplete_details_from_stop_reason, response_error_from_stop_reason,
+    responses_status_from_anthropic_stop_reason,
 };
 
 #[derive(Debug)]
@@ -108,7 +109,7 @@ impl StreamingState {
             conversation: None.into(),
             created_at: 0.0,
             completed_at: None.into(),
-            error: None.into(),
+            error: response_error_from_stop_reason(self.stop_reason).into(),
             id: identity.id().to_string(),
             incomplete_details: incomplete_details.into(),
             instructions: None.into(),

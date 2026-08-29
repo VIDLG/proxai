@@ -353,17 +353,32 @@ fn translates_reasoning_effort_and_summary_to_output_config_plus_display() {
 }
 
 #[test]
-fn rejects_minimal_reasoning_effort_for_anthropic_output_config() {
+fn adapts_minimal_reasoning_effort_to_anthropic_low() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": "hello",
         "reasoning": {"effort": "minimal", "summary": "auto"}
     });
 
-    let error = translate_request_payload(&payload).unwrap_err().to_string();
+    let translated = translate_request_payload(&payload).unwrap();
 
-    assert!(error.contains("reasoning effort `minimal` cannot be translated"));
-    assert!(error.contains("output_config.effort"));
+    assert_eq!(translated["output_config"]["effort"], "low");
+    assert_eq!(translated["thinking"]["type"], "adaptive");
+    assert_eq!(translated["thinking"]["display"], "summarized");
+}
+
+#[test]
+fn disables_anthropic_thinking_for_minimal_effort_without_summary() {
+    let payload = json!({
+        "model": "gpt-5.5",
+        "input": "hello",
+        "reasoning": {"effort": "minimal"}
+    });
+
+    let translated = translate_request_payload(&payload).unwrap();
+
+    assert_eq!(translated["output_config"]["effort"], "low");
+    assert_eq!(translated["thinking"]["type"], "disabled");
 }
 
 #[test]

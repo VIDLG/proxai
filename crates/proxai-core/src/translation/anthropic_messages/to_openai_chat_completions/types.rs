@@ -6,7 +6,7 @@ use crate::protocol::openai::chat_completions::{
     ChatCompletionStreamResponseDelta, CompletionUsage, FinishReason, FunctionCall,
     PromptTokensDetails,
 };
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 impl TryFrom<&ToolUseBlock> for ChatCompletionMessageToolCalls {
     type Error = TranslationError;
@@ -91,12 +91,23 @@ fn completion_usage_from_anthropic(
 
 pub(super) fn chat_finish_reason_from_anthropic_stop_reason(
     stop_reason: StopReason,
+    scope: &TranslationScope,
 ) -> FinishReason {
     match stop_reason {
         // Chat has no dedicated refusal finish reason; a refusal is still a
         // terminal assistant turn rather than a tool-call request.
         StopReason::EndTurn | StopReason::StopSequence | StopReason::Refusal => FinishReason::Stop,
+        // Chat has no context-window-specific finish reason. `length` is the
+        // closest terminal semantic and keeps clients from treating a truncated
+        // response as a normal completed turn.
         StopReason::MaxTokens => FinishReason::Length,
+        StopReason::ModelContextWindowExceeded => {
+            scope.adapted(
+                "Anthropic stop_reason `model_context_window_exceeded`",
+                "Chat Completions has no context-window-specific finish reason; translating it to `length`",
+            );
+            FinishReason::Length
+        }
         // OpenAI Chat has no `pause_turn` finish reason. Treat it like
         // `tool_use` so clients can continue the turn with follow-up action.
         StopReason::ToolUse | StopReason::PauseTurn => FinishReason::ToolCalls,

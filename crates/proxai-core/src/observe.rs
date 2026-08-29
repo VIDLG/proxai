@@ -61,6 +61,7 @@ pub enum ProviderResponsePhase {
 pub enum ProviderResponseAdaptation {
     AnthropicMessagesShape,
     AnthropicMessagesStreamEvent,
+    OpenaiChatCompletionsShape,
     OpenaiChatCompletionsStreamEvent,
     OpenaiResponsesUsageShape,
 }

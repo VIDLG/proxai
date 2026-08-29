@@ -10,6 +10,7 @@ use crate::formatting::{compact_tail, format_count_map};
 use crate::provider::anthropic_messages::{
     AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot,
 };
+use crate::request::RequestId;
 use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
@@ -126,21 +127,110 @@ impl ValuableJson for AnthropicResponseFields {
     }
 }
 
-pub(crate) fn emit_anthropic_stream_completed(snapshot: &AnthropicUpstreamResponseSnapshot) {
-    emit_anthropic_stream_info("end", snapshot);
+pub(crate) fn emit_anthropic_stream_completed(
+    request_id: RequestId,
+    snapshot: &AnthropicUpstreamResponseSnapshot,
+) {
+    emit_anthropic_stream_info("end", request_id, snapshot);
 }
 
-pub(crate) fn emit_anthropic_stream_closed(snapshot: &AnthropicUpstreamResponseSnapshot) {
-    emit_anthropic_stream_info("closed", snapshot);
+pub(crate) fn emit_anthropic_context_window_exceeded(
+    request_id: RequestId,
+    snapshot: &AnthropicUpstreamResponseSnapshot,
+    diagnostic_path: Option<&str>,
+) {
+    let head = &snapshot.head;
+    let response = AnthropicResponseFields::from(snapshot);
+    let message = "model context window exceeded before generation started";
+
+    match active_log_format() {
+        LogOutputFormat::Human => warn!(
+            event = "provider-semantic-failure",
+            request_id = request_id.as_u64(),
+            kind = "provider",
+            semantic = "model_context_window_exceeded",
+            status = head.status.as_u16(),
+            ttfb_ms = head.ttfb.as_millis() as u64,
+            down = snapshot.metrics.bytes,
+            chunks = snapshot.metrics.chunks,
+            avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
+            duration_ms = snapshot.metrics.duration_ms(),
+            ct = head.content_type_text(),
+            sse = head.is_sse(),
+            response_id = response.id,
+            model = response.model,
+            service_tier = response.service_tier,
+            stop_reason = response.stop_reason,
+            tok = response.tok,
+            input = response.input,
+            cache_read = response.cache_read,
+            cache_creation = response.cache_creation,
+            output = response.output,
+            output_items_human = response.output_items_human,
+            stop_reasons = format_count_map(&response.stop_reasons),
+            calls_human = response.calls_human,
+            diagnostic_path = diagnostic_path.unwrap_or(""),
+            err = message,
+        ),
+        LogOutputFormat::Json => {
+            let mut payload = response.to_json_value();
+            rename_json_field(&mut payload, "id", "response_id");
+            extend_json_object(
+                &mut payload,
+                [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
+                    ("kind", JsonValue::String("provider".to_string())),
+                    (
+                        "semantic",
+                        JsonValue::String("model_context_window_exceeded".to_string()),
+                    ),
+                    ("status", JsonValue::from(head.status.as_u16())),
+                    ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
+                    ("down", JsonValue::from(snapshot.metrics.bytes)),
+                    ("chunks", JsonValue::from(snapshot.metrics.chunks)),
+                    (
+                        "avg_chunk_bytes",
+                        JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
+                    ),
+                    (
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
+                    ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
+                    ("ct", JsonValue::String(head.content_type_text())),
+                    ("sse", JsonValue::Bool(head.is_sse())),
+                    (
+                        "diagnostic_path",
+                        JsonValue::String(diagnostic_path.unwrap_or("").to_string()),
+                    ),
+                    ("error", JsonValue::String(message.to_string())),
+                ],
+            );
+            emit_json_log("WARN", "provider-semantic-failure", payload);
+        }
+    }
 }
 
-fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseSnapshot) {
+pub(crate) fn emit_anthropic_stream_closed(
+    request_id: RequestId,
+    snapshot: &AnthropicUpstreamResponseSnapshot,
+) {
+    emit_anthropic_stream_info("closed", request_id, snapshot);
+}
+
+fn emit_anthropic_stream_info(
+    event: &str,
+    request_id: RequestId,
+    snapshot: &AnthropicUpstreamResponseSnapshot,
+) {
     let head = &snapshot.head;
     let response = AnthropicResponseFields::from(snapshot);
 
     match active_log_format() {
         LogOutputFormat::Human => info!(
             event = event,
+            request_id = request_id.as_u64(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
@@ -169,6 +259,7 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
             extend_json_object(
                 &mut payload,
                 [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     ("status", JsonValue::from(head.status.as_u16())),
                     ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
                     ("down", JsonValue::from(snapshot.metrics.bytes)),
@@ -192,6 +283,7 @@ fn emit_anthropic_stream_info(event: &str, snapshot: &AnthropicUpstreamResponseS
 }
 
 pub(crate) fn emit_anthropic_stream_error(
+    request_id: RequestId,
     snapshot: &AnthropicUpstreamResponseSnapshot,
     error: &UpstreamStreamError,
 ) {
@@ -201,6 +293,7 @@ pub(crate) fn emit_anthropic_stream_error(
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = stream_error_token(error),
+            request_id = request_id.as_u64(),
             kind = stream_error_kind(error).as_ref(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
@@ -231,6 +324,7 @@ pub(crate) fn emit_anthropic_stream_error(
             extend_json_object(
                 &mut payload,
                 [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     ("status", JsonValue::from(head.status.as_u16())),
                     ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
                     ("down", JsonValue::from(snapshot.metrics.bytes)),

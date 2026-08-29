@@ -1,8 +1,101 @@
-use axum::http::{HeaderMap, HeaderValue};
-use reqwest::Url;
+use std::time::Duration;
 
-use super::{is_loopback_url, provider_request_headers, upstream_url_for_path};
+use axum::{
+    Router,
+    http::{HeaderMap, HeaderValue},
+};
+use reqwest::Url;
+use tokio::net::TcpListener;
+
+use super::{ProviderTransport, is_loopback_url, provider_request_headers, upstream_url_for_path};
+use crate::config::{ProviderConfig, ProxyConfig};
 use crate::protocol::ProviderProtocol;
+
+#[tokio::test]
+async fn explicit_proxy_routes_remote_provider_requests() {
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_address = proxy_listener.local_addr().unwrap();
+    let proxy_server = tokio::spawn(async move {
+        axum::serve(
+            proxy_listener,
+            Router::new().fallback(|| async { "proxied" }),
+        )
+        .await
+        .unwrap();
+    });
+    let proxy = ProxyConfig {
+        url: Url::parse(&format!("http://{proxy_address}")).unwrap(),
+        no_proxy: vec!["localhost".to_string(), "127.0.0.0/8".to_string()],
+    };
+    let transport = ProviderTransport::build(
+        "remote".to_string(),
+        provider_config(Url::parse("http://provider.invalid").unwrap()),
+        Some(&proxy),
+    )
+    .unwrap();
+
+    let response = transport
+        .client
+        .get("http://provider.invalid/probe")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.text().await.unwrap(), "proxied");
+    proxy_server.abort();
+}
+
+#[tokio::test]
+async fn explicit_proxy_is_bypassed_for_loopback_provider() {
+    let upstream_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let upstream_address = upstream_listener.local_addr().unwrap();
+    let upstream_server = tokio::spawn(async move {
+        axum::serve(
+            upstream_listener,
+            Router::new().fallback(|| async { "direct" }),
+        )
+        .await
+        .unwrap();
+    });
+    let proxy_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_address = proxy_listener.local_addr().unwrap();
+    let proxy_server = tokio::spawn(async move {
+        axum::serve(
+            proxy_listener,
+            Router::new().fallback(|| async { "proxied" }),
+        )
+        .await
+        .unwrap();
+    });
+    let proxy = ProxyConfig {
+        url: Url::parse(&format!("http://{proxy_address}")).unwrap(),
+        no_proxy: Vec::new(),
+    };
+    let base_url = Url::parse(&format!("http://{upstream_address}")).unwrap();
+    let transport = ProviderTransport::build(
+        "local".to_string(),
+        provider_config(base_url.clone()),
+        Some(&proxy),
+    )
+    .unwrap();
+
+    let response = transport.client.get(base_url).send().await.unwrap();
+
+    assert_eq!(response.text().await.unwrap(), "direct");
+    upstream_server.abort();
+    proxy_server.abort();
+}
+
+fn provider_config(base_url: Url) -> ProviderConfig {
+    ProviderConfig {
+        protocol: ProviderProtocol::OpenaiResponses,
+        base_url,
+        api_key: "test-key".to_string(),
+        proxy: None,
+        compatibility: Default::default(),
+        read_idle_timeout: Duration::from_secs(5),
+    }
+}
 
 #[test]
 fn identifies_loopback_upstream_urls() {

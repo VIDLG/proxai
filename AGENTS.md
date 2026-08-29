@@ -82,6 +82,14 @@ Do not pass HTTP `Response`, `Body`, `ByteStream`, SSE frames, route/model rewri
 
 Prefer pair-oriented conversion names such as `openai_responses -> anthropic_messages`. For protocol-specific request/response data, prefer top-level enums keyed by protocol over parallel fields that can drift into impossible states.
 
+Each translation pair lays out `From`/`TryFrom` impls and pair-local helpers across up to three `types.rs` files, scoped by who consumes them:
+
+- pair-root `types.rs` — protocol-to-protocol conversions shared across the pair's `request` / `response` / `streaming` children (usage mapping, finish/stop/status mapping, tool-call struct conversions, service-tier mapping).
+- `request/types.rs` — request-only input field conversions (reasoning, response_format, image_detail, prompt_cache_retention, etc.).
+- `streaming/types.rs` — streaming state-machine data structures (not wire-type conversions).
+
+A symbol that only one child module consumes does not belong in pair-root `types.rs`; keep it inside the consuming child (a pair-local id-shaping helper used only by `response.rs` lives in `response.rs`). Each `types.rs` file header should state the boundary explicitly — name what belongs in the file and where siblings live. Use `crates/proxai-core/src/translation/anthropic_messages/to_openai_responses/types.rs` as the template.
+
 When a target protocol cannot represent a source field or block, report a typed translation observation through the core `Observer` with the discriminant and a short reason. Do not silently drop source-protocol data with `_ => {}` — silent drops make "why did my X disappear" reports unanswerable. "Cannot represent" is not an error: the call site still returns `Ok`; the downstream observer decides how to log or diagnose the loss.
 
 ## Logging / Errors / Streaming
@@ -90,7 +98,7 @@ Logs should be compact, structured, stable, and useful for real debugging. Do no
 
 Core crates may define observation traits, closed structured observation variants, and no-op defaults, but must not choose concrete logging, diagnostics, capture, metrics, or storage implementations. Downstream composition supplies those implementations.
 
-Core request-domain producers emit typed `Observation` values through `Observer`; downstream `ObserveContext` implements that contract, and its sinks decide logging level/format, diagnostics, and capture. Use `tracing` directly only inside logging/observation sinks, for observation-system failures that must not recurse, for process-level startup/config/background events without a request context, or for genuinely temporary local debugging. If a trace becomes a recurring diagnostic signal, promote it to an observe point.
+Core request-domain producers emit typed `Observation` values through `Observer`; downstream `ObserveContext` implements that contract, and its sinks decide logging level/format, diagnostics, and capture. `TranslationScope` is an explicit request/phase-scoped dependency, never global, thread-local, or task-local. Pass `&TranslationScope` only through pair entrypoints and semantic projections that may emit `adapted`/`dropped`; pure wire conversions, derives, and outbound constructors remain scope-free. Fatal failures return through `Result` and must not also emit the same failure as an observation. Use `tracing` directly only inside logging/observation sinks, for observation-system failures that must not recurse, for process-level startup/config/background events without a request context, or for genuinely temporary local debugging. If a trace becomes a recurring diagnostic signal, promote it to an observe point.
 
 Keep `error_responses.format = "text"` as the readable default. Preserve useful headers such as `Retry-After`; avoid overfitting to every upstream JSON shape.
 

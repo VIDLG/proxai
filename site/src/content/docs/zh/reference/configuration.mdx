@@ -39,11 +39,12 @@ import configExample from '@root/config.example.toml?raw';
 <ReferenceTable
   columns={['Section', '负责', '任务文档']}
   rows={[
+    ['`[proxies.local]`', '示例具名出站代理 URL 和可选 no-proxy 规则。', '[配置说明](/zh/using/configuration#为-provider-指定具名代理)'],
     ['`[server]`', '本地 proxy listener、请求体大小和并发限制。', '[配置说明](/zh/using/configuration#最小本地配置)'],
     ['`[mcp]`', '本地 MCP control/API listener。MCP 是控制面，不是模型路径。', '[配置说明](/zh/using/configuration#配置地图)'],
     ['`[routing.default_provider_names]`', '每个入站请求协议的 fallback provider 名称。', '[路由与 Provider](/zh/using/routing-and-providers)'],
     ['`[[routing.routes]]`', '显式模型/协议路由和可选 upstream model rewrite。', '[路由匹配](/zh/reference/route-matching)'],
-    ['`[providers.<name>]`', '命名上游 provider 的协议、base URL、API key、compatibility 和 idle timeout。', '[Provider 设置](/zh/using/provider-setup)'],
+    ['`[providers.<name>]`', '命名上游 provider 的协议、base URL、API key、可选 proxy 引用、compatibility 和 idle timeout。', '[Provider 设置](/zh/using/provider-setup)'],
     ['`[tool_calls]`', '不完整流式工具调用参数的语义超时。', '[流式行为](/zh/protocol/streaming-behavior)'],
     ['`[logging]`', '日志 level、输出格式和颜色行为。', '[观测与诊断](/zh/using/observability)'],
     ['`[logging.duration_thresholds]`', 'Human log duration coloring thresholds。', '[观测与诊断](/zh/using/observability)'],

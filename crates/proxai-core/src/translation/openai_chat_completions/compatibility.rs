@@ -67,15 +67,6 @@ impl ChatRequestExtensions {
         }
     }
 
-    pub(crate) fn append(&mut self, message_index: usize, reasoning: &str) {
-        if !reasoning.is_empty() {
-            self.assistant_reasoning
-                .entry(message_index)
-                .or_default()
-                .push_str(reasoning);
-        }
-    }
-
     pub(crate) fn apply(self, payload: &mut Value) -> TranslationResult<()> {
         let messages = payload
             .get_mut("messages")

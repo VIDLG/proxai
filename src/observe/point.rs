@@ -129,9 +129,43 @@ pub(crate) enum ProviderStreamOutcome<'a> {
     UnfinishedTool(&'a UpstreamStreamError),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProviderSemanticFailure {
+    ContextWindowExceeded,
+    ProviderReportedError,
+}
+
 pub(crate) struct ProviderStreamOutcomeObserved<'a> {
     pub(crate) snapshot: ProviderStreamSnapshot<'a>,
     pub(crate) outcome: ProviderStreamOutcome<'a>,
+}
+
+impl ProviderStreamOutcomeObserved<'_> {
+    pub(crate) fn semantic_failure(&self) -> Option<ProviderSemanticFailure> {
+        match (&self.snapshot, &self.outcome) {
+            (
+                ProviderStreamSnapshot::AnthropicMessages(snapshot),
+                ProviderStreamOutcome::Completed,
+            ) if snapshot.state.stop_reason()
+                == Some(
+                    crate::protocol::anthropic::messages::StopReason::ModelContextWindowExceeded,
+                ) =>
+            {
+                Some(ProviderSemanticFailure::ContextWindowExceeded)
+            }
+            (
+                ProviderStreamSnapshot::OpenaiResponses(snapshot),
+                ProviderStreamOutcome::Completed,
+            ) => snapshot.state.effective_error().map(|error| {
+                if error.code == "context_length_exceeded" {
+                    ProviderSemanticFailure::ContextWindowExceeded
+                } else {
+                    ProviderSemanticFailure::ProviderReportedError
+                }
+            }),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

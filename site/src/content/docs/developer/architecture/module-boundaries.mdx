@@ -24,7 +24,7 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: 'Shared observer contract, closed core observation variants, and no-op default. No concrete sinks.' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs, enums, and protocol-specific event payloads. No provider routing decisions.' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: 'Compile model rules, select provider labels by request protocol/model, rewrite upstream models, and enforce strict protocol guards.' },
-    { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: 'Pure request/response/stream conversion between protocol pairs.' },
+    { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: 'Carrier-independent request/response/stream conversion between protocol pairs, with typed observations for legal adaptations.' },
     { name: 'crates/proxai-core/src/provider/', icon: 'file', description: 'Carrier-independent provider request payload preparation, compatibility policy, structured response/error normalization, and typed adaptation observations.' },
     { name: 'src/provider/*/request', icon: 'file', description: 'Application-side provider projection/summary extraction, JSON serialization, and request carrier assembly.' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: 'Upstream URL construction, provider-owned auth headers, HTTP send.' },
@@ -62,6 +62,8 @@ This page is a maintainer map for deciding where code belongs. When in doubt, ke
 ## Observation and logging boundary
 
 `proxai-core` defines the shared `Observer` contract, closed `Observation` variants, and a no-op default. Core ingress, provider normalization, and translation emit typed variants through that contract. They do not select `tracing`, diagnostics files, capture storage, metrics backends, or any other concrete sink; the downstream application composes those implementations.
+
+`TranslationScope` is an explicit request- and phase-scoped dependency. It must not be global, thread-local, or task-local. Pass `&TranslationScope` through pair entrypoints and semantic projections only when that path may emit `adapted` or `dropped`; pure wire conversions, `From`/`TryFrom` implementations without loss reporting, and outbound constructors remain scope-free. Fatal failures return through `Result` and must not also emit the same failure as an observation. This explicit scope model is preferred over returning a parallel projection/notice collection because streaming observations are naturally emitted as events arrive and the shared `Observer` already lets downstream callers collect them as data when needed.
 
 For request-scoped code, emit stable lifecycle and domain events through `ObserveContext`. `ObserveSinks` then decides whether each point goes to logging, diagnostics, capture, or several sinks. The logging sink is the layer that translates an observation into a `tracing` event and chooses its level and output format.
 

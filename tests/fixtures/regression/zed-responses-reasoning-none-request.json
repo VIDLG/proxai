@@ -1,0 +1,7 @@
+{
+  "model": "glm-5.2",
+  "input": "sanitized user turn",
+  "reasoning": {
+    "effort": "none"
+  }
+}

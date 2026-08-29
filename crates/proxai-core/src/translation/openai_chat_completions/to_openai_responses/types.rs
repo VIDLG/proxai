@@ -2,13 +2,25 @@
 //! `openai_chat_completions -> openai_responses`.
 
 use crate::protocol::openai::chat_completions::{
-    ChatCompletionMessageToolCalls, CompletionUsage, FinishReason,
+    ChatCompletionMessageToolCalls, CompletionUsage, FinishReason, ServiceTier as ChatServiceTier,
 };
 use crate::protocol::openai::responses::{
     CustomToolCall, IncompleteDetails, IncompleteDetailsReason, InputTokenDetails, OutputItem,
-    OutputTokenDetails, ResponseUsage, Status,
+    OutputTokenDetails, ResponseUsage, ServiceTier as ResponsesServiceTier, Status,
 };
 use crate::translation::openai_responses::outbound::function_call_item;
+
+impl From<ChatServiceTier> for ResponsesServiceTier {
+    fn from(value: ChatServiceTier) -> Self {
+        match value {
+            ChatServiceTier::Auto => Self::Auto,
+            ChatServiceTier::Default => Self::Default,
+            ChatServiceTier::Flex => Self::Flex,
+            ChatServiceTier::Scale => Self::Scale,
+            ChatServiceTier::Priority => Self::Priority,
+        }
+    }
+}
 
 pub(super) fn incomplete_details_from_finish_reason(
     finish_reason: Option<FinishReason>,

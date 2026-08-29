@@ -164,7 +164,7 @@ fn preserves_responses_system_and_developer_roles_as_chat_instruction_messages()
         "developer instruction"
     );
     assert_eq!(translated["messages"][3]["role"], "user");
-    assert_eq!(translated["messages"][3]["content"][0]["text"], "hello");
+    assert_eq!(translated["messages"][3]["content"], "hello");
 }
 
 #[test]
@@ -193,12 +193,59 @@ fn translates_normalized_assistant_replay_with_output_text() {
         .expect("translated payload must match Chat Completions request schema");
 
     assert_eq!(translated["messages"][0]["role"], "assistant");
-    assert_eq!(
-        translated["messages"][0]["content"][0]["text"],
-        "previous answer"
-    );
+    assert_eq!(translated["messages"][0]["content"], "previous answer");
     assert_eq!(translated["messages"][1]["role"], "user");
-    assert_eq!(translated["messages"][1]["content"][0]["text"], "continue");
+    assert_eq!(translated["messages"][1]["content"], "continue");
+}
+
+#[test]
+fn groups_consecutive_assistant_artifacts_into_one_chat_turn() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "instructions": "Keep the translated history intact.",
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": "continue"
+            },
+            {
+                "type": "reasoning",
+                "id": "rs_1",
+                "summary": [{"type": "summary_text", "text": "visible reasoning"}],
+                "status": "completed"
+            },
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "lookup",
+                "arguments": "{}",
+                "status": "completed"
+            },
+            {
+                "type": "message",
+                "id": "msg_1",
+                "role": "assistant",
+                "content": [{
+                    "type": "output_text",
+                    "text": "answer",
+                    "annotations": [],
+                    "logprobs": []
+                }],
+                "status": "completed"
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 3);
+    assert_eq!(translated["messages"][0]["role"], "developer");
+    assert!(translated["messages"][0].get("reasoning_content").is_none());
+    let assistant = &translated["messages"][2];
+    assert_eq!(assistant["role"], "assistant");
+    assert_eq!(assistant["reasoning_content"], "visible reasoning");
+    assert_eq!(assistant["content"], "answer");
+    assert_eq!(assistant["tool_calls"][0]["function"]["name"], "lookup");
 }
 
 #[test]
@@ -214,30 +261,18 @@ fn parses_responses_request_into_native_response_create_params() {
 }
 
 #[test]
-fn translates_item_reference_to_placeholder() {
-    // Responses item references are stateful pointers; the proxy cannot resolve
-    // them, so they are surfaced as a user-text placeholder so the omission is
-    // observable rather than silently dropped.
-    let payload = json!({
+fn rejects_responses_item_reference_without_referenced_content() {
+    let error = translate_request_payload(&json!({
         "model": "glm-5.1",
         "input": [
             {"type": "item_reference", "id": "msg_abc"}
         ]
-    });
+    }))
+    .unwrap_err()
+    .to_string();
 
-    let translated = translate_request_payload(&payload).unwrap();
-    serde_json::from_value::<CreateChatCompletionRequest>(translated.clone())
-        .expect("translated payload must match Chat Completions request schema");
-
-    assert_eq!(translated["messages"][0]["role"], "user");
-    assert!(
-        translated["messages"][0]["content"]
-            .as_str()
-            .unwrap()
-            .contains("item_reference"),
-        "unexpected content: {}",
-        translated["messages"][0]["content"]
-    );
+    assert!(error.contains("item_reference `msg_abc` cannot be translated"));
+    assert!(error.contains("referenced item content is not available"));
 }
 
 #[test]
@@ -273,6 +308,58 @@ fn flattens_function_call_arguments_into_assistant_tool_call() {
 }
 
 #[test]
+fn drops_unrepresentable_item_without_injecting_a_message() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "lookup",
+                "arguments": "{}"
+            },
+            {
+                "type": "additional_tools",
+                "role": "developer",
+                "tools": [{
+                    "type": "function",
+                    "name": "late_tool",
+                    "parameters": {"type": "object"},
+                    "strict": null
+                }]
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "result"
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(translated["messages"][0]["role"], "assistant");
+    assert_eq!(translated["messages"][1]["role"], "tool");
+    assert_eq!(translated["messages"][1]["tool_call_id"], "call_1");
+}
+
+#[test]
+fn rejects_encrypted_compaction_item() {
+    let error = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "compaction",
+            "encrypted_content": "provider-encrypted-summary"
+        }]
+    }))
+    .unwrap_err()
+    .to_string();
+
+    assert!(error.contains("compaction item cannot be translated"));
+    assert!(error.contains("summary content is encrypted"));
+}
+
+#[test]
 fn skips_hosted_responses_tools_without_chat_equivalent() {
     let payload = json!({
         "model": "glm-5.1",
@@ -303,7 +390,7 @@ fn skips_hosted_tool_choice_without_chat_equivalent() {
 }
 
 #[test]
-fn serializes_custom_tool_output_content_list_as_tool_message_text() {
+fn translates_custom_tool_output_content_list_as_tool_content_array() {
     let payload = json!({
         "model": "glm-5.1",
         "input": [
@@ -316,16 +403,240 @@ fn serializes_custom_tool_output_content_list_as_tool_message_text() {
             {
                 "type": "custom_tool_call_output",
                 "call_id": "call_1",
-                "output": [{"type": "input_text", "text": "ok"}]
+                "output": [
+                    {
+                        "type": "input_text",
+                        "text": "first",
+                        "prompt_cache_breakpoint": {"mode": "explicit"}
+                    },
+                    {"type": "input_text", "text": "second"}
+                ]
             }
         ]
     });
 
     let translated = translate_request_payload(&payload).unwrap();
-    let content = translated["messages"][1]["content"].as_str().unwrap();
+    let content = translated["messages"][1]["content"].as_array().unwrap();
 
+    assert_eq!(content.len(), 2);
+    assert_eq!(content[0]["text"], "first");
     assert_eq!(
-        serde_json::from_str::<serde_json::Value>(content).unwrap(),
-        json!([{"type": "input_text", "text": "ok"}])
+        content[0]["prompt_cache_breakpoint"],
+        json!({"mode": "explicit"})
     );
+    assert_eq!(content[1]["text"], "second");
+}
+
+#[test]
+fn keeps_instruction_content_together_and_preserves_prompt_cache_breakpoints() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "message",
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "stable prefix",
+                    "prompt_cache_breakpoint": {"mode": "explicit"}
+                },
+                {"type": "input_text", "text": "current instruction"}
+            ]
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(translated["messages"][0]["role"], "system");
+    assert_eq!(
+        translated["messages"][0]["content"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        translated["messages"][0]["content"][0]["prompt_cache_breakpoint"],
+        json!({"mode": "explicit"})
+    );
+}
+
+#[test]
+fn preserves_assistant_history_prompt_cache_breakpoint() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [
+            {
+                "role": "assistant",
+                "content": [{
+                    "type": "input_text",
+                    "text": "cached answer",
+                    "prompt_cache_breakpoint": {"mode": "explicit"}
+                }]
+            },
+            {"role": "user", "content": "continue"}
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"][0]["role"], "assistant");
+    assert_eq!(
+        translated["messages"][0]["content"][0]["prompt_cache_breakpoint"],
+        json!({"mode": "explicit"})
+    );
+}
+
+#[test]
+fn translates_responses_input_file_to_chat_file_content() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{
+                "type": "input_file",
+                "filename": "brief.txt",
+                "file_data": "data:text/plain;base64,b2s=",
+                "prompt_cache_breakpoint": {"mode": "explicit"}
+            }]
+        }]
+    }))
+    .unwrap();
+
+    let file = &translated["messages"][0]["content"][0];
+    assert_eq!(file["type"], "file");
+    assert_eq!(file["file"]["filename"], "brief.txt");
+    assert_eq!(file["file"]["file_data"], "data:text/plain;base64,b2s=");
+    assert_eq!(file["prompt_cache_breakpoint"], json!({"mode": "explicit"}));
+}
+
+#[test]
+fn translates_responses_input_image_file_id_to_chat_file_content() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{
+                "type": "input_image",
+                "file_id": "file_image_1",
+                "prompt_cache_breakpoint": {"mode": "explicit"}
+            }]
+        }]
+    }))
+    .unwrap();
+
+    let file = &translated["messages"][0]["content"][0];
+    assert_eq!(file["type"], "file");
+    assert_eq!(file["file"]["file_id"], "file_image_1");
+    assert_eq!(file["prompt_cache_breakpoint"], json!({"mode": "explicit"}));
+}
+
+#[test]
+fn preserves_responses_original_image_with_auto_detail_fallback() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{
+                "type": "input_image",
+                "image_url": "https://example.test/original.png",
+                "detail": "original"
+            }]
+        }]
+    }))
+    .unwrap();
+
+    let image = &translated["messages"][0]["content"][0];
+    assert_eq!(image["type"], "image_url");
+    assert_eq!(
+        image["image_url"]["url"],
+        "https://example.test/original.png"
+    );
+    assert_eq!(image["image_url"]["detail"], "auto");
+}
+
+#[test]
+fn preserves_function_output_text_part_prompt_cache_breakpoint() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [{
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": [{
+                "type": "input_text",
+                "text": "cached tool result",
+                "prompt_cache_breakpoint": {"mode": "explicit"}
+            }]
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"][0]["role"], "tool");
+    assert_eq!(
+        translated["messages"][0]["content"][0]["prompt_cache_breakpoint"],
+        json!({"mode": "explicit"})
+    );
+}
+
+#[test]
+fn uses_the_same_user_content_projection_for_easy_and_typed_messages() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "easy"}]
+            },
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "typed"}]
+            }
+        ]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"][0]["content"], "easy");
+    assert_eq!(translated["messages"][1]["content"], "typed");
+}
+
+#[test]
+fn omits_user_turn_without_representable_content() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "instructions": "Keep the instruction-only request intact.",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_image", "detail": "auto"}]
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(translated["messages"][0]["role"], "developer");
+    assert_eq!(
+        translated["messages"][0]["content"],
+        "Keep the instruction-only request intact."
+    );
+}
+
+#[test]
+fn preserves_explicit_empty_user_text() {
+    let translated = translate_request_payload(&json!({
+        "model": "gpt-5.6",
+        "instructions": "Preserve the following user turn.",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": ""}]
+        }]
+    }))
+    .unwrap();
+
+    assert_eq!(translated["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(translated["messages"][1]["role"], "user");
+    assert_eq!(translated["messages"][1]["content"], "");
 }

@@ -130,6 +130,51 @@ fn stream_translation_error_line_keeps_protocol_event_and_diagnostic_bundle() {
 }
 
 #[test]
+fn provider_semantic_failure_line_keeps_context_reason_and_diagnostic_bundle() {
+    let mut fields = LogFields::default();
+    fields.insert("event", "provider-semantic-failure");
+    fields.insert("kind", "provider");
+    fields.insert("semantic", "model_context_window_exceeded");
+    fields.insert("status", "200");
+    fields.insert("ttfb_ms", "10632");
+    fields.insert("duration_ms", "10648");
+    fields.insert("down", "554");
+    fields.insert("chunks", "4");
+    fields.insert("ct", "text/event-stream");
+    fields.insert("sse", "true");
+    fields.insert("model", "glm-5.2");
+    fields.insert("stop_reason", "model_context_window_exceeded");
+    fields.insert("input", "0");
+    fields.insert("output", "0");
+    fields.insert(
+        "diagnostic_path",
+        "diagnostics/1784601174-provider_semantic_failure",
+    );
+    fields.insert(
+        "err",
+        "model context window exceeded before generation started",
+    );
+    fields.insert("request_id", "1784644372536");
+
+    let mut line = String::new();
+    format_event_line(
+        &mut line,
+        &Level::WARN,
+        &fields,
+        false,
+        &DurationThresholds::default(),
+    )
+    .unwrap();
+
+    assert!(line.contains("provider-semantic-failure"));
+    assert!(line.contains("glm-5.2"));
+    assert!(line.contains("semantic=model_context_window_exceeded"));
+    assert!(line.contains("diag=diagnostics/1784601174-provider_semantic_failure"));
+    assert!(line.contains("model context window exceeded before generation started"));
+    assert!(line.contains("req=ur6iwo"));
+}
+
+#[test]
 fn forward_line_renders_request_effort_when_present() {
     let mut fields = LogFields::default();
     fields.insert("event", "fwd");

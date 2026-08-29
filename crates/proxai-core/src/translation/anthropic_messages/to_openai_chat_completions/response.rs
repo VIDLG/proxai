@@ -96,7 +96,7 @@ pub(super) fn translate_response(
                     .stop_reason
                     .as_non_null()
                     .copied()
-                    .map(chat_finish_reason_from_anthropic_stop_reason)
+                    .map(|reason| chat_finish_reason_from_anthropic_stop_reason(reason, scope))
                     .ok_or_else(|| {
                         TranslationError::InvalidPayload(
                             "Anthropic message response is missing stop_reason required by Chat Completions"

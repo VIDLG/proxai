@@ -65,7 +65,7 @@ fn stores_normalized_payload_and_json_location_without_capture() {
     assert_eq!(record["error"]["column"], 5);
     assert_eq!(record["route"]["provider_protocol"], "anthropic_messages");
 
-    fs::remove_dir_all(diagnostics_dir).unwrap();
+    let _ = fs::remove_dir_all(diagnostics_dir);
 }
 
 #[test]
@@ -128,5 +128,5 @@ fn stored_payload_uses_json_error_pretty_coordinates() {
     let error_line = stored_payload.lines().nth(json_error.line() - 1).unwrap();
     assert_eq!(error_line.chars().nth(json_error.column() - 1), Some(']'));
 
-    fs::remove_dir_all(diagnostics_dir).unwrap();
+    let _ = fs::remove_dir_all(diagnostics_dir);
 }

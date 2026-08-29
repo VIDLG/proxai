@@ -8,6 +8,7 @@ use observe::{CaptureController, InboundRequestReceived, RequestFailed};
 use getset::{CopyGetters, Getters};
 use proxai_core::pipeline::Pipeline as CorePipeline;
 use proxai_core::provider::ProviderBehavior;
+use proxai_core::routing::normalize_provider_name;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -31,7 +32,14 @@ mod sse_translation;
 pub use proxai_core::translation;
 pub(crate) mod upstream;
 
-use config::{CaptureConfig, ErrorResponseFormat, ProviderConfig, RoutingConfig};
+#[doc(hidden)]
+pub fn ensure_rustls_crypto_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
+use config::{CaptureConfig, ErrorResponseFormat, ProviderConfig, ProxyConfig, RoutingConfig};
 pub use error::Error;
 use error::{InternalError, RequestError, Result};
 use observe::ObserveContext;
@@ -56,6 +64,14 @@ impl AppState {
         routing: RoutingConfig,
         providers: BTreeMap<String, ProviderConfig>,
     ) -> Result<Self> {
+        Self::new_with_proxies(routing, providers, BTreeMap::new())
+    }
+
+    pub fn new_with_proxies(
+        routing: RoutingConfig,
+        providers: BTreeMap<String, ProviderConfig>,
+        proxies: BTreeMap<String, ProxyConfig>,
+    ) -> Result<Self> {
         let provider_behaviors = providers
             .iter()
             .map(|(name, config)| {
@@ -67,10 +83,25 @@ impl AppState {
             .collect();
         let core_pipeline =
             CorePipeline::build(routing, provider_behaviors).map_err(InternalError::from)?;
+        let proxies = proxies
+            .into_iter()
+            .map(|(name, config)| (normalize_provider_name(&name), config))
+            .collect::<BTreeMap<_, _>>();
         let provider_transports = providers
             .into_iter()
             .map(|(name, config)| {
-                let transport = ProviderTransport::build(name, config)?;
+                let proxy = match config.proxy.as_deref() {
+                    Some(proxy_name) => Some(
+                        proxies
+                            .get(&normalize_provider_name(proxy_name))
+                            .ok_or_else(|| InternalError::MissingProxyConfig {
+                                provider: name.clone(),
+                                proxy: proxy_name.to_string(),
+                            })?,
+                    ),
+                    None => None,
+                };
+                let transport = ProviderTransport::build(name, config, proxy)?;
                 Ok((transport.name().to_string(), transport))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;

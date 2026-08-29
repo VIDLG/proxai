@@ -35,6 +35,8 @@ pub(crate) struct AnthropicResponseState {
     pub(crate) summary: AnthropicResponseSummary,
     #[getset(get_copy = "pub(crate)")]
     stream_done: bool,
+    #[getset(get = "pub(crate)")]
+    terminal_event: Option<SseEvent>,
 }
 
 impl AnthropicResponseState {
@@ -53,10 +55,17 @@ impl AnthropicResponseState {
                 &NoopObserver,
             )
             .data;
-            let Ok(event) = serde_json::from_value::<MessageStreamEvent>(payload) else {
+            let Ok(parsed) = serde_json::from_value::<MessageStreamEvent>(payload) else {
                 continue;
             };
-            self.record_stream_event(&event);
+            if matches!(
+                &parsed,
+                MessageStreamEvent::MessageDelta(delta)
+                    if delta.delta.stop_reason.as_non_null().is_some()
+            ) {
+                self.terminal_event = Some(event.clone());
+            }
+            self.record_stream_event(&parsed);
         }
     }
 

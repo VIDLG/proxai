@@ -126,7 +126,12 @@ pub(super) fn translate_response(
         prompt_cache_options: None,
         reasoning: None.into(),
         safety_identifier: None,
-        service_tier: None.into(),
+        service_tier: chat
+            .service_tier
+            .as_non_null()
+            .copied()
+            .map(Into::into)
+            .into(),
         status: Some(responses_status_from_chat_finish_reason(
             choice.finish_reason,
         )),

@@ -1,45 +1,45 @@
-//! Basic type conversions and pair-local helpers for
-//! `openai_responses -> openai_chat_completions`.
+//! Pair-local protocol-to-protocol conversions shared across the
+//! `openai_responses -> openai_chat_completions` pair's `request` / `response` /
+//! `streaming` children.
+//!
+//! Only stateless conversions shared by more than one child belong here.
+//! Request-only input field conversions live in `request/types.rs`. Pair-local
+//! helpers used by a single child (e.g. response-side id shaping) live inside
+//! that child module, not here.
 
 use crate::protocol::openai::chat_completions::{
     ChatCompletionMessageCustomToolCall, ChatCompletionMessageToolCall,
     ChatCompletionMessageToolCalls, CompletionTokensDetails, CompletionUsage, CustomTool,
-    FunctionCall, ImageDetail as ChatImageDetail, PromptTokensDetails,
+    FinishReason, FunctionCall, PromptTokensDetails, ServiceTier as ChatServiceTier,
 };
 use crate::protocol::openai::responses::{
-    CustomToolCall, FunctionToolCall, ImageDetail as ResponsesImageDetail, ResponseUsage,
+    CustomToolCall, FunctionToolCall, ResponseUsage, ServiceTier as ResponsesServiceTier,
 };
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::openai_responses::stop::ResponsesStopKind;
 
-/// Normalize a Responses id into a Chat-shaped id.
-///
-/// Pair-local naming convention, not a protocol conversion: it just makes the
-/// id start with `chatcmpl_` so downstream consumers recognize it.
-pub(super) fn chat_id(response_id: &str) -> String {
-    if response_id.starts_with("chatcmpl_") {
-        response_id.to_string()
-    } else {
-        format!("chatcmpl_{response_id}")
-    }
-}
-
-impl TryFrom<ResponsesImageDetail> for ChatImageDetail {
-    type Error = TranslationError;
-
-    fn try_from(value: ResponsesImageDetail) -> TranslationResult<Self> {
+impl From<ResponsesStopKind> for FinishReason {
+    fn from(value: ResponsesStopKind) -> Self {
         match value {
-            ResponsesImageDetail::Auto => Ok(Self::Auto),
-            ResponsesImageDetail::Low => Ok(Self::Low),
-            ResponsesImageDetail::High => Ok(Self::High),
-            ResponsesImageDetail::Original => Err(TranslationError::InvalidPayload(
-                "OpenAI Responses image detail `original` cannot be represented by Chat Completions"
-                    .to_string(),
-            )),
+            ResponsesStopKind::EndTurn | ResponsesStopKind::Refusal => Self::Stop,
+            ResponsesStopKind::MaxTokens => Self::Length,
+            ResponsesStopKind::ToolUse => Self::ToolCalls,
         }
     }
 }
 
-/// Resolve a tool-call identifier, preferring the explicit `call_id` (which
+impl From<ResponsesServiceTier> for ChatServiceTier {
+    fn from(value: ResponsesServiceTier) -> Self {
+        match value {
+            ResponsesServiceTier::Auto => Self::Auto,
+            ResponsesServiceTier::Default => Self::Default,
+            ResponsesServiceTier::Flex => Self::Flex,
+            ResponsesServiceTier::Scale => Self::Scale,
+            ResponsesServiceTier::Priority => Self::Priority,
+        }
+    }
+}
+
+/// Resolve a tool-call identifier, preferring the explicit `call_id`
 /// is the wire-level identifier used in tool_call/tool message pairing) and
 /// falling back to the optional item `id`.
 fn tool_call_id(id: &Option<String>, call_id: &str) -> String {

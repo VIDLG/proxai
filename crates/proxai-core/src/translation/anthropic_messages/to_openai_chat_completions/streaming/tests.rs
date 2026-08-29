@@ -17,6 +17,26 @@ async fn translate_streaming_response(stream: &str) -> String {
 }
 
 #[tokio::test]
+async fn translates_empty_context_limit_stream_to_chat_length() {
+    let stream = concat!(
+        "event: message_start\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_context_limit\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-test\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+        "event: message_delta\n",
+        "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"model_context_window_exceeded\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null},\"usage\":{\"cache_creation\":null,\"cache_creation_input_tokens\":null,\"cache_read_input_tokens\":null,\"inference_geo\":null,\"output_tokens_details\":null,\"server_tool_use\":null,\"service_tier\":null,\"input_tokens\":0,\"output_tokens\":0}}\n\n",
+        "event: message_stop\n",
+        "data: {\"type\":\"message_stop\"}\n\n"
+    );
+    let body = translate_streaming_response(stream).await;
+    let chunks = chat_stream_payloads(&body);
+
+    assert_eq!(chunks[0]["choices"][0]["delta"]["role"], "assistant");
+    assert_eq!(chunks[1]["choices"][0]["finish_reason"], "length");
+    assert_eq!(chunks[2]["choices"], json!([]));
+    assert!(body.contains("data: [DONE]"));
+    assert!(!body.contains("stream translation error"), "{body}");
+}
+
+#[tokio::test]
 async fn translates_anthropic_stream_to_chat_completion_sse() {
     let stream = concat!(
         "event: message_start\n",

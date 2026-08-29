@@ -1,5 +1,6 @@
 //! Request translation for `openai_responses -> openai_chat_completions`.
 
+mod content;
 mod messages;
 mod tools;
 mod types;
@@ -7,16 +8,22 @@ mod types;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::responses;
 use crate::translation::openai_chat_completions::compatibility::ChatRequestExtensions;
+
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
-use self::messages::chat_messages;
+use self::messages::project_request_messages;
 use self::tools::{chat_tool_choice, chat_tools};
+
+pub(super) struct ChatRequestProjection {
+    pub(super) request: chat::CreateChatCompletionRequest,
+    pub(super) extensions: ChatRequestExtensions,
+}
 
 pub(super) fn translate_request(
     request: &responses::CreateResponseRequest,
     scope: &TranslationScope,
-) -> TranslationResult<(chat::CreateChatCompletionRequest, ChatRequestExtensions)> {
-    let (messages, extensions) = chat_messages(
+) -> TranslationResult<ChatRequestProjection> {
+    let (messages, extensions) = project_request_messages(
         request.instructions.as_non_null().map(String::as_str),
         request.input.as_ref(),
         scope,
@@ -112,7 +119,10 @@ pub(super) fn translate_request(
         metadata: request.metadata.clone(),
     };
 
-    Ok((translated, extensions))
+    Ok(ChatRequestProjection {
+        request: translated,
+        extensions,
+    })
 }
 
 #[cfg(test)]

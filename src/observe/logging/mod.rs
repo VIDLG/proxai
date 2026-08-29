@@ -12,8 +12,8 @@ mod translation;
 mod upstream;
 
 use super::point::{
-    ProviderProtocolRequestPrepared, ProviderRequestBodySizes, ProviderStreamOutcome,
-    ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
+    ProviderProtocolRequestPrepared, ProviderRequestBodySizes, ProviderSemanticFailure,
+    ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
 };
 use axum::http::{Method, Uri};
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
@@ -28,7 +28,8 @@ use crate::protocol::{ProviderProtocol, RequestProtocol};
 use crate::provider::ProviderRequestView;
 use crate::request::RequestId;
 use anthropic_messages::{
-    emit_anthropic_stream_closed, emit_anthropic_stream_completed, emit_anthropic_stream_error,
+    emit_anthropic_context_window_exceeded, emit_anthropic_stream_closed,
+    emit_anthropic_stream_completed, emit_anthropic_stream_error,
 };
 use openai_chat_completions::{
     emit_chat_stream_closed, emit_chat_stream_completed, emit_chat_stream_error,
@@ -38,6 +39,7 @@ use openai_responses::{
     emit_stream_completed as emit_responses_stream_completed,
     emit_stream_error as emit_responses_stream_error,
     emit_stream_error_with_diagnostic as emit_responses_stream_error_with_diagnostic,
+    emit_stream_semantic_failure as emit_responses_stream_semantic_failure,
 };
 use output_alias::compact_output_item_kind;
 use proxai_core::observe::Observation;
@@ -128,10 +130,11 @@ impl LoggingSink {
 
     pub(super) fn emit_provider_stream_outcome(
         self,
+        request_id: RequestId,
         point: &ProviderStreamOutcomeObserved<'_>,
         diagnostic_path: Option<&str>,
     ) {
-        emit_provider_stream_outcome(point, diagnostic_path);
+        emit_provider_stream_outcome(request_id, point, diagnostic_path);
     }
 
     pub(super) fn emit_inbound_request_received(
@@ -192,30 +195,54 @@ fn emit_request_failed(error: &crate::error::Error) {
 }
 
 fn emit_provider_stream_outcome(
+    request_id: RequestId,
     point: &ProviderStreamOutcomeObserved<'_>,
     diagnostic_path: Option<&str>,
 ) {
     match point.snapshot {
         ProviderStreamSnapshot::AnthropicMessages(snapshot) => match point.outcome {
-            ProviderStreamOutcome::Completed => emit_anthropic_stream_completed(snapshot),
-            ProviderStreamOutcome::Closed => emit_anthropic_stream_closed(snapshot),
+            ProviderStreamOutcome::Completed
+                if point.semantic_failure()
+                    == Some(ProviderSemanticFailure::ContextWindowExceeded) =>
+            {
+                emit_anthropic_context_window_exceeded(request_id, snapshot, diagnostic_path)
+            }
+            ProviderStreamOutcome::Completed => {
+                emit_anthropic_stream_completed(request_id, snapshot)
+            }
+            ProviderStreamOutcome::Closed => emit_anthropic_stream_closed(request_id, snapshot),
             ProviderStreamOutcome::Error(error) | ProviderStreamOutcome::UnfinishedTool(error) => {
-                emit_anthropic_stream_error(snapshot, error)
+                emit_anthropic_stream_error(request_id, snapshot, error)
             }
         },
         ProviderStreamSnapshot::OpenaiChatCompletions(snapshot) => match point.outcome {
-            ProviderStreamOutcome::Completed => emit_chat_stream_completed(snapshot),
-            ProviderStreamOutcome::Closed => emit_chat_stream_closed(snapshot),
+            ProviderStreamOutcome::Completed => emit_chat_stream_completed(request_id, snapshot),
+            ProviderStreamOutcome::Closed => emit_chat_stream_closed(request_id, snapshot),
             ProviderStreamOutcome::Error(error) | ProviderStreamOutcome::UnfinishedTool(error) => {
-                emit_chat_stream_error(snapshot, error)
+                emit_chat_stream_error(request_id, snapshot, error)
             }
         },
         ProviderStreamSnapshot::OpenaiResponses(snapshot) => match point.outcome {
-            ProviderStreamOutcome::Completed => emit_responses_stream_completed(snapshot),
-            ProviderStreamOutcome::Closed => emit_responses_stream_closed(snapshot),
-            ProviderStreamOutcome::Error(error) => emit_responses_stream_error(snapshot, error),
+            ProviderStreamOutcome::Completed => match point.semantic_failure() {
+                Some(failure) => emit_responses_stream_semantic_failure(
+                    request_id,
+                    snapshot,
+                    failure,
+                    diagnostic_path,
+                ),
+                None => emit_responses_stream_completed(request_id, snapshot),
+            },
+            ProviderStreamOutcome::Closed => emit_responses_stream_closed(request_id, snapshot),
+            ProviderStreamOutcome::Error(error) => {
+                emit_responses_stream_error(request_id, snapshot, error)
+            }
             ProviderStreamOutcome::UnfinishedTool(error) => {
-                emit_responses_stream_error_with_diagnostic(snapshot, error, diagnostic_path)
+                emit_responses_stream_error_with_diagnostic(
+                    request_id,
+                    snapshot,
+                    error,
+                    diagnostic_path,
+                )
             }
         },
     }

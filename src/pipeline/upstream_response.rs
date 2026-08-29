@@ -45,7 +45,7 @@ impl UpstreamHttpFlow {
                 Ok(body) => body,
                 Err(source) => {
                     let error = UpstreamError::ResponseBodyRead {
-                        head: head.clone(),
+                        head: Box::new(head.clone()),
                         source,
                     };
                     obs.observe_upstream_body_read_error(&head, &error);
@@ -54,9 +54,9 @@ impl UpstreamHttpFlow {
             };
             let parsed = UpstreamResponseError::parse_body(provider_protocol, &body);
             let error = UpstreamError::ErrorStatus {
-                head: head.clone(),
+                head: Box::new(head.clone()),
                 body,
-                parsed,
+                parsed: Box::new(parsed),
             };
             if let UpstreamError::ErrorStatus { body, .. } = &error {
                 obs.observe_upstream_error_response(
@@ -87,7 +87,7 @@ impl UpstreamHttpFlow {
             Ok(body) => body,
             Err(source) => {
                 let error = UpstreamError::ResponseBodyRead {
-                    head: head.clone(),
+                    head: Box::new(head.clone()),
                     source,
                 };
                 obs.observe_upstream_body_read_error(&head, &error);

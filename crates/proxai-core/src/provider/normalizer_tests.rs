@@ -115,6 +115,34 @@ fn compatible_mode_emits_typed_provider_observation() {
 }
 
 #[test]
+fn compatible_chat_response_repair_emits_typed_provider_observation() {
+    let observations = RecordingObserver::default();
+    let recorded = observations.values.clone();
+    let payload = json!({"service_tier": "standard"});
+
+    let normalized = normalize_provider_response(
+        ProviderBehavior::new(
+            ProviderProtocol::OpenaiChatCompletions,
+            ProviderCompatibility::Compatible,
+        ),
+        payload,
+        &observations,
+    );
+
+    assert_eq!(normalized["service_tier"], "default");
+    assert!(matches!(
+        recorded.lock().unwrap().as_slice(),
+        [Observation::Provider(
+            ProviderObservation::ResponseAdapted {
+                phase: ProviderResponsePhase::NonStreaming,
+                adaptation: ProviderResponseAdaptation::OpenaiChatCompletionsShape,
+                ..
+            }
+        )]
+    ));
+}
+
+#[test]
 fn compatible_responses_usage_repair_emits_typed_provider_observation() {
     let observations = RecordingObserver::default();
     let recorded = observations.values.clone();

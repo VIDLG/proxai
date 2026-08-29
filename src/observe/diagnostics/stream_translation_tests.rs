@@ -72,5 +72,5 @@ fn stores_raw_triggering_sse_event_without_capture() {
         "data: {\"choices\":[{\"delta\":{}}]}\n\n"
     );
 
-    fs::remove_dir_all(diagnostics_dir).unwrap();
+    let _ = fs::remove_dir_all(diagnostics_dir);
 }

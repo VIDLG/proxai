@@ -48,15 +48,15 @@ test_lib *args:
 
 # List every `regression_*` test in the tree (real-world payload / observed-bug tests).
 regression-list:
-    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --workspace --lib -- --list 2>&1 | grep regression || true
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- cargo test --workspace regression_ -- --list 2>&1 | grep "regression_.*: test" || true
 
 # Run every `regression_*` test (real-world payload / observed-bug tests).
 regression-run *args:
-    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --workspace --lib regression {{ args }}
+    CARGO_TARGET_DIR=.cargo-target-tests {{ pixi }} run -- rtk cargo test --workspace regression_ {{ args }}
 
 # Show which regression test files the working diff touches — review attention signal.
 regression-touched:
-    @git diff --name-only HEAD | grep "_regression_tests.rs" || echo "no regression tests touched"
+    @git status --short --untracked-files=all | cut -c4- | grep "_regression_tests.rs" || echo "no regression tests touched"
 
 check_release_tag_version:
     {{ pixi }} run -- python scripts/check_release_tag_version.py

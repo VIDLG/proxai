@@ -1,50 +1,67 @@
 use crate::protocol::openai::chat_completions::{
     ChatChoice, ChatCompletionMessageToolCalls, CreateChatCompletionResponse,
-    CreateChatCompletionResponseObject, FinishReason,
+    CreateChatCompletionResponseObject,
 };
 use crate::protocol::openai::responses::{
-    OutputItem, OutputMessage, OutputMessageContent, ReasoningItemContent, Response, SummaryPart,
+    OutputItem, OutputMessageContent, ReasoningItemContent, Response, SummaryPart,
 };
 use crate::translation::openai_chat_completions::outbound::assistant_response_message;
-use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
+use crate::translation::openai_responses::stop::infer_response_stop_kind;
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
-use super::types::chat_id;
+pub(super) struct ChatResponseProjection {
+    pub(super) response: CreateChatCompletionResponse,
+    pub(super) reasoning: Option<String>,
+}
 
-pub(super) fn translate_response_payload(
-    response: &Response,
-    scope: &TranslationScope,
-) -> TranslationResult<(CreateChatCompletionResponse, Option<String>)> {
-    let mut content_parts: Vec<String> = Vec::new();
-    let mut reasoning_parts: Vec<String> = Vec::new();
-    let mut refusal_parts: Vec<String> = Vec::new();
-    let mut tool_calls = Vec::new();
+#[derive(Default)]
+struct ChatResponseOutput {
+    content: String,
+    reasoning: String,
+    refusal: String,
+    tool_calls: Vec<ChatCompletionMessageToolCalls>,
+}
 
-    for output in &response.output {
+impl ChatResponseOutput {
+    fn project(mut self, output: &OutputItem, scope: &TranslationScope) -> ChatResponseOutput {
         match output {
             OutputItem::Message(message) => {
-                collect_message_content(message, &mut content_parts, &mut refusal_parts);
+                for content in &message.content {
+                    match content {
+                        OutputMessageContent::OutputText(text) => {
+                            self.content.push_str(&text.text);
+                        }
+                        OutputMessageContent::Refusal(refusal) => {
+                            self.refusal.push_str(&refusal.refusal);
+                        }
+                    }
+                }
             }
             OutputItem::FunctionCall(call) => {
-                tool_calls.push(ChatCompletionMessageToolCalls::from(call));
+                self.tool_calls
+                    .push(ChatCompletionMessageToolCalls::from(call));
             }
             OutputItem::CustomToolCall(call) => {
-                tool_calls.push(ChatCompletionMessageToolCalls::from(call));
+                self.tool_calls
+                    .push(ChatCompletionMessageToolCalls::from(call));
             }
             OutputItem::Reasoning(reasoning) => {
-                reasoning_parts.extend(reasoning.summary.iter().map(|part| match part {
-                    SummaryPart::SummaryText(text) => text.text.clone(),
-                }));
+                for part in &reasoning.summary {
+                    let SummaryPart::SummaryText(text) = part;
+                    self.reasoning.push_str(&text.text);
+                }
                 if let Some(content) = reasoning.content.as_ref() {
-                    reasoning_parts.extend(content.iter().map(|part| match part {
-                        ReasoningItemContent::ReasoningText(text) => text.text.clone(),
-                    }));
+                    for part in content {
+                        let ReasoningItemContent::ReasoningText(text) = part;
+                        self.reasoning.push_str(&text.text);
+                    }
                 }
                 if reasoning.encrypted_content.is_non_null()
                     && reasoning.summary.is_empty()
                     && reasoning.content.as_ref().is_none_or(Vec::is_empty)
                 {
-                    scope.dropped("Responses encrypted reasoning item",
+                    scope.dropped(
+                        "Responses encrypted reasoning item",
                         "Chat reasoning_content cannot represent encrypted reasoning without visible text",
                     );
                 }
@@ -54,80 +71,75 @@ pub(super) fn translate_response_payload(
                 "Responses output item has no Chat Completions response representation",
             ),
         }
+        self
     }
+}
 
-    let content = content_parts.join("");
-    let reasoning_content = reasoning_parts.concat();
-    let refusal = refusal_parts.join("");
-    if !content.is_empty() && !refusal.is_empty() {
-        return Err(TranslationError::InvalidPayload(
-                "OpenAI Responses output contains both text and refusal content; Chat Completions response cannot represent mixed refusal semantics"
-                    .to_string(),
-            ));
-    }
-    if content.is_empty()
-        && reasoning_content.is_empty()
-        && refusal.is_empty()
-        && tool_calls.is_empty()
-    {
-        return Err(TranslationError::InvalidPayload(
-            "OpenAI Responses output has no Chat-representable text, reasoning, or tool calls"
+pub(super) fn translate_response_payload(
+    response: &Response,
+    scope: &TranslationScope,
+) -> TranslationResult<ChatResponseProjection> {
+    let output = response
+        .output
+        .iter()
+        .fold(ChatResponseOutput::default(), |output, item| {
+            output.project(item, scope)
+        });
+
+    let finish_reason = infer_response_stop_kind(response, scope)
+        .map(Into::into)
+        .ok_or_else(|| {
+        TranslationError::InvalidPayload(
+            "OpenAI Responses response has no terminal state required for Chat Completions finish_reason"
                 .to_string(),
-        ));
-    }
-
+            )
+        })?;
+    let reasoning = (!output.reasoning.is_empty()).then_some(output.reasoning);
     let translated = CreateChatCompletionResponse {
         // Keep the upstream id embedded while presenting an OpenAI-shaped id.
         id: chat_id(&response.id),
         choices: vec![ChatChoice {
             index: 0,
             message: assistant_response_message(
-                (!content.is_empty()).then_some(content),
-                (!refusal.is_empty()).then_some(refusal),
-                (!tool_calls.is_empty()).then_some(tool_calls),
+                (!output.content.is_empty()).then_some(output.content),
+                (!output.refusal.is_empty()).then_some(output.refusal),
+                (!output.tool_calls.is_empty()).then_some(output.tool_calls),
                 None,
             ),
-            finish_reason: chat_finish_reason(response, scope).ok_or_else(|| {
-                TranslationError::InvalidPayload(
-                    "OpenAI Responses response has no terminal state required for Chat Completions finish_reason"
-                        .to_string(),
-                )
-            })?,
+            finish_reason,
             logprobs: None.into(),
         }],
         // Responses responses carry a `created_at` Unix timestamp.
         created: response.created_at as u32,
         model: response.model.clone(),
-        // Responses has no Chat-style service tier field on the response body.
-        service_tier: None.into(),
+        service_tier: response
+            .service_tier
+            .as_non_null()
+            .copied()
+            .map(Into::into)
+            .into(),
         system_fingerprint: None,
         object: CreateChatCompletionResponseObject::ChatCompletion,
         usage: response.usage.as_ref().map(Into::into),
         moderation: None.into(),
     };
-    let reasoning = (!reasoning_content.is_empty()).then_some(reasoning_content);
 
-    Ok((translated, reasoning))
-}
-
-fn chat_finish_reason(response: &Response, scope: &TranslationScope) -> Option<FinishReason> {
-    infer_response_stop_kind(response, scope).map(|kind| match kind {
-        ResponsesStopKind::EndTurn | ResponsesStopKind::Refusal => FinishReason::Stop,
-        ResponsesStopKind::MaxTokens => FinishReason::Length,
-        ResponsesStopKind::ToolUse => FinishReason::ToolCalls,
+    Ok(ChatResponseProjection {
+        response: translated,
+        reasoning,
     })
 }
 
-fn collect_message_content(
-    message: &OutputMessage,
-    content_parts: &mut Vec<String>,
-    refusal_parts: &mut Vec<String>,
-) {
-    for content in &message.content {
-        match content {
-            OutputMessageContent::OutputText(text) => content_parts.push(text.text.clone()),
-            OutputMessageContent::Refusal(refusal) => refusal_parts.push(refusal.refusal.clone()),
-        }
+/// Normalize a Responses id into a Chat-shaped id.
+///
+/// Pair-local naming convention, not a protocol conversion: it just makes the
+/// id start with `chatcmpl_` so downstream consumers recognize it. Lives here
+/// rather than in pair-root `types.rs` because only response translation uses it.
+fn chat_id(response_id: &str) -> String {
+    if response_id.starts_with("chatcmpl_") {
+        response_id.to_string()
+    } else {
+        format!("chatcmpl_{response_id}")
     }
 }
 

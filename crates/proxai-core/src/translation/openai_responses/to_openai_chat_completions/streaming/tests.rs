@@ -114,6 +114,20 @@ async fn translates_responses_incomplete_to_length_finish_reason() {
 }
 
 #[tokio::test]
+async fn translates_responses_content_filter_incomplete_to_stop_finish_reason() {
+    let body = concat!(
+        "event: response.created\n",
+        "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_filtered\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
+        "event: response.incomplete\n",
+        "data: {\"type\":\"response.incomplete\",\"sequence_number\":2,\"response\":{\"id\":\"resp_filtered\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"content_filter\"}}}\n\n"
+    );
+    let text = translate_responses_stream_body(body).await;
+
+    assert!(text.contains("\"finish_reason\":\"stop\""));
+    assert!(!text.contains("\"finish_reason\":\"length\""));
+}
+
+#[tokio::test]
 async fn translates_responses_refusal_to_chat_refusal_delta() {
     let body = concat!(
         "event: response.created\n",
@@ -133,7 +147,7 @@ async fn translates_responses_refusal_to_chat_refusal_delta() {
 }
 
 #[tokio::test]
-async fn rejects_responses_stream_mixing_text_and_refusal() {
+async fn preserves_responses_stream_mixing_text_and_refusal() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_mixed\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"in_progress\"}}\n\n",
@@ -142,14 +156,17 @@ async fn rejects_responses_stream_mixing_text_and_refusal() {
         "event: response.output_text.delta\n",
         "data: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"ordinary text\",\"logprobs\":[]}\n\n",
         "event: response.refusal.delta\n",
-        "data: {\"type\":\"response.refusal.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"delta\":\"cannot comply\"}\n\n"
+        "data: {\"type\":\"response.refusal.delta\",\"sequence_number\":4,\"item_id\":\"msg_1\",\"output_index\":0,\"content_index\":1,\"delta\":\"cannot comply\"}\n\n",
+        "event: response.completed\n",
+        "data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"resp_mixed\",\"object\":\"response\",\"created_at\":0,\"model\":\"glm-5.1\",\"output\":[],\"parallel_tool_calls\":false,\"tool_choice\":\"auto\",\"tools\":[],\"status\":\"completed\"}}\n\n"
     );
     let text = translate_responses_stream_body(body).await;
 
     assert!(text.contains("\"content\":\"ordinary text\""));
-    assert!(text.contains("stream translation error"));
-    assert!(text.contains("cannot represent mixed text and refusal semantics"));
-    assert!(!text.contains("\"refusal\":\"cannot comply\""));
+    assert!(text.contains("\"refusal\":\"cannot comply\""));
+    assert!(text.contains("\"finish_reason\":\"stop\""));
+    assert!(text.contains("data: [DONE]"));
+    assert!(!text.contains("stream translation error"));
 }
 
 #[tokio::test]

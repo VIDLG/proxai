@@ -9,15 +9,36 @@ use crate::protocol::anthropic::messages::{
 };
 use crate::protocol::openai_responses::{
     FunctionToolCall, IncompleteDetails, IncompleteDetailsReason, InputTokenDetails, OutputStatus,
-    OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseUsage,
-    ServiceTier, Status,
+    OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseError,
+    ResponseErrorCode, ResponseUsage, ServiceTier, Status,
 };
-use crate::translation::{TranslationError, TranslationResult};
+use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
 /// Pair-local Responses `incomplete_details.reason` convention.
 ///
 /// The string `"max_output_tokens"` is this pair's chosen wording (matching
 /// OpenAI Responses API guidance), not an Anthropic protocol value.
+pub(super) fn observe_stop_reason_projection(stop_reason: StopReason, scope: &TranslationScope) {
+    if stop_reason == StopReason::ModelContextWindowExceeded {
+        scope.adapted(
+            "Anthropic stop_reason `model_context_window_exceeded`",
+            "Responses has no context-window-specific status; translating the pre-generation context exhaustion to `response.failed`",
+        );
+    }
+}
+
+pub(super) fn response_error_from_stop_reason(
+    stop_reason: Option<StopReason>,
+) -> Option<ResponseError> {
+    match stop_reason {
+        Some(StopReason::ModelContextWindowExceeded) => Some(ResponseError {
+            code: ResponseErrorCode::InvalidPrompt,
+            message: "model context window exceeded before generation started".to_string(),
+        }),
+        _ => None,
+    }
+}
+
 pub(super) fn incomplete_details_from_stop_reason(
     stop_reason: Option<StopReason>,
 ) -> Option<IncompleteDetails> {
@@ -70,6 +91,7 @@ impl From<ResponseServiceTier> for Option<ServiceTier> {
 pub(super) fn responses_status_from_anthropic_stop_reason(stop_reason: StopReason) -> Status {
     match stop_reason {
         StopReason::MaxTokens => Status::Incomplete,
+        StopReason::ModelContextWindowExceeded => Status::Failed,
         StopReason::EndTurn
         | StopReason::StopSequence
         | StopReason::PauseTurn

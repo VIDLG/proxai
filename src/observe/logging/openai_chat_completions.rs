@@ -9,6 +9,7 @@ use crate::formatting::{compact_tail, format_count_map_with};
 use crate::provider::openai::chat_completions::{
     ChatResponseOutputKind, ChatUpstreamStreamSnapshot,
 };
+use crate::request::RequestId;
 use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
@@ -139,25 +140,36 @@ impl ValuableJson for ChatResponseFields {
     }
 }
 
-pub(crate) fn emit_chat_stream_completed(snapshot: &ChatUpstreamStreamSnapshot) {
-    emit_chat_stream_info("end", snapshot);
+pub(crate) fn emit_chat_stream_completed(
+    request_id: RequestId,
+    snapshot: &ChatUpstreamStreamSnapshot,
+) {
+    emit_chat_stream_info("end", request_id, snapshot);
 }
 
-pub(crate) fn emit_chat_stream_closed(snapshot: &ChatUpstreamStreamSnapshot) {
-    emit_chat_stream_info("closed", snapshot);
+pub(crate) fn emit_chat_stream_closed(
+    request_id: RequestId,
+    snapshot: &ChatUpstreamStreamSnapshot,
+) {
+    emit_chat_stream_info("closed", request_id, snapshot);
 }
 
 fn chat_response_fields_from_snapshot(snapshot: &ChatUpstreamStreamSnapshot) -> ChatResponseFields {
     ChatResponseFields::from(snapshot)
 }
 
-fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
+fn emit_chat_stream_info(
+    event: &str,
+    request_id: RequestId,
+    snapshot: &ChatUpstreamStreamSnapshot,
+) {
     let head = &snapshot.head;
     let response = chat_response_fields_from_snapshot(snapshot);
 
     match active_log_format() {
         LogOutputFormat::Human => info!(
             event = event,
+            request_id = request_id.as_u64(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
@@ -185,6 +197,7 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
             extend_json_object(
                 &mut payload,
                 [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     ("status", JsonValue::from(head.status.as_u16())),
                     ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
                     ("down", JsonValue::from(snapshot.metrics.bytes)),
@@ -208,6 +221,7 @@ fn emit_chat_stream_info(event: &str, snapshot: &ChatUpstreamStreamSnapshot) {
 }
 
 pub(crate) fn emit_chat_stream_error(
+    request_id: RequestId,
     snapshot: &ChatUpstreamStreamSnapshot,
     error: &UpstreamStreamError,
 ) {
@@ -217,6 +231,7 @@ pub(crate) fn emit_chat_stream_error(
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = stream_error_token(error),
+            request_id = request_id.as_u64(),
             kind = stream_error_kind(error).as_ref(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
@@ -246,6 +261,7 @@ pub(crate) fn emit_chat_stream_error(
             extend_json_object(
                 &mut payload,
                 [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     ("status", JsonValue::from(head.status.as_u16())),
                     ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
                     ("down", JsonValue::from(snapshot.metrics.bytes)),

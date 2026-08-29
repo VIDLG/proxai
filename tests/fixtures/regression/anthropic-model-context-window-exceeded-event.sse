@@ -1,0 +1,3 @@
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"model_context_window_exceeded","stop_sequence":null},"usage":{"input_tokens":0,"output_tokens":0}}
+

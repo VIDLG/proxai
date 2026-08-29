@@ -26,6 +26,13 @@ data: {"type":"error","error":{"type":"invalid_request_error","code":"context_le
         "Your input exceeds the context window of this model."
     );
     assert_eq!(state.sequence_number, Some(2));
+    assert_eq!(
+        state
+            .terminal_error_event
+            .as_ref()
+            .map(|event| event.event_type.as_str()),
+        Some("error")
+    );
 }
 
 #[test]

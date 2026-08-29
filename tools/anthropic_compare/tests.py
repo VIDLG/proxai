@@ -459,6 +459,122 @@ class NamedFieldReferenceTests(unittest.TestCase):
         self.assertEqual(diffs, [])
 
 
+class EnumLiteralTests(unittest.TestCase):
+    def run_check(
+        self,
+        *,
+        local_variants,
+        enum_extras=None,
+        extension_literals=None,
+        stable_literals=None,
+    ):
+        stable_literals = stable_literals or ["end_turn", "max_tokens"]
+        sdk_shape = {
+            "kind": "type",
+            "rhs": " | ".join(f"'{literal}'" for literal in stable_literals),
+        }
+        sdk_shapes = {"StopReason": sdk_shape}
+        rust_items = {
+            "StopReason": {
+                "kind": "enum_item",
+                "file": "common.rs",
+                "line": 1,
+                "attrs": ['#[serde(rename_all = "snake_case")]'],
+                "variants": {
+                    variant: {"attrs": []} for variant in local_variants
+                },
+            }
+        }
+        bindings = [
+            {
+                "item": "StopReason",
+                "sdk_name": "StopReason",
+                "sdk_shape": sdk_shape,
+            }
+        ]
+        extension_shapes = {
+            "BetaStopReason": {
+                "kind": "type",
+                "rhs": " | ".join(
+                    f"'{literal}'" for literal in extension_literals or []
+                ),
+            }
+        }
+        with (
+            patch.object(checks, "sdk_comment_shapes", return_value=sdk_shapes),
+            patch.object(checks, "rust_serde_items", return_value=rust_items),
+            patch.object(checks, "rust_item_shape_bindings", return_value=bindings),
+            patch.object(
+                checks,
+                "rust_sdk_markers",
+                return_value={"enum_extras": enum_extras or {}},
+            ),
+        ):
+            return checks.enum_literal_diffs(
+                "sdk", extension_shapes=extension_shapes
+            )
+
+    def test_accepts_enum_extra_declared_by_secondary_sdk_shape(self):
+        diffs = self.run_check(
+            local_variants=["EndTurn", "MaxTokens", "ModelContextWindowExceeded"],
+            enum_extras={
+                "StopReason": {
+                    "model_context_window_exceeded": "BetaStopReason"
+                }
+            },
+            extension_literals=["model_context_window_exceeded"],
+        )
+
+        self.assertEqual(diffs, [])
+
+    def test_rejects_undeclared_local_enum_extra(self):
+        diffs = self.run_check(
+            local_variants=["EndTurn", "MaxTokens", "Unexpected"],
+        )
+
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("enum literals differ", diffs[0][2][0])
+
+    def test_rejects_enum_extra_missing_from_declared_source(self):
+        diffs = self.run_check(
+            local_variants=["EndTurn", "MaxTokens", "ModelContextWindowExceeded"],
+            enum_extras={
+                "StopReason": {
+                    "model_context_window_exceeded": "BetaStopReason"
+                }
+            },
+            extension_literals=["compaction"],
+        )
+
+        self.assertTrue(
+            any(
+                "is not defined by SDK source" in detail
+                for _, _, details in diffs
+                for detail in details
+            )
+        )
+
+    def test_rejects_enum_extra_after_stable_sdk_adopts_literal(self):
+        diffs = self.run_check(
+            local_variants=["EndTurn", "MaxTokens", "ModelContextWindowExceeded"],
+            enum_extras={
+                "StopReason": {
+                    "model_context_window_exceeded": "BetaStopReason"
+                }
+            },
+            extension_literals=["model_context_window_exceeded"],
+            stable_literals=[
+                "end_turn",
+                "max_tokens",
+                "model_context_window_exceeded",
+            ],
+        )
+
+        self.assertTrue(
+            any("is stale" in detail for _, _, details in diffs for detail in details)
+        )
+
+
 class ExplicitProvenanceTests(unittest.TestCase):
     def run_check(self, *, docs, markers):
         sdk_shapes = {"Message": {"kind": "interface", "fields": []}}

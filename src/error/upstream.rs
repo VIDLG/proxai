@@ -102,9 +102,9 @@ pub enum UpstreamError {
     /// captured and parsed into proxai's compact diagnostic shape.
     #[error("upstream returned {}: {parsed}", head.status)]
     ErrorStatus {
-        head: UpstreamResponseHead,
+        head: Box<UpstreamResponseHead>,
         body: Bytes,
-        parsed: UpstreamResponseError,
+        parsed: Box<UpstreamResponseError>,
     },
 
     /// A response head was available, but proxai could not read the response
@@ -112,7 +112,7 @@ pub enum UpstreamError {
     /// retain upstream status/header context.
     #[error("upstream response body read failed: {source}")]
     ResponseBodyRead {
-        head: UpstreamResponseHead,
+        head: Box<UpstreamResponseHead>,
         #[source]
         source: reqwest::Error,
     },

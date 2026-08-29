@@ -68,8 +68,8 @@ impl PairStreamingState {
             Self::Identity => Ok(vec![event]),
             Self::AnthropicToChat(state) => state.translate_event(event, scope),
             Self::AnthropicToResponses(state) => state.translate_event(event, scope),
-            Self::ChatToAnthropic(state) => state.translate_event(event, scope),
-            Self::ChatToResponses(state) => state.translate_event(event, scope),
+            Self::ChatToAnthropic(state) => state.translate_event(event),
+            Self::ChatToResponses(state) => state.translate_event(event),
             Self::ResponsesToAnthropic(state) => state.translate_event(event, scope),
             Self::ResponsesToChat(state) => state.translate_event(event, scope),
         }

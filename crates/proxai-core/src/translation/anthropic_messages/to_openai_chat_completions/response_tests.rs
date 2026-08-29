@@ -428,6 +428,25 @@ async fn uses_refusal_text_when_refusal_details_have_no_explanation() {
 }
 
 #[tokio::test]
+async fn translates_model_context_window_exceeded_to_chat_length() {
+    let upstream = json!({
+        "id": "msg_context_limit",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-test",
+        "content": [{"type": "text", "citations": null, "text": "partial"}],
+        "stop_reason": "model_context_window_exceeded",
+        "stop_sequence": null,
+        "stop_details": null,
+        "container": null,
+        "usage": {"cache_creation": null, "cache_creation_input_tokens": null, "cache_read_input_tokens": null, "inference_geo": null, "output_tokens_details": null, "server_tool_use": null, "service_tier": null, "input_tokens": 10, "output_tokens": 2}
+    });
+    let translated = translate_non_streaming_response(upstream).unwrap();
+
+    assert_eq!(translated["choices"][0]["finish_reason"], "length");
+}
+
+#[tokio::test]
 async fn translates_anthropic_refusal_stop_reason_to_chat_stop() {
     let upstream = json!({
         "id": "msg_refusal",

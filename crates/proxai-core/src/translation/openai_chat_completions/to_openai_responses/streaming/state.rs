@@ -16,7 +16,7 @@ use crate::protocol::openai::chat_completions::{
 };
 use crate::protocol::openai_responses::{
     IncompleteDetails, InputTokenDetails, OutputItem, OutputTokenDetails, Response, ResponseObject,
-    ResponseStreamEvent, ResponseUsage, Status, ToolChoiceOptions, ToolChoiceParam,
+    ResponseStreamEvent, ResponseUsage, ServiceTier, Status, ToolChoiceOptions, ToolChoiceParam,
 };
 use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
@@ -43,6 +43,7 @@ pub(super) struct StreamingState {
     pub(super) reasoning_item: Option<StreamTextItem>,
     pub(super) tool_items: BTreeMap<u32, StreamToolItem>,
     pub(super) output_items: Vec<OutputItem>,
+    pub(super) service_tier: Option<ServiceTier>,
     pub(super) usage: Option<CompletionUsage>,
 }
 
@@ -91,6 +92,7 @@ impl StreamingState {
             reasoning_item: None,
             tool_items: BTreeMap::new(),
             output_items: Vec::new(),
+            service_tier: chunk.service_tier.as_non_null().copied().map(Into::into),
             usage: None,
         })
     }
@@ -112,7 +114,7 @@ impl StreamingState {
     pub(super) fn response_terminal_event(
         &mut self,
         finish_reason: FinishReason,
-    ) -> ResponseStreamEvent {
+    ) -> StreamTranslationResult<ResponseStreamEvent> {
         let status = responses_status_from_chat_finish_reason(finish_reason);
         let incomplete_details = incomplete_details_from_finish_reason(Some(finish_reason));
         let sequence_number = self.next_sequence_number();
@@ -133,7 +135,7 @@ impl StreamingState {
     pub(super) fn finish_stream(
         &mut self,
         finish_reason: FinishReason,
-    ) -> Vec<ResponseStreamEvent> {
+    ) -> StreamTranslationResult<Vec<ResponseStreamEvent>> {
         let mut events = Vec::new();
         let mut pending = Vec::new();
         if let Some(item) = self.text_item.take() {
@@ -206,8 +208,8 @@ impl StreamingState {
                 }
             }
         }
-        events.push(self.response_terminal_event(finish_reason));
-        events
+        events.push(self.response_terminal_event(finish_reason)?);
+        Ok(events)
     }
 
     pub(super) fn response_snapshot(
@@ -249,7 +251,7 @@ impl StreamingState {
             prompt_cache_options: None,
             reasoning: None.into(),
             safety_identifier: None,
-            service_tier: None.into(),
+            service_tier: self.service_tier.into(),
             status: Some(status),
             temperature: None.into(),
             text: None,

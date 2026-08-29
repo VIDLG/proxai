@@ -29,9 +29,9 @@ import { PipelineStrip, ProxaiCallout, ReferenceTable } from '@components/Proxai
 
 ## 自动失败诊断
 
-Translation 失败时，ProxAI 会自动在 `diagnostics/` 下创建本地诊断 bundle；该行为独立于所有 `[capture]` 开关。转发前的请求失败使用 `fwd-error`；已经开始的 SSE 响应在转换时失败使用 `stream-error`。两者都会包含协议对和指向 bundle 的 `diag=...`。
+Translation 失败以及已识别的 provider 语义失败都会在 `diagnostics/` 下自动创建本地诊断 bundle；该行为独立于所有 `[capture]` 开关。转发前的请求失败使用 `fwd-error`；已经开始的 SSE 响应在转换时失败使用 `stream-error`。provider stream 若完整结束、但报告了 Anthropic `model_context_window_exceeded` 或 OpenAI Responses terminal `error` 之类的语义失败，则使用 `provider-semantic-failure`。这些警告都会包含指向 bundle 的 `diag=...`。Provider stream 的 terminal/error 行会携带与对应 `fwd` 行相同的紧凑 `req=...` ID，可以直接关联并发请求。
 
-请求 translation bundle 包含 `record.json` 和发生反序列化或转换失败时的完整 normalized JSON payload。流式 translation bundle 包含 `record.json` 和触发失败的原始（或终止前最近一个）`upstream_sse_event.sse` frame。JSON path 和紧凑日志只能定位上下文，不能替代复现所需的 payload/frame 现场。ProxAI 只保留最新 50 个诊断 bundle。
+请求 translation bundle 包含 `record.json` 和发生反序列化或转换失败时的完整 normalized JSON payload。流式 translation bundle 包含 `record.json` 和触发失败的原始（或终止前最近一个）`upstream_sse_event.sse` frame。provider semantic bundle 只包含隐私安全的响应摘要和终止事件 `upstream_terminal_event.sse`，不会复制请求或 prompt。JSON path 和紧凑日志只能定位上下文，不能替代复现 translation 失败所需的 payload/frame 现场。ProxAI 只保留最新 50 个诊断 bundle。
 
 <ProxaiCallout type="caution" title="Diagnostics 可能包含私有数据">
   自动诊断 payload 可能包含 prompt 和 tool arguments。它们只保存在本地，不会写入普通日志；分享或提交前必须脱敏。

@@ -10,7 +10,9 @@ use crate::protocol::openai::chat_completions::{
 };
 
 use crate::translation::TranslationScope;
-use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
+use crate::translation::anthropic_messages::streaming::{
+    AnthropicInboundLifecycle, stop_reason_allows_empty_output,
+};
 use crate::translation::openai_chat_completions::compatibility::inject_stream_reasoning;
 use crate::translation::openai_chat_completions::outbound::{
     assistant_role_delta as message_start_delta, chat_choice_chunk as build_chat_choice_chunk,
@@ -230,7 +232,8 @@ impl AnthropicToChatStreaming {
                 let emitted_representable_content = phase.emitted_any();
                 let terminal_delta = chat_terminal_delta(event.delta, emitted_text);
                 let identity = self.lifecycle.stream_identity()?.clone();
-                let finish_reason = chat_finish_reason_from_anthropic_stop_reason(stop_reason);
+                let finish_reason =
+                    chat_finish_reason_from_anthropic_stop_reason(stop_reason, scope);
 
                 if let Some(continuation) = phase.state_mut().take_continuation() {
                     chunks.push(chat_reasoning_chunk(
@@ -248,7 +251,9 @@ impl AnthropicToChatStreaming {
                         Some(finish_reason),
                     )?);
                 } else {
-                    if !emitted_representable_content {
+                    if !emitted_representable_content
+                        && !stop_reason_allows_empty_output(stop_reason)
+                    {
                         return Err(StreamTranslationError::Semantic(
                             "Anthropic stream completed without Chat-representable content, thinking, refusal, or tool_use blocks"
                                 .to_string(),

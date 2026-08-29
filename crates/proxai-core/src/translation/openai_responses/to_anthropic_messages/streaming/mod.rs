@@ -15,13 +15,12 @@ use crate::protocol::openai_responses::{Response, ResponseStreamEvent};
 
 use crate::translation::openai_responses::streaming::{
     MantleStreamEvent, ResponsesInboundLifecycle, ResponsesInboundStreamEvent,
-    response_failure_error,
+    response_failure_error, response_stream_error,
 };
 
 use crate::translation::TranslationScope;
 use crate::translation::stream::{
-    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-    typed_stream_events,
+    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationResult, typed_stream_events,
 };
 
 use state::StreamingState;
@@ -268,33 +267,28 @@ impl ResponsesToAnthropicStreaming {
                     .ensure_output_item_projection_closed(event.output_index, &event_type)?;
             }
             ResponseStreamEvent::ResponseCompleted(event) => {
+                let stop_reason =
+                    self.completion_stop_reason(&event.response, scope, StopReason::EndTurn);
                 let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
                 let state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.finish_message(StopReason::EndTurn, usage)?);
+                events.extend(state.finish_message(stop_reason, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseIncomplete(event) => {
+                let stop_reason =
+                    self.completion_stop_reason(&event.response, scope, StopReason::MaxTokens);
                 let usage = event.response.usage.as_ref();
                 self.lifecycle.receive_terminal_event()?;
                 let state = self.lifecycle.take_terminal_state()?;
-                events.extend(state.finish_message(StopReason::MaxTokens, usage)?);
+                events.extend(state.finish_message(stop_reason, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseFailed(event) => {
                 return Err(response_failure_error(&event.response));
             }
             ResponseStreamEvent::ResponseError(event) => {
-                return Err(StreamTranslationError::Semantic(format!(
-                    "Responses stream error{}: {}",
-                    event
-                        .code
-                        .as_non_null()
-                        .map(String::as_str)
-                        .map(|code| format!(" ({code})"))
-                        .unwrap_or_default(),
-                    event.message
-                )));
+                return Err(response_stream_error(&event));
             }
             other => scope.dropped(
                 format!("Responses stream event `{}`", other.as_ref()),
@@ -315,6 +309,18 @@ impl ResponsesToAnthropicStreaming {
 }
 
 impl ResponsesToAnthropicStreaming {
+    fn completion_stop_reason(
+        &self,
+        response: &Response,
+        scope: &TranslationScope,
+        fallback: StopReason,
+    ) -> StopReason {
+        self.lifecycle
+            .infer_stop_kind(response, scope)
+            .map(Into::into)
+            .unwrap_or(fallback)
+    }
+
     fn project_response_snapshot(
         &mut self,
         response: &Response,

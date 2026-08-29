@@ -255,16 +255,37 @@ fn format_event_line(
         write!(writer, "{} ", paint(color, &event, event_style(&event)))?;
     }
 
-    match fields.text("event").as_deref() {
+    let event = fields.text("event");
+    match event.as_deref() {
         Some("fwd") => format_forward(writer, fields, color)?,
         Some("fwd-error") => format_forward_error(writer, fields, color)?,
         Some("hdr") => format_headers(writer, fields, color, duration_thresholds)?,
         Some("wait") => format_wait(writer, fields, color, duration_thresholds)?,
         Some("end" | "closed") => format_stream_end(writer, fields, color, duration_thresholds)?,
-        Some("hdr-error" | "stream-error" | "timeout" | "unfinished-tool") => {
-            format_error(writer, fields, color, duration_thresholds)?
-        }
+        Some(
+            "hdr-error"
+            | "stream-error"
+            | "timeout"
+            | "unfinished-tool"
+            | "provider-semantic-failure",
+        ) => format_error(writer, fields, color, duration_thresholds)?,
         _ => format_remaining_fields(writer, fields, color)?,
+    }
+
+    if matches!(
+        event.as_deref(),
+        Some(
+            "end"
+                | "closed"
+                | "hdr-error"
+                | "stream-error"
+                | "timeout"
+                | "unfinished-tool"
+                | "provider-semantic-failure"
+        )
+    ) && let Some(request_id) = fields.text("request_id")
+    {
+        write!(writer, " req={}", short_request_id(&request_id))?;
     }
 
     Ok(())
@@ -572,6 +593,11 @@ fn format_error(
     duration_thresholds: &DurationThresholds,
 ) -> fmt::Result {
     format_stream_end(writer, fields, color, duration_thresholds)?;
+    if fields.text("kind").as_deref() == Some("provider")
+        && let Some(semantic) = fields.text("semantic")
+    {
+        write!(writer, " semantic={semantic}")?;
+    }
     if let Some(error) = fields.text("err") {
         write!(
             writer,

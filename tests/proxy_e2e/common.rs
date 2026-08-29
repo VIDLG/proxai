@@ -228,14 +228,11 @@ pub(super) async fn spawn_minimax_chat_completion_sse_upstream(
         capture.paths.lock().await.push(uri.to_string());
 
         let chunks = stream::iter([
-            Ok::<_, std::io::Error>(Bytes::from_static(
-                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\n",
-            )),
+            Ok::<_, std::io::Error>(Bytes::from_static(include_bytes!(
+                "../fixtures/regression/minimax-chat-service-tier-standard-event.sse"
+            ))),
             Ok(Bytes::from_static(
-                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}]}\n\n",
-            )),
-            Ok(Bytes::from_static(
-                b"data: {\"id\":\"chatcmpl_minimax\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+                b"data: {\"id\":\"chatcmpl_sanitized\",\"object\":\"chat.completion.chunk\",\"created\":1784191900,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
             )),
             Ok(Bytes::from_static(b"data: [DONE]\n\n")),
         ]);
@@ -1064,6 +1061,7 @@ async fn spawn_shim_with_options(upstream_address: SocketAddr, options: ShimOpti
             ))
             .unwrap(),
             api_key: "test-upstream-key".to_string(),
+            proxy: None,
             compatibility: options.provider_compatibility,
             read_idle_timeout: Duration::from_secs(120),
         },

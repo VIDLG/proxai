@@ -5,11 +5,12 @@ mod reasoning;
 mod tools;
 
 use self::messages::translate_messages;
+use self::reasoning::translate_reasoning;
 use self::tools::translate_tool_choice;
 use crate::protocol::anthropic::messages as anthropic;
 use crate::protocol::openai_responses as responses;
 use crate::translation::anthropic_messages::outbound::{
-    COMPATIBILITY_MAX_TOKENS_FALLBACK, json_number_from_f32, output_config,
+    COMPATIBILITY_MAX_TOKENS_FALLBACK, json_number_from_f32,
 };
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
@@ -27,42 +28,7 @@ pub(super) fn translate_request(
         request.input.as_ref(),
         scope,
     )?;
-    let reasoning = request.reasoning.as_non_null();
-    if reasoning
-        .and_then(|reasoning| reasoning.mode.as_ref())
-        .is_some()
-    {
-        scope.dropped(
-            "Responses reasoning.mode",
-            "Anthropic Messages has no equivalent reasoning execution mode",
-        );
-    }
-    if reasoning
-        .and_then(|reasoning| reasoning.context.as_non_null())
-        .is_some()
-    {
-        scope.dropped(
-            "Responses reasoning.context",
-            "Anthropic Messages has no equivalent reasoning history-selection control",
-        );
-    }
-    let reasoning_summary = reasoning.and_then(|reasoning| {
-        if let Some(summary) = reasoning.summary.as_non_null().copied() {
-            if reasoning.generate_summary.is_non_null() {
-                scope.dropped(
-                    "Responses reasoning.generate_summary",
-                    "reasoning.summary takes precedence over the deprecated field",
-                );
-            }
-            return Some(summary);
-        }
-        let summary = reasoning.generate_summary.as_non_null().copied()?;
-        scope.adapted(
-            "Responses reasoning.generate_summary",
-            "used as deprecated alias for reasoning.summary",
-        );
-        Some(summary)
-    });
+    let reasoning = translate_reasoning(request.reasoning.as_non_null(), scope);
     if request.prompt_cache_options.is_some() {
         scope.dropped(
             "Responses prompt_cache_options",
@@ -92,11 +58,7 @@ pub(super) fn translate_request(
                 user_id: Some(user_id.clone()).into(),
             })
         }),
-        output_config: reasoning
-            .and_then(|reasoning| reasoning.effort.as_non_null())
-            .copied()
-            .map(|effort| effort.try_into().map(output_config))
-            .transpose()?,
+        output_config: reasoning.output_config,
         service_tier: None,
         stop_sequences: None,
         stream: request.stream.as_non_null().copied(),
@@ -106,11 +68,7 @@ pub(super) fn translate_request(
             .as_non_null()
             .copied()
             .and_then(json_number_from_f32),
-        thinking: reasoning_summary.map(|summary| {
-            anthropic::ThinkingConfigParam::Adaptive(anthropic::ThinkingConfigAdaptive {
-                display: Some(reasoning::thinking_display(summary, scope)).into(),
-            })
-        }),
+        thinking: reasoning.thinking,
         tool_choice: request
             .tool_choice
             .as_ref()
@@ -145,3 +103,6 @@ pub(super) fn translate_request(
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod request_regression_tests;

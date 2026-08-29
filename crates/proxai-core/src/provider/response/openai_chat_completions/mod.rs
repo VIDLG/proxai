@@ -1,6 +1,9 @@
 mod normalize;
 
-pub(crate) use normalize::normalize_stream_event_payload;
+pub(crate) use normalize::{normalize_response_payload, normalize_stream_event_payload};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod normalize_regression_tests;

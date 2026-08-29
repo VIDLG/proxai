@@ -53,16 +53,20 @@ and Chat-compatible history uses a suffix in `reasoning_content`. ProxAI removes
 that envelope and restores the provider-specific thinking blocks before forwarding
 the next request to Anthropic; it keeps no proxy-side continuation state.
 
-Request and stream translation failures automatically create bounded local diagnostic
-bundles under `diagnostics/`, independent of capture. Stream bundles retain the raw
-triggering SSE frame locally; normal logs expose only safe context and `diag=...`.
+Request/stream translation failures and recognized provider semantic failures automatically
+create bounded local diagnostic bundles under `diagnostics/`, independent of capture. Stream
+bundles retain the triggering SSE frame locally; normal logs expose only safe context and
+`diag=...`.
 
 ## Quick Start
 
 1. Download the Windows release executable, or build from source.
 2. Run ProxAI once to generate the app directory and `config.example.toml`.
 3. Edit `config.toml` (under `%USERPROFILE%\.proxai\` on Windows,
-   `~/.proxai/` on Linux/macOS) to set provider `base_url` and `api_key`.
+   `~/.proxai/` on Linux/macOS) to set provider `base_url` and `api_key`. The generated
+   `[proxies.local]` profile points to `http://127.0.0.1:7897`, and generated providers
+   reference it with `proxy = "local"`; remove those provider references if no outbound
+   proxy is running.
 4. Point your OpenAI-compatible client at `http://127.0.0.1:18080/v1`.
 
 For the full walkthrough, see [Quick Start](https://vidlg.github.io/proxai/using/quick-start).

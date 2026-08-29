@@ -46,7 +46,10 @@ pub(crate) fn normalize_provider_response(
             response::openai_responses::normalize_response_payload(payload),
             ProviderResponseAdaptation::OpenaiResponsesUsageShape,
         ),
-        ProviderProtocol::OpenaiChatCompletions => return payload,
+        ProviderProtocol::OpenaiChatCompletions => (
+            response::openai_chat_completions::normalize_response_payload(payload),
+            ProviderResponseAdaptation::OpenaiChatCompletionsShape,
+        ),
     };
     if normalized != original {
         observer.observe(

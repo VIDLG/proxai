@@ -1,4 +1,5 @@
 mod openai_responses;
+mod provider_semantic;
 mod stream_translation;
 mod translation;
 
@@ -51,6 +52,20 @@ impl DiagnosticsSink {
         point: &StreamingTranslationFailure<'_>,
     ) -> Option<PathBuf> {
         stream_translation::write_streaming_translation_failure(self.request_id, point)
+    }
+
+    pub(super) fn record_openai_responses_error(
+        &self,
+        snapshot: &ResponsesUpstreamStreamSnapshot,
+    ) -> Option<String> {
+        provider_semantic::write_openai_responses_error(self.request_id, snapshot)
+    }
+
+    pub(super) fn record_anthropic_context_window_exceeded(
+        &self,
+        snapshot: &crate::provider::anthropic_messages::AnthropicUpstreamResponseSnapshot,
+    ) -> Option<String> {
+        provider_semantic::write_anthropic_context_window_exceeded(self.request_id, snapshot)
     }
 
     pub(super) fn record_openai_responses_unfinished_tool_stream(

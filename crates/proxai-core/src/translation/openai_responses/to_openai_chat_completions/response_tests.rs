@@ -11,7 +11,7 @@ fn translate_response(response: &Response) -> TranslationResult<CreateChatComple
         RequestProtocol::OpenaiChatCompletions,
         ProviderProtocol::OpenaiResponses,
     );
-    super::translate_response_payload(response, &scope).map(|(response, _)| response)
+    super::translate_response_payload(response, &scope).map(|projection| projection.response)
 }
 
 #[test]
@@ -31,6 +31,7 @@ fn translates_responses_message_response_to_chat_completion() {
         "parallel_tool_calls": false,
         "tool_choice": "auto",
         "tools": [],
+        "service_tier": "default",
         "output": [
             {
                 "type": "message",
@@ -62,6 +63,7 @@ fn translates_responses_message_response_to_chat_completion() {
     assert_eq!(value["choices"][0]["message"]["role"], "assistant");
     assert_eq!(value["choices"][0]["message"]["content"], "hello world");
     assert_eq!(value["choices"][0]["finish_reason"], "stop");
+    assert_eq!(value["service_tier"], "default");
     assert_eq!(value["usage"]["prompt_tokens"], 8);
     assert_eq!(value["usage"]["completion_tokens"], 2);
     assert_eq!(value["usage"]["total_tokens"], 10);
@@ -210,7 +212,7 @@ fn translates_responses_refusal_to_chat_refusal_message() {
 }
 
 #[test]
-fn rejects_mixed_responses_text_and_refusal_for_chat_response() {
+fn preserves_mixed_responses_text_and_refusal_for_chat_response() {
     let upstream = json!({
         "id": "resp_mixed_refusal",
         "model": "glm-5.1",
@@ -238,10 +240,13 @@ fn rejects_mixed_responses_text_and_refusal_for_chat_response() {
         }]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let error = translate_response(&response);
-    let error = error.unwrap_err().to_string();
+    let value = serde_json::to_value(translate_response(&response).unwrap()).unwrap();
 
-    assert!(error.contains("both text and refusal content"));
+    assert_eq!(value["choices"][0]["message"]["content"], "partial");
+    assert_eq!(
+        value["choices"][0]["message"]["refusal"],
+        "I can't help with that."
+    );
 }
 
 #[test]
@@ -283,7 +288,7 @@ fn translates_responses_reasoning_output_to_chat_reasoning_content() {
 }
 
 #[test]
-fn rejects_responses_output_without_chat_content() {
+fn emits_nullable_chat_content_when_responses_output_has_no_visible_projection() {
     let upstream = json!({
         "id": "resp_1",
         "model": "glm-5.1",
@@ -304,7 +309,9 @@ fn rejects_responses_output_without_chat_content() {
         ]
     });
     let response = serde_json::from_value::<Response>(upstream).unwrap();
-    let error = translate_response(&response);
-    let error = error.unwrap_err().to_string();
-    assert!(error.contains("no Chat-representable text, reasoning, or tool calls"));
+    let value = serde_json::to_value(translate_response(&response).unwrap()).unwrap();
+
+    assert!(value["choices"][0]["message"]["content"].is_null());
+    assert!(value["choices"][0]["message"]["refusal"].is_null());
+    assert_eq!(value["choices"][0]["finish_reason"], "stop");
 }

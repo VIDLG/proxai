@@ -39,11 +39,12 @@ This page is the **single-source configuration reference** for the tracked `conf
 <ReferenceTable
   columns={['Section', 'Owns', 'Task docs']}
   rows={[
+    ['`[proxies.local]`', 'Example named outbound proxy URL and optional no-proxy rules.', '[Configuration](/using/configuration#assign-named-proxies-to-providers)'],
     ['`[server]`', 'Local proxy listener, request size, and concurrency limits.', '[Configuration](/using/configuration#minimal-local-config)'],
     ['`[mcp]`', 'Local MCP control/API listener. MCP is a control surface, not a model path.', '[Configuration](/using/configuration#configuration-map)'],
     ['`[routing.default_provider_names]`', 'Fallback provider names per inbound request protocol.', '[Routing and Providers](/using/routing-and-providers)'],
     ['`[[routing.routes]]`', 'Explicit model/protocol routes and optional upstream model rewrite.', '[Route Matching](/reference/route-matching)'],
-    ['`[providers.<name>]`', 'Named upstream provider protocol, base URL, API key, compatibility, and idle timeout.', '[Provider Setup](/using/provider-setup)'],
+    ['`[providers.<name>]`', 'Named upstream provider protocol, base URL, API key, optional proxy reference, compatibility, and idle timeout.', '[Provider Setup](/using/provider-setup)'],
     ['`[tool_calls]`', 'Semantic timeout for incomplete streamed tool-call arguments.', '[Streaming Behavior](/protocol/streaming-behavior)'],
     ['`[logging]`', 'Log level, output format, and color behavior.', '[Observability](/using/observability)'],
     ['`[logging.duration_thresholds]`', 'Human-log duration coloring thresholds.', '[Observability](/using/observability)'],

@@ -5,7 +5,7 @@ use getset::{CopyGetters, Getters};
 use headers::{ContentLength, HeaderMapExt};
 use reqwest::{Client, Url};
 
-use crate::config::ProviderConfig;
+use crate::config::{ProviderConfig, ProxyConfig};
 use crate::error::{Error as ProxyError, InternalError, Result, UpstreamError};
 use crate::http_support::filter_forwardable_request_headers;
 use crate::observe::{ObserveContext, ProviderHttpRequestPrepared};
@@ -55,7 +55,12 @@ pub(crate) struct ProviderTransport {
 }
 
 impl ProviderTransport {
-    pub(crate) fn build(name: String, config: ProviderConfig) -> Result<Self, InternalError> {
+    pub(crate) fn build(
+        name: String,
+        config: ProviderConfig,
+        proxy: Option<&ProxyConfig>,
+    ) -> Result<Self, InternalError> {
+        crate::ensure_rustls_crypto_provider();
         let normalized_name = normalize_provider_name(&name);
         let mut base_url = config.base_url.clone();
         base_url.set_query(None);
@@ -66,6 +71,15 @@ impl ProviderTransport {
         let mut client_builder = reqwest::Client::builder().read_timeout(config.read_idle_timeout);
         if is_loopback_url(&base_url) {
             client_builder = client_builder.no_proxy();
+        } else if let Some(proxy) = proxy {
+            let mut outbound_proxy =
+                reqwest::Proxy::all(proxy.url.as_str()).map_err(InternalError::HttpClientBuild)?;
+            if !proxy.no_proxy.is_empty() {
+                let no_proxy = reqwest::NoProxy::from_string(&proxy.no_proxy.join(","))
+                    .expect("validated no-proxy rules must produce a non-empty list");
+                outbound_proxy = outbound_proxy.no_proxy(Some(no_proxy));
+            }
+            client_builder = client_builder.no_proxy().proxy(outbound_proxy);
         }
         let client = client_builder
             .build()

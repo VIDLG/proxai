@@ -275,7 +275,7 @@ async fn proxy_translates_openai_chat_stream_to_anthropic_messages_stream() {
         "translated SSE body: {body}"
     );
     assert!(
-        body.contains("\"type\":\"text\"") && body.contains("\"text\":\"hello\""),
+        body.contains("\"type\":\"text\"") && body.contains("\"text\":\"sanitized\""),
         "translated SSE body: {body}"
     );
     assert!(

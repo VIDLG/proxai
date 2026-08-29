@@ -21,6 +21,16 @@ fn creates_default_files_inside_app_dir() {
     assert!(created.config_example_path.exists());
     assert!(created.created_config);
     assert!(created.created_config_example);
+    assert!(
+        fs::read_to_string(&created.config_path)
+            .unwrap()
+            .contains("[proxies.local]")
+    );
+    assert!(
+        fs::read_to_string(&created.config_path)
+            .unwrap()
+            .contains("proxy = \"local\"")
+    );
 
     let created_again = ensure_app_paths().unwrap();
     assert!(!created_again.created_config);

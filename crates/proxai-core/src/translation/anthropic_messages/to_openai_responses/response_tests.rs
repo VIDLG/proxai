@@ -176,6 +176,44 @@ fn translates_max_tokens_stop_to_incomplete_details() {
 }
 
 #[test]
+fn translates_model_context_window_exceeded_to_failed_response() {
+    let message: Message = serde_json::from_value(json!({
+        "id": "msg_context_limit",
+        "container": null,
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-test",
+        "content": [{"type": "text", "citations": null, "text": "partial"}],
+        "stop_details": null,
+        "stop_reason": "model_context_window_exceeded",
+        "stop_sequence": null,
+        "usage": {
+            "output_tokens_details": null,
+            "input_tokens": 10,
+            "output_tokens": 2,
+            "cache_creation": null,
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "inference_geo": null,
+            "server_tool_use": null,
+            "service_tier": null
+        }
+    }))
+    .unwrap();
+
+    let translated = translate_message_response(&message).unwrap();
+    let value = serde_json::to_value(translated).unwrap();
+
+    assert_eq!(value["status"], "failed");
+    assert!(value["incomplete_details"].is_null());
+    assert_eq!(value["error"]["code"], "invalid_prompt");
+    assert_eq!(
+        value["error"]["message"],
+        "model context window exceeded before generation started"
+    );
+}
+
+#[test]
 fn translates_anthropic_refusal_stop_to_completed_responses_status() {
     let message: Message = serde_json::from_value(json!({
         "id": "msg_refusal",

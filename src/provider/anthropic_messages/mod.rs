@@ -9,3 +9,6 @@ mod response;
 pub(crate) use self::response::{
     AnthropicResponseOutputKind, AnthropicUpstreamResponseSnapshot, handle_streaming_response,
 };
+
+#[cfg(test)]
+pub(crate) use self::response::AnthropicResponseState;

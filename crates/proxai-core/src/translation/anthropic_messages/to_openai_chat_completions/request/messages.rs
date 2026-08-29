@@ -4,7 +4,7 @@ use crate::protocol::openai::chat_completions::request::wire as chat_request;
 use crate::translation::anthropic_messages::continuation::{Continuation, ContinuationEnvelope};
 use crate::translation::openai_chat_completions::outbound::{
     assistant_message, assistant_text_message, system_message, system_text_message, text_part,
-    tool_message, user_message, user_text_message,
+    tool_message, user_file_part, user_image_url_part, user_message, user_text_message,
 };
 use crate::translation::{TranslationError, TranslationResult};
 
@@ -384,15 +384,13 @@ fn base64_pdf_file_part(
     source: anthropic::Base64PdfSource,
     filename: Option<String>,
 ) -> chat::ChatCompletionRequestUserMessageContentPart {
-    chat::ChatCompletionRequestUserMessageContentPart::File(
-        chat::ChatCompletionRequestMessageContentPartFile {
-            file: chat::FileObject {
-                file_data: Some(source.data),
-                file_id: None,
-                filename,
-            },
-            prompt_cache_breakpoint: None,
+    user_file_part(
+        chat::FileObject {
+            file_data: Some(source.data),
+            file_id: None,
+            filename,
         },
+        None,
     )
 }
 
@@ -400,14 +398,14 @@ impl From<anthropic::ContainerUploadBlockParam>
     for chat::ChatCompletionRequestUserMessageContentPart
 {
     fn from(block: anthropic::ContainerUploadBlockParam) -> Self {
-        Self::File(chat::ChatCompletionRequestMessageContentPartFile {
-            file: chat::FileObject {
+        user_file_part(
+            chat::FileObject {
                 file_data: None,
                 file_id: Some(block.file_id),
                 filename: None,
             },
-            prompt_cache_breakpoint: None,
-        })
+            None,
+        )
     }
 }
 
@@ -454,24 +452,12 @@ impl From<anthropic::ContentBlockSourceContent>
 impl From<anthropic::ImageBlockParam> for chat::ChatCompletionRequestUserMessageContentPart {
     fn from(block: anthropic::ImageBlockParam) -> Self {
         match block.source {
-            anthropic::ImageBlockSource::Url(source) => {
-                Self::ImageUrl(chat::ChatCompletionRequestMessageContentPartImage {
-                    image_url: chat::ImageUrl {
-                        url: source.url,
-                        detail: None,
-                    },
-                    prompt_cache_breakpoint: None,
-                })
-            }
-            anthropic::ImageBlockSource::Base64(source) => {
-                Self::ImageUrl(chat::ChatCompletionRequestMessageContentPartImage {
-                    image_url: chat::ImageUrl {
-                        url: format!("data:{};base64,{}", source.media_type.as_ref(), source.data),
-                        detail: None,
-                    },
-                    prompt_cache_breakpoint: None,
-                })
-            }
+            anthropic::ImageBlockSource::Url(source) => user_image_url_part(source.url, None, None),
+            anthropic::ImageBlockSource::Base64(source) => user_image_url_part(
+                format!("data:{};base64,{}", source.media_type.as_ref(), source.data),
+                None,
+                None,
+            ),
         }
     }
 }

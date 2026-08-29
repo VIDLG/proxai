@@ -23,8 +23,9 @@ http = "1"
 indexmap = "2"
 owo-colors = "4"
 proxai-core = { path = "crates/proxai-core" }
-reqwest = { version = "0.13", features = ["json", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["charset", "http2", "json", "rustls-no-provider", "stream", "system-proxy"] }
 rmcp = { version = "1.6.0", features = ["server", "macros", "schemars", "transport-streamable-http-server", "transport-streamable-http-server-session"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

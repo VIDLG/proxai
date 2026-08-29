@@ -19,7 +19,7 @@ Runtime configuration centers on `config.toml`. Use this page for common configu
   groups={[
     { title: 'Local listeners', icon: 'terminal', description: 'HTTP addresses for the proxy and MCP control surface.', keys: ['[server]', '[mcp]'] },
     { title: 'Routing', icon: 'route', description: 'Default providers and explicit model/protocol routes.', keys: ['[routing.default_provider_names]', '[[routing.routes]]'] },
-    { title: 'Providers', icon: 'protocol', description: 'Upstream endpoints, provider protocols, API keys, and compatibility mode.', keys: ['[providers.<name>]'] },
+    { title: 'Providers', icon: 'protocol', description: 'Upstream endpoints, named outbound proxies, provider protocols, API keys, and compatibility mode.', keys: ['[proxies.<name>]', '[providers.<name>]'] },
     { title: 'Streaming safety', icon: 'timer', description: 'Timeouts for incomplete streamed tool-call arguments and idle upstream reads.', keys: ['[tool_calls]', 'read_idle_timeout_secs'] },
     { title: 'Diagnostics', icon: 'gauge', description: 'Capture switches, log format, and duration coloring thresholds.', keys: ['[capture]', '[logging]', '[logging.duration_thresholds]'] },
     { title: 'Client-facing errors', icon: 'alert', description: 'Readable text errors for Zed or JSON errors for OpenAI-compatible clients.', keys: ['[error_responses]'] },
@@ -81,6 +81,33 @@ api_key = "..."
 <ProxaiCallout type="caution" title="Never commit secrets">
   `api_key` values belong in local `config.toml`, not in tracked examples, logs, docs, captures, or fixtures.
 </ProxaiCallout>
+
+## Assign named proxies to providers
+
+Define any number of proxy profiles under `[proxies.<name>]`, then opt individual providers in with `proxy = "<name>"`. A provider without `proxy` keeps the existing direct/system-proxy behavior. Loopback provider URLs (`localhost`, `127.0.0.0/8`, and `::1`) always connect directly even when assigned a proxy.
+
+```toml
+[proxies.local]
+url = "http://127.0.0.1:7897"
+
+[proxies.corporate]
+url = "http://proxy.example:8080"
+no_proxy = [".internal.example"]
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "..."
+proxy = "local"
+
+[providers.anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "..."
+proxy = "corporate"
+```
+
+When `no_proxy` is omitted, it defaults to `localhost`, `127.0.0.0/8`, and `::1`. Custom values accept reqwest's standard domain (including subdomains), IPv4/IPv6, CIDR, and `*` patterns. Proxy names and provider references are case-insensitive and validated at startup.
 
 ## Add a provider
 

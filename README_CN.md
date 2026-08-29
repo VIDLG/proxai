@@ -49,15 +49,15 @@ Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在
 `reasoning_content` 后。ProxAI 会在向 Anthropic 转发下一次请求前剥离 envelope
 并恢复 provider-specific thinking block；代理自身不保存这类续接状态。
 
-请求和流式 translation 失败都会自动在 `diagnostics/` 下生成有数量上限的本地
-诊断 bundle，独立于 capture。流式 bundle 会仅在本地保留触发失败的原始 SSE frame；
-普通日志只输出安全上下文和 `diag=...`。
+请求/流式 translation 失败以及已识别的 provider 语义失败，都会自动在
+`diagnostics/` 下生成有数量上限的本地诊断 bundle，独立于 capture。流式 bundle
+会仅在本地保留触发失败的 SSE frame；普通日志只输出安全上下文和 `diag=...`。
 
 ## 快速开始
 
 1. 下载 Windows release 可执行文件，或从源码构建。
 2. 先运行一次 ProxAI，让应用目录和 `config.example.toml` 自动生成。
-3. 编辑 `config.toml`（Windows 在 `%USERPROFILE%\.proxai\`，Linux/macOS 在 `~/.proxai/`），把 provider 的 `base_url` 和 `api_key` 配好。
+3. 编辑 `config.toml`（Windows 在 `%USERPROFILE%\.proxai\`，Linux/macOS 在 `~/.proxai/`），把 provider 的 `base_url` 和 `api_key` 配好。生成配置会创建指向 `http://127.0.0.1:7897` 的 `[proxies.local]`，并让 providers 通过 `proxy = "local"` 引用它；如果本机没有运行出站代理，请删除 provider 中的这些引用。
 4. 把 OpenAI 兼容客户端指向 `http://127.0.0.1:18080/v1`。
 
 完整步骤见 [快速开始](https://vidlg.github.io/proxai/zh/using/quick-start)。

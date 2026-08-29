@@ -10,6 +10,9 @@ fn loads_config_file_with_providers_and_routes() {
     fs::write(
         &path,
         r#"
+[proxies.local]
+url = "http://127.0.0.1:7897"
+
 [server]
 host = "0.0.0.0"
 port = 19090
@@ -44,12 +47,14 @@ upstream_model = "claude-sonnet-4-5-20250929"
 protocol = "openai_responses"
 base_url = "http://upstream.example:8080"
 api_key = "replace-with-your-api-key"
+proxy = "local"
 read_idle_timeout_secs = 42
 
 [providers.anthropic_default]
 protocol = "anthropic_messages"
 base_url = "https://api.anthropic.com"
 api_key = "anthropic-secret"
+proxy = "local"
 compatibility = "compatible"
 read_idle_timeout_secs = 55
 
@@ -78,6 +83,14 @@ outbound_response_enabled = false
     .unwrap();
 
     let config = AppConfig::load(path.clone()).unwrap();
+    assert_eq!(
+        config.proxies["local"].url.as_str(),
+        "http://127.0.0.1:7897/"
+    );
+    assert_eq!(
+        config.proxies["local"].no_proxy,
+        ["localhost", "127.0.0.0/8", "::1"]
+    );
     assert_eq!(config.server.host, "0.0.0.0".parse::<IpAddr>().unwrap());
     assert_eq!(config.server.port, 19090);
     assert_eq!(config.server.max_request_body_bytes, 123456);
@@ -108,6 +121,10 @@ outbound_response_enabled = false
         "replace-with-your-api-key"
     );
     assert_eq!(
+        config.providers["openai_default"].proxy.as_deref(),
+        Some("local")
+    );
+    assert_eq!(
         config.providers["openai_default"].read_idle_timeout,
         Duration::from_secs(42)
     );
@@ -130,6 +147,123 @@ outbound_response_enabled = false
     assert!(!config.capture.provider_request_enabled);
     assert!(!config.capture.upstream_response_enabled);
     assert!(!config.capture.outbound_response_enabled);
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn omitted_proxy_registry_and_provider_reference_default_to_disabled() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "test-key"
+read_idle_timeout_secs = 120
+"#,
+    )
+    .unwrap();
+
+    let config = AppConfig::load(path.clone()).unwrap();
+
+    assert!(config.proxies.is_empty());
+    assert!(config.providers["openai"].proxy.is_none());
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn rejects_empty_named_proxy_no_proxy_rule() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[proxies.local]
+url = "http://127.0.0.1:7897"
+no_proxy = [""]
+"#,
+    )
+    .unwrap();
+
+    let error = AppConfig::load(path.clone()).unwrap_err().to_string();
+
+    assert!(error.contains("proxies.local.no_proxy entries must be non-empty strings"));
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn loads_multiple_named_proxies_and_provider_assignments() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[proxies.local]
+url = "http://127.0.0.1:7897"
+
+[proxies.corporate]
+url = "http://proxy.example:8080"
+no_proxy = [".internal.example"]
+
+[routing.default_provider_names]
+openai_responses = "openai"
+openai_chat_completions = "openai"
+anthropic_messages = "anthropic"
+
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "openai-key"
+proxy = "local"
+read_idle_timeout_secs = 120
+
+[providers.anthropic]
+protocol = "anthropic_messages"
+base_url = "https://api.anthropic.com"
+api_key = "anthropic-key"
+proxy = "corporate"
+read_idle_timeout_secs = 120
+"#,
+    )
+    .unwrap();
+
+    let config = AppConfig::load(path.clone()).unwrap();
+
+    assert_eq!(config.proxies.len(), 2);
+    assert_eq!(config.providers["openai"].proxy.as_deref(), Some("local"));
+    assert_eq!(
+        config.providers["anthropic"].proxy.as_deref(),
+        Some("corporate")
+    );
+    assert_eq!(config.proxies["corporate"].no_proxy, [".internal.example"]);
+
+    AppState::new_with_proxies(config.routing, config.providers, config.proxies)
+        .expect("multiple named proxies should build runtime state");
+
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn rejects_provider_reference_to_missing_proxy() {
+    let path = unique_config_path();
+    fs::write(
+        &path,
+        r#"
+[providers.openai]
+protocol = "openai_responses"
+base_url = "https://api.openai.com"
+api_key = "test-key"
+proxy = "missing"
+read_idle_timeout_secs = 120
+"#,
+    )
+    .unwrap();
+
+    let error = AppConfig::load(path.clone()).unwrap_err().to_string();
+
+    assert!(error.contains("providers.openai.proxy references missing proxy `missing`"));
 
     fs::remove_file(path).unwrap();
 }
@@ -255,7 +389,16 @@ fn bundled_example_config_builds_runtime_for_all_default_protocols() {
         Some(ProviderProtocol::AnthropicMessages)
     );
 
-    AppState::new(config.routing, config.providers)
+    assert_eq!(
+        config.proxies["local"].url.as_str(),
+        "http://127.0.0.1:7897/"
+    );
+    assert_eq!(
+        config.proxies["local"].no_proxy,
+        ["localhost", "127.0.0.0/8", "::1"]
+    );
+
+    AppState::new_with_proxies(config.routing, config.providers, config.proxies)
         .expect("bundled example config should build runtime state");
 
     fs::remove_file(path).unwrap();

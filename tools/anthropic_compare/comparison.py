@@ -15,9 +15,9 @@ from .checks import (
     serde_wire_diffs,
     untagged_union_diffs,
 )
-from .common import SDK_FILE, SDK_PKG, norm
+from .common import BETA_SDK_FILE, SDK_FILE, SDK_PKG, norm
 from .rust import px_enum_variants, px_types, rust_sdk_markers
-from .sdk import sdk_tool_union, sdk_types
+from .sdk import sdk_comment_shapes, sdk_tool_union, sdk_types
 
 
 def _norm_field(name):
@@ -164,7 +164,8 @@ def compare_protocol(*, only_marked=False):
     field_suppress_marker_diffs = field_suppress_diffs(
         text, only_marked=only_marked
     )
-    enum_semantic_diffs = enum_literal_diffs(text)
+    beta_shapes = sdk_comment_shapes(BETA_SDK_FILE.read_text(encoding="utf-8"))
+    enum_semantic_diffs = enum_literal_diffs(text, extension_shapes=beta_shapes)
     union_semantic_diffs = untagged_union_diffs(text, only_marked=only_marked)
     proxai_only_diffs = proxai_internal_diffs(text, only_marked=only_marked)
     sdk_markers = rust_sdk_markers()

@@ -6,6 +6,7 @@
 mod request;
 mod response;
 mod streaming;
+mod types;
 
 pub(crate) use streaming::ResponsesToAnthropicStreaming;
 

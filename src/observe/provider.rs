@@ -41,7 +41,9 @@ impl ObserveContext {
     }
 
     pub(crate) fn observe_provider_stream_outcome(&self, point: ProviderStreamOutcomeObserved<'_>) {
-        self.span
-            .in_scope(|| self.sinks.observe_provider_stream_outcome(&point));
+        self.span.in_scope(|| {
+            self.sinks
+                .observe_provider_stream_outcome(self.request_id, &point)
+        });
     }
 }

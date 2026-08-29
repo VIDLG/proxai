@@ -321,6 +321,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":4,\"response\":{\"id\
     assert!(body.contains("\"type\":\"input_json_delta\""));
     assert!(body.contains("id"));
     assert!(body.contains("42"));
+    assert!(body.contains("\"stop_reason\":\"tool_use\""));
     assert!(!body.contains("stream translation error"));
 }
 
@@ -343,6 +344,7 @@ data: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\
     assert!(body.contains("\"type\":\"tool_use\""));
     assert!(body.contains("\"partial_json\":\"\\\"pwd\\\"\""));
     assert!(body.contains("event: content_block_stop"));
+    assert!(body.contains("\"stop_reason\":\"tool_use\""));
     assert!(body.contains("event: message_stop"));
     assert!(!body.contains("stream translation error"));
 }

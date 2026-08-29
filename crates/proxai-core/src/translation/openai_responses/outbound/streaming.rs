@@ -5,6 +5,7 @@
 //! still build events that depend on source-specific accumulated state.
 
 use crate::protocol::openai_responses as responses;
+use crate::translation::stream::{StreamTranslationError, StreamTranslationResult};
 
 pub(crate) fn response_created(
     sequence_number: u64,
@@ -20,18 +21,31 @@ pub(crate) fn response_terminal(
     sequence_number: u64,
     response: responses::Response,
     status: responses::Status,
-) -> responses::ResponseStreamEvent {
+) -> StreamTranslationResult<responses::ResponseStreamEvent> {
     match status {
-        responses::Status::Incomplete => {
-            responses::ResponseStreamEvent::ResponseIncomplete(responses::ResponseIncompleteEvent {
+        responses::Status::Completed => Ok(responses::ResponseStreamEvent::ResponseCompleted(
+            responses::ResponseCompletedEvent {
                 sequence_number,
                 response,
-            })
-        }
-        _ => responses::ResponseStreamEvent::ResponseCompleted(responses::ResponseCompletedEvent {
-            sequence_number,
-            response,
-        }),
+            },
+        )),
+        responses::Status::Incomplete => Ok(responses::ResponseStreamEvent::ResponseIncomplete(
+            responses::ResponseIncompleteEvent {
+                sequence_number,
+                response,
+            },
+        )),
+        responses::Status::Failed => Ok(responses::ResponseStreamEvent::ResponseFailed(
+            responses::ResponseFailedEvent {
+                sequence_number,
+                response,
+            },
+        )),
+        responses::Status::Cancelled
+        | responses::Status::Queued
+        | responses::Status::InProgress => Err(StreamTranslationError::Semantic(format!(
+            "cannot emit Responses terminal event with non-terminal status `{status}`"
+        ))),
     }
 }
 

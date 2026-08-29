@@ -9,11 +9,22 @@ use delegate::delegate;
 use serde_json::Value;
 
 use crate::json::deserialize_value;
-use crate::protocol::anthropic::messages::MessageStreamEvent;
+use crate::protocol::anthropic::messages::{MessageStreamEvent, StopReason};
 use crate::translation::stream::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
     StreamTranslationError, StreamTranslationResult, StreamingPhase,
 };
+
+/// Whether Anthropic may legitimately terminate before emitting any content
+/// block that a target protocol can represent.
+///
+/// `model_context_window_exceeded` is observed as a pre-generation terminal:
+/// the stream contains `message_start`, then a terminal `message_delta` with
+/// zero output tokens, and no content blocks. Other stop reasons remain subject
+/// to the strict non-empty-output invariant.
+pub(crate) fn stop_reason_allows_empty_output(stop_reason: StopReason) -> bool {
+    stop_reason == StopReason::ModelContextWindowExceeded
+}
 
 #[derive(Debug)]
 pub(crate) struct AnthropicInboundLifecycle<S> {

@@ -1,5 +1,6 @@
 use crate::protocol::ErrorObject;
 use crate::protocol::openai_responses::ResponseProjection;
+use crate::sse::SseEvent;
 
 use crate::http_support::UpstreamResponseHead;
 use crate::upstream::UpstreamStreamMetrics;
@@ -40,6 +41,7 @@ pub(crate) struct ResponsesUpstreamState {
     /// diagnostics.
     observed: ObservedState,
     pub(crate) sequence_number: Option<u64>,
+    pub(crate) terminal_error_event: Option<SseEvent>,
 }
 
 impl ResponsesUpstreamState {

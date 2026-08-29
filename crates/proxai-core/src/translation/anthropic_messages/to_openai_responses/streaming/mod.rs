@@ -9,7 +9,9 @@ use crate::protocol::anthropic::messages::{ContentBlock, ContentBlockDelta, Mess
 use crate::protocol::openai_responses::Status;
 
 use crate::translation::TranslationScope;
-use crate::translation::anthropic_messages::streaming::AnthropicInboundLifecycle;
+use crate::translation::anthropic_messages::streaming::{
+    AnthropicInboundLifecycle, stop_reason_allows_empty_output,
+};
 use crate::translation::openai_responses::outbound::{
     in_progress_function_call_item, in_progress_message_item, in_progress_reasoning_item,
     in_progress_redacted_reasoning_item, output_item_added, output_item_done, output_text_delta,
@@ -20,6 +22,8 @@ use crate::translation::stream::{
     typed_stream_events,
 };
 
+use super::types::observe_stop_reason_projection;
+
 mod output;
 mod state;
 
@@ -28,6 +32,10 @@ use state::StreamingState;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "streaming_regression_tests.rs"]
+mod regression_tests;
 
 #[derive(Debug, Default)]
 pub(crate) struct AnthropicToResponsesStreaming {
@@ -262,8 +270,9 @@ impl AnthropicToResponsesStreaming {
                         "Anthropic stream emitted message_delta without stop_reason".to_string(),
                     )
                 })?;
+                observe_stop_reason_projection(stop_reason, scope);
                 let mut phase = self.lifecycle.take_streaming_phase()?;
-                if !phase.emitted_any() {
+                if !phase.emitted_any() && !stop_reason_allows_empty_output(stop_reason) {
                     return Err(StreamTranslationError::Semantic(
                         "Anthropic stream completed without Responses-representable content, thinking, or tool_use blocks"
                             .to_string(),
@@ -297,7 +306,7 @@ impl AnthropicToResponsesStreaming {
                 let identity = self.lifecycle.stream_identity()?;
                 let response = state.response_snapshot(identity, status);
                 self.lifecycle.stop();
-                chunks.push(response_terminal(sequence_number, response, status));
+                chunks.push(response_terminal(sequence_number, response, status)?);
             }
             MessageStreamEvent::Ping(_) => {}
         }

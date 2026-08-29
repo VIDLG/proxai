@@ -37,12 +37,6 @@ def _ts_string_literals(type_text):
     return set(re.findall(r"'([^']+)'", type_text))
 
 
-def sdk_literal_aliases(sdk_shapes):
-    return {
-        name: _ts_string_literals(shape.get("rhs", ""))
-        for name, shape in sdk_shapes.items()
-        if shape.get("kind") == "type" and _ts_string_literals(shape.get("rhs", ""))
-    }
 
 
 def rust_enum_literals(enum_item):
@@ -519,25 +513,76 @@ def field_suppress_diffs(sdk_text, only_marked=False):
     return diffs
 
 
-def enum_literal_diffs(sdk_text):
-    """Compare Rust enum serde literals against SDK string literal unions."""
+def enum_literal_diffs(sdk_text, extension_shapes=None):
+    """Compare Rust enum literals with their SDK union plus sourced extensions."""
     sdk_shapes = sdk_comment_shapes(sdk_text)
     rust_items = rust_serde_items()
-    sdk_literals = sdk_literal_aliases(sdk_shapes)
+    enum_extras = rust_sdk_markers().get("enum_extras", {})
+    extension_shapes = extension_shapes or {}
+    compared_items = set()
     diffs = []
-    for sdk_name, expected in sdk_literals.items():
-        rust_item = rust_items.get(sdk_name)
+
+    for binding in rust_item_shape_bindings(sdk_shapes, only_marked=False):
+        item_name = binding["item"]
+        sdk_name = binding["sdk_name"]
+        rust_item = rust_items.get(item_name)
         if not rust_item or rust_item.get("kind") != "enum_item":
             continue
+        expected = _ts_string_literals(binding["sdk_shape"].get("rhs", ""))
+        if not expected:
+            continue
+
+        compared_items.add(item_name)
+        for literal, source in enum_extras.get(item_name, {}).items():
+            if literal in expected:
+                diffs.append(
+                    (
+                        item_name,
+                        f"{rust_item['file']}:{rust_item['line']}",
+                        [
+                            f"enum extension `{literal}` is stale because SDK `{sdk_name}` now defines it"
+                        ],
+                    )
+                )
+                continue
+            source_shape = extension_shapes.get(source)
+            source_literals = (
+                _ts_string_literals(source_shape.get("rhs", "")) if source_shape else set()
+            )
+            if literal not in source_literals:
+                diffs.append(
+                    (
+                        item_name,
+                        f"{rust_item['file']}:{rust_item['line']}",
+                        [
+                            f"enum extension `{literal}` is not defined by SDK source `{source}`"
+                        ],
+                    )
+                )
+                continue
+            expected.add(literal)
+
         actual = rust_enum_literals(rust_item)
         if expected != actual:
             diffs.append(
                 (
-                    sdk_name,
+                    item_name,
                     f"{rust_item['file']}:{rust_item['line']}",
                     [
-                        f"enum literals differ: SDK `{', '.join(sorted(expected))}` vs Rust `{', '.join(sorted(actual))}`"
+                        f"enum literals differ from SDK `{sdk_name}` plus declared extensions: "
+                        f"SDK `{', '.join(sorted(expected))}` vs Rust `{', '.join(sorted(actual))}`"
                     ],
+                )
+            )
+
+    for item_name in sorted(set(enum_extras) - compared_items):
+        rust_item = rust_items.get(item_name)
+        if rust_item:
+            diffs.append(
+                (
+                    item_name,
+                    f"{rust_item['file']}:{rust_item['line']}",
+                    ["enum extensions require a bound SDK string-literal union"],
                 )
             )
     return diffs

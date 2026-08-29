@@ -129,8 +129,22 @@ impl ResponsesUpstreamState {
         for event in events {
             if let Some(error) = nested_error_event(event) {
                 self.record_event(&ResponseStreamEvent::ResponseError(error));
-            } else if let Ok(event) = serde_json::from_str::<ResponseStreamEvent>(&event.data) {
-                self.record_event(&event);
+                self.terminal_error_event = Some(event.clone());
+            } else if let Ok(parsed) = serde_json::from_str::<ResponseStreamEvent>(&event.data) {
+                let is_failed_terminal = matches!(
+                    &parsed,
+                    ResponseStreamEvent::ResponseFailed(_) | ResponseStreamEvent::ResponseError(_)
+                );
+                let is_terminal_snapshot = matches!(
+                    &parsed,
+                    ResponseStreamEvent::ResponseCompleted(_)
+                        | ResponseStreamEvent::ResponseIncomplete(_)
+                );
+                self.record_event(&parsed);
+                if is_failed_terminal || (is_terminal_snapshot && self.effective_error().is_some())
+                {
+                    self.terminal_error_event = Some(event.clone());
+                }
             }
         }
     }

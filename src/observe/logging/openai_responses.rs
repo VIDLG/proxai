@@ -6,9 +6,11 @@ use valuable::Valuable;
 
 use crate::config::LogOutputFormat;
 use crate::formatting::{compact_tail, truncate_chars};
+use crate::observe::point::ProviderSemanticFailure;
 
 use crate::protocol::openai_responses::OutputItemKind;
 use crate::provider::openai::responses::{ResponsesUpstreamState, ResponsesUpstreamStreamSnapshot};
+use crate::request::RequestId;
 use crate::upstream::UpstreamStreamError;
 
 use super::counts::{
@@ -189,19 +191,113 @@ impl ValuableJson for ResponseFields {
     }
 }
 
-pub(crate) fn emit_stream_completed(snapshot: &ResponsesUpstreamStreamSnapshot) {
-    emit_stream_info("end", snapshot);
+pub(crate) fn emit_stream_completed(
+    request_id: RequestId,
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+) {
+    emit_stream_info("end", request_id, snapshot);
 }
 
-pub(crate) fn emit_stream_closed(snapshot: &ResponsesUpstreamStreamSnapshot) {
-    emit_stream_info("closed", snapshot);
+pub(crate) fn emit_stream_semantic_failure(
+    request_id: RequestId,
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+    failure: ProviderSemanticFailure,
+    diagnostic_path: Option<&str>,
+) {
+    let head = &snapshot.head;
+    let response = response_fields_from_snapshot(snapshot);
+    let semantic = match failure {
+        ProviderSemanticFailure::ContextWindowExceeded => "context_window_exceeded",
+        ProviderSemanticFailure::ProviderReportedError => "provider_reported_error",
+    };
+
+    match active_log_format() {
+        LogOutputFormat::Human => warn!(
+            event = "provider-semantic-failure",
+            request_id = request_id.as_u64(),
+            kind = "provider",
+            semantic,
+            status = head.status.as_u16(),
+            ttfb_ms = head.ttfb.as_millis() as u64,
+            down = snapshot.metrics.bytes,
+            chunks = snapshot.metrics.chunks,
+            avg_chunk_bytes = snapshot.metrics.avg_chunk_bytes(),
+            max_chunk_gap_ms = snapshot.metrics.max_chunk_gap_ms(),
+            duration_ms = snapshot.metrics.duration_ms(),
+            ct = head.content_type_text(),
+            sse = head.is_sse(),
+            response_id = response.id,
+            model = response.model,
+            reasoning_effort = response.reasoning_effort,
+            response_status = response.status,
+            service_tier = response.service_tier,
+            incomplete_reason = response.incomplete_reason,
+            error_code = response.error_code,
+            error_message = response.error_message,
+            error_param = response.error_param,
+            seq = response.sequence_number,
+            tok = response.tok,
+            input = response.input,
+            cache = response.cache,
+            output = response.output,
+            reasoning = response.reasoning,
+            output_items_human = response.output_items_human,
+            calls_human = response.calls_human,
+            diagnostic_path = diagnostic_path.unwrap_or(""),
+        ),
+        LogOutputFormat::Json => {
+            let mut payload = response.to_json_value();
+            rename_json_field(&mut payload, "id", "response_id");
+            rename_json_field(&mut payload, "status", "response_status");
+            rename_json_field(&mut payload, "sequence_number", "seq");
+            extend_json_object(
+                &mut payload,
+                [
+                    ("request_id", JsonValue::from(request_id.as_u64())),
+                    ("kind", JsonValue::String("provider".to_string())),
+                    ("semantic", JsonValue::String(semantic.to_string())),
+                    ("status", JsonValue::from(head.status.as_u16())),
+                    ("ttfb_ms", JsonValue::from(head.ttfb.as_millis() as u64)),
+                    ("down", JsonValue::from(snapshot.metrics.bytes)),
+                    ("chunks", JsonValue::from(snapshot.metrics.chunks)),
+                    (
+                        "avg_chunk_bytes",
+                        JsonValue::from(snapshot.metrics.avg_chunk_bytes()),
+                    ),
+                    (
+                        "max_chunk_gap_ms",
+                        u128_json(snapshot.metrics.max_chunk_gap_ms()),
+                    ),
+                    ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
+                    ("ct", JsonValue::String(head.content_type_text())),
+                    ("sse", JsonValue::Bool(head.is_sse())),
+                    (
+                        "diagnostic_path",
+                        JsonValue::String(diagnostic_path.unwrap_or("").to_string()),
+                    ),
+                ],
+            );
+            emit_json_log("WARN", "provider-semantic-failure", payload);
+        }
+    }
+}
+
+pub(crate) fn emit_stream_closed(
+    request_id: RequestId,
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+) {
+    emit_stream_info("closed", request_id, snapshot);
 }
 
 fn response_fields_from_snapshot(snapshot: &ResponsesUpstreamStreamSnapshot) -> ResponseFields {
     ResponseFields::from_state(&snapshot.state, snapshot.state.sequence_number)
 }
 
-fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
+fn emit_stream_info(
+    event: &str,
+    request_id: RequestId,
+    snapshot: &ResponsesUpstreamStreamSnapshot,
+) {
     let head = &snapshot.head;
     let response = response_fields_from_snapshot(snapshot);
     let limits = snapshot.metadata.limits;
@@ -211,6 +307,7 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
     match active_log_format() {
         LogOutputFormat::Human => info!(
             event = event,
+            request_id = request_id.as_u64(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
             down = snapshot.metrics.bytes,
@@ -278,6 +375,7 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
                     ("duration_ms", u128_json(snapshot.metrics.duration_ms())),
                     ("ct", JsonValue::String(head.content_type_text())),
                     ("sse", JsonValue::Bool(head.is_sse())),
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     (
                         "rate_limit_limit_requests",
                         optional_u64(rate_limit.limit_requests),
@@ -346,13 +444,15 @@ fn emit_stream_info(event: &str, snapshot: &ResponsesUpstreamStreamSnapshot) {
 }
 
 pub(crate) fn emit_stream_error(
+    request_id: RequestId,
     snapshot: &ResponsesUpstreamStreamSnapshot,
     error: &UpstreamStreamError,
 ) {
-    emit_stream_error_with_diagnostic(snapshot, error, None);
+    emit_stream_error_with_diagnostic(request_id, snapshot, error, None);
 }
 
 pub(crate) fn emit_stream_error_with_diagnostic(
+    request_id: RequestId,
     snapshot: &ResponsesUpstreamStreamSnapshot,
     error: &UpstreamStreamError,
     diagnostic_path: Option<&str>,
@@ -385,6 +485,7 @@ pub(crate) fn emit_stream_error_with_diagnostic(
     match active_log_format() {
         LogOutputFormat::Human => warn!(
             event = stream_error_token(error),
+            request_id = request_id.as_u64(),
             kind = stream_error_kind(error).as_ref(),
             status = head.status.as_u16(),
             ttfb_ms = head.ttfb.as_millis() as u64,
@@ -465,6 +566,7 @@ pub(crate) fn emit_stream_error_with_diagnostic(
                         "diagnostic_path",
                         JsonValue::String(diagnostic_path.unwrap_or("").to_string()),
                     ),
+                    ("request_id", JsonValue::from(request_id.as_u64())),
                     (
                         "rate_limit_limit_requests",
                         optional_u64(rate_limit.limit_requests),

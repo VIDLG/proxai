@@ -31,6 +31,10 @@ pub enum InternalError {
     #[error("routed provider `{provider}` has no configured transport")]
     MissingProviderTransport { provider: String },
 
+    /// A directly assembled provider registry references an absent proxy profile.
+    #[error("provider `{provider}` references missing proxy `{proxy}`")]
+    MissingProxyConfig { provider: String, proxy: String },
+
     /// Protocol translation failed for a configured route.
     #[error(transparent)]
     Translation(#[from] TranslationError),

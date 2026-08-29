@@ -6,6 +6,7 @@ import tree_sitter_rust as ts_rust
 import tree_sitter_typescript as ts_ts
 
 SDK_FILE = Path('contrib/anthropic-sdk-typescript/src/resources/messages/messages.ts')
+BETA_SDK_FILE = Path('contrib/anthropic-sdk-typescript/src/resources/beta/messages/messages.ts')
 PROTO_DIR = Path('crates/proxai-core/src/protocol/anthropic/messages/wire')
 SDK_PKG = Path('contrib/anthropic-sdk-typescript/package.json')
 

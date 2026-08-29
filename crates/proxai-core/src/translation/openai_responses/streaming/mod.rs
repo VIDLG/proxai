@@ -24,8 +24,10 @@ use strum::Display;
 
 use crate::json::deserialize_value;
 use crate::protocol::openai::responses::{
-    OutputContent, OutputItem, Response, ResponseStreamEvent,
+    OutputContent, OutputItem, Response, ResponseErrorEvent, ResponseStreamEvent,
 };
+use crate::translation::TranslationScope;
+use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
 use crate::translation::stream::{
     InboundStreamLifecycle, InboundStreamLifecyclePhase, StreamEnd, StreamIdentity,
     StreamTranslationError, StreamTranslationResult,
@@ -45,6 +47,7 @@ pub(crate) struct ResponsesInboundLifecycle<S> {
     inner: InboundStreamLifecycle<S, S>,
     output_items: BTreeMap<u32, ObservedOutputItem>,
     mantle_reasoning: MantleReasoningChannel,
+    saw_refusal: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
@@ -104,6 +107,16 @@ pub(crate) fn response_failure_error(response: &Response) -> StreamTranslationEr
         .map(|error| format!("{}: {}", error.code, error.message))
         .unwrap_or_else(|| "upstream response failed without error details".to_string());
     StreamTranslationError::Semantic(format!("Responses stream failed: {detail}"))
+}
+
+pub(crate) fn response_stream_error(event: &ResponseErrorEvent) -> StreamTranslationError {
+    let code = event
+        .code
+        .as_non_null()
+        .map(String::as_str)
+        .map(|code| format!(" ({code})"))
+        .unwrap_or_default();
+    StreamTranslationError::Semantic(format!("Responses stream error{code}: {}", event.message))
 }
 
 /// Parsed Responses ingress event.
@@ -342,13 +355,15 @@ impl<S> ResponsesInboundLifecycle<S> {
             ResponseStreamEvent::ResponseOutputItemAdded(event) => {
                 self.register_output_item(event.output_index, &event.item, event_type)
             }
-            ResponseStreamEvent::ResponseContentPartAdded(event) => self
-                .observe_required_output_item(
+            ResponseStreamEvent::ResponseContentPartAdded(event) => {
+                self.saw_refusal |= matches!(&event.part, OutputContent::Refusal(_));
+                self.observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::from(&event.part),
                     event_type,
-                ),
+                )
+            }
             ResponseStreamEvent::ResponseOutputTextDelta(event) => self
                 .observe_required_output_item(
                     event.output_index,
@@ -363,18 +378,24 @@ impl<S> ResponsesInboundLifecycle<S> {
                     ResponsesOutputKind::Message,
                     event_type,
                 ),
-            ResponseStreamEvent::ResponseRefusalDelta(event) => self.observe_required_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Message,
-                event_type,
-            ),
-            ResponseStreamEvent::ResponseRefusalDone(event) => self.observe_required_output_item(
-                event.output_index,
-                &event.item_id,
-                ResponsesOutputKind::Message,
-                event_type,
-            ),
+            ResponseStreamEvent::ResponseRefusalDelta(event) => {
+                self.saw_refusal = true;
+                self.observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Message,
+                    event_type,
+                )
+            }
+            ResponseStreamEvent::ResponseRefusalDone(event) => {
+                self.saw_refusal = true;
+                self.observe_required_output_item(
+                    event.output_index,
+                    &event.item_id,
+                    ResponsesOutputKind::Message,
+                    event_type,
+                )
+            }
             ResponseStreamEvent::ResponseReasoningTextDelta(event) => self
                 .observe_required_output_item(
                     event.output_index,
@@ -389,13 +410,15 @@ impl<S> ResponsesInboundLifecycle<S> {
                     ResponsesOutputKind::Reasoning,
                     event_type,
                 ),
-            ResponseStreamEvent::ResponseContentPartDone(event) => self
-                .observe_required_output_item(
+            ResponseStreamEvent::ResponseContentPartDone(event) => {
+                self.saw_refusal |= matches!(&event.part, OutputContent::Refusal(_));
+                self.observe_required_output_item(
                     event.output_index,
                     &event.item_id,
                     ResponsesOutputKind::from(&event.part),
                     event_type,
-                ),
+                )
+            }
             ResponseStreamEvent::ResponseReasoningSummaryPartAdded(event) => self
                 .observe_required_output_item(
                     event.output_index,
@@ -683,6 +706,29 @@ impl<S> ResponsesInboundLifecycle<S> {
         })?;
         self.inner.receive_terminal(phase.into_state());
         Ok(())
+    }
+
+    /// Infer the terminal source stop semantic from both incrementally observed
+    /// output items and the terminal response snapshot. Some compatible
+    /// providers omit `response.output` from terminal events, so streaming
+    /// observations take precedence over snapshot-only inference.
+    pub(crate) fn infer_stop_kind(
+        &self,
+        response: &Response,
+        scope: &TranslationScope,
+    ) -> Option<ResponsesStopKind> {
+        if self.saw_refusal {
+            return Some(ResponsesStopKind::Refusal);
+        }
+        if self.output_items.values().any(|item| {
+            matches!(
+                item.kind,
+                ResponsesOutputKind::FunctionCall | ResponsesOutputKind::CustomToolCall
+            )
+        }) {
+            return Some(ResponsesStopKind::ToolUse);
+        }
+        infer_response_stop_kind(response, scope)
     }
 
     pub(crate) fn stream_identity(&self) -> StreamTranslationResult<&StreamIdentity> {

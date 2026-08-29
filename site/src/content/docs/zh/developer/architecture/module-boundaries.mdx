@@ -24,7 +24,7 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
     { name: 'crates/proxai-core/src/observe.rs', icon: 'gauge', description: '共享 observer contract、封闭的 core observation variants 和 no-op 默认实现；不包含具体 sink。' },
     { name: 'crates/proxai-core/src/protocol/', icon: 'protocol', description: 'Wire structs、enums 和协议专属 event payload。不做 provider routing 决策。' },
     { name: 'crates/proxai-core/src/routing/', icon: 'route', description: '编译模型规则，按 request protocol/model 选择 provider 标签，改写 upstream model，并执行严格协议 guard。' },
-    { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: '协议 pair 之间的纯 request/response/stream 转换。' },
+    { name: 'crates/proxai-core/src/translation/', icon: 'flow', description: '协议 pair 之间与 carrier 无关的 request/response/stream 转换；合法适配通过类型化 observation 报告。' },
     { name: 'crates/proxai-core/src/provider/', icon: 'file', description: '与 carrier 无关的 provider request payload preparation、compatibility policy、结构化响应/错误归一化和类型化 adaptation observations。' },
     { name: 'src/provider/*/request', icon: 'file', description: '应用层 provider projection/summary 提取、JSON 序列化和 request carrier 组装。' },
     { name: 'src/provider/*/transport', icon: 'terminal', description: '上游 URL 构造、provider-owned auth headers、HTTP send。' },
@@ -62,6 +62,8 @@ import { ModuleGrid, ProxaiCallout, ReferenceTable } from '@components/ProxaiDoc
 ## Observation 与日志边界
 
 `proxai-core` 定义共享 `Observer` contract、封闭的 `Observation` variants 和 no-op 默认实现。Core ingress、provider normalization 与 translation 通过该 contract 发出类型化 variants。它们不选择 `tracing`、诊断文件、capture 存储、metrics backend 或其他具体 sink；具体实现由下游应用组合层提供。
+
+`TranslationScope` 是显式的 request-scoped、phase-scoped 依赖，禁止做成全局、thread-local 或 task-local 状态。只有 pair 入口和可能发出 `adapted` / `dropped` 的语义投影路径才传递 `&TranslationScope`；纯 wire 转换、不需要报告信息损失的 `From` / `TryFrom`，以及 outbound constructor 都必须保持 scope-free。致命失败通过 `Result` 返回，不得同时为同一失败发出 observation。这里优先采用显式 scope，而不是额外返回 projection/notice 集合：streaming observation 本来就应随事件即时发出，而共享 `Observer` 已允许下游在需要时把 observation 收集成数据。
 
 对于 request-scoped 代码，稳定的生命周期和领域事件应通过 `ObserveContext` 发出。`ObserveSinks` 再决定一个 point 应进入日志、diagnostics、capture，还是同时进入多个 sink。只有 logging sink 负责把 observation 转成 `tracing` event，并选择日志级别和输出格式。
 

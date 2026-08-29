@@ -102,7 +102,7 @@ fn translates_openai_responses_inbound_to_chat_provider_request() {
     assert_eq!(provider_body["messages"][0]["role"], "developer");
     assert_eq!(provider_body["messages"][0]["content"], "Be concise.");
     assert_eq!(provider_body["messages"][1]["role"], "user");
-    assert_eq!(provider_body["messages"][1]["content"][0]["text"], "hello");
+    assert_eq!(provider_body["messages"][1]["content"], "hello");
 }
 
 #[test]

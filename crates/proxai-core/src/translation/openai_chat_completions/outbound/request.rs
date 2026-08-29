@@ -3,6 +3,7 @@
 //! Used by `* -> openai_chat_completions` request translators to build
 //! protocol-native request messages without repeating optional-field boilerplate.
 
+use crate::protocol::openai::PromptCacheBreakpointParam;
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire::ChatCompletionRequestMessageContentPartText;
 
@@ -28,19 +29,55 @@ pub(crate) fn system_text_message(text: impl Into<String>) -> chat::ChatCompleti
     ))
 }
 
+pub(crate) fn developer_message(
+    content: chat::ChatCompletionRequestDeveloperMessageContent,
+) -> chat::ChatCompletionRequestMessage {
+    chat::ChatCompletionRequestMessage::Developer(chat::ChatCompletionRequestDeveloperMessage {
+        content,
+        name: None,
+    })
+}
+
 pub(crate) fn developer_text_message(
     text: impl Into<String>,
 ) -> chat::ChatCompletionRequestMessage {
-    chat::ChatCompletionRequestMessage::Developer(chat::ChatCompletionRequestDeveloperMessage {
-        content: chat::ChatCompletionRequestDeveloperMessageContent::Text(text.into()),
-        name: None,
-    })
+    developer_message(chat::ChatCompletionRequestDeveloperMessageContent::Text(
+        text.into(),
+    ))
 }
 
 pub(crate) fn user_text_message(text: impl Into<String>) -> chat::ChatCompletionRequestMessage {
     user_message(chat::ChatCompletionRequestUserMessageContent::Text(
         text.into(),
     ))
+}
+
+pub(crate) fn user_image_url_part(
+    url: impl Into<String>,
+    detail: Option<chat::ImageDetail>,
+    prompt_cache_breakpoint: Option<PromptCacheBreakpointParam>,
+) -> chat::ChatCompletionRequestUserMessageContentPart {
+    chat::ChatCompletionRequestUserMessageContentPart::ImageUrl(
+        chat::ChatCompletionRequestMessageContentPartImage {
+            image_url: chat::ImageUrl {
+                url: url.into(),
+                detail,
+            },
+            prompt_cache_breakpoint,
+        },
+    )
+}
+
+pub(crate) fn user_file_part(
+    file: chat::FileObject,
+    prompt_cache_breakpoint: Option<PromptCacheBreakpointParam>,
+) -> chat::ChatCompletionRequestUserMessageContentPart {
+    chat::ChatCompletionRequestUserMessageContentPart::File(
+        chat::ChatCompletionRequestMessageContentPartFile {
+            file,
+            prompt_cache_breakpoint,
+        },
+    )
 }
 
 pub(crate) fn user_message(

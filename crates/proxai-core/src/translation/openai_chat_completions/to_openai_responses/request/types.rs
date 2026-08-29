@@ -2,18 +2,6 @@ use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai_responses as responses;
 use crate::translation::{TranslationError, TranslationResult, TranslationScope};
 
-impl From<chat::ServiceTier> for responses::ServiceTier {
-    fn from(value: chat::ServiceTier) -> Self {
-        match value {
-            chat::ServiceTier::Auto => responses::ServiceTier::Auto,
-            chat::ServiceTier::Default => responses::ServiceTier::Default,
-            chat::ServiceTier::Flex => responses::ServiceTier::Flex,
-            chat::ServiceTier::Scale => responses::ServiceTier::Scale,
-            chat::ServiceTier::Priority => responses::ServiceTier::Priority,
-        }
-    }
-}
-
 impl From<chat::PromptCacheRetention> for responses::PromptCacheRetention {
     fn from(value: chat::PromptCacheRetention) -> Self {
         match value {

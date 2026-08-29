@@ -5,14 +5,14 @@
 
 use crate::protocol::anthropic::messages::{
     ContentBlock, Message as AnthropicMessage, MessageDeltaUsage, MessageRole, MessageType,
-    OutputTokensDetails, StopReason, Usage,
+    OutputTokensDetails, Usage,
 };
 use crate::protocol::openai_responses as responses;
 use crate::translation::TranslationScope;
 use crate::translation::anthropic_messages::outbound::{
     redacted_thinking_block, text_block, thinking_block, tool_use_block,
 };
-use crate::translation::openai_responses::stop::{ResponsesStopKind, infer_response_stop_kind};
+use crate::translation::openai_responses::stop::infer_response_stop_kind;
 use crate::translation::text::parse_json_or_string;
 
 pub(super) fn translate_response_payload(
@@ -25,12 +25,7 @@ pub(super) fn translate_response_payload(
         .flat_map(|item| translate_response_output_item(item, scope))
         .collect::<Vec<_>>();
 
-    let stop_reason = infer_response_stop_kind(response, scope).map(|kind| match kind {
-        ResponsesStopKind::EndTurn => StopReason::EndTurn,
-        ResponsesStopKind::MaxTokens => StopReason::MaxTokens,
-        ResponsesStopKind::ToolUse => StopReason::ToolUse,
-        ResponsesStopKind::Refusal => StopReason::Refusal,
-    });
+    let stop_reason = infer_response_stop_kind(response, scope).map(Into::into);
 
     AnthropicMessage {
         id: response.id.clone(),

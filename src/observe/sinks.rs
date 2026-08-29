@@ -7,11 +7,12 @@ use crate::error::UpstreamError;
 use crate::http_support::{ContentType, OutboundResponseHead, UpstreamResponseHead};
 use crate::observe::point::{
     InboundRequestPrepared, InboundRequestReceived, OutboundResponseHeadPrepared,
-    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderStreamOutcome,
-    ProviderStreamOutcomeObserved, ProviderStreamSnapshot, RequestInfoParseFailure,
-    RequestTranslationFailure, StreamingTranslationFailure, UpstreamErrorResponseReceived,
-    UpstreamNonStreamingResponseReceived, UpstreamResponseHeadReceived,
-    UpstreamStreamChunkReceived, UpstreamStreamProgress, UpstreamStreamingResponseStarted,
+    ProviderHttpRequestPrepared, ProviderProtocolRequestPrepared, ProviderSemanticFailure,
+    ProviderStreamOutcome, ProviderStreamOutcomeObserved, ProviderStreamSnapshot,
+    RequestInfoParseFailure, RequestTranslationFailure, StreamingTranslationFailure,
+    UpstreamErrorResponseReceived, UpstreamNonStreamingResponseReceived,
+    UpstreamResponseHeadReceived, UpstreamStreamChunkReceived, UpstreamStreamProgress,
+    UpstreamStreamingResponseStarted,
 };
 
 use crate::request::RequestId;
@@ -124,10 +125,27 @@ impl ObserveSinks {
 
     pub(super) fn observe_provider_stream_outcome(
         &self,
+        request_id: RequestId,
         point: &ProviderStreamOutcomeObserved<'_>,
     ) {
-        let diagnostic_path = match (&point.snapshot, &point.outcome) {
+        let diagnostic_path = match (point.semantic_failure(), &point.snapshot, &point.outcome) {
             (
+                Some(ProviderSemanticFailure::ContextWindowExceeded),
+                ProviderStreamSnapshot::AnthropicMessages(snapshot),
+                ProviderStreamOutcome::Completed,
+            ) => self
+                .diagnostics
+                .record_anthropic_context_window_exceeded(snapshot),
+            (
+                Some(
+                    ProviderSemanticFailure::ContextWindowExceeded
+                    | ProviderSemanticFailure::ProviderReportedError,
+                ),
+                ProviderStreamSnapshot::OpenaiResponses(snapshot),
+                ProviderStreamOutcome::Completed,
+            ) => self.diagnostics.record_openai_responses_error(snapshot),
+            (
+                None,
                 ProviderStreamSnapshot::OpenaiResponses(snapshot),
                 ProviderStreamOutcome::UnfinishedTool(_),
             ) => self
@@ -136,7 +154,7 @@ impl ObserveSinks {
             _ => None,
         };
         self.logging
-            .emit_provider_stream_outcome(point, diagnostic_path.as_deref());
+            .emit_provider_stream_outcome(request_id, point, diagnostic_path.as_deref());
     }
 
     pub(super) fn observe_upstream_response_head_received(

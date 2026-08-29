@@ -23,13 +23,11 @@ use crate::translation::openai_chat_completions::outbound::{
 };
 use crate::translation::openai_responses::streaming::{
     MantleStreamEvent, ResponsesInboundLifecycle, ResponsesInboundStreamEvent,
-    ResponsesOutputSegmentKey, response_failure_error,
+    ResponsesOutputSegmentKey, response_failure_error, response_stream_error,
 };
-use crate::translation::stream::{
-    StreamEnd, StreamEvent, StreamIdentity, StreamTranslationError, StreamTranslationResult,
-};
+use crate::translation::stream::{StreamEnd, StreamEvent, StreamIdentity, StreamTranslationResult};
 
-use state::{StreamingState, VisibleContentKind};
+use state::StreamingState;
 
 fn reasoning_stream_event(
     identity: &StreamIdentity,
@@ -421,34 +419,26 @@ impl ResponsesToChatStreaming {
             }
             ResponseStreamEvent::ResponseOutputItemDone(_) => {}
             ResponseStreamEvent::ResponseCompleted(event) => {
-                self.require_representable_content()?;
+                let finish_reason =
+                    self.completion_finish_reason(&event.response, scope, FinishReason::Stop);
                 let usage = event.response.usage;
-                let finish_reason = self.completion_finish_reason()?;
                 self.lifecycle.receive_terminal_event()?;
                 chunks.extend(self.terminal_chunks(finish_reason, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseIncomplete(event) => {
-                self.require_representable_content()?;
+                let finish_reason =
+                    self.completion_finish_reason(&event.response, scope, FinishReason::Length);
                 let usage = event.response.usage;
                 self.lifecycle.receive_terminal_event()?;
-                chunks.extend(self.terminal_chunks(FinishReason::Length, usage)?);
+                chunks.extend(self.terminal_chunks(finish_reason, usage)?);
                 self.lifecycle.stop();
             }
             ResponseStreamEvent::ResponseFailed(event) => {
                 return Err(response_failure_error(&event.response));
             }
             ResponseStreamEvent::ResponseError(event) => {
-                return Err(StreamTranslationError::Semantic(format!(
-                    "Responses stream error{}: {}",
-                    event
-                        .code
-                        .as_non_null()
-                        .map(String::as_str)
-                        .map(|code| format!(" ({code})"))
-                        .unwrap_or_default(),
-                    event.message
-                )));
+                return Err(response_stream_error(&event));
             }
             other => scope.dropped(
                 format!("Responses stream event `{}`", other.as_ref()),
@@ -491,9 +481,6 @@ impl ResponsesToChatStreaming {
         if text.is_empty() {
             return Ok(None);
         }
-        self.lifecycle
-            .streaming_state_mut()?
-            .observe_visible_content(VisibleContentKind::Text)?;
         let identity = self.lifecycle.stream_identity()?.clone();
         StreamEvent::message(chat_choice_chunk(&identity, text_delta(text), None)).map(Some)
     }
@@ -505,9 +492,6 @@ impl ResponsesToChatStreaming {
         if refusal.is_empty() {
             return Ok(None);
         }
-        self.lifecycle
-            .streaming_state_mut()?
-            .observe_visible_content(VisibleContentKind::Refusal)?;
         let identity = self.lifecycle.stream_identity()?.clone();
         StreamEvent::message(chat_choice_chunk(&identity, refusal_delta(refusal), None)).map(Some)
     }
@@ -519,32 +503,20 @@ impl ResponsesToChatStreaming {
         if reasoning.is_empty() {
             return Ok(None);
         }
-        self.lifecycle.streaming_state_mut()?.mark_reasoning();
         let identity = self.lifecycle.stream_identity()?.clone();
         reasoning_stream_event(&identity, reasoning).map(Some)
     }
 
-    fn completion_finish_reason(&mut self) -> StreamTranslationResult<FinishReason> {
-        Ok(if self.lifecycle.streaming_state_mut()?.has_tool_calls() {
-            FinishReason::ToolCalls
-        } else {
-            FinishReason::Stop
-        })
-    }
-
-    fn require_representable_content(&mut self) -> StreamTranslationResult<()> {
-        if self
-            .lifecycle
-            .streaming_state_mut()?
-            .has_representable_output()
-        {
-            Ok(())
-        } else {
-            Err(StreamTranslationError::Semantic(
-                "Responses stream completed without Chat-representable text, refusal, reasoning, or function tool calls"
-                    .to_string(),
-            ))
-        }
+    fn completion_finish_reason(
+        &self,
+        response: &Response,
+        scope: &TranslationScope,
+        fallback: FinishReason,
+    ) -> FinishReason {
+        self.lifecycle
+            .infer_stop_kind(response, scope)
+            .map(Into::into)
+            .unwrap_or(fallback)
     }
 
     /// Build the terminal chunk sequence for a finished Responses turn:

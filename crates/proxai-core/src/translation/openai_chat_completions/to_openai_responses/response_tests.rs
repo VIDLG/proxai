@@ -21,6 +21,7 @@ fn translates_chat_completion_response_to_responses_shape() {
         "object": "chat.completion",
         "created": 1234,
         "model": "MiniMax-M3",
+        "service_tier": "default",
         "choices": [{
             "index": 0,
             "message": {
@@ -52,6 +53,7 @@ fn translates_chat_completion_response_to_responses_shape() {
     assert_eq!(value["object"], "response");
     assert_eq!(value["model"], "MiniMax-M3");
     assert_eq!(value["status"], "completed");
+    assert_eq!(value["service_tier"], "default");
     assert_eq!(value["output"][0]["type"], "message");
     assert_eq!(value["output"][0]["content"][0]["type"], "output_text");
     assert_eq!(value["output"][0]["content"][0]["text"], "hello");

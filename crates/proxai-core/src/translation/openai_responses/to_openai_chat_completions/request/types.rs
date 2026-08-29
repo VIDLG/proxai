@@ -1,16 +1,38 @@
+//! Request-only input field conversions for `openai_responses -> openai_chat_completions`.
+//!
+//! Only `From` / `TryFrom` impls consumed by the pair's `request` child belong
+//! here. Conversions shared across `request` / `response` / `streaming` children
+//! (usage, tool-call structs, service tier) live in pair-root `types.rs`.
+
 use crate::protocol::openai::chat_completions as chat;
 use crate::protocol::openai::chat_completions::request::wire as chat_request;
 use crate::protocol::openai::responses;
+use crate::protocol::openai::{PromptCacheBreakpointConfig, PromptCacheBreakpointParam};
 use crate::translation::{TranslationError, TranslationResult};
 
-impl From<responses::ServiceTier> for chat::ServiceTier {
-    fn from(value: responses::ServiceTier) -> Self {
+impl From<&PromptCacheBreakpointConfig> for PromptCacheBreakpointParam {
+    fn from(value: &PromptCacheBreakpointConfig) -> Self {
+        Self { mode: value.mode }
+    }
+}
+
+impl From<&responses::InputTextContent>
+    for chat_request::ChatCompletionRequestMessageContentPartText
+{
+    fn from(value: &responses::InputTextContent) -> Self {
+        Self {
+            text: value.text.clone(),
+            prompt_cache_breakpoint: value.prompt_cache_breakpoint.as_ref().map(Into::into),
+        }
+    }
+}
+
+impl From<responses::ImageDetail> for chat::ImageDetail {
+    fn from(value: responses::ImageDetail) -> Self {
         match value {
-            responses::ServiceTier::Auto => Self::Auto,
-            responses::ServiceTier::Default => Self::Default,
-            responses::ServiceTier::Flex => Self::Flex,
-            responses::ServiceTier::Scale => Self::Scale,
-            responses::ServiceTier::Priority => Self::Priority,
+            responses::ImageDetail::Auto | responses::ImageDetail::Original => Self::Auto,
+            responses::ImageDetail::Low => Self::Low,
+            responses::ImageDetail::High => Self::High,
         }
     }
 }
@@ -85,6 +107,38 @@ impl From<&responses::ResponseStreamOptions> for chat::ChatCompletionStreamOptio
         Self {
             include_usage: None,
             include_obfuscation: value.include_obfuscation,
+        }
+    }
+}
+
+impl From<responses::CustomToolParamFormat> for chat_request::CustomToolPropertiesFormat {
+    fn from(value: responses::CustomToolParamFormat) -> Self {
+        match value {
+            responses::CustomToolParamFormat::Text => Self::Text,
+            responses::CustomToolParamFormat::Grammar(grammar) => {
+                Self::Grammar(chat_request::CustomGrammarFormatParam {
+                    definition: grammar.definition,
+                    syntax: grammar.syntax.into(),
+                })
+            }
+        }
+    }
+}
+
+impl From<responses::GrammarSyntax> for chat_request::GrammarSyntax {
+    fn from(value: responses::GrammarSyntax) -> Self {
+        match value {
+            responses::GrammarSyntax::Lark => Self::Lark,
+            responses::GrammarSyntax::Regex => Self::Regex,
+        }
+    }
+}
+
+impl From<responses::ToolChoiceAllowedMode> for chat_request::ToolChoiceAllowedMode {
+    fn from(value: responses::ToolChoiceAllowedMode) -> Self {
+        match value {
+            responses::ToolChoiceAllowedMode::Auto => Self::Auto,
+            responses::ToolChoiceAllowedMode::Required => Self::Required,
         }
     }
 }

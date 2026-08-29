@@ -386,12 +386,13 @@ async fn run(cli: RunArgs) -> anyhow::Result<()> {
             .clone(),
     };
 
-    let state = AppState::new(
+    let state = AppState::new_with_proxies(
         RoutingConfig {
             default_provider_names,
             routes: config.routing.routes.clone(),
         },
         providers,
+        config.proxies.clone(),
     )
     .context("build routing and provider transports")?
     .with_server_limits(

@@ -20,12 +20,13 @@ async fn live_home_config_starts_proxy_and_serves_responses_request() {
         .expect("load home-directory config.toml");
     let model = std::env::var("PROXAI_LIVE_TEST_MODEL").unwrap_or_else(|_| "gpt-5.4".to_string());
 
-    let state = AppState::new(config.routing, config.providers)
-        .expect("build app state from home-directory config.toml")
-        .with_error_response_format(config.error_responses.format)
-        .with_capture_dir(Some(app_paths.captures_dir))
-        .with_capture_config(config.capture)
-        .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
+    let state =
+        AppState::new_with_proxies(config.routing, config.providers, config.proxies.clone())
+            .expect("build app state from home-directory config.toml")
+            .with_error_response_format(config.error_responses.format)
+            .with_capture_dir(Some(app_paths.captures_dir))
+            .with_capture_config(config.capture)
+            .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
 
     let listener = TcpListener::bind((config.server.host, 0))
         .await
@@ -117,12 +118,13 @@ async fn live_openai_responses_to_anthropic_messages_translation_with_glm() {
     let config = proxai::config::AppConfig::load(app_paths.config_path.clone())
         .expect("load ~/.proxai/config.toml");
 
-    let state = AppState::new(config.routing, config.providers)
-        .expect("build app state from ~/.proxai/config.toml")
-        .with_error_response_format(config.error_responses.format)
-        .with_capture_dir(Some(app_paths.captures_dir))
-        .with_capture_config(config.capture)
-        .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
+    let state =
+        AppState::new_with_proxies(config.routing, config.providers, config.proxies.clone())
+            .expect("build app state from ~/.proxai/config.toml")
+            .with_error_response_format(config.error_responses.format)
+            .with_capture_dir(Some(app_paths.captures_dir))
+            .with_capture_config(config.capture)
+            .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
 
     let listener = TcpListener::bind((config.server.host, 0))
         .await
@@ -575,12 +577,13 @@ async fn live_openai_responses_to_anthropic_messages_stream_translation(
     let config = proxai::config::AppConfig::load(app_paths.config_path.clone())
         .expect("load ~/.proxai/config.toml");
 
-    let state = AppState::new(config.routing, config.providers)
-        .expect("build app state from ~/.proxai/config.toml")
-        .with_error_response_format(config.error_responses.format)
-        .with_capture_dir(Some(app_paths.captures_dir))
-        .with_capture_config(config.capture)
-        .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
+    let state =
+        AppState::new_with_proxies(config.routing, config.providers, config.proxies.clone())
+            .expect("build app state from ~/.proxai/config.toml")
+            .with_error_response_format(config.error_responses.format)
+            .with_capture_dir(Some(app_paths.captures_dir))
+            .with_capture_config(config.capture)
+            .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
 
     let listener = TcpListener::bind((config.server.host, 0))
         .await
@@ -738,12 +741,13 @@ async fn live_openai_chat_completions_roundtrip_with_model(
         return;
     }
 
-    let state = AppState::new(config.routing, config.providers)
-        .expect("build app state from ~/.proxai/config.toml")
-        .with_error_response_format(config.error_responses.format)
-        .with_capture_dir(Some(app_paths.captures_dir))
-        .with_capture_config(config.capture)
-        .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
+    let state =
+        AppState::new_with_proxies(config.routing, config.providers, config.proxies.clone())
+            .expect("build app state from ~/.proxai/config.toml")
+            .with_error_response_format(config.error_responses.format)
+            .with_capture_dir(Some(app_paths.captures_dir))
+            .with_capture_config(config.capture)
+            .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
 
     let listener = TcpListener::bind((config.server.host, 0))
         .await
@@ -852,12 +856,13 @@ async fn live_anthropic_messages_protocol_roundtrip() {
     let model = std::env::var("PROXAI_ANTHROPIC_TEST_MODEL")
         .unwrap_or_else(|_| "deepseek-v4-flash".to_string());
 
-    let state = AppState::new(config.routing, config.providers)
-        .expect("build app state from ~/.proxai/config.toml")
-        .with_error_response_format(config.error_responses.format)
-        .with_capture_dir(Some(app_paths.captures_dir))
-        .with_capture_config(config.capture)
-        .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
+    let state =
+        AppState::new_with_proxies(config.routing, config.providers, config.proxies.clone())
+            .expect("build app state from ~/.proxai/config.toml")
+            .with_error_response_format(config.error_responses.format)
+            .with_capture_dir(Some(app_paths.captures_dir))
+            .with_capture_config(config.capture)
+            .with_sse_tool_call_timeout(Some(config.tool_calls.timeout));
 
     let listener = TcpListener::bind((config.server.host, 0))
         .await

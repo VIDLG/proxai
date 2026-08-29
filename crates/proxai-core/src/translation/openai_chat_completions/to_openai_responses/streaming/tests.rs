@@ -167,7 +167,7 @@ async fn rejects_done_before_first_chunk() {
 #[tokio::test]
 async fn translates_chat_stream_to_responses_sse() {
     let body = concat!(
-        "data: {\"id\":\"chatcmpl_123\",\"object\":\"chat.completion.chunk\",\"created\":1234,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"id\":\"chatcmpl_123\",\"object\":\"chat.completion.chunk\",\"created\":1234,\"model\":\"MiniMax-M3\",\"service_tier\":\"default\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\n",
         "data: {\"id\":\"chatcmpl_123\",\"object\":\"chat.completion.chunk\",\"created\":1234,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\"},\"finish_reason\":null}]}\n\n",
         "data: {\"id\":\"chatcmpl_123\",\"object\":\"chat.completion.chunk\",\"created\":1234,\"model\":\"MiniMax-M3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}\n\n",
         "data: [DONE]\n\n"
@@ -175,6 +175,7 @@ async fn translates_chat_stream_to_responses_sse() {
     let text = translate_chat_stream_body(body).await;
 
     assert!(text.contains("event: response.created"));
+    assert!(text.contains("\"service_tier\":\"default\""));
     assert!(text.contains("event: response.output_item.added"));
     assert!(text.contains("event: response.output_text.delta"));
     assert!(text.contains("hel"));
