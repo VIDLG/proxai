@@ -127,7 +127,7 @@ Reference pages:
 
 Common commands:
 
-- `pixi install`
+- `pixi install` — install the platform-specific development tools, including Rust/Cargo
 - `just run` — run ProxAI locally
 - `just check` — full local validation, including the OpenAI protocol drift check
 - `just test-e2e` — end-to-end tests

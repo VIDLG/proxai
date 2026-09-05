@@ -118,7 +118,7 @@ proxai --config <path> \
 
 常用命令：
 
-- `pixi install`
+- `pixi install` —— 安装当前平台的开发工具，包括 Rust/Cargo
 - `just run` —— 本地运行 ProxAI
 - `just check` —— 完整本地校验，包含 OpenAI 协议漂移检查
 - `just test-e2e` —— 端到端测试

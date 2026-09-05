@@ -1,10 +1,11 @@
 [workspace]
 name = "proxai"
 channels = ["conda-forge"]
-platforms = ["win-64"]
+platforms = ["win-64", "osx-arm64", "osx-64"]
 
 [dependencies]
 python = ">=3.12,<3.15"
+rust = ">=1.85,<2"
 just = "*"
 git-cliff = "*"
 lefthook = "*"
