@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> Remove this line to confirm you've reviewed this PR before submitting.
+
 # ProxAI
 
 📚 **Docs site**: [vidlg.github.io/proxai](https://vidlg.github.io/proxai) (Astro / Starlight, source in `site/`)

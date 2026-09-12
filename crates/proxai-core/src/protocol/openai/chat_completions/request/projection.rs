@@ -67,6 +67,7 @@ impl From<CreateChatCompletionRequest> for RequestProjection {
         let max_tokens = request.max_tokens.into_non_null();
         let prompt_cache_key = request
             .prompt_cache_key
+            .into_non_null()
             .filter(|value| !value.trim().is_empty());
         Self {
             model: Some(request.model),
@@ -97,7 +98,7 @@ impl From<CreateChatCompletionRequest> for RequestProjection {
             tools: request.tools,
             tool_choice: request.tool_choice,
             parallel_tool_calls: request.parallel_tool_calls,
-            safety_identifier: request.safety_identifier,
+            safety_identifier: request.safety_identifier.into_non_null(),
             prompt_cache_key,
             user: request.user,
             metadata: request.metadata.into_non_null(),

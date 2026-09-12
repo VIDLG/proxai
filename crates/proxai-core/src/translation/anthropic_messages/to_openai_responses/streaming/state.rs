@@ -124,11 +124,11 @@ impl StreamingState {
             parallel_tool_calls: false,
             previous_response_id: None.into(),
             prompt: None.into(),
-            prompt_cache_key: None,
+            prompt_cache_key: None.into(),
             prompt_cache_retention: None.into(),
             prompt_cache_options: None,
             reasoning: None.into(),
-            safety_identifier: None,
+            safety_identifier: None.into(),
             service_tier: self
                 .usage
                 .service_tier

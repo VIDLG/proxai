@@ -219,7 +219,11 @@ pub(super) fn project_request_messages(
                             projected.push(ProjectedMessage {
                                 message: tool_message(
                                     tool_content_from_function_output(&output.output, scope),
-                                    output.call_id.clone(),
+                                    output.call_id.as_non_null().cloned().ok_or_else(|| {
+                                        TranslationError::InvalidPayload(
+                                            "function call output is missing call_id".to_string(),
+                                        )
+                                    })?,
                                 ),
                                 reasoning: None,
                             });

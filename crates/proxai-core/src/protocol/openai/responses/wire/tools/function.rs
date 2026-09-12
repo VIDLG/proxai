@@ -136,7 +136,8 @@ pub struct FunctionCallOutputItemParam {
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub id: OptionalNullable<String>,
 
-    pub call_id: String,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub call_id: OptionalNullable<String>,
     pub output: FunctionCallOutput,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub caller: OptionalNullable<ToolCallCallerParam>,
@@ -187,7 +188,12 @@ pub struct FunctionToolCallResource {
 pub struct FunctionToolCallOutputResource {
     pub id: String,
 
-    pub call_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present"
+    )]
+    pub call_id: Option<String>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub caller: OptionalNullable<ToolCallCallerParam>,
     pub output: FunctionCallOutput,

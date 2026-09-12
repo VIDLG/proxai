@@ -110,8 +110,8 @@ pub struct ResponseUsage {
 
 // ── Conversation ─────────────────────────────────────────────
 
-/// OpenAPI schema: `#/components/schemas/Conversation-2`
-/// Rust name differs because `Conversation-2` is not a valid Rust identifier.
+/// OpenAPI schema: `#/components/schemas/ResponseConversation`
+/// Rust name differs because the protocol type is represented as a local shared value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Conversation {
     pub id: String,
@@ -180,18 +180,10 @@ pub struct Response {
         deserialize_with = "deserialize_present"
     )]
     pub user: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_present"
-    )]
-    pub safety_identifier: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_present"
-    )]
-    pub prompt_cache_key: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub safety_identifier: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub prompt_cache_key: OptionalNullable<String>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub service_tier: OptionalNullable<ServiceTier>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]

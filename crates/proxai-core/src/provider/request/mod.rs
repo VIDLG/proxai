@@ -25,13 +25,17 @@ pub fn prepare_provider_request(
     }
 
     let (payload, sanitized) = openai_responses::sanitize_provider_payload(payload);
-    if sanitized.status_removed > 0 || sanitized.reasoning_content_removed > 0 {
+    if sanitized.status_removed > 0
+        || sanitized.reasoning_content_removed > 0
+        || sanitized.reasoning_none_effort_removed > 0
+    {
         observer.observe(
             &ProviderObservation::RequestAdapted {
                 protocol,
                 adaptation: ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
                     status_removed: sanitized.status_removed,
                     reasoning_content_removed: sanitized.reasoning_content_removed,
+                    reasoning_none_effort_removed: sanitized.reasoning_none_effort_removed,
                 },
             }
             .into(),

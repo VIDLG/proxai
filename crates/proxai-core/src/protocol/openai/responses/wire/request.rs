@@ -42,18 +42,10 @@ pub struct CreateResponseRequest {
         deserialize_with = "deserialize_present"
     )]
     pub user: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_present"
-    )]
-    pub safety_identifier: Option<String>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_present"
-    )]
-    pub prompt_cache_key: Option<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub safety_identifier: OptionalNullable<String>,
+    #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
+    pub prompt_cache_key: OptionalNullable<String>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]
     pub service_tier: OptionalNullable<ServiceTier>,
     #[serde(default, skip_serializing_if = "OptionalNullable::is_missing")]

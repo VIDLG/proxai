@@ -344,7 +344,11 @@ impl TryFrom<&responses::FunctionCallOutputItemParam> for anthropic::ToolResultB
 
     fn try_from(output: &responses::FunctionCallOutputItemParam) -> TranslationResult<Self> {
         Ok(Self {
-            tool_use_id: output.call_id.clone(),
+            tool_use_id: output.call_id.as_non_null().cloned().ok_or_else(|| {
+                TranslationError::InvalidPayload(
+                    "function call output is missing call_id".to_string(),
+                )
+            })?,
             content: Some(anthropic::ToolResultContentParam::try_from(&output.output)?),
             is_error: Some(false),
             cache_control: None.into(),

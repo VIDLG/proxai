@@ -114,7 +114,7 @@ impl TryFrom<anthropic::ToolResultBlockParam> for responses::Item {
         };
         Ok(Self::FunctionCallOutput(
             responses::FunctionCallOutputItemParam {
-                call_id: block.tool_use_id,
+                call_id: block.tool_use_id.into(),
                 output,
                 caller: None.into(),
                 id: None.into(), // No Anthropic equivalent; Responses item id is server-assigned.

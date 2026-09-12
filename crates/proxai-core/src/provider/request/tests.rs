@@ -86,6 +86,41 @@ fn responses_preparation_removes_only_output_fields_invalid_as_input() {
 }
 
 #[test]
+fn responses_preparation_removes_unsupported_none_effort() {
+    let observer = RecordingObserver::default();
+    let payload = json!({
+        "model": "gpt-6-astra",
+        "reasoning": {"effort": "none"}
+    });
+
+    let prepared = prepare_provider_request(
+        ProviderProtocol::OpenaiResponses,
+        payload,
+        "upstream-model",
+        &observer,
+    );
+
+    assert!(prepared["reasoning"].is_null());
+    assert!(
+        observer
+            .values
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|observation| matches!(
+                observation,
+                Observation::Provider(ProviderObservation::RequestAdapted {
+                    adaptation: ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
+                        reasoning_none_effort_removed: 1,
+                        ..
+                    },
+                    ..
+                })
+            ))
+    );
+}
+
+#[test]
 fn responses_preparation_emits_typed_request_adaptation() {
     let observer = RecordingObserver::default();
     let recorded = observer.values.clone();
@@ -110,6 +145,7 @@ fn responses_preparation_emits_typed_request_adaptation() {
             adaptation: ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
                 status_removed: 2,
                 reasoning_content_removed: 1,
+                reasoning_none_effort_removed: 0,
             },
         })]
     ));

@@ -4,6 +4,7 @@ use serde_json::Value;
 pub(super) struct SanitizedInputFields {
     pub(super) status_removed: usize,
     pub(super) reasoning_content_removed: usize,
+    pub(super) reasoning_none_effort_removed: usize,
 }
 
 /// Remove output-only fields from replayed Responses input items.
@@ -13,8 +14,27 @@ pub(super) struct SanitizedInputFields {
 /// non-empty `content` on reasoning input items, while the same fields remain
 /// valid on other item kinds and at the request root.
 pub(super) fn sanitize_provider_payload(mut payload: Value) -> (Value, SanitizedInputFields) {
-    let sanitized = sanitize_response_output_fields_from_input(&mut payload);
+    let mut sanitized = sanitize_response_output_fields_from_input(&mut payload);
+    sanitized.reasoning_none_effort_removed = remove_unsupported_none_effort(&mut payload);
     (payload, sanitized)
+}
+
+fn remove_unsupported_none_effort(payload: &mut Value) -> usize {
+    let Some(reasoning) = payload.get_mut("reasoning").and_then(Value::as_object_mut) else {
+        return 0;
+    };
+
+    if reasoning.get("effort").and_then(Value::as_str) != Some("none") {
+        return 0;
+    }
+
+    reasoning.remove("effort");
+    if reasoning.is_empty() {
+        payload
+            .as_object_mut()
+            .map(|payload| payload.remove("reasoning"));
+    }
+    1
 }
 
 fn sanitize_response_output_fields_from_input(payload: &mut Value) -> SanitizedInputFields {

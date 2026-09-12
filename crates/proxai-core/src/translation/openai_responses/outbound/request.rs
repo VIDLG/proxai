@@ -89,7 +89,7 @@ pub(crate) fn function_call_output_item(
     output: responses::FunctionCallOutput,
 ) -> responses::Item {
     responses::Item::FunctionCallOutput(responses::FunctionCallOutputItemParam {
-        call_id: call_id.into(),
+        call_id: Some(call_id.into()).into(),
         output,
         caller: None.into(),
         id: None.into(),

@@ -19,6 +19,7 @@ pub(super) fn emit(observation: &Observation) {
                 ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
                     status_removed,
                     reasoning_content_removed,
+                    reasoning_none_effort_removed,
                 },
         }) => tracing::trace!(
             provider_protocol = %protocol,
@@ -26,6 +27,7 @@ pub(super) fn emit(observation: &Observation) {
             adaptation = "openai_responses_output_fields_removed",
             status_removed,
             reasoning_content_removed,
+            reasoning_none_effort_removed,
             "provider compatibility observation"
         ),
         Observation::Provider(ProviderObservation::ResponseAdapted {

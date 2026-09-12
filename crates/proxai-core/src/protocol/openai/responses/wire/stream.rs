@@ -450,7 +450,7 @@ pub struct ResponseOutputTextAnnotationAddedEvent {
     pub annotation_index: u32,
 
     pub sequence_number: u64,
-    pub annotation: Value,
+    pub annotation: RequiredNullable<Value>,
 }
 
 /// OpenAPI schema: `#/components/schemas/ResponseQueuedEvent`
