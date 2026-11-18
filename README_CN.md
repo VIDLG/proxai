@@ -49,6 +49,11 @@ Responses 放在 `reasoning.encrypted_content`，Chat-compatible 历史则附在
 `reasoning_content` 后。ProxAI 会在向 Anthropic 转发下一次请求前剥离 envelope
 并恢复 provider-specific thinking block；代理自身不保存这类续接状态。
 
+向 Responses 上游转发请求时，ProxAI 会原样保留历史 `reasoning.content`（包括
+`reasoning_text`），修复了此前误删这些内容的问题。现有的 `status` 和
+`reasoning.effort = "none"` 清理逻辑不变。如果上游拒绝这些内容，ProxAI 不会通过
+删除内容来绕过拒绝，也不会自动重试。
+
 请求/流式 translation 失败以及已识别的 provider 语义失败，都会自动在
 `diagnostics/` 下生成有数量上限的本地诊断 bundle，独立于 capture。流式 bundle
 会仅在本地保留触发失败的 SSE frame；普通日志只输出安全上下文和 `diag=...`。

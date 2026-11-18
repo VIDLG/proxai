@@ -68,6 +68,59 @@ async fn proxy_moves_system_to_instructions_and_overrides_authorization() {
 }
 
 #[tokio::test]
+async fn proxy_preserves_reasoning_text_in_replayed_tool_history() {
+    let capture = Arc::new(Capture::default());
+    let upstream_address = spawn_upstream(capture.clone()).await;
+    let shim_address = spawn_shim(upstream_address).await;
+    let reasoning_content = json!([
+        {"type": "reasoning_text", "text": "先检查工具结果。\n"},
+        {"type": "reasoning_text", "text": "Then continue 🧠."}
+    ]);
+
+    for stream in [false, true] {
+        let response = local_client()
+            .post(format!("http://{shim_address}/v1/responses"))
+            .json(&json!({
+                "model": "thinking-model",
+                "stream": stream,
+                "tools": [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}],
+                "input": [
+                    {"role": "user", "content": "Look up the value."},
+                    {
+                        "type": "reasoning", "id": "rs_history", "status": "completed",
+                        "summary": [], "content": reasoning_content,
+                        "encrypted_content": "opaque-upstream-state"
+                    },
+                    {
+                        "type": "function_call", "call_id": "call_lookup",
+                        "name": "lookup", "arguments": "{}"
+                    },
+                    {"type": "function_call_output", "call_id": "call_lookup", "output": "42"}
+                ]
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.json::<Value>().await.unwrap(), json!({"ok": true}));
+    }
+
+    let payloads = capture.payloads.lock().await;
+    assert_eq!(payloads.len(), 2);
+    for (payload, stream) in payloads.iter().zip([false, true]) {
+        assert_eq!(payload["stream"], stream);
+        assert_eq!(payload["input"][1]["content"], reasoning_content);
+        assert_eq!(
+            payload["input"][1]["encrypted_content"],
+            "opaque-upstream-state"
+        );
+        assert!(payload["input"][1].get("status").is_none());
+        assert_eq!(payload["input"][2]["call_id"], "call_lookup");
+        assert_eq!(payload["input"][3]["output"], "42");
+    }
+}
+
+#[tokio::test]
 async fn proxy_normalizes_zed_responses_request_defaults() {
     let capture = Arc::new(Capture::default());
     let upstream_address = spawn_upstream(capture.clone()).await;

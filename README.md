@@ -56,6 +56,12 @@ and Chat-compatible history uses a suffix in `reasoning_content`. ProxAI removes
 that envelope and restores the provider-specific thinking blocks before forwarding
 the next request to Anthropic; it keeps no proxy-side continuation state.
 
+When forwarding requests to a Responses upstream, ProxAI preserves historical
+`reasoning.content` unchanged, including `reasoning_text`, instead of dropping it.
+Existing cleanup of `status` and `reasoning.effort = "none"` is unaffected. If the
+upstream rejects the content, ProxAI does not strip it as a workaround or retry
+automatically.
+
 Request/stream translation failures and recognized provider semantic failures automatically
 create bounded local diagnostic bundles under `diagnostics/`, independent of capture. Stream
 bundles retain the triggering SSE frame locally; normal logs expose only safe context and

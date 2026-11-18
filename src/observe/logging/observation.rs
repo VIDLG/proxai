@@ -18,7 +18,6 @@ pub(super) fn emit(observation: &Observation) {
             adaptation:
                 ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
                     status_removed,
-                    reasoning_content_removed,
                     reasoning_none_effort_removed,
                 },
         }) => tracing::trace!(
@@ -26,7 +25,6 @@ pub(super) fn emit(observation: &Observation) {
             phase = "request",
             adaptation = "openai_responses_output_fields_removed",
             status_removed,
-            reasoning_content_removed,
             reasoning_none_effort_removed,
             "provider compatibility observation"
         ),

@@ -42,7 +42,7 @@ fn does_not_invent_a_missing_model_field() {
 }
 
 #[test]
-fn responses_preparation_removes_only_output_fields_invalid_as_input() {
+fn responses_preparation_preserves_historical_reasoning_while_stripping_status() {
     let payload = json!({
         "model": "client-model",
         "status": "completed",
@@ -57,8 +57,12 @@ fn responses_preparation_removes_only_output_fields_invalid_as_input() {
                 "type": "reasoning",
                 "id": "rs_123",
                 "status": "completed",
-                "content": [{"type": "reasoning_text", "text": "reasoning"}],
-                "summary": []
+                "content": [
+                    {"type": "reasoning_text", "text": "先考虑 🦀\n第二行"},
+                    {"type": "reasoning_text", "text": "café e\u{301}"}
+                ],
+                "summary": [{"type": "summary_text", "text": "previous reasoning summary"}],
+                "encrypted_content": "opaque-reasoning"
             },
             {
                 "type": "function_call_output",
@@ -71,7 +75,7 @@ fn responses_preparation_removes_only_output_fields_invalid_as_input() {
 
     let prepared = prepare_provider_request(
         ProviderProtocol::OpenaiResponses,
-        payload,
+        payload.clone(),
         "upstream-model",
         &NoopObserver,
     );
@@ -80,8 +84,9 @@ fn responses_preparation_removes_only_output_fields_invalid_as_input() {
     assert_eq!(prepared["status"], "completed");
     assert!(prepared["input"][0].get("status").is_none());
     assert!(prepared["input"][1].get("status").is_none());
-    assert!(prepared["input"][1].get("content").is_none());
-    assert_eq!(prepared["input"][1]["summary"], json!([]));
+    for field in ["content", "summary", "encrypted_content"] {
+        assert_eq!(prepared["input"][1][field], payload["input"][1][field]);
+    }
     assert_eq!(prepared["input"][2]["status"], "failed");
 }
 
@@ -100,7 +105,7 @@ fn responses_preparation_removes_unsupported_none_effort() {
         &observer,
     );
 
-    assert!(prepared["reasoning"].is_null());
+    assert!(prepared.get("reasoning").is_none());
     assert!(
         observer
             .values
@@ -128,24 +133,25 @@ fn responses_preparation_emits_typed_request_adaptation() {
         "input": [
             {"type": "message", "status": "completed"},
             {"type": "reasoning", "status": "completed", "content": []}
-        ]
+        ],
+        "reasoning": {"effort": "none", "summary": "auto"}
     });
 
-    prepare_provider_request(
+    let prepared = prepare_provider_request(
         ProviderProtocol::OpenaiResponses,
         payload,
         "upstream-model",
         &observer,
     );
 
+    assert_eq!(prepared["reasoning"], json!({"summary": "auto"}));
     assert!(matches!(
         recorded.lock().unwrap().as_slice(),
         [Observation::Provider(ProviderObservation::RequestAdapted {
             protocol: ProviderProtocol::OpenaiResponses,
             adaptation: ProviderRequestAdaptation::OpenaiResponsesOutputFieldsRemoved {
                 status_removed: 2,
-                reasoning_content_removed: 1,
-                reasoning_none_effort_removed: 0,
+                reasoning_none_effort_removed: 1,
             },
         })]
     ));

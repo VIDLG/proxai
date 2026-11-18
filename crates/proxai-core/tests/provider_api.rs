@@ -36,7 +36,7 @@ fn prepares_provider_request_values_through_the_public_api() {
 
     assert_eq!(prepared["model"], "upstream-model");
     assert!(prepared["input"][0].get("status").is_none());
-    assert!(prepared["input"][0].get("content").is_none());
+    assert_eq!(prepared["input"][0]["content"], json!([]));
 }
 
 #[test]

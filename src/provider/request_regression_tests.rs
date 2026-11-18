@@ -15,7 +15,7 @@ fn test_obs() -> ObserveContext {
     )
 }
 
-// Trigger: Zed 1.9.0 replayed Responses history with output-only fields on
+// Trigger: Zed 1.9.0 replayed Responses history with output status on
 // `message` and `reasoning` input items. The forwarded provider request had
 // fragments equivalent to:
 // `input[1] = {"type":"message","role":"assistant","status":"completed",...}`
@@ -26,9 +26,11 @@ fn test_obs() -> ObserveContext {
 // `{"code":"array_above_max_length","message":"Invalid 'input[3].content': array too long. Expected an array with maximum length 0, but got an array with length 1 instead.","param":"input[3].content"}`
 // Provenance: Zed/proxai dogfooding on 2026-07-04; inline payload is minimized
 // and sanitized (private prompt/tool content redacted), so no external capture
-// file is required to understand the regression.
+// file is required to understand the regression. The content rejection was
+// specific to that observed upstream; reasoning text is valid input and may
+// be required for continuation. Strip the replayed status, not the text.
 #[test]
-fn regression_zed_reasoning_output_fields_rejected_by_strict_responses_upstream() {
+fn regression_zed_responses_replay_strips_status_but_preserves_reasoning_text() {
     let payload = json!({
         "model": "gpt-5.5",
         "input": [
@@ -62,7 +64,10 @@ fn regression_zed_reasoning_output_fields_rejected_by_strict_responses_upstream(
     assert_eq!(body["model"], "gpt-upstream");
     assert!(body["input"][0].get("status").is_none());
     assert!(body["input"][1].get("status").is_none());
-    assert!(body["input"][1].get("content").is_none());
+    assert_eq!(
+        body["input"][1]["content"],
+        json!([{"type": "reasoning_text", "text": "redacted reasoning"}])
+    );
     assert_eq!(body["input"][1]["summary"], json!([]));
     assert_eq!(request.capture_payload(), &body);
 }

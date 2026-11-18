@@ -3,16 +3,14 @@ use serde_json::Value;
 #[derive(Debug, Default)]
 pub(super) struct SanitizedInputFields {
     pub(super) status_removed: usize,
-    pub(super) reasoning_content_removed: usize,
     pub(super) reasoning_none_effort_removed: usize,
 }
 
-/// Remove output-only fields from replayed Responses input items.
+/// Strip output-only status and unsupported reasoning effort from Responses requests.
 ///
-/// Responses clients can replay output items as later request input. Strict
-/// compatible upstreams reject `status` on message/reasoning input items and
-/// non-empty `content` on reasoning input items, while the same fields remain
-/// valid on other item kinds and at the request root.
+/// Clients can replay output items as later input. Some upstreams need the raw
+/// `reasoning.content` to use historical reasoning, so only strip `status` from
+/// replayed message and reasoning items.
 pub(super) fn sanitize_provider_payload(mut payload: Value) -> (Value, SanitizedInputFields) {
     let mut sanitized = sanitize_response_output_fields_from_input(&mut payload);
     sanitized.reasoning_none_effort_removed = remove_unsupported_none_effort(&mut payload);
@@ -51,12 +49,8 @@ fn sanitize_response_output_fields_from_input(payload: &mut Value) -> SanitizedI
             continue;
         };
         let is_message_or_reasoning = matches!(item_type, "message" | "reasoning");
-        let is_reasoning = item_type == "reasoning";
         if is_message_or_reasoning && object.remove("status").is_some() {
             sanitized.status_removed += 1;
-        }
-        if is_reasoning && object.remove("content").is_some() {
-            sanitized.reasoning_content_removed += 1;
         }
     }
     sanitized

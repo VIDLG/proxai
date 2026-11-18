@@ -43,7 +43,6 @@ pub enum ProviderObservation {
 pub enum ProviderRequestAdaptation {
     OpenaiResponsesOutputFieldsRemoved {
         status_removed: usize,
-        reasoning_content_removed: usize,
         reasoning_none_effort_removed: usize,
     },
 }
